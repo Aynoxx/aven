@@ -12,7 +12,7 @@
     "dev:electron": "tsc -p tsconfig.electron.json --watch --preserveWatchOutput",
     "dev": "concurrently -k -n web,electron,run \"npm:dev:web\" \"npm:dev:electron\" \"wait-on tcp:127.0.0.1:5173 dist-electron/main.js && electron .\"",
     "package:win": "npm run build && electron-builder --win nsis portable --publish never",
-    "postinstall": "npm --prefix web install && node scripts/ensure-binaries.mjs",
+    "postinstall": "node scripts/install-web.mjs && node scripts/ensure-binaries.mjs",
     "verify:v8.7": "node scripts/verify-v8.7.mjs",
     "verify:v8.7.2": "node scripts/verify-v8.7.2.mjs",
     "verify:v8.7.4": "node scripts/verify-v8.7.4.mjs",
