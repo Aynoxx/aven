@@ -75,8 +75,8 @@
     },
     "publish": {
       "provider": "github",
-      "owner": "TODO-ton-compte-github",
-      "repo": "TODO-nom-du-repo"
+      "owner": "Aynoxx",
+      "repo": "aven"
     },
     "directories": {
       "buildResources": "build",
