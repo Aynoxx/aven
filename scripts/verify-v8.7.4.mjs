@@ -1,0 +1,25 @@
+import assert from "node:assert/strict"
+import { readFileSync } from "node:fs"
+import { isFreeModelRef } from "../electron/priorities.ts"
+
+const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"))
+assert.equal(pkg.version, "8.7.4")
+const table = JSON.parse(readFileSync(new URL("../model-priorities.json", import.meta.url), "utf8"))
+for (const ref of Object.keys(table.models)) assert.equal(isFreeModelRef(ref), true, `Paid/non-free model remains: ${ref}`)
+assert.ok(Object.keys(table.models).length > 0)
+const providers = readFileSync(new URL("../electron/providers.ts", import.meta.url), "utf8")
+assert.doesNotMatch(providers, /id:\s*"openai"/)
+assert.doesNotMatch(providers, /id:\s*"mistral"/)
+assert.doesNotMatch(providers, /id:\s*"groq"/)
+assert.doesNotMatch(providers, /id:\s*"cerebras"/)
+const workspaceSync = readFileSync(new URL("../electron/workspace-sync.ts", import.meta.url), "utf8")
+assert.match(workspaceSync, /prunePaidModels/)
+const main = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8")
+assert.doesNotMatch(main, /api\.openai\.com\/v1\/realtime/)
+assert.match(main, /mode gratuit uniquement/)
+assert.doesNotMatch(main, /openaiKey|gpt-realtime-2\.1|api\.openai\.com/)
+const types = readFileSync(new URL("../web/src/types.ts", import.meta.url), "utf8")
+assert.doesNotMatch(types, /provider:\s*"openai"/)
+const live = readFileSync(new URL("../web/src/live-voice.ts", import.meta.url), "utf8")
+assert.doesNotMatch(live, /OpenAIRealtimeVoiceSession|openai-realtime-voice/)
+console.log(`v8.7.4 free-only checks: OK (${Object.keys(table.models).length} models)`)

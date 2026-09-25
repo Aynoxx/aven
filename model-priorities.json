@@ -1,0 +1,148 @@
+{
+  "_aide": "Aven v8.7.6 — catalogue strictement gratuit ; modèles gratuits OpenCode connus au 24/09/2026. 1 = préféré. Chaque modèle doit encore être présent, actif et non obsolète dans model.list() avant attribution. Les nouveaux modèles gratuits OpenCode (suffixe -free) et OpenRouter (:free) sont découverts dynamiquement.",
+  "models": {
+    "opencode/deepseek-v4-flash-free": {
+      "label": "DeepSeek V4 Flash Free",
+      "priority": {
+        "code": 1,
+        "analyse": 3,
+        "recherche": 3
+      }
+    },
+    "opencode/nemotron-3-ultra-free": {
+      "label": "Nemotron 3 Ultra Free",
+      "priority": {
+        "code": 3,
+        "analyse": 1,
+        "recherche": 2
+      }
+    },
+    "opencode/mimo-v2.5-free": {
+      "label": "MiMo-V2.5 Free",
+      "priority": {
+        "code": 4,
+        "analyse": 2,
+        "recherche": 1
+      }
+    },
+    "opencode/laguna-s-2.1-free": {
+      "label": "Laguna S 2.1 Free",
+      "priority": {
+        "code": 5,
+        "analyse": 5,
+        "recherche": 5
+      }
+    },
+    "opencode/ling-3.0-tiny-free": {
+      "label": "Ling 3.0 Tiny Free",
+      "priority": {
+        "code": 8,
+        "analyse": 8,
+        "recherche": 8
+      }
+    },
+    "opencode/longcat-2.0-free": {
+      "label": "LongCat 2.0 Free",
+      "priority": {
+        "code": 6,
+        "analyse": 6,
+        "recherche": 6
+      }
+    },
+    "opencode/north-mini-code-free": {
+      "label": "North Mini Code Free",
+      "priority": {
+        "code": 2,
+        "analyse": 4,
+        "recherche": 7
+      }
+    },
+    "opencode/big-pickle": {
+      "label": "Big Pickle (gratuit)",
+      "priority": {
+        "code": 7,
+        "analyse": 7,
+        "recherche": 6
+      }
+    },
+    "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free": {
+      "label": "Nemotron 3 Ultra (OpenRouter Free)",
+      "priority": {
+        "code": 51,
+        "analyse": 51,
+        "recherche": 51
+      },
+      "limit": {
+        "perMinute": 20,
+        "perDay": 50,
+        "shared": "openrouter-free"
+      }
+    },
+    "openrouter/poolside/laguna-s-2.1:free": {
+      "label": "Laguna S 2.1 (OpenRouter Free)",
+      "priority": {
+        "code": 52,
+        "analyse": 52,
+        "recherche": 52
+      },
+      "limit": {
+        "perMinute": 20,
+        "perDay": 50,
+        "shared": "openrouter-free"
+      }
+    },
+    "openrouter/nvidia/nemotron-3-super-120b-a12b:free": {
+      "label": "Nemotron 3 Super (OpenRouter Free)",
+      "priority": {
+        "code": 53,
+        "analyse": 53,
+        "recherche": 53
+      },
+      "limit": {
+        "perMinute": 20,
+        "perDay": 50,
+        "shared": "openrouter-free"
+      }
+    },
+    "opencode/mimo-v2.6-flash-free": {
+      "label": "MiMo-V2.6-Flash Free",
+      "priority": {
+        "code": 5,
+        "analyse": 4,
+        "recherche": 4
+      }
+    },
+    "opencode/nemotron-3.5-lightning-free": {
+      "label": "Nemotron 3.5 Lightning Free",
+      "priority": {
+        "code": 9,
+        "analyse": 6,
+        "recherche": 6
+      }
+    },
+    "opencode/space-bunny-free": {
+      "label": "Space Bunny Free",
+      "priority": {
+        "code": 11,
+        "analyse": 10,
+        "recherche": 10
+      }
+    },
+    "opencode/muse-spark-1.3-contributor-free": {
+      "label": "Muse Spark 1.3 Contributor Free",
+      "priority": {
+        "code": 12,
+        "analyse": 11,
+        "recherche": 11
+      }
+    },
+    "opencode/jev-1.13-free": {
+      "label": "Jev 1.13 Free",
+      "priority": {
+        "code": 13,
+        "analyse": 12,
+        "recherche": 12
+      }
+    }
+  }
+}

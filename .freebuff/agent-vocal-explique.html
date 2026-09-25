@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>L'agent vocal d'Aven — que peut-il faire concrètement ?</title>
+<style>
+  :root {
+    --bg: #0b1220;
+    --panel: #111a2e;
+    --panel2: #16213a;
+    --border: #233250;
+    --text: #e8eefc;
+    --muted: #9fb0d0;
+    --accent: #6ea8fe;
+    --accent-soft: rgba(110, 168, 254, .14);
+    --green: #34d399;
+    --rose: #fb7185;
+    --amber: #fbbf24;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    line-height: 1.55; font-size: 16px;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 24px 20px 80px; }
+  header.hero { padding: 40px 0 8px; }
+  .eyebrow { color: var(--accent); font-size: 13px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+  h1 { font-size: clamp(26px, 4.5vw, 40px); margin: 6px 0 10px; line-height: 1.15; }
+  .lead { color: var(--muted); font-size: 18px; max-width: 46em; }
+  .lead strong { color: var(--text); }
+  h2 { font-size: 24px; margin: 48px 0 6px; display: flex; align-items: center; gap: 10px; }
+  h2 .num { color: var(--accent); font-size: 15px; font-weight: 800; background: var(--accent-soft); border-radius: 8px; padding: 4px 9px; }
+  h3 { font-size: 17px; margin: 22px 0 8px; }
+  p { margin: 8px 0; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; margin: 14px 0; }
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+  .grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
+  .pill { display:inline-block; padding:2px 10px; border-radius:999px; font-size:12.5px; font-weight:700; }
+  .pill.g { background:rgba(52,211,153,.15); color:var(--green); }
+  .pill.r { background:rgba(251,113,133,.15); color:var(--rose); }
+  .pill.a { background:rgba(251,191,36,.14); color:var(--amber); }
+  .pill.b { background:var(--accent-soft); color:var(--accent); }
+  kbd { background:var(--panel2); border:1px solid var(--border); border-bottom-width:2px; border-radius:6px; padding:1px 7px; font-size:13px; font-family:inherit; }
+  code { background:var(--panel2); border-radius:5px; padding:1px 6px; font-size:13.5px; }
+  table { width:100%; border-collapse:collapse; margin:10px 0; font-size:14.5px; }
+  th, td { text-align:left; padding:9px 12px; border-bottom:1px solid var(--border); vertical-align:top; }
+  th { color:var(--muted); font-size:12.5px; text-transform:uppercase; letter-spacing:.08em; }
+  tr:last-child td { border-bottom:none; }
+  .diagram { background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:16px; margin:14px 0; overflow-x:auto; }
+  .diagram svg { display:block; margin:0 auto; max-width:100%; height:auto; }
+  .flow { display:flex; flex-wrap:wrap; gap:8px; align-items:stretch; margin:12px 0; }
+  .flow .step { flex:1 1 130px; background:var(--panel2); border:1px solid var(--border); border-radius:10px; padding:10px 12px; position:relative; min-width:120px; }
+  .flow .step b { display:block; font-size:13.5px; }
+  .flow .step small { color:var(--muted); font-size:12.5px; }
+  .flow .arrow { align-self:center; color:var(--accent); font-weight:800; font-size:18px; }
+  .tl { list-style:none; padding:0; margin:10px 0; border-left:2px solid var(--border); }
+  .tl li { position:relative; padding:6px 0 6px 22px; }
+  .tl li::before { content:""; position:absolute; left:-7px; top:13px; width:12px; height:12px; border-radius:50%; background:var(--accent); box-shadow:0 0 0 3px var(--bg); }
+  .tl li.ok::before { background:var(--green); }
+  .tl li.warn::before { background:var(--amber); }
+  .tl b { color:var(--text); }
+  .tl small { color:var(--muted); }
+  .say { display:flex; gap:10px; align-items:flex-start; margin:8px 0; }
+  .say .who { flex:0 0 92px; color:var(--muted); font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; padding-top:3px; }
+  .say .bubble { background:var(--panel2); border:1px solid var(--border); border-radius:12px; padding:9px 13px; font-size:14.5px; }
+  .say.voice .bubble { border-color:rgba(110,168,254,.4); }
+  .note { border-left:3px solid var(--accent); background:var(--accent-soft); border-radius:0 10px 10px 0; padding:10px 14px; margin:12px 0; font-size:14.5px; }
+  .note.warn { border-color:var(--amber); background:rgba(251,191,36,.09); }
+  .note.stop { border-color:var(--rose); background:rgba(251,113,133,.09); }
+  .yes td:first-child, .no td:first-child { white-space:nowrap; font-weight:700; }
+  .yes td:first-child { color:var(--green); }
+  .no td:first-child { color:var(--rose); }
+  footer { margin-top:60px; color:var(--muted); font-size:13px; border-top:1px solid var(--border); padding-top:16px; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior:auto; } * { animation:none !important; transition:none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div class="eyebrow">Aven v8.7.9 · vocal gratuit</div>
+  <h1>L'agent vocal d'Aven, concrètement</h1>
+  <p class="lead">
+    Ce n'est <strong>pas un « Jarvis » qui cause avec toi</strong>. C'est un couple simple et robuste :
+    <strong>tu dictes une demande</strong> (au lieu de la taper) et <strong>l'app t'annonce à voix haute</strong> ce que
+    les agents font — sans que tu aies à lire l'écran. Voici exactement ce que ça change dans ton quotidien.
+  </p>
+</header>
+
+<!-- ══════════════ 1. LES DEUX CANAUX ══════════════ -->
+<h2><span class="num">1</span> Deux canaux, deux usages</h2>
+<div class="grid2">
+  <div class="card">
+    <span class="pill b">ENTRÉE · dictée</span>
+    <h3>Tu parles, l'app écrit</h3>
+    <p>Maintiens le bouton micro (hub ou composeur) ou <kbd>Ctrl</kbd>+<kbd>Maj</kbd>+<kbd>V</kbd>, parle, relâche.
+    En ~1&nbsp;s, ta phrase arrive <strong>écrite dans le composeur</strong>, déjà nettoyée
+    (hésitations, répétitions, lapsus retirés). Tu relis, tu corriges si besoin, <kbd>Entrée</kbd> envoie.</p>
+    <p style="color:var(--muted);font-size:14px;">Technique : Whisper <em>large-v3-turbo</em> chez Groq (gratuit, ~2&nbsp;000 transcriptions/j) + passe de reformage par un petit modèle texte.</p>
+  </div>
+  <div class="card">
+    <span class="pill g">SORTIE · annonceur</span>
+    <h3>L'app parle pour t'informer</h3>
+    <p>Pendant que l'agent travaille, une voix (Windows SAPI, hors ligne) annonce les moments clés :
+    «&nbsp;C'est parti.&nbsp;», «&nbsp;Aven demande la permission d'écrire un fichier.&nbsp;»,
+    «&nbsp;Terminé — 2 fichiers modifiés.&nbsp;», «&nbsp;Modèle saturé, passage sur le suivant.&nbsp;»</p>
+    <p style="color:var(--muted);font-size:14px;">Optionnelle (Réglages → Apparence → Annonce vocale), coupée instantanément dès que tu tapes.</p>
+  </div>
+</div>
+<div class="note">
+  <strong>Ce que l'agent ne fait jamais :</strong> il ne converse pas à voix haute, il ne lit pas les réponses,
+  et la voix ne valide aucune action à ta place — les permissions se répondent toujours à l'écran.
+</div>
+
+<!-- ══════════════ 2. LE PARCOURS ══════════════ -->
+<h2><span class="num">2</span> Une dictée, de bout en bout</h2>
+<div class="diagram">
+<svg viewBox="0 0 980 190" role="img" aria-label="Parcours d'une dictée : micro, Groq Whisper, reformage, composeur, validation, agent">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#6ea8fe"/>
+    </marker>
+  </defs>
+  <g font-family="Segoe UI, sans-serif" font-size="13" fill="#e8eefc">
+    <rect x="10" y="40" width="130" height="52" rx="10" fill="#16213a" stroke="#233250"/>
+    <text x="75" y="62" text-anchor="middle" font-weight="700">🎤 Maintenir</text>
+    <text x="75" y="80" text-anchor="middle" fill="#9fb0d0" font-size="11.5">hub ou Ctrl+Maj+V</text>
+
+    <line x1="145" y1="66" x2="185" y2="66" stroke="#6ea8fe" stroke-width="2" marker-end="url(#arr)"/>
+
+    <rect x="190" y="40" width="150" height="52" rx="10" fill="#16213a" stroke="#233250"/>
+    <text x="265" y="62" text-anchor="middle" font-weight="700">Whisper (Groq)</text>
+    <text x="265" y="80" text-anchor="middle" fill="#9fb0d0" font-size="11.5">transcription ~1 s</text>
+
+    <line x1="345" y1="66" x2="385" y2="66" stroke="#6ea8fe" stroke-width="2" marker-end="url(#arr)"/>
+
+    <rect x="390" y="40" width="150" height="52" rx="10" fill="#16213a" stroke="#233250"/>
+    <text x="465" y="62" text-anchor="middle" font-weight="700">Reformage</text>
+    <text x="465" y="80" text-anchor="middle" fill="#9fb0d0" font-size="11.5">épure le texte ~0,3 s</text>
+
+    <line x1="545" y1="66" x2="585" y2="66" stroke="#6ea8fe" stroke-width="2" marker-end="url(#arr)"/>
+
+    <rect x="590" y="40" width="160" height="52" rx="10" fill="#1a2745" stroke="#6ea8fe"/>
+    <text x="670" y="62" text-anchor="middle" font-weight="700">✍️ Composeur</text>
+    <text x="670" y="80" text-anchor="middle" fill="#9fb0d0" font-size="11.5">tu relis et corriges</text>
+
+    <line x1="755" y1="66" x2="795" y2="66" stroke="#6ea8fe" stroke-width="2" marker-end="url(#arr)"/>
+
+    <rect x="800" y="40" width="170" height="52" rx="10" fill="#16213a" stroke="#233250"/>
+    <text x="885" y="62" text-anchor="middle" font-weight="700">⏎ Entrée = envoi</text>
+    <text x="885" y="80" text-anchor="middle" fill="#9fb0d0" font-size="11.5">l'agent travaille</text>
+
+    <!-- retour vocal -->
+    <path d="M885 100 L885 140 L670 140 L670 100" fill="none" stroke="#34d399" stroke-width="2" marker-end="url(#arr)" opacity=".85"/>
+    <text x="778" y="132" text-anchor="middle" fill="#34d399" font-size="12">🔊 « Terminé — 2 fichiers modifiés. »</text>
+    <text x="465" y="132" text-anchor="middle" fill="#9fb0d0" font-size="11.5">pendant ce temps, tu fais autre chose</text>
+    <path d="M465 100 L465 118 L20 118 L20 100" fill="none" stroke="#6ea8fe" stroke-width="0" />
+  </g>
+</svg>
+</div>
+
+<h3>Exemple réel</h3>
+<div class="say voice"><span class="who">Tu dis</span><div class="bubble">« Euh…corrige le… le bug de euh connexion sur la page login stp »</div></div>
+<div class="say"><span class="who">Composeur</span><div class="bubble"><code>Corrige le bug de connexion sur la page login.</code> <span class="pill b">✓ éclairci</span> <span style="color:var(--muted);font-size:12.5px;">— badge cliquable pour voir le brut</span></div></div>
+<div class="say voice"><span class="who">Aven dit</span><div class="bubble">« C'est parti. » … puis « Aven demande la permission d'écrire un fichier. Réponds à l'écran. » … puis « Terminé — 1 fichier modifié. »</div></div>
+
+<!-- ══════════════ 3. CAS D'USAGE CONCRETS ══════════════ -->
+<h2><span class="num">3</span> Ce que ça te permet, concrètement</h2>
+<div class="grid3">
+  <div class="card"><span style="font-size:26px;">🛠️</span><h3>Lancer une tâche sans taper</h3><p style="color:var(--muted);font-size:14px;">Main sur le café, l'autre sur la souris : « Ajoute un mode sombre », « Corrige le test qui échoue ». Deux secondes de dictée au lieu de trente de frappe.</p></div>
+  <div class="card"><span style="font-size:26px;">👀</span><h3>Suivre sans regarder</h3><p style="color:var(--muted);font-size:14px;">Annonceur activé, tu sais qu'une permission t'attend ou que le tour est fini, même en train de lire ailleurs — ou debout, loin du clavier.</p></div>
+  <div class="card"><span style="font-size:26px;">🚦</span><h3>Comprendre un blocage</h3><p style="color:var(--muted);font-size:14px;">« Modèle saturé, passage sur le suivant » : tu entends pourquoi rien ne bouge, sans deviner devant un spinner.</p></div>
+  <div class="card"><span style="font-size:26px;">📈</span><h3>Dicter de longues demandes</h3><p style="color:var(--muted);font-size:14px;">Le reformage enlève les « euh » et les répétitions : décrire un contexte en 3 phrases devient plus rapide à l'oral qu'au clavier.</p></div>
+  <div class="card"><span style="font-size:26px;">🔒</span><h3>Rester maître</h3><p style="color:var(--muted);font-size:14px;">Rien n'est envoyé sans ta validation <kbd>Entrée</kbd>. Le badge « ✓ éclairci » montre le brut en un clic. Aucune action n'est approuvée par la voix.</p></div>
+  <div class="card"><span style="font-size:26px;">💸</span><h3>Zéro coût</h3><p style="color:var(--muted);font-size:14px;">Free tier Groq (audio + texte), TTS Windows local. Aucun abonnement, aucune minute facturée.</p></div>
+</div>
+
+<!-- ══════════════ 4. POUR / PAS POUR ══════════════ -->
+<h2><span class="num">4</span> Pour toi / pas pour toi</h2>
+<div class="grid2">
+  <div class="card">
+    <table class="yes">
+      <tr><th style="width:30px;">✔</th><th>Idéal pour…</th></tr>
+      <tr><td>✔</td><td>Lancer rapidement des tâches courtes et claires (« corrige… », « ajoute… », « cherche… »)</td></tr>
+      <tr><td>✔</td><td>Suivre l'avancement en audio tout en travaillant sur autre chose</td></tr>
+      <tr><td>✔</td><td>Dicter un contexte long sans se fatiguer les mains</td></tr>
+      <tr><td>✔</td><td>Travailler sans regarder l'écran (accessibilité, pauses visuelles)</td></tr>
+      <tr><td>✔</td><td>Un usage quotidien : ~2 000 dictées/jour gratuites, quasi impossibles à épuiser</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <table class="no">
+      <tr><th style="width:30px;">✘</th><th>Pas fait pour…</th></tr>
+      <tr><td>✘</td><td>Une conversation orale clé en main : tu valides à l'écran, la voix ne dialogue pas</td></tr>
+      <tr><td>✘</td><td>Le duplex temps réel façon Gemini Live (interrompre la voix à la volée)</td></tr>
+      <tr><td>✘</td><td>Lire les réponses longues à voix haute — l'annonceur résume, il ne lit pas</td></tr>
+      <tr><td>✘</td><td>Fonctionner sans clé Groq ni internet (le STT est cloud ; l'annonceur, lui, est 100 % local)</td></tr>
+      <tr><td>✘</td><td>Valider des permissions à la voix (garde-fou volontaire : c'est l'écran qui décide)</td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- ══════════════ 5. LIMITES ══════════════ -->
+<h2><span class="num">5</span> Limites connues (assumées)</h2>
+<ul class="tl">
+  <li class="ok"><b>Latence ~1,3–1,8 s</b> entre ta voix et le texte affiché. <small>Imparable à ce prix ; un mode local (Whisper JS) ferait ~2–4 s.</small></li>
+  <li class="warn"><b>Le reformage ne devine pas l'intention.</b> <small>Un lapsus sémantique (« déploie » dit pour « désinstalle ») passera : relis toujours le composeur.</small></li>
+  <li class="warn"><b>Noms techniques à surveiller.</b> <small>Un nom de fichier ou de variable mal entendu sera « proprement » faux. Le brut reste consultable.</small></li>
+  <li class="warn"><b>Quotas Groq.</b> <small>~2 000 transcriptions/jour (audio) : largement assez pour des dictées courtes ; un usage marathon les sentira.</small></li>
+  <li class="warn"><b>Annonceur en anglais du système.</b> <small>La voix SAPI dépend des voix installées sur Windows (Hortense = français, généralement présente).</small></li>
+</ul>
+
+<div class="note">
+  <strong>En résumé :</strong> ce vocal transforme Aven en assistant qu'on <em>brieftime à l'oral</em> et qui
+  <em>rend compte à l'oral</em> — pendant que le vrai travail reste fait par tes agents gratuits, à l'écran, sous ton contrôle.
+</div>
+
+<footer>
+  Aven v8.7.9 · dictée : Whisper large-v3-turbo + reformage via Groq (free tier) · annonceur : SAPI Windows local ·
+  architecture détaillée dans <code>electron/voice.ts</code>, <code>electron/announcer.ts</code> et le README.
+</footer>
+
+</div>
+</body>
+</html>

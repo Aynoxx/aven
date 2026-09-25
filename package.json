@@ -1,0 +1,94 @@
+{
+  "name": "aven",
+  "version": "8.8.0",
+  "private": true,
+  "type": "module",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "build:electron": "tsc -p tsconfig.electron.json",
+    "build:web": "cd web && npm run build",
+    "build": "npm run build:electron && npm run build:web",
+    "dev:web": "cd web && npm run dev",
+    "dev:electron": "tsc -p tsconfig.electron.json --watch --preserveWatchOutput",
+    "dev": "concurrently -k -n web,electron,run \"npm:dev:web\" \"npm:dev:electron\" \"wait-on tcp:127.0.0.1:5173 dist-electron/main.js && electron .\"",
+    "package:win": "npm run build && electron-builder --win nsis portable --publish never",
+    "postinstall": "npm --prefix web install && node scripts/ensure-binaries.mjs",
+    "verify:v8.7": "node scripts/verify-v8.7.mjs",
+    "verify:v8.7.2": "node scripts/verify-v8.7.2.mjs",
+    "verify:v8.7.4": "node scripts/verify-v8.7.4.mjs",
+    "verify:v8.7.5": "node scripts/verify-v8.7.5.mjs",
+    "verify:v8.7.6": "node scripts/verify-v8.7.6.mjs",
+    "verify": "node scripts/verify-v8.8.0.mjs && node scripts/verify-build.mjs",
+    "test": "node --import ./tests/register.mjs --experimental-strip-types --no-warnings --test tests/",
+    "typecheck:electron": "tsc --noEmit -p tsconfig.electron.json",
+    "typecheck:tests": "tsc --noEmit -p tsconfig.test.json"
+  },
+  "dependencies": {
+    "@opencode/client": "2.0.10",
+    "@opencode/cli": "2.0.10",
+    "electron-updater": "^6.3.0",
+    "@codebuff/sdk": "0.10.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "concurrently": "^9.0.0",
+    "electron": "35.7.5",
+    "electron-builder": "^25.0.0",
+    "typescript": "^5.6.0",
+    "wait-on": "^8.0.0"
+  },
+  "build": {
+    "appId": "com.local.aven",
+    "productName": "Aven",
+    "files": [
+      "dist-electron/**",
+      "web/dist/**",
+      "build/icon.png",
+      "package.json",
+      "!node_modules/@opencode/cli/**",
+      "!node_modules/@opencode/cli-*/**"
+    ],
+    "extraResources": [
+      {
+        "from": ".opencode",
+        "to": ".opencode"
+      },
+      {
+        "from": "opencode.jsonc",
+        "to": "opencode.jsonc"
+      },
+      {
+        "from": "node_modules/@opencode/cli/bin",
+        "to": "opencode-bin"
+      },
+      {
+        "from": "model-priorities.json",
+        "to": "model-priorities.json"
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "signAndEditExecutable": false
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "TODO-ton-compte-github",
+      "repo": "TODO-nom-du-repo"
+    },
+    "directories": {
+      "buildResources": "build",
+      "output": "release"
+    },
+    "npmRebuild": false
+  },
+  "allowScripts": {
+    "electron": true,
+    "@opencode/cli": true,
+    "msgpackr-extract": false
+  },
+  "description": "Espace de travail IA pour agents, code, recherche, analyse, notes et voix",
+  "author": "Liam"
+}

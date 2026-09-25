@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Installation (télécharge aussi Electron et le CLI OpenCode)
+        run: npm install
+      - name: Tests unitaires
+        run: npm test
+      - name: Typecheck electron
+        run: npm run typecheck:electron
+      - name: Build web (inclut tsc -b)
+        run: npm run build:web
+      - name: Build electron
+        run: npm run build:electron
+      - name: Vérification v8.8.0 + fraîcheur du build
+        run: npm run verify
