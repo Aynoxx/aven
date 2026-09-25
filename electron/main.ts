@@ -1,5 +1,5 @@
 import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, session, shell, Tray } from "electron"
-import { readFileSync, writeFileSync } from "node:fs"
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { makeOps } from "./operations.js"
@@ -11,7 +11,7 @@ import { relayEvents, startOpenCode, TABS, type Bridge } from "./opencode-bridge
 import { aggregateStats, countDictation, readDictationStats } from "./stats.js"
 import { probeOpenRouterKey, PROVIDERS } from "./providers.js"
 import { loadKeys, saveKey, seedWorkspace } from "./settings.js"
-import { getNote, listNotes } from "./notes.js"
+import { getNote, listNotes, notesDir } from "./notes.js"
 import { loadPinned, togglePin } from "./notes-meta.js"
 import { transcribeSpeech } from "./voice.js"
 import { Announcer } from "./announcer.js"
@@ -351,15 +351,22 @@ function registerIpc() {
   })
   ipcMain.handle("workspace:createNew", async (_e, name: string) => {
     if (!win) return null
-    const res = await dialog.showOpenDialog(win, { properties: ["openDirectory"], title: "Où créer le nouvel espace de travail ?" })
+    // v9.0.0 : c'est l'utilisateur qui choisit (ou crée) le DOSSIER FINAL de l'espace dans
+    // le sélecteur Windows natif — plus de sous-dossier imposé. Annulation = aucun changement.
+    const res = await dialog.showOpenDialog(win, {
+      properties: ["openDirectory", "createDirectory"],
+      title: "Nouvel espace de travail — choisis ou crée son dossier",
+      buttonLabel: "Utiliser ce dossier",
+    })
     if (res.canceled || !res.filePaths[0]) return null
-    const clean = String(name || "Aven-workspace").trim() || "Aven-workspace"
+    const dir = path.resolve(res.filePaths[0])
+    if (listWorkspaces().some((w) => path.resolve(w.path) === dir)) {
+      throw new Error("Ce dossier fait déjà partie des espaces de travail connus.")
+    }
+    const clean = String(name || "").trim() || path.basename(dir)
     if (!/^[^<>:"/\\|?*]+$/.test(clean) || clean === "." || clean === ".." || /(^|\s)(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)/i.test(clean)) {
       throw new Error("Nom d’espace de travail invalide.")
     }
-    const dir = path.join(res.filePaths[0], clean)
-    const { mkdirSync } = await import("node:fs")
-    mkdirSync(dir, { recursive: true })
     const entry = registerWorkspace(dir, clean)
     setActiveWorkspace(dir)
     workspace = dir
@@ -377,6 +384,12 @@ function registerIpc() {
   ipcMain.handle("notes:get", (_e, id: string) => getNote(workspace, String(id)))
   ipcMain.handle("notes:togglePin", (_e, id: string) => togglePin(workspace, String(id)))
   ipcMain.handle("notes:pins", () => loadPinned(workspace))
+  // v9.0.0 : les notes sont de vrais fichiers — chemin affiché et ouverture du dossier.
+  ipcMain.handle("notes:dir", () => notesDir(workspace))
+  ipcMain.handle("notes:openFolder", () => {
+    mkdirSync(notesDir(workspace), { recursive: true })
+    return shell.openPath(notesDir(workspace))
+  })
   // Dictée vocale (v8.7.8) : blob audio du renderer → Groq (transcription + reformage).
   // Renvoie { raw, cleaned?, cleanedBy?, warning? } ; lève seulement si la transcription
   // elle-même échoue (le reformage, lui, est best effort côté voice.ts).

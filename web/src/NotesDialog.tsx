@@ -11,12 +11,14 @@ export default function NotesDialog(props: { initialId?: string; onClose: () => 
   const [pinned, setPinned] = useState<string[]>([])
   const [query, setQuery] = useState("")
   const [selected, setSelected] = useState<Note | null>(null)
+  const [dir, setDir] = useState("") // v9.0.0 : les notes sont de vrais fichiers .md accessibles
 
   const reload = useCallback(() => api.notesList().then(setNotes).catch((e) => props.onError(e)), [props.onError])
 
   useEffect(() => {
     void reload()
     api.notePins().then(setPinned).catch((e) => props.onError(e))
+    api.noteDir().then(setDir).catch(() => undefined)
   }, [reload])
 
   useEffect(() => {
@@ -57,6 +59,6 @@ export default function NotesDialog(props: { initialId?: string; onClose: () => 
   }
 
   return (
-    <div className="overlay"><div className="dialog wide notes-dialog"><header className="unified-settings-header"><div><span className="eyebrow">NOTES</span><h3>Notes du projet</h3><p className="hint">Stockées en Markdown dans l’espace de travail actif.</p></div><button className="button button-icon dialog-close" onClick={props.onClose} aria-label="Fermer" type="button"><Icon name="close" size={17} /></button></header><div className="notes-layout"><aside className="notes-list-panel"><input className="settings-input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher dans les titres et le contenu…" />{ordered.map((n) => <button key={n.id} className={`notes-item ${selected?.id === n.id ? "selected" : ""}`} onClick={() => open(n.id)}><strong>{pinned.includes(n.id) ? "📌 " : ""}{n.title}</strong><span>{n.id}</span></button>)}{!ordered.length && <p className="hint">Aucune note ne correspond.</p>}</aside><article className="notes-preview">{selected ? <><span className="eyebrow">APERÇU</span><h4>{selected.title}</h4><div className="notes-toolbar"><button className="button ghost" onClick={() => togglePin(selected.id)} type="button">{pinned.includes(selected.id) ? "Détacher" : "Épingler"}</button><button className="button ghost" onClick={() => exportNote(selected.id)} type="button">Exporter .md</button><span className="hint">{countWords(selected.markdown)} mots · {selected.markdown.length} caractères</span></div><pre>{selected.markdown}</pre></> : <div className="empty-state"><div className="empty-symbol"><Icon name="pencil" size={24} /></div><h2>Sélectionne une note</h2><p>Les notes de l’espace de travail apparaîtront ici.</p></div>}</article></div></div></div>
+    <div className="overlay"><div className="dialog wide notes-dialog"><header className="unified-settings-header"><div><span className="eyebrow">NOTES</span><h3>Notes du projet</h3><p className="hint">De vrais fichiers Markdown sur ton PC.</p><div className="row notes-dir-row"><code className="hint">{dir || "…"}</code><button className="button secondary" type="button" onClick={() => api.noteOpenFolder().catch((e) => props.onError(e))}><Icon name="folder" size={14} />Ouvrir le dossier</button></div></div><button className="button button-icon dialog-close" onClick={props.onClose} aria-label="Fermer" type="button"><Icon name="close" size={17} /></button></header><div className="notes-layout"><aside className="notes-list-panel"><input className="settings-input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher dans les titres et le contenu…" />{ordered.map((n) => <button key={n.id} className={`notes-item ${selected?.id === n.id ? "selected" : ""}`} onClick={() => open(n.id)}><strong>{pinned.includes(n.id) ? "📌 " : ""}{n.title}</strong><span>{n.id}</span></button>)}{!ordered.length && <p className="hint">Aucune note ne correspond.</p>}</aside><article className="notes-preview">{selected ? <><span className="eyebrow">APERÇU</span><h4>{selected.title}</h4><div className="notes-toolbar"><button className="button ghost" onClick={() => togglePin(selected.id)} type="button">{pinned.includes(selected.id) ? "Détacher" : "Épingler"}</button><button className="button ghost" onClick={() => exportNote(selected.id)} type="button">Exporter .md</button><span className="hint">{countWords(selected.markdown)} mots · {selected.markdown.length} caractères</span></div><pre>{selected.markdown}</pre></> : <div className="empty-state"><div className="empty-symbol"><Icon name="pencil" size={24} /></div><h2>Sélectionne une note</h2><p>Les notes de l’espace de travail apparaîtront ici.</p></div>}</article></div></div></div>
   )
 }

@@ -5,6 +5,8 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from "node
 import path from "node:path"
 
 const NOTE_DIR = (workspace: string) => path.join(workspace, ".opencodeapp", "notes")
+/** Dossier des notes de l'espace (v9.0.0) : de vrais fichiers .md accessibles depuis le PC. */
+export const notesDir = NOTE_DIR
 const safeId = (value: string) => value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 70) || `note-${Date.now()}`
 const cleanTitle = (value: string) => String(value || "Sans titre").trim().replace(/\s+/g, " ").slice(0, 120) || "Sans titre"
 
