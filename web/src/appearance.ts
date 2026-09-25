@@ -25,6 +25,8 @@ export type AppearanceConfig = {
   agentOrder: string[]
   customAccent: string // couleur libre, utilisée quand accent === "custom"
   voiceAnnouncements: boolean // annonceur vocal SAPI des événements d'agent (v8.7.9)
+  chatsGroupedByAgent: boolean // v9.0.0 : sidebar montrant les conversations de tous les agents, groupées
+  freebuffDefaultCode: boolean // v9.0.0 : Freebuff prioritaire sur l'agent code quand la clé Codebuff existe
 }
 
 export const APPEARANCE_KEY = "aven.appearance.v3"
@@ -48,6 +50,8 @@ export const defaultAppearance: AppearanceConfig = {
   agentOrder: [],
   customAccent: "#8b5cf6",
   voiceAnnouncements: false, // annonceur vocal : désactivé par défaut (choix explicite)
+  chatsGroupedByAgent: true, // v9.0.0 : conversations groupées par agent dans la sidebar
+  freebuffDefaultCode: true, // v9.0.0 : actif par défaut — ne s'applique que si la clé Codebuff existe
 }
 
 export const presetAccents: Record<Exclude<Accent, "custom">, { label: string; value: string }> = {
@@ -79,6 +83,8 @@ function sanitize(input: Partial<AppearanceConfig> | null | undefined): Appearan
     agentOrder: Array.isArray(input?.agentOrder) ? [...new Set(input.agentOrder.filter((x) => typeof x === "string"))] : [],
     customAccent: /^#[0-9a-fA-F]{6}$/.test(String(out.customAccent)) ? out.customAccent : defaultAppearance.customAccent,
     voiceAnnouncements: typeof input?.voiceAnnouncements === "boolean" ? input.voiceAnnouncements : defaultAppearance.voiceAnnouncements,
+    chatsGroupedByAgent: typeof input?.chatsGroupedByAgent === "boolean" ? input.chatsGroupedByAgent : defaultAppearance.chatsGroupedByAgent,
+    freebuffDefaultCode: typeof input?.freebuffDefaultCode === "boolean" ? input.freebuffDefaultCode : defaultAppearance.freebuffDefaultCode,
   }
 }
 

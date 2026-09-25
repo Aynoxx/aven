@@ -250,6 +250,17 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
 /* Barre d'outils des notes premium (v8.10.0). */
 .notes-toolbar { display: flex; align-items: center; gap: 8px; margin: 6px 0 10px; flex-wrap: wrap; }
 .notes-toolbar .hint { margin-left: auto; }
+.notes-dir-row { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.notes-dir-row code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Sections d'agent dans la liste de conversations (v9.0.0). */
+.chat-group-header { display: flex; align-items: center; gap: 6px; margin: 10px 6px 4px; color: var(--muted); font-size: var(--font-size-xs); text-transform: uppercase; letter-spacing: .06em; }
+.chat-group-header:first-child { margin-top: 2px; }
+.chat-group-header .chat-group-count { margin-left: auto; opacity: .7; }
+
+/* Conversations par agent sur la page Agents (v9.0.0). */
+.agent-card-chats { display: grid; gap: 4px; margin-top: 10px; }
+.agent-card-chats .chat-main { justify-content: flex-start; padding: 6px 10px; border-radius: 8px; }
 .dictation-button.dictation-recording { background: var(--rose, #f43f5e); border-color: var(--rose, #f43f5e); color: white; animation: dictation-pulse 1.2s ease-in-out infinite; }
 .dictation-button:disabled { opacity: .6; cursor: progress; }
 .dictation-toggle { font-size: var(--font-size-xs); padding: 2px 8px; min-height: 22px; }
