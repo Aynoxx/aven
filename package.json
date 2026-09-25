@@ -1,6 +1,6 @@
 {
   "name": "aven",
-  "version": "8.10.0",
+  "version": "8.11.0",
   "private": true,
   "type": "module",
   "main": "dist-electron/main.js",
@@ -18,7 +18,7 @@
     "verify:v8.7.4": "node scripts/verify-v8.7.4.mjs",
     "verify:v8.7.5": "node scripts/verify-v8.7.5.mjs",
     "verify:v8.7.6": "node scripts/verify-v8.7.6.mjs",
-    "verify": "node scripts/verify-v8.10.0.mjs && node scripts/verify-v8.9.0.mjs && node scripts/verify-v8.8.0.mjs && node scripts/verify-build.mjs",
+    "verify": "node scripts/verify-v8.11.0.mjs && node scripts/verify-v8.10.0.mjs && node scripts/verify-v8.9.0.mjs && node scripts/verify-v8.8.0.mjs && node scripts/verify-build.mjs",
     "test": "node --import ./tests/register.mjs --experimental-strip-types --no-warnings --test tests/",
     "typecheck:electron": "tsc --noEmit -p tsconfig.electron.json",
     "typecheck:tests": "tsc --noEmit -p tsconfig.test.json"

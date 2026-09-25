@@ -1,8 +1,11 @@
-# Aven v8.10.0
+# Aven v8.11.0
 
 Application de bureau (Electron) : une chatbox avec **3 agents commutables** (code, recherche, analyse) et un
 sous-agent (code-reviewer), branchée sur **OpenCode 2.0.10** et un catalogue d’agents strictement gratuit (OpenRouter Free / OpenCode Zen).
 
+> **v8.11.0 — Panneau de statistiques** : carte « Statistiques » du hub — conversations
+> actives/archivées par agent, dictées (total et du jour), modèles les plus utilisés.
+> Comptage persisté par espace de travail, agrégation pure et testée.
 > **v8.10.0 — Notes premium** : recherche plein-texte (insensible aux accents et à la casse,
 > sur les titres ET le contenu), épinglage persistant (les épinglées en tête de liste),
 > comptage de mots/caractères et export .md via le dialogue Windows.

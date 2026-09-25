@@ -557,11 +557,19 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
 .hub-card-copy { display:grid; justify-items:center; gap:2px; min-width:0; text-align:center; }
 .hub-card-copy strong { font-size:var(--font-size-md); font-weight:780; letter-spacing:.005em; }
 .hub-card-copy small { max-width:130px; color:var(--muted); font-size:var(--font-size-xs); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.hub-card-notes { --hub-angle:90deg; }
-.hub-card-projects { --hub-angle:18deg; }
-.hub-card-files { --hub-angle:-54deg; }
-.hub-card-settings { --hub-angle:-126deg; }
-.hub-card-agents { --hub-angle:162deg; }
+.hub-card-notes { --hub-angle:60deg; }
+.hub-card-projects { --hub-angle:0deg; }
+.hub-card-files { --hub-angle:-60deg; }
+.hub-card-settings { --hub-angle:-120deg; }
+.hub-card-agents { --hub-angle:180deg; }
+.hub-card-stats { --hub-angle:120deg; }
+
+/* Tuiles du panneau de statistiques (v8.11.0). */
+.stats-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px; }
+.stat-tile { display:grid; justify-items:center; gap:3px; padding:14px 10px; border:1px solid var(--border); border-radius:12px; background:var(--home-surface-strong, var(--panel-soft)); text-align:center; }
+.stat-tile strong { font-size:1.45em; font-weight:800; }
+.stat-tile small { color:var(--muted); font-size:var(--font-size-xs); }
+.stat-wide { grid-column:1 / -1; }
 
 
 .hub-picker-overlay,.home-modal-overlay { position:fixed; inset:0; z-index:90; display:grid; place-items:center; padding:24px; background:color-mix(in srgb,var(--bg) 76%,transparent); backdrop-filter:blur(14px); animation:fade-up .16s ease both; }

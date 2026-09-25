@@ -39,6 +39,7 @@ contextBridge.exposeInMainWorld("opencode", {
   noteTogglePin: (id: string) => call("notes:togglePin", id),
   notePins: () => call("notes:pins"),
   noteExport: (id: string) => call("notes:export", id),
+  getStats: () => call("stats:get"),
   voiceTranscribe: (audio: Uint8Array, mimeType: string) => call("voice:transcribe", audio, mimeType),
   announcerActivity: () => call("announcer:activity"),
   announcerSetEnabled: (on: boolean) => call("announcer:setEnabled", on),

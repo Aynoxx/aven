@@ -53,6 +53,16 @@ export type DictationResult = {
   intent?: DictationIntent // routage décidé par la passe d'intention (absent si elle a échoué)
 }
 
+// Miroir de electron/stats.ts (AgregatedStats) : chiffres affichables du panneau de stats.
+export type AggregatedStats = {
+  totalChats: number
+  archivedChats: number
+  perAgent: { agent: string; count: number }[]
+  dictationsTotal: number
+  dictationsToday: number
+  topModels: { model: string; count: number }[]
+}
+
 export type AppState = {
   status: "starting" | "ready" | "error"
   error?: string
@@ -109,6 +119,7 @@ export type OpenCodeApi = {
   noteTogglePin: (id: string) => Promise<string[]>
   notePins: () => Promise<string[]>
   noteExport: (id: string) => Promise<string | null>
+  getStats: () => Promise<AggregatedStats>
   voiceTranscribe: (audio: Uint8Array, mimeType: string) => Promise<DictationResult>
   announcerActivity: () => Promise<void>
   announcerSetEnabled: (on: boolean) => Promise<boolean>

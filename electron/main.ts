@@ -7,7 +7,8 @@ import { addDiscoveredFreeModels, loadTable } from "./priorities.js"
 import { EXPECTED_VERSION } from "./opencode-bridge.js"
 import { FREEBUFF_MODEL_LABEL } from "./freebuff.js"
 import { Router } from "./router.js"
-import { relayEvents, startOpenCode, type Bridge } from "./opencode-bridge.js"
+import { relayEvents, startOpenCode, TABS, type Bridge } from "./opencode-bridge.js"
+import { aggregateStats, countDictation, readDictationStats } from "./stats.js"
 import { probeOpenRouterKey, PROVIDERS } from "./providers.js"
 import { loadKeys, saveKey, seedWorkspace } from "./settings.js"
 import { getNote, listNotes } from "./notes.js"
@@ -390,6 +391,7 @@ function registerIpc() {
         : "chat"
         : "absente"
       console.log(`[dictée] OK — brut: ${result.raw.length} car.` + (result.cleaned ? `, éclairci: ${result.cleaned.length} car.` : "") + (result.warning ? `, warning: ${result.warning}` : "") + `, intention: ${intent}`)
+      try { countDictation(workspace) } catch { /* les stats ne doivent jamais casser la dictée */ }
       return result
     } catch (err) {
       console.error("[dictée] échec de transcription :", err instanceof Error ? err.message : String(err))
@@ -425,6 +427,12 @@ function registerIpc() {
     if (res.canceled || !res.filePath) return null
     writeFileSync(res.filePath, note.markdown, "utf8")
     return res.filePath
+  })
+  ipcMain.handle("stats:get", async () => {
+    const chats = await ops.chats(undefined, true).catch(() => [])
+    const modelCounters: Record<string, number> = {}
+    for (const c of chats) if (c.model) modelCounters[c.model] = (modelCounters[c.model] ?? 0) + 1
+    return aggregateStats({ chats, dictations: readDictationStats(workspace), modelCounters }, [...TABS])
   })
   ipcMain.handle("chats:export", async (_e, id: string) => {
     if (!win) return null

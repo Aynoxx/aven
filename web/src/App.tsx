@@ -5,6 +5,7 @@ import Markdown from "./Markdown"
 import MessageBubble from "./MessageBubble"
 import { applyEvent, emptyLive, type Live } from "./stream"
 import type { Agent, AppAction, AppState, Chat, Decision, FormAnswer, Msg, StreamEvent } from "./types"
+import type { AggregatedStats } from "./types"
 import FormDialog from "./FormDialog"
 import SettingsDialog from "./SettingsDialog"
 import NotesDialog from "./NotesDialog"
@@ -617,6 +618,15 @@ export default function App() {
   }
   const agentName = (id: string) => agents.find((a) => a.id === id)?.name ?? id
 
+  // Carte « Statistiques » du hub (v8.11.0) : chiffres clés de l'usage (conversations,
+  // dictées, modèles). Les données sont rechargées à chaque ouverture.
+  const [stats, setStats] = useState<AggregatedStats | null>(null)
+  const [showStats, setShowStats] = useState(false)
+  const openStats = () => {
+    setShowStats(true)
+    api.getStats().then(setStats).catch((e) => { setShowStats(false); fail(e) })
+  }
+
   const orderedAgents = useMemo(() => orderAgents(agents, appearance.agentOrder), [agents, appearance.agentOrder])
   const workspaceName = appState.workspace ? appState.workspace.split(/[\\/]/).pop() : undefined
   const visibleChats = useMemo(() => chats.filter((c) => !search.trim() || c.title.toLowerCase().includes(search.trim().toLowerCase())), [chats, search])
@@ -655,6 +665,7 @@ export default function App() {
       notes: "file",
       projects: "grid",
       settings: "settings",
+      stats: "chart",
     }
     return <Icon name={icons[kind] ?? "sparkle"} />
   }
@@ -708,6 +719,7 @@ export default function App() {
   const renderHome = () => {
     const nav = [
       { key: "agents", label: "Agents", kind: "agent", hint: orderedAgents.length === 1 ? "Agent actif" : `${orderedAgents.length} agents`, action: openAgentsPage },
+      { key: "stats", label: "Statistiques", kind: "stats", hint: "Usage de l'app", action: openStats },
       { key: "files", label: "Fichiers", kind: "files", hint: "Parcourir l’espace", action: () => api.openWorkspace().catch(fail) },
       { key: "notes", label: "Notes", kind: "notes", hint: "Vos notes Markdown", action: () => { setShowAgentsPage(false); setShowSettings(false); setShowHome(false); setNotesInitialId(undefined); setShowNotes(true) } },
       { key: "projects", label: "Projets", kind: "projects", hint: "Espaces de travail", action: () => openConfiguration("workspaces") },
@@ -870,6 +882,28 @@ export default function App() {
                 </button>
 
                 {homeNotice && <div className="home-notice" role="status">{homeNotice}</div>}
+
+                {showStats && (
+                  <div className="hub-picker-overlay" role="dialog" aria-modal="true" aria-label="Statistiques" onClick={(e) => { if (e.target === e.currentTarget) setShowStats(false) }}>
+                    <div className="hub-picker">
+                      <div className="hub-picker-header">
+                        <div><span className="eyebrow">STATISTIQUES</span><strong className="hub-picker-title">Usage de l'application</strong></div>
+                        <button className="button button-icon dialog-close" onClick={() => setShowStats(false)} aria-label="Fermer" type="button"><Icon name="close" size={17} /></button>
+                      </div>
+                      <div className="hub-picker-list stats-grid">
+                        <div className="stat-tile"><strong>{stats ? stats.totalChats : "…"}</strong><small>conversations actives</small></div>
+                        <div className="stat-tile"><strong>{stats ? stats.archivedChats : "…"}</strong><small>archivées</small></div>
+                        <div className="stat-tile"><strong>{stats ? stats.dictationsTotal : "…"}</strong><small>dictées ({stats ? stats.dictationsToday : "…"} aujourd'hui)</small></div>
+                        {stats?.perAgent.map((e) => (
+                          <div key={e.agent} className="stat-tile"><strong>{e.count}</strong><small>conversations · {agentName(e.agent)}</small></div>
+                        ))}
+                        {stats?.topModels.length ? (
+                          <div className="stat-tile stat-wide"><strong>{stats.topModels.map((m) => `${m.model} (${m.count})`).join(" · ")}</strong><small>modèles les plus utilisés</small></div>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {showAgentPicker && (
                   <div className="hub-picker-overlay" role="dialog" aria-modal="true" aria-label="Choisir un agent" onClick={(e) => { if (e.target === e.currentTarget) setShowAgentPicker(false) }}>
