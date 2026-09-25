@@ -246,6 +246,10 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
   background: transparent; color: var(--text); cursor: pointer; }
 .selbar button:hover { background: color-mix(in srgb, var(--accent, #6366f1) 18%, transparent); }
 .selbar .selbar-close { color: var(--text-muted, var(--text)); opacity: .7; }
+
+/* Barre d'outils des notes premium (v8.10.0). */
+.notes-toolbar { display: flex; align-items: center; gap: 8px; margin: 6px 0 10px; flex-wrap: wrap; }
+.notes-toolbar .hint { margin-left: auto; }
 .dictation-button.dictation-recording { background: var(--rose, #f43f5e); border-color: var(--rose, #f43f5e); color: white; animation: dictation-pulse 1.2s ease-in-out infinite; }
 .dictation-button:disabled { opacity: .6; cursor: progress; }
 .dictation-toggle { font-size: var(--font-size-xs); padding: 2px 8px; min-height: 22px; }

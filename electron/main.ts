@@ -11,6 +11,7 @@ import { relayEvents, startOpenCode, type Bridge } from "./opencode-bridge.js"
 import { probeOpenRouterKey, PROVIDERS } from "./providers.js"
 import { loadKeys, saveKey, seedWorkspace } from "./settings.js"
 import { getNote, listNotes } from "./notes.js"
+import { loadPinned, togglePin } from "./notes-meta.js"
 import { transcribeSpeech } from "./voice.js"
 import { Announcer } from "./announcer.js"
 import { activeWorkspace, ensureDefaultRegistered, listWorkspaces, registerWorkspace, removeWorkspace, setActiveWorkspace, validateWorkspacePath } from "./workspaces.js"
@@ -373,6 +374,8 @@ function registerIpc() {
   ipcMain.handle("chats:list", (_e, agent?: string, includeArchived?: boolean) => ops.chats(agent, includeArchived))
   ipcMain.handle("notes:list", () => listNotes(workspace))
   ipcMain.handle("notes:get", (_e, id: string) => getNote(workspace, String(id)))
+  ipcMain.handle("notes:togglePin", (_e, id: string) => togglePin(workspace, String(id)))
+  ipcMain.handle("notes:pins", () => loadPinned(workspace))
   // Dictée vocale (v8.7.8) : blob audio du renderer → Groq (transcription + reformage).
   // Renvoie { raw, cleaned?, cleanedBy?, warning? } ; lève seulement si la transcription
   // elle-même échoue (le reformage, lui, est best effort côté voice.ts).
@@ -410,6 +413,19 @@ function registerIpc() {
   ipcMain.handle("chats:messages", (_e, id: string) => ops.messages(id))
   ipcMain.handle("chats:send", (_e, id: string, text: string, backend?: "opencode" | "freebuff") => ops.send(id, text, backend))
   ipcMain.handle("chats:interrupt", (_e, id: string) => ops.interrupt(id))
+  ipcMain.handle("notes:export", async (_e, id: string) => {
+    if (!win) return null
+    const note = getNote(workspace, String(id))
+    const safeName = note.title.replace(/[\\/:*?"<>|]/g, "_").slice(0, 80) || "note"
+    const res = await dialog.showSaveDialog(win, {
+      title: "Exporter la note",
+      defaultPath: `${safeName}.md`,
+      filters: [{ name: "Markdown", extensions: ["md"] }],
+    })
+    if (res.canceled || !res.filePath) return null
+    writeFileSync(res.filePath, note.markdown, "utf8")
+    return res.filePath
+  })
   ipcMain.handle("chats:export", async (_e, id: string) => {
     if (!win) return null
     const { title, markdown } = await ops.exportMarkdown(id)
