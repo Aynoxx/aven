@@ -14,7 +14,8 @@ export type AppAction = (typeof APP_ACTIONS)[number]
 
 // Miroir des TABS d'opencode-bridge.ts (ids canoniques des agents), ici sans dépendance
 // au client OpenCode pour garder le module testable avec Node seul.
-export const AGENT_IDS = ["code", "recherche", "analyse"] as const
+// v9.0.0 : « projet » = agent principal orchestrateur.
+export const AGENT_IDS = ["projet", "code", "recherche", "analyse"] as const
 export type AgentId = (typeof AGENT_IDS)[number]
 
 export type DictationIntent =
@@ -27,6 +28,7 @@ export const INTENT_MODEL = process.env.AVEN_VOICE_INTENT_MODEL || "openai/gpt-o
 // Descriptions sémantiques injectées dans le prompt : le classifieur route selon le SENS
 // de la tâche dictée, pas selon des mots-clés littéraux.
 export const AGENT_HINTS: Record<AgentId, string> = {
+  projet: "projet d'ensemble, chantier multi-étapes, coordonner et synthétiser plusieurs domaines",
   code: "développement, bug, erreur de code, refactoring, tests, git, terminal, fichiers du projet",
   recherche: "recherche, documentation, comparaison, veille, actualité, explique-moi, qu'est-ce que",
   analyse: "données, chiffres, statistiques, tableau, graphique, rapport, analyse de fichier",
@@ -44,7 +46,7 @@ export const INTENT_SYSTEM_PROMPT = [
   AGENT_LINES,
   '3. Dictée ordinaire (tout le reste : message, question, suite de conversation) : {"intent":"chat"}.',
   "Réponds UNIQUEMENT par un JSON valide sur une ligne, sans Markdown ni commentaire :",
-  '{"intent":"app","action":"..."} | {"intent":"agent","target":"code|recherche|analyse"} | {"intent":"chat"}',
+  '{"intent":"app","action":"..."} | {"intent":"agent","target":"projet|code|recherche|analyse"} | {"intent":"chat"}',
 ].join("\n")
 
 const GROQ_BASE = "https://api.groq.com/openai/v1" // miroir de voice.ts (import interdit : dépendance circulaire)

@@ -24,7 +24,7 @@ assert.ok(vMaj > 8 || (vMaj === 8 && vMin >= 8), `version trop ancienne : ${pkg.
 
 // Module de classification : liste fermée, neutralité, anti-injection.
 assert.match(intent, /APP_ACTIONS/)
-assert.match(intent, /AGENT_IDS = \["code", "recherche", "analyse"\]/)
+assert.match(intent, /AGENT_IDS = \["projet", "code", "recherche", "analyse"\]/) // v9.0.0 : agent projet ajouté
 assert.match(intent, /ne réponds jamais à la demande/)
 assert.match(intent, /Action d'intention inconnue/) // garde anti-hallucination
 assert.match(intent, /temperature: 0/)

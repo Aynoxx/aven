@@ -1,6 +1,6 @@
 import { loadNames, setName } from "./agent-names.js"
 import type { Router } from "./router.js"
-import type { Task } from "./priorities.js"
+import { TASKS, type Task } from "./priorities.js"
 import { parseRef, refOf } from "./model-ref.js"
 import { TABS, type Bridge } from "./opencode-bridge.js"
 import { isArchived, listArchived, setArchived } from "./archive.js"
@@ -213,7 +213,7 @@ export function makeOps(current: () => Bridge, router: () => Router | null = () 
       if (backend === "freebuff") {
         const info = await b.client.session.get({ sessionID: id })
         const rawAgent = String(info.agent ?? "code")
-        const task: Task = (["code", "analyse", "recherche"] as const).includes(rawAgent as Task) ? rawAgent as Task : "code"
+        const task: Task = (TASKS as readonly string[]).includes(rawAgent) ? (rawAgent as Task) : "code"
         const result = await runFreebuff({
           chatId: id,
           task,

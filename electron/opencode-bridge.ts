@@ -9,7 +9,9 @@ import { OpenCode } from "@opencode/client"
 // Ce module ne dépend PAS d'Electron : on peut donc le tester avec Node seul.
 
 export const EXPECTED_VERSION = "2.0.10"
-export const TABS = ["code", "recherche", "analyse"] as const
+// v9.0.0 : « projet » est l'agent principal orchestrateur (appelé en premier),
+// il délègue aux agents spécialisés via l'outil subagent.
+export const TABS = ["projet", "code", "recherche", "analyse"] as const
 
 export type OpenCodeClient = ReturnType<typeof OpenCode.make>
 export type AppEvent = { type: string; data: Record<string, unknown> }

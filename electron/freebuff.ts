@@ -12,6 +12,7 @@ export const FREEBUFF_MODEL_LABEL = "Freebuff / Codebuff SDK"
 type FreebuffEvent = { type?: string; [key: string]: unknown }
 
 const AGENTS: Record<Task, string> = {
+  projet: "codebuff/base@latest", // v9.0.0 : l'orchestrateur utilise l'agent généraliste Codebuff
   code: "codebuff/base@latest",
   analyse: "codebuff/thinker@latest",
   recherche: "codebuff/researcher@latest",

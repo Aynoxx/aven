@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs"
 
-export const TASKS = ["code", "analyse", "recherche"] as const
+// v9.0.0 : « projet » = agent principal orchestrateur qui délègue aux trois spécialistes.
+export const TASKS = ["projet", "code", "analyse", "recherche"] as const
 export type Task = (typeof TASKS)[number]
 export type Limit = { perMinute?: number; perDay?: number; shared?: string }
 export type Entry = { label: string; priority: Partial<Record<Task, number>>; limit?: Limit }
@@ -98,7 +99,14 @@ export function buildChains(table: Table, available: Set<string>): Record<Task, 
   const out = {} as Record<Task, Chain>
   for (const task of TASKS) {
     out[task] = Object.entries(table)
-      .map(([ref, e], i) => ({ ref, label: e.label, priority: e.priority?.[task], i }))
+      .map(([ref, e], i) => ({
+        ref,
+        label: e.label,
+        // v9.0.0 : l'agent « projet » hérite des priorités de « code » quand la table
+        // ne lui donne pas d'entrée explicite (y compris pour les modèles découverts).
+        priority: e.priority?.[task] ?? (task === "projet" ? e.priority?.code : undefined),
+        i,
+      }))
       .filter((m): m is { ref: string; label: string; priority: number; i: number } => m.priority !== undefined && available.has(m.ref))
       .sort((a, b) => a.priority - b.priority || a.i - b.i)
       .map(({ ref, label, priority }) => ({ ref, label, priority }))
