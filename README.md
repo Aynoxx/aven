@@ -1,8 +1,14 @@
-# Aven v9.0.0
+# Aven v9.0.1
 
 Application de bureau (Electron) : une chatbox avec **3 agents commutables** (code, recherche, analyse) et un
 sous-agent (code-reviewer), branchée sur **OpenCode 2.0.10** et un catalogue d’agents strictement gratuit (OpenRouter Free / OpenCode Zen).
 
+> **v9.0.1 — Réparation du démarrage** : les espaces créés avant la v9.0.0 n'avaient pas
+> l'agent **projet** (liste de synchro figée) → « Agents introuvables après 90s » au lancement.
+> Les agents sont désormais **découverts dans le gabarit de l'app** : tout nouvel agent sera
+> automatiquement copié dans les espaces existants (sans jamais toucher à tes personnalisations).
+> Corrige aussi le script de tests pour la CI GitHub (les installateurs v8.11.0/v9.0.0 n'avaient
+> pas pu être publiés) — les releases repartent avec la v9.0.1.
 > **v9.0.0 — Projet Agent IA** : ① créer un espace = choisir/créer son dossier dans le
 > sélecteur Windows ; ② les notes sont de vrais fichiers .md (chemin affiché + « Ouvrir
 > le dossier ») ; ③ conversations groupées par agent (sidebar + page Agents, réglage

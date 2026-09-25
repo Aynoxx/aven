@@ -1,5 +1,5 @@
 import { app, safeStorage } from "electron"
-import { mkdirSync, readFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs"
 import path from "node:path"
 import { PROVIDERS } from "./providers.js"
 import { mergeNewModels, prunePaidModels, syncTrackedFiles, type FileSyncResult } from "./workspace-sync.js"
@@ -57,13 +57,25 @@ export function saveKey(provider: string, key: string) {
 const TRACKED = [
   "opencode.jsonc",
   "model-priorities.json",
-  path.join(".opencode", "agents", "code.md"),
-  path.join(".opencode", "agents", "recherche.md"),
-  path.join(".opencode", "agents", "analyse.md"),
-  path.join(".opencode", "agents", "code-reviewer.md"),
   path.join(".opencode", "plugins", "aven-tool-guard.js"),
   path.join(".opencode", "plugins", "README.md"),
 ]
+
+/**
+ * Les agents sont découverts DANS LE GABARIT de l'app au lieu d'être listés en dur :
+ * un agent ajouté dans une nouvelle version (ex. « projet » en v9.0.0) est ainsi
+ * propagé aux espaces de travail existants au démarrage suivant. La liste statique
+ * avait oublié « projet.md » : les espaces créés avant la v9.0.0 n'avaient pas
+ * l'agent, et l'app refusait de démarrer (« Agents introuvables après 90s »).
+ * (v9.0.1) Testable sans Electron : le gabarit est un paramètre.
+ */
+export function trackedAgentFiles(templateDir: string): string[] {
+  const agentsDir = path.join(templateDir, ".opencode", "agents")
+  if (!existsSync(agentsDir)) return []
+  return readdirSync(agentsDir)
+    .filter((f) => f.endsWith(".md"))
+    .map((f) => path.join(".opencode", "agents", f))
+}
 
 /**
  * Prépare un dossier de travail (le crée s'il n'existe pas encore) : copie la config et les
@@ -74,7 +86,9 @@ const TRACKED = [
  */
 export function seedWorkspace(dir: string, templateDir: string): { sync: FileSyncResult[]; newModels: string[]; removedModels: string[] } {
   mkdirSync(path.join(dir, ".opencode", "agents"), { recursive: true })
-  const sync = syncTrackedFiles(dir, templateDir, TRACKED)
+  // Dédoublonnage : les agents découverts remplacent toute entrée statique de même nom.
+  const tracked = [...new Set([...TRACKED, ...trackedAgentFiles(templateDir)])]
+  const sync = syncTrackedFiles(dir, templateDir, tracked)
   const removedModels = prunePaidModels(dir)
   const newModels = mergeNewModels(dir, templateDir)
   return { sync, newModels, removedModels }
