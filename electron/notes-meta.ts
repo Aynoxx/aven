@@ -27,7 +27,9 @@ export function loadPinned(workspace: string): string[] {
 /** Épingle ou détache une note. Retourne la nouvelle liste. */
 export function togglePin(workspace: string, id: string): string[] {
   const meta = readMeta(workspace)
-  const clean = path.basename(String(id || "")) // défense : jamais de traversée de chemin
+  // défense : jamais de traversée de chemin. Les \\ sont normalisés AVANT basename :
+  // sur Linux, path.basename ne les découpe pas (« ..\\evil\\note.md » resterait entier).
+  const clean = path.basename(String(id || "").replace(/[\\/]+/g, "/"))
   const wasPinned = meta.pinned.includes(clean)
   if (wasPinned) meta.pinned = meta.pinned.filter((x) => x !== clean)
   else {
