@@ -238,6 +238,14 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
 
 /* Dictée vocale (v8.7.8) : bouton push-to-talk + badge de reformage. */
 .dictation-button { border-radius: 999px; touch-action: none; user-select: none; }
+
+/* Barre d'actions sur sélection (v8.9.0) : flottante, au-dessus du contenu. */
+.selbar { position: fixed; z-index: 90; display: flex; gap: 2px; padding: 3px; border-radius: 10px;
+  background: var(--panel-solid, var(--panel)); border: 1px solid var(--border); box-shadow: 0 8px 24px color-mix(in srgb, black 35%, transparent); }
+.selbar button { display: grid; place-items: center; width: 30px; height: 30px; border: none; border-radius: 7px;
+  background: transparent; color: var(--text); cursor: pointer; }
+.selbar button:hover { background: color-mix(in srgb, var(--accent, #6366f1) 18%, transparent); }
+.selbar .selbar-close { color: var(--text-muted, var(--text)); opacity: .7; }
 .dictation-button.dictation-recording { background: var(--rose, #f43f5e); border-color: var(--rose, #f43f5e); color: white; animation: dictation-pulse 1.2s ease-in-out infinite; }
 .dictation-button:disabled { opacity: .6; cursor: progress; }
 .dictation-toggle { font-size: var(--font-size-xs); padding: 2px 8px; min-height: 22px; }

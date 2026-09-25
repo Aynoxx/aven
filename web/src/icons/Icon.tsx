@@ -32,6 +32,8 @@ export type IconName =
   | "dot"
   | "archive-list"
   | "check"
+  | "copy"
+  | "wrench"
   | "slash"
 
 export interface IconProps {
@@ -102,6 +104,10 @@ function paths(name: IconName): ReactNode {
       return <><path d="M5 5h14v14H5z" /><path d="M8 9h8M8 12h6M8 15h5" /></>
     case "check":
       return <path d="m5 12 4 4 10-10" />
+    case "copy":
+      return <><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V6a2 2 0 0 1 2-2h9" /></>
+    case "wrench":
+      return <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
     case "slash":
       return <path d="m6 6 12 12" />
   }

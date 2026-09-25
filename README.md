@@ -1,8 +1,11 @@
-# Aven v8.8.0
+# Aven v8.9.0
 
 Application de bureau (Electron) : une chatbox avec **3 agents commutables** (code, recherche, analyse) et un
 sous-agent (code-reviewer), branchée sur **OpenCode 2.0.10** et un catalogue d’agents strictement gratuit (OpenRouter Free / OpenCode Zen).
 
+> **v8.9.0 — Actions sur sélection** : sélectionne du code dans une réponse → une mini-barre flottante propose
+> **Copier**, **Corriger** (bascule sur l'agent code), **Expliquer** (agent recherche) et **Citer** (composeur).
+> Le texte cité atterrit dans le composeur : tu complètes ta demande et tu valides avec Entrée.
 > **v8.8.0 — Routage d'intention de la dictée** : la dictée comprend ce que tu demandes à l'*application*.
 > « Ouvre une note », « ouvre les paramètres »… s'exécutent immédiatement ; une tâche de dev, de recherche ou
 > d'analyse **bascule automatiquement sur le bon agent** (classification Groq gratuite, en parallèle du reformage :

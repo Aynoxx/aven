@@ -10,6 +10,7 @@ import SettingsDialog from "./SettingsDialog"
 import NotesDialog from "./NotesDialog"
 import { useAppearance } from "./appearance"
 import { useDictation } from "./voice-dictation"
+import { buildPrompt, selectionWithin } from "./selection-actions"
 import { Icon, type IconName } from "./icons"
 import "./App.css"
 
@@ -57,6 +58,10 @@ export default function App() {
   const [showConversationPicker, setShowConversationPicker] = useState(false)
   const [showNotes, setShowNotes] = useState(false)
   const [notesInitialId, setNotesInitialId] = useState<string | undefined>()
+  // Barre d'actions sur sélection (v8.9.0) : position viewport de la mini-barre flottante.
+  const [selBar, setSelBar] = useState<{ text: string; top: number; left: number } | null>(null)
+  const selBarRef = useRef(selBar)
+  selBarRef.current = selBar
   // "Projets", dans le hub d'accueil, ouvre les Réglages directement sur la liste des espaces
   // de travail plutôt que de rester sur le haut du panneau général.
   const [settingsFocus, setSettingsFocus] = useState<"workspaces" | undefined>(undefined)
@@ -166,6 +171,43 @@ export default function App() {
   })
   const dictationRef = useRef(dictation)
   dictationRef.current = dictation
+
+  // Sélection dans les messages (v8.9.0) : au relâchement de la souris, une mini-barre
+  // propose Copier / Corriger / Expliquer / Citer. Le texte atterrit TOUJOURS dans le
+  // composeur : l'utilisateur valide avec Entrée, rien ne part automatiquement.
+  const onMessagesMouseUp = (e: MouseEvent<HTMLDivElement>) => {
+    const root = e.currentTarget
+    requestAnimationFrame(() => {
+      const text = selectionWithin(root)
+      if (!text) {
+        setSelBar(null)
+        return
+      }
+      const rect = window.getSelection()!.getRangeAt(0).getBoundingClientRect()
+      setSelBar({
+        text,
+        top: Math.min(rect.bottom + 8, window.innerHeight - 56),
+        left: Math.min(Math.max(12, rect.left), Math.max(12, window.innerWidth - 330)),
+      })
+    })
+  }
+
+  // Applique l'action choisie : routage one-click (Corriger → code, Expliquer → recherche,
+  // réutilise la bascule v8.8.0) puis préremplissage du composeur.
+  const applySelection = (action: "fix" | "explain" | "send") => {
+    if (!selBar) return
+    setDictationMeta({ cleaned: false, showRaw: false, rawText: "", cleanedText: "" })
+    setInput(buildPrompt(action, selBar.text))
+    if (action === "fix" && tab !== "code" && agents.some((a) => a.id === "code")) selectAgent("code")
+    if (action === "explain" && tab !== "recherche" && agents.some((a) => a.id === "recherche")) selectAgent("recherche")
+    setSelBar(null)
+    requestAnimationFrame(() => {
+      const ta = textareaRef.current
+      if (!ta) return
+      ta.focus()
+      ta.selectionStart = ta.selectionEnd = ta.value.length // curseur à la fin, prêt à compléter
+    })
+  }
 
   // Annonceur vocal (v8.7.9) : la préférence vit dans l'apparence ; toute frappe dans le
   // composeur signale l'activité au main, qui coupe la voix (l'utilisateur parle/pile, on se tait).
@@ -877,7 +919,7 @@ export default function App() {
   }
 
   const renderMessages = () => (
-    <div className="messages block-card" key="messages">
+    <div className="messages block-card" key="messages" onMouseUp={onMessagesMouseUp}>
       {!chatId && (
         <div className="empty-state">
           <div className="empty-symbol"><Icon name="sparkle" size={24} /></div>
@@ -1226,6 +1268,16 @@ export default function App() {
 
       {form && <FormDialog key={form.id} form={form} onSubmit={answerForm} onCancel={cancelForm} />}
       {showNotes && <NotesDialog initialId={notesInitialId} onClose={closeNotesToHome} onError={fail} />}
+
+      {selBar && (
+        <div className="selbar" role="toolbar" aria-label="Actions sur la sélection" style={{ top: selBar.top, left: selBar.left }}>
+          <button type="button" title="Copier la sélection" onClick={() => { void navigator.clipboard.writeText(selBar.text); setSelBar(null) }}><Icon name="copy" size={15} /></button>
+          <button type="button" title="Corriger ce code (agent code)" onClick={() => applySelection("fix")}><Icon name="wrench" size={15} /></button>
+          <button type="button" title="Expliquer ce code (agent recherche)" onClick={() => applySelection("explain")}><Icon name="sparkle" size={15} /></button>
+          <button type="button" title="Citer dans le composeur" onClick={() => applySelection("send")}><Icon name="chevron-right" size={15} /></button>
+          <button type="button" className="selbar-close" title="Fermer" onClick={() => setSelBar(null)}><Icon name="close" size={15} /></button>
+        </div>
+      )}
 
       {showSettings && (
         <SettingsDialog

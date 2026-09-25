@@ -17,7 +17,10 @@ const types = read("web/src/types.ts")
 const tests = read("tests/voice-intent.test.mjs")
 
 // ── Version et périmètre v8.8.0 : routage d'intention de la dictée ──
-assert.equal(pkg.version, "8.8.0")
+// Le périmètre reste valable pour toute version ultérieure : on exige « au moins 8.8.0 »
+// (comparaison numérique, pas lexicale — 8.10 > 8.9).
+const [vMaj, vMin] = pkg.version.split(".").map(Number)
+assert.ok(vMaj > 8 || (vMaj === 8 && vMin >= 8), `version trop ancienne : ${pkg.version}`)
 
 // Module de classification : liste fermée, neutralité, anti-injection.
 assert.match(intent, /APP_ACTIONS/)
