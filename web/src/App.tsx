@@ -12,6 +12,8 @@ import NotesDialog from "./NotesDialog"
 import { useAppearance } from "./appearance"
 import { useDictation } from "./voice-dictation"
 import { buildPrompt, selectionWithin } from "./selection-actions"
+import { groupChatsByAgent } from "./chat-groups"
+import { effectiveBackend, nextManualChoice, type ManualChoice } from "./backend-choice"
 import { Icon, type IconName } from "./icons"
 import "./App.css"
 
@@ -44,7 +46,9 @@ export default function App() {
   const [messages, setMessages] = useState<Msg[]>([])
   const [live, setLive] = useState<Live>(emptyLive)
   const [input, setInput] = useState("")
-  const [useFreebuff, setUseFreebuff] = useState(false)
+  // v9.0.0 : Freebuff prioritaire sur l'agent code (si clé + réglage) ; le bouton du
+  // composeur reste un override manuel tri-état (auto / forcé / désactivé).
+  const [freebuffOverride, setFreebuffOverride] = useState<ManualChoice>(null)
   const [error, setError] = useState<string>()
   const [appState, setAppState] = useState<AppState>({ status: "starting", keys: {}, providers: [], updatesConfigured: false })
   const [showSettings, setShowSettings] = useState(false)
@@ -226,7 +230,8 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (!appState.keys.codebuff) setUseFreebuff(false)
+    // v9.0.0 : l'override Freebuff tri-état se réinitialise quand la clé disparaît.
+    if (!appState.keys.codebuff) setFreebuffOverride(null)
   }, [appState.keys.codebuff])
 
   const closeNotesToHome = useCallback(() => {
@@ -499,7 +504,9 @@ export default function App() {
     const explicitFreebuff = /^\/freebuff\s+/i.test(text.trim())
     const prompt = explicitFreebuff ? text.trim().replace(/^\/freebuff\s+/i, "").trim() : text.trim()
     if (!prompt) return
-    const backend: "opencode" | "freebuff" = useFreebuff || explicitFreebuff ? "freebuff" : "opencode"
+    const backend: "opencode" | "freebuff" = explicitFreebuff
+      ? "freebuff"
+      : effectiveBackend({ tab, hasCodebuffKey: !!appState.keys.codebuff, pref: appearance.freebuffDefaultCode, manual: freebuffOverride })
     setError(undefined)
     setFollowBottom(true)
     setMessages((m) => [...m, { id: `local-${Date.now()}`, role: "user", text: prompt }])
@@ -630,6 +637,24 @@ export default function App() {
   const orderedAgents = useMemo(() => orderAgents(agents, appearance.agentOrder), [agents, appearance.agentOrder])
   const workspaceName = appState.workspace ? appState.workspace.split(/[\\/]/).pop() : undefined
   const visibleChats = useMemo(() => chats.filter((c) => !search.trim() || c.title.toLowerCase().includes(search.trim().toLowerCase())), [chats, search])
+
+  // v9.0.0 : quand le regroupement par agent est activé, la sidebar affiche TOUTES les
+  // conversations de tous les agents (filtrées par la recherche), groupées par agent.
+  // Cliquer une conversation d'un autre agent bascule sur cet agent puis ouvre.
+  const openConversationFromSidebar = (chat: Chat) => {
+    if (chat.agent && chat.agent !== tab && agents.some((a) => a.id === chat.agent)) {
+      selectAgent(chat.agent)
+      preferredChatIdRef.current = chat.id
+      setChatId(chat.id)
+      return
+    }
+    setChatId(chat.id)
+  }
+  const chatGroups = useMemo(() => {
+    if (!appearance.chatsGroupedByAgent) return null
+    const filtered = chats.filter((c) => !search.trim() || c.title.toLowerCase().includes(search.trim().toLowerCase()))
+    return groupChatsByAgent(filtered, orderedAgents.map((a) => a.id))
+  }, [appearance.chatsGroupedByAgent, chats, search, orderedAgents])
   const lastUserIdx = [...messages].map((m) => m.role).lastIndexOf("user")
 
   const moveAgent = (id: string, targetId: string) => {
@@ -1057,22 +1082,25 @@ export default function App() {
                 <Icon name="microphone" size={16} />
               </button>
             )}
-            {appState.keys.codebuff && (
-              <button
-                className={`button ${useFreebuff ? "primary" : "secondary"}`}
-                type="button"
-                onClick={() => setUseFreebuff((value) => !value)}
-                title="Mode Freebuff intégré via le SDK Codebuff. Une clé Codebuff peut consommer des crédits."
-              >
-                {useFreebuff ? "Freebuff actif" : "Freebuff"}
-              </button>
-            )}
+            {appState.keys.codebuff && (() => {
+              const activeFreebuff = effectiveBackend({ tab, hasCodebuffKey: true, pref: appearance.freebuffDefaultCode, manual: freebuffOverride }) === "freebuff"
+              return (
+                <button
+                  className={`button ${activeFreebuff ? "primary" : "secondary"}`}
+                  type="button"
+                  onClick={() => setFreebuffOverride((value) => nextManualChoice(value))}
+                  title="Freebuff (SDK Codebuff) : peut consommer des crédits. Clic : forcer → désactiver → automatique. Par défaut, Freebuff ne s'applique qu'à l'agent code."
+                >
+                  {activeFreebuff ? "Freebuff actif" : "Freebuff"}
+                </button>
+              )
+            })()}
             <span className="composer-hint">
               {dictation.state === "recording" ? "J’écoute… relâche pour transcrire (Échap pour annuler)."
                 : dictation.state === "transcribing" ? "Transcription…"
                 : dictationMeta.cleaned && !dictationMeta.showRaw && input ? "Texte dicté éclairci — clique pour voir le brut."
                 : dictationMeta.warning ? `Dictée non reformée : ${dictationMeta.warning}`
-                : useFreebuff ? "Backend Freebuff / Codebuff SDK." : "Envoyez votre message à l’agent."}
+                : effectiveBackend({ tab, hasCodebuffKey: !!appState.keys.codebuff, pref: appearance.freebuffDefaultCode, manual: freebuffOverride }) === "freebuff" ? "Backend Freebuff / Codebuff SDK." : "Envoyez votre message à l’agent."}
             </span>
             {dictationMeta.cleaned && input && (
               <button
@@ -1209,6 +1237,21 @@ export default function App() {
                     )}
                     <p>{a.description || "Agent spécialisé Aven."}</p>
                   </div>
+                  {/* v9.0.0 : conversations de cet agent, ouvertes avec bascule automatique. */}
+                  {(() => {
+                    const group = groupChatsByAgent(chats, [a.id])[0]
+                    if (!group?.chats.length) return null
+                    return (
+                      <div className="agent-card-chats">
+                        {group.chats.slice(0, 4).map((c) => (
+                          <button key={c.id} className="chat-main" onClick={() => openConversationFromSidebar(c)} type="button" title="Ouvrir cette conversation">
+                            <span className="chat-title">{c.title}</span>
+                            <span className="chat-meta">{c.updated ? new Date(c.updated).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" }) : ""}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )
+                  })()}
                   <div className="agent-card-actions">
                     <button className="button secondary" onClick={() => selectAgent(a.id)} type="button">
                       Ouvrir
@@ -1260,7 +1303,21 @@ export default function App() {
                   <button className={`archive-toggle ${showArchived ? "selected" : ""}`} onClick={() => { setShowArchived((value) => !value); setChatId(null) }}><span><Icon name="archive-list" size={15} /></span>{showArchived ? "Revenir aux actives" : "Voir les archivées"}</button>
                 </div>
                 <div className="chat-list">
-                  {visibleChats.map((c) => (
+                  {chatGroups ? chatGroups.map((group) => (
+                    <div key={group.agent || "autre"} className="chat-group">
+                      <div className="chat-group-header"><span>{group.agent ? agentName(group.agent) : "Autre"}</span><span className="chat-group-count">{group.chats.length}</span></div>
+                      {group.chats.map((c) => (
+                        <div key={c.id} className={`chat ${c.id === chatId ? "active" : ""}`}>
+                          {renamingChat === c.id ? (
+                            <input className="rename-input" autoFocus value={chatValue} maxLength={120} onFocus={(e) => e.target.select()} onChange={(e) => setChatValue(e.target.value)} onBlur={() => void commitChatRename(c.id)} onKeyDown={(e) => { if (e.key === "Enter") void commitChatRename(c.id); if (e.key === "Escape") { e.stopPropagation(); renameCancelled.current = true; setRenamingChat(null) } }} />
+                          ) : (
+                            <button className="chat-main" onClick={() => openConversationFromSidebar(c)} onDoubleClick={() => startRenameChat(c.id)} title="Ouvrir la conversation"><span className="chat-title">{c.title}</span><span className="chat-meta">{c.updated ? new Date(c.updated).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" }) : ""}</span></button>
+                          )}
+                          <div className="chat-actions"><button onClick={() => startRenameChat(c.id)} title="Renommer" aria-label="Renommer"><Icon name="pencil" size={14} /></button><button onClick={() => exportChat(c.id)} title="Exporter" aria-label="Exporter"><Icon name="export" size={14} /></button><button onClick={() => toggleArchive(c.id, !showArchived)} title={showArchived ? "Désarchiver" : "Archiver"} aria-label={showArchived ? "Désarchiver" : "Archiver"}><Icon name={showArchived ? "restore" : "archive"} size={14} /></button><button onClick={() => removeChat(c.id)} title="Supprimer" aria-label="Supprimer"><Icon name="trash" size={14} /></button></div>
+                        </div>
+                      ))}
+                    </div>
+                  )) : visibleChats.map((c) => (
                     <div key={c.id} className={`chat ${c.id === chatId ? "active" : ""}`}>
                       {renamingChat === c.id ? (
                         <input className="rename-input" autoFocus value={chatValue} maxLength={120} onFocus={(e) => e.target.select()} onChange={(e) => setChatValue(e.target.value)} onBlur={() => void commitChatRename(c.id)} onKeyDown={(e) => { if (e.key === "Enter") void commitChatRename(c.id); if (e.key === "Escape") { e.stopPropagation(); renameCancelled.current = true; setRenamingChat(null) } }} />
