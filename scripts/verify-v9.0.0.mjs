@@ -48,6 +48,8 @@ assert.match(app, /openConversationFromSidebar/)
 assert.match(app, /chatGroups/)
 assert.match(app, /agent-card-chats/)
 assert.match(appearance, /chatsGroupedByAgent/)
+// v9.1.0 : freebuffDefaultCode a été remplacé par freebuffAsEngine (moteur de tous les agents).
+assert.match(appearance, /freebuffAsEngine|freebuffDefaultCode/)
 assert.match(settings, /Grouper les conversations par agent/)
 assert.match(testsGroups, /groupChatsByAgent/)
 
@@ -70,7 +72,7 @@ assert.match(backend, /effectiveBackend/)
 assert.match(app, /freebuffOverride/)
 assert.match(app, /nextManualChoice/)
 assert.match(appearance, /freebuffDefaultCode/)
-assert.match(settings, /Freebuff par défaut sur/)
+assert.match(settings, /Freebuff comme moteur|Freebuff par défaut sur/)
 assert.match(testsBackend, /effectiveBackend/)
 
 // Régressions : les acquis v8.x restent en place.

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import type { DragEvent, FormEvent, MouseEvent, ReactNode } from "react"
+import type { FormEvent, MouseEvent, ReactNode } from "react"
 import { api } from "./api"
 import Markdown from "./Markdown"
 import MessageBubble from "./MessageBubble"
@@ -56,7 +56,6 @@ export default function App() {
   const [notices, setNotices] = useState<Notice[]>([])
   const [showHome, setShowHome] = useState(true)
   const [homeNotice, setHomeNotice] = useState<string | null>(null)
-  const [showAgentPicker, setShowAgentPicker] = useState(false)
   const [showAgentsPage, setShowAgentsPage] = useState(false)
   const [agentsLoading, setAgentsLoading] = useState(true)
   const [agentsError, setAgentsError] = useState<string>()
@@ -101,7 +100,7 @@ export default function App() {
     switch (action) {
       case "open-notes":
         setShowAgentsPage(false); setShowSettings(false); setShowHome(false)
-        setShowAgentPicker(false); setShowConversationPicker(false)
+        setShowConversationPicker(false)
         setNotesInitialId(undefined); setShowNotes(true)
         return "Notes ouvertes."
       case "open-settings":
@@ -153,7 +152,6 @@ export default function App() {
       // dans le composeur qui n'est PAS visible depuis l'accueil. Sans cette navigation,
       // l'utilisateur ne voit rien après le relâchement.
       setShowHome(false)
-      setShowAgentPicker(false)
       setShowConversationPicker(false)
       setShowAgentsPage(false)
       setHomeNotice(null)
@@ -239,7 +237,6 @@ export default function App() {
     setNotesInitialId(undefined)
     setShowSettings(false)
     setShowAgentsPage(false)
-    setShowAgentPicker(false)
     setShowConversationPicker(false)
     setShowHome(true)
   }, [])
@@ -422,7 +419,6 @@ export default function App() {
           return
         }
         if (showConversationPicker) setShowConversationPicker(false)
-        else if (showAgentPicker) setShowAgentPicker(false)
         else if (showAgentsPage) { setShowAgentsPage(false); setShowHome(true) }
         else if (showNotes) closeNotesToHome()
         else if (showSettings) setShowSettings(false)
@@ -444,7 +440,7 @@ export default function App() {
       window.removeEventListener("keydown", onKey)
       window.removeEventListener("keyup", onKeyUp)
     }
-  }, [live.busy, live.forms, chatId, showSettings, showAgentPicker, showAgentsPage, showConversationPicker, showHome, showNotes, tab, closeNotesToHome])
+  }, [live.busy, live.forms, chatId, showSettings, showAgentsPage, showConversationPicker, showHome, showNotes, tab, closeNotesToHome])
 
   const newChat = async () => {
     if (!tab) return
@@ -453,7 +449,6 @@ export default function App() {
       setChats((prev) => [c, ...prev])
       setChatId(c.id)
       setShowConversationPicker(false)
-      setShowAgentPicker(false)
       setShowAgentsPage(false)
       setShowHome(false)
       requestAnimationFrame(() => textareaRef.current?.focus())
@@ -506,7 +501,7 @@ export default function App() {
     if (!prompt) return
     const backend: "opencode" | "freebuff" = explicitFreebuff
       ? "freebuff"
-      : effectiveBackend({ tab, hasCodebuffKey: !!appState.keys.codebuff, pref: appearance.freebuffDefaultCode, manual: freebuffOverride })
+      : effectiveBackend({ hasCodebuffKey: !!appState.keys.codebuff, pref: appearance.freebuffAsEngine, manual: freebuffOverride })
     setError(undefined)
     setFollowBottom(true)
     setMessages((m) => [...m, { id: `local-${Date.now()}`, role: "user", text: prompt }])
@@ -657,34 +652,12 @@ export default function App() {
   }, [appearance.chatsGroupedByAgent, chats, search, orderedAgents])
   const lastUserIdx = [...messages].map((m) => m.role).lastIndexOf("user")
 
-  const moveAgent = (id: string, targetId: string) => {
-    if (id === targetId) return
-    const ids = orderedAgents.map((a) => a.id)
-    const from = ids.indexOf(id)
-    const to = ids.indexOf(targetId)
-    if (from < 0 || to < 0) return
-    ids.splice(to, 0, ids.splice(from, 1)[0])
-    updateAppearance({ agentOrder: ids })
-  }
-
-  const dragStart = (e: DragEvent<HTMLElement>, id: string) => {
-    e.dataTransfer.effectAllowed = "move"
-    e.dataTransfer.setData("text/plain", id)
-  }
-
-  const startAgentRenameFromContext = (e: MouseEvent<HTMLButtonElement>, agent: Agent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    renameCancelled.current = false
-    setAgentValue(agent.name)
-    setRenamingAgent(agent.id)
-  }
-
   // L'ordre des blocs est persisté par le panneau Apparence.
   const mainBlocks = appearance.mainOrder
 
   const HubIcon = ({ kind }: { kind: string }) => {
     const icons: Record<string, IconName> = {
+      project: "sparkle", // v9.1.0 : l'orchestrateur porte la marque Aven (à part des agents)
       agent: "agent",
       files: "folder",
       notes: "file",
@@ -703,7 +676,6 @@ export default function App() {
     preferredChatIdRef.current = null
     setTab(id)
     setChatId(null)
-    setShowAgentPicker(false)
     setShowAgentsPage(false)
     setShowConversationPicker(false)
     setShowSettings(false)
@@ -716,20 +688,17 @@ export default function App() {
     setShowHome(false)
     setShowSettings(false)
     setShowNotes(false)
-    setShowAgentPicker(false)
     setShowConversationPicker(false)
     setShowAgentsPage(true)
   }
 
-  // Le sélecteur rapide reste disponible depuis la barre supérieure. La carte "Agents"
-  // ouvre la vue complète de gestion.
-  const openAgents = () => {
-    if (orderedAgents.length <= 1) {
-      if (orderedAgents[0]) selectAgent(orderedAgents[0].id)
-      else openAgentsPage()
-      return
-    }
-    setShowAgentPicker(true)
+  // v9.1.0 : retour accueil depuis la barre de fenêtre — ferme les panneaux ouverts.
+  const goHome = () => {
+    setShowAgentsPage(false)
+    setShowSettings(false)
+    setShowNotes(false)
+    setShowConversationPicker(false)
+    setShowHome(true)
   }
 
   const openConfiguration = (focus?: "workspaces") => {
@@ -743,6 +712,8 @@ export default function App() {
 
   const renderHome = () => {
     const nav = [
+      // v9.1.0 : « projet » est à part — carte dédiée d'orchestrateur, hors sélecteur d'agents.
+      { key: "project", label: "Projet", kind: "project", hint: "Orchestrateur des agents", action: () => selectAgent("projet") },
       { key: "agents", label: "Agents", kind: "agent", hint: orderedAgents.length === 1 ? "Agent actif" : `${orderedAgents.length} agents`, action: openAgentsPage },
       { key: "stats", label: "Statistiques", kind: "stats", hint: "Usage de l'app", action: openStats },
       { key: "files", label: "Fichiers", kind: "files", hint: "Parcourir l’espace", action: () => api.openWorkspace().catch(fail) },
@@ -752,7 +723,6 @@ export default function App() {
     ]
     const recent = chats.slice(0, 3)
     const allConversations = chats
-    const currentAgent = orderedAgents.find((a) => a.id === tab)
     const online = appState.status === "ready"
     const command = homeCommand.trim()
 
@@ -768,7 +738,6 @@ export default function App() {
         setShowHome(false)
         setShowAgentsPage(false)
         setShowConversationPicker(false)
-        setShowAgentPicker(false)
         setInput(command)
         setHomeCommand("")
         requestAnimationFrame(() => textareaRef.current?.focus())
@@ -811,11 +780,6 @@ export default function App() {
           </form>
 
           <div className="home-toolbar-actions">
-            <button className="home-agent-chip home-control" onClick={openAgents} title="Changer d’agent" type="button">
-              <span className="home-agent-dot" />
-              <span>{currentAgent?.name || "Agent"}</span>
-              <span className="home-chip-chevron" aria-hidden="true"><Icon name="chevron-down" size={14} /></span>
-            </button>
             <span className={`home-status ${online ? "online" : ""}`} title={online ? "Aven est prêt" : appState.status === "starting" ? "Aven démarre" : "Aven est indisponible"}>
               <span className="status-dot" />
               <span>{online ? "En ligne" : appState.status === "starting" ? "Démarrage" : "Indisponible"}</span>
@@ -908,6 +872,7 @@ export default function App() {
 
                 {homeNotice && <div className="home-notice" role="status">{homeNotice}</div>}
 
+
                 {showStats && (
                   <div className="hub-picker-overlay" role="dialog" aria-modal="true" aria-label="Statistiques" onClick={(e) => { if (e.target === e.currentTarget) setShowStats(false) }}>
                     <div className="hub-picker">
@@ -930,24 +895,6 @@ export default function App() {
                   </div>
                 )}
 
-                {showAgentPicker && (
-                  <div className="hub-picker-overlay" role="dialog" aria-modal="true" aria-label="Choisir un agent" onClick={(e) => { if (e.target === e.currentTarget) setShowAgentPicker(false) }}>
-                    <div className="hub-picker">
-                      <div className="hub-picker-header">
-                        <div><span className="eyebrow">AGENTS</span><strong className="hub-picker-title">Choisir un agent</strong></div>
-                        <button className="button button-icon dialog-close" onClick={() => setShowAgentPicker(false)} aria-label="Fermer" type="button"><Icon name="close" size={17} /></button>
-                      </div>
-                      <div className="hub-picker-list">
-                        {orderedAgents.map((a) => (
-                          <button key={a.id} className={`hub-picker-item ${a.id === tab ? "active" : ""}`} onClick={() => selectAgent(a.id)} type="button">
-                            <strong>{a.name}</strong>
-                            {a.description && <small>{a.description}</small>}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
               </section>
             </div>
           </div>
@@ -1083,13 +1030,13 @@ export default function App() {
               </button>
             )}
             {appState.keys.codebuff && (() => {
-              const activeFreebuff = effectiveBackend({ tab, hasCodebuffKey: true, pref: appearance.freebuffDefaultCode, manual: freebuffOverride }) === "freebuff"
+              const activeFreebuff = effectiveBackend({ hasCodebuffKey: true, pref: appearance.freebuffAsEngine, manual: freebuffOverride }) === "freebuff"
               return (
                 <button
                   className={`button ${activeFreebuff ? "primary" : "secondary"}`}
                   type="button"
                   onClick={() => setFreebuffOverride((value) => nextManualChoice(value))}
-                  title="Freebuff (SDK Codebuff) : peut consommer des crédits. Clic : forcer → désactiver → automatique. Par défaut, Freebuff ne s'applique qu'à l'agent code."
+                  title="Freebuff (SDK Codebuff) : peut consommer des crédits. Clic : forcer → désactiver → automatique. Par défaut, Freebuff est le moteur de tous les agents."
                 >
                   {activeFreebuff ? "Freebuff actif" : "Freebuff"}
                 </button>
@@ -1100,7 +1047,7 @@ export default function App() {
                 : dictation.state === "transcribing" ? "Transcription…"
                 : dictationMeta.cleaned && !dictationMeta.showRaw && input ? "Texte dicté éclairci — clique pour voir le brut."
                 : dictationMeta.warning ? `Dictée non reformée : ${dictationMeta.warning}`
-                : effectiveBackend({ tab, hasCodebuffKey: !!appState.keys.codebuff, pref: appearance.freebuffDefaultCode, manual: freebuffOverride }) === "freebuff" ? "Backend Freebuff / Codebuff SDK." : "Envoyez votre message à l’agent."}
+                : effectiveBackend({ hasCodebuffKey: !!appState.keys.codebuff, pref: appearance.freebuffAsEngine, manual: freebuffOverride }) === "freebuff" ? "Backend Freebuff / Codebuff SDK." : "Envoyez votre message à l’agent."}
             </span>
             {dictationMeta.cleaned && input && (
               <button
@@ -1160,6 +1107,12 @@ export default function App() {
             <span className="window-tab-icon"><Icon name="settings" size={14} /></span>
             <span>Paramètres</span>
           </button>
+          {!showHome && (
+            <button className="window-tab" onClick={goHome} aria-label="Retour à l’accueil">
+              <span className="window-tab-icon"><Icon name="arrow-left" size={14} /></span>
+              <span>Accueil</span>
+            </button>
+          )}
         </div>
         {/* Contrôles locaux dessinés en SVG dans l’esprit des icônes Fluent UI de Microsoft (Windows 11). */}
         <div className="window-controls">
@@ -1209,10 +1162,10 @@ export default function App() {
                   <button className="button primary" type="button" onClick={() => { setAgentsLoading(true); setAgentsError(undefined); api.agents().then((a) => { setAgents(a); setTab((cur) => cur || a[0]?.id || "") }).catch((e) => setAgentsError(e instanceof Error ? e.message : String(e))).finally(() => setAgentsLoading(false)) }}>Réessayer</button>
                 </div>
               ) : orderedAgents.length ? orderedAgents.map((a) => (
-                <article key={a.id} className={`agent-card ${a.id === tab ? "active" : ""}`}>
-                  <div className="agent-card-icon"><Icon name="agent" size={24} /></div>
+                <article key={a.id} className={`agent-card ${a.id === tab ? "active" : ""} ${a.id === "projet" ? "agent-card-orchestrator" : ""}`}>
+                  <div className="agent-card-icon"><Icon name={a.id === "projet" ? "sparkle" : "agent"} size={24} /></div>
                   <div className="agent-card-body">
-                    <span className="agent-card-id">{a.id}</span>
+                    <span className="agent-card-id">{a.id}{a.id === "projet" && <em className="orchestrator-badge">orchestrateur</em>}</span>
                     {renamingAgent === a.id ? (
                       <input
                         className="rename-input"
@@ -1281,19 +1234,6 @@ export default function App() {
         </main>
       ) : (
         <>
-          {appearance.showTabs && (
-            <nav className="tabs" aria-label="Agents">
-              <div className="tabs-scroll">
-                {orderedAgents.map((a) => renamingAgent === a.id ? (
-                  <input key={a.id} className="rename-input tab" autoFocus value={agentValue} maxLength={30} placeholder={a.defaultName ?? a.id} onFocus={(e) => e.target.select()} onChange={(e) => setAgentValue(e.target.value)} onBlur={() => void commitAgentRename(a.id)} onKeyDown={(e) => { if (e.key === "Enter") void commitAgentRename(a.id); if (e.key === "Escape") { e.stopPropagation(); renameCancelled.current = true; setRenamingAgent(null) } }} />
-                ) : (
-                  <button key={a.id} draggable className={a.id === tab ? "tab active" : "tab"} title={a.description} onDragStart={(e) => dragStart(e, a.id)} onDragOver={(e) => e.preventDefault()} onDrop={(e) => moveAgent(e.dataTransfer.getData("text/plain"), a.id)} onContextMenu={(e) => startAgentRenameFromContext(e, a)} onClick={() => selectAgent(a.id)} onDoubleClick={() => { renameCancelled.current = false; setAgentValue(a.name); setRenamingAgent(a.id) }}>
-                    <span className="tab-grip" aria-hidden="true"><Icon name="grip" size={13} /></span>{a.name}
-                  </button>
-                ))}
-              </div>
-            </nav>
-          )}
           <div className="workspace-layout">
             {appearance.showSidebar && (
               <aside className="sidebar">
@@ -1336,6 +1276,7 @@ export default function App() {
               <div className="chat-titlebar">
                 <div><span className="eyebrow">SESSION</span><strong>{chats.find((c) => c.id === chatId)?.title ?? "Nouvelle conversation"}</strong></div>
                 <div className="row">
+                  <button className="button ghost back-home-button" onClick={() => { setShowHome(false); setShowAgentsPage(true) }} aria-label="Voir la page des agents" type="button"><Icon name="agent" size={15} />Agents</button>
                   <button className="button ghost back-home-button" onClick={() => setShowHome(true)} aria-label="Retour à l’accueil" type="button"><Icon name="arrow-left" size={15} />Accueil</button>
                 </div>
               </div>

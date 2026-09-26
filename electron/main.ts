@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, session, shell, Tray } from "electron"
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, Notification, session, shell, Tray } from "electron"
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
@@ -15,11 +15,18 @@ import { getNote, listNotes, notesDir } from "./notes.js"
 import { loadPinned, togglePin } from "./notes-meta.js"
 import { transcribeSpeech } from "./voice.js"
 import { Announcer } from "./announcer.js"
+import { notifyContent, shouldNotify } from "./notify-policy.js"
+import { loadPrefs, saveNotifications } from "./prefs.js"
+import { buildDiagnostic } from "./diagnostic.js"
 import { activeWorkspace, ensureDefaultRegistered, listWorkspaces, registerWorkspace, removeWorkspace, setActiveWorkspace, validateWorkspacePath } from "./workspaces.js"
 import type { FileSyncResult } from "./workspace-sync.js"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const isDev = !app.isPackaged
+
+// Piège Windows : sans AppUserModelId identique au appId, pas de toast et le nom
+// « Electron » s'affiche à la place d'« Aven » dans les notifications.
+if (process.platform === "win32") app.setAppUserModelId("com.local.aven")
 
 // Verrou mono-instance : évite de lancer deux processus OpenCode sur le même espace de travail.
 if (!app.requestSingleInstanceLock()) {
@@ -114,6 +121,28 @@ const announcer = new Announcer({
   speak: (text) => speakWithSapi(text),
 })
 
+// ── Notifications de bureau (v9.1.0) ──────────────────────────────────────────────
+// Jamais au premier plan ; permissions/formulaires toujours ; tour terminé seulement s'il
+// a duré (politique pure testée dans notify-policy.ts). Clic sur le toast : fenêtre au premier plan.
+function notifyDesktop(kind: Parameters<typeof shouldNotify>[0]["kind"], turnDurationMs?: number) {
+  if (!win) return
+  const windowFocused = win.isFocused() && win.isVisible() // cachée dans le tray → isVisible() est false, c'est voulu
+  const enabled = loadPrefs().notifications
+  if (!shouldNotify({ windowFocused, kind, turnDurationMs, enabled })) return
+  const { title, body } = notifyContent(kind, turnDurationMs)
+  const n = new Notification({ title, body })
+  n.on("click", () => showWindow())
+  n.show()
+}
+
+// ── Tampon de diagnostic (v9.1.0) : 30 derniers événements internes, sans contenu de clé. ──
+const diagLog: string[] = []
+function trace(line: string) {
+  diagLog.push(`${new Date().toISOString()} ${line}`)
+  if (diagLog.length > 30) diagLog.shift()
+}
+trace("démarrage du process principal")
+
 /** Voix Windows via PowerShell SAPI : gratuite, hors ligne, déjà installée. */
 async function speakWithSapi(text: string): Promise<void> {
   const safe = text.replace(/'/g, "''")
@@ -204,6 +233,7 @@ async function bootImpl(requestedWorkspace: string, generation: number) {
         r.onEvent(ev)
         win?.webContents.send("opencode:event", ev)
         announcer.handle(ev)
+        notifyFromEvent(ev)
       },
       relay.signal,
     )
@@ -231,6 +261,32 @@ async function bootImpl(requestedWorkspace: string, generation: number) {
     console.error(err)
     state = { ...state, status: "error", error: err instanceof Error ? err.message : String(err) }
   }
+}
+
+// Notifications pilotées par les événements du moteur (v9.1.0) : durée des tours mesurée
+// au session.execution.started de CHAQUE session (les sous-agents n'en génèrent pas ici :
+// seuls les événements avec sessionID sont relayés).
+const turnStarts = new Map<string, number>()
+function notifyFromEvent(ev: { type: string; data: Record<string, unknown> }) {
+  trace(ev.type)
+  const sessionID = typeof ev.data?.sessionID === "string" ? ev.data.sessionID : ""
+  if (ev.type === "session.execution.started" && sessionID) {
+    turnStarts.set(sessionID, Date.now())
+    return
+  }
+  if (ev.type === "session.execution.succeeded" && sessionID) {
+    const started = turnStarts.get(sessionID)
+    turnStarts.delete(sessionID)
+    notifyDesktop("turn-done", started ? Date.now() - started : undefined)
+    return
+  }
+  if (ev.type === "session.execution.failed" && sessionID) {
+    turnStarts.delete(sessionID)
+    notifyDesktop("turn-error")
+    return
+  }
+  if (ev.type === "permission.asked") notifyDesktop("permission")
+  else if (ev.type === "form.created") notifyDesktop("form")
 }
 
 function boot() {
@@ -465,6 +521,28 @@ function registerIpc() {
   )
   ipcMain.handle("forms:cancel", (_e, sid: string, fid: string) => ops.formCancel(sid, fid))
   ipcMain.handle("permissions:reply", (_e, sid: string, rid: string, d: "once" | "always" | "reject") => ops.reply(sid, rid, d))
+
+  // Notifications de bureau (v9.1.0) : interrupteur persistant dans userData.
+  ipcMain.handle("prefs:get", () => loadPrefs())
+  ipcMain.handle("prefs:setNotifications", (_e, on: boolean) => saveNotifications(on === true))
+  // Diagnostic copiable (v9.1.0) : les valeurs de clés ne quittent JAMAIS ce process —
+  // seuls leurs identifiants de provider sont listés (test anti-fuite sur buildDiagnostic).
+  ipcMain.handle("app:diagnostic", () =>
+    buildDiagnostic({
+      versions: { electron: process.versions.electron, node: process.versions.node, chrome: process.versions.chrome },
+      platform: `${process.platform} ${process.arch}`,
+      status: state.status,
+      opencodeVersion: state.version,
+      cli: state.cli,
+      keyIds: Object.keys(loadKeys()),
+      assignments: state.assignments,
+      warning: state.warning,
+      keyWarnings: state.keyWarnings,
+      workspace: state.workspace,
+      workspaces: state.workspaces,
+      log: diagLog,
+    }),
+  )
 
   // Mise à jour automatique : nécessite une config "publish" valide dans package.json (voir README).
   // Sans elle (placeholder non rempli), ceci échoue proprement avec un message clair, sans jamais planter l'app.

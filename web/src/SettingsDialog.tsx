@@ -42,6 +42,19 @@ export default function SettingsDialog(props: {
   const [newWsName, setNewWsName] = useState("")
   const [updateMsg, setUpdateMsg] = useState<string>()
   const [busy, setBusy] = useState(false)
+  const [notifications, setNotifications] = useState<boolean | null>(null) // null = pas encore chargé
+  useEffect(() => { api.prefs().then((p) => setNotifications(p.notifications)).catch(() => setNotifications(true)) }, [])
+  const changeNotifications = async (on: boolean) => {
+    setNotifications(on)
+    try { await api.setNotifications(on) } catch (e) { props.onError(e) }
+  }
+  const copyDiagnostic = async () => {
+    try {
+      const text = await api.diagnostic()
+      await navigator.clipboard.writeText(text)
+      setUpdateMsg("Diagnostic copié dans le presse-papiers (sans aucune clé API).")
+    } catch (e) { props.onError(e) }
+  }
 
   // Rafraîchissement propre après une action qui redémarre le moteur (clé enregistrée,
   // changement d'espace) : on relit l'état via IPC au lieu de window.location.reload(),
@@ -135,7 +148,7 @@ export default function SettingsDialog(props: {
       </section>
       <section className="settings-section">
         <div className="section-title">Éléments de l’interface</div>
-        {([ ["showTabs", "Barre des agents"], ["showSidebar", "Conversations"], ["showModel", "Modèle actif"], ["showNotices", "Événements modèle"], ["showToolActivity", "Activité des outils"], ["showComposer", "Éditeur de message"] ] as const).map(([key, label]) => <label key={key} className="toggle-row"><span>{label}</span><input type="checkbox" checked={appearance[key]} onChange={(e) => props.onAppearanceChange({ [key]: e.target.checked })} /></label>)}
+        {([ ["showSidebar", "Conversations"], ["showModel", "Modèle actif"], ["showNotices", "Événements modèle"], ["showToolActivity", "Activité des outils"], ["showComposer", "Éditeur de message"] ] as const).map(([key, label]) => <label key={key} className="toggle-row"><span>{label}</span><input type="checkbox" checked={appearance[key]} onChange={(e) => props.onAppearanceChange({ [key]: e.target.checked })} /></label>)}
         <label className="toggle-row"><span>Grouper les conversations par agent</span><input type="checkbox" checked={appearance.chatsGroupedByAgent} onChange={(e) => props.onAppearanceChange({ chatsGroupedByAgent: e.target.checked })} /></label>
       </section>
       <section className="settings-section">
@@ -171,8 +184,12 @@ export default function SettingsDialog(props: {
       <p className="hint">Les modèles texte payants sont désactivés. OpenRouter Free est optionnel, Groq sert à la dictée vocale, et Freebuff / Codebuff peut être activé comme backend externe. Les clés sont chiffrées par le système et ne quittent jamais l’application.</p>
       {state.providers.map((p) => <div key={p.id} className="field"><b>{p.label} {state.keys[p.id] && <span className="key-status"><Icon name="check" size={12} />clé enregistrée</span>}</b><span className="hint">{p.note}</span>{state.keyWarnings?.[p.id] && <span className="err">{state.keyWarnings[p.id]}</span>}<div className="row"><input className="settings-input" type="password" placeholder={state.keys[p.id] ? "Remplacer la clé…" : "Coller la clé…"} value={inputs[p.id] ?? ""} onChange={(e) => setInputs((i) => ({ ...i, [p.id]: e.target.value }))} /><button className="button primary" disabled={!inputs[p.id]?.trim()} onClick={() => save(p.id, inputs[p.id])}>Enregistrer</button>{state.keys[p.id] && <button className="button danger" onClick={() => save(p.id, "")}>Effacer</button>}<button className="button secondary" onClick={() => api.openExternal(p.url)}>Obtenir une clé</button></div></div>)}
       <div className="settings-callout"><b>Modèles Aven gratuits uniquement</b><span><code>OpenRouter Free</code> fournit des modèles gratuits pour les agents, <code>Groq</code> alimente la dictée vocale (maintiens le bouton micro ou Ctrl+Maj+V ; le texte arrive dans le composeur, à relire avant d’envoyer), et <code>Freebuff / Codebuff SDK</code> est un backend séparé, optionnel, qui nécessite une clé Codebuff et peut consommer des crédits : il ne remplace pas le client Freebuff gratuit.</span></div>
-      <label className="toggle-row"><span>Freebuff par défaut sur l’agent code</span><input type="checkbox" checked={appearance.freebuffDefaultCode} onChange={(e) => props.onAppearanceChange({ freebuffDefaultCode: e.target.checked })} /></label>
-      <p className="hint">S’applique uniquement si une clé Codebuff est enregistrée et seulement à l’agent code — les autres agents restent sur les modèles gratuits. Le bouton « Freebuff » du composeur force ou désactive le backend pour la conversation en cours.</p>
+      <label className="toggle-row"><span>Utiliser Freebuff comme moteur des agents</span><input type="checkbox" checked={appearance.freebuffAsEngine} onChange={(e) => props.onAppearanceChange({ freebuffAsEngine: e.target.checked })} /></label>
+      <p className="hint">S’applique uniquement si une clé Codebuff est enregistrée : les agents projet, code, recherche et analyse tournent alors sur le SDK Codebuff (base, researcher, thinker) au lieu d’OpenCode. Le bouton « Freebuff » du composeur force ou désactive le backend pour la conversation en cours.</p>
+      <h4>Notifications de bureau</h4>
+      <p className="hint">Prévient quand un agent a besoin de toi : permission demandée, formulaire, tour terminé (s’il a duré plus de 8 s) ou échoué. Jamais quand la fenêtre est au premier plan.</p>
+      <label className="toggle-row"><span>Activer les notifications</span><input type="checkbox" checked={notifications !== false} onChange={(e) => void changeNotifications(e.target.checked)} /></label>
+      <div className="row"><button className="button secondary" onClick={() => void copyDiagnostic()}>Copier le diagnostic</button><span className="hint">Versions, état du moteur, agents et derniers événements — sans aucune clé API.</span></div>
       <h4>Priorité des modèles par agent</h4>
       <p className="hint">Chaque agent reçoit explicitement le premier modèle disponible de sa chaîne de priorité. Si ce modèle est temporairement indisponible, le routeur passe au suivant et la session est mise à jour.</p>
       {state.warning && <p className="err">Table de priorités : {state.warning}</p>}

@@ -2,26 +2,28 @@ import assert from "node:assert/strict"
 import { test } from "node:test"
 import { effectiveBackend, nextManualChoice } from "../web/src/backend-choice.ts"
 
-test("sans clé Codebuff, jamais Freebuff (même sur l'agent code, réglage actif)", () => {
-  assert.equal(effectiveBackend({ tab: "code", hasCodebuffKey: false, pref: true, manual: null }), "opencode")
+test("sans clé Codebuff, jamais Freebuff (réglage actif, quel que soit l'agent)", () => {
+  for (const tab of ["projet", "code", "recherche", "analyse"]) {
+    assert.equal(effectiveBackend({ hasCodebuffKey: false, pref: true, manual: null }), "opencode", tab)
+  }
 })
 
-test("clé + réglage actif + agent code = Freebuff par défaut", () => {
-  assert.equal(effectiveBackend({ tab: "code", hasCodebuffKey: true, pref: true, manual: null }), "freebuff")
+test("clé + réglage actif = Freebuff moteur de TOUS les agents (v9.1.0)", () => {
+  for (const tab of ["projet", "code", "recherche", "analyse"]) {
+    assert.equal(effectiveBackend({ hasCodebuffKey: true, pref: true, manual: null }), "freebuff", tab)
+  }
 })
 
-test("clé + réglage actif mais autre agent = OpenCode gratuit", () => {
-  assert.equal(effectiveBackend({ tab: "recherche", hasCodebuffKey: true, pref: true, manual: null }), "opencode")
-  assert.equal(effectiveBackend({ tab: "analyse", hasCodebuffKey: true, pref: true, manual: null }), "opencode")
+test("réglage désactivé = OpenCode gratuit pour tous les agents", () => {
+  for (const tab of ["projet", "code", "recherche", "analyse"]) {
+    assert.equal(effectiveBackend({ hasCodebuffKey: true, pref: false, manual: null }), "opencode", tab)
+  }
 })
 
-test("réglage désactivé = OpenCode même sur code", () => {
-  assert.equal(effectiveBackend({ tab: "code", hasCodebuffKey: true, pref: false, manual: null }), "opencode")
-})
-
-test("l'override manuel gagne toujours, dans les deux sens", () => {
-  assert.equal(effectiveBackend({ tab: "recherche", hasCodebuffKey: true, pref: true, manual: true }), "freebuff")
-  assert.equal(effectiveBackend({ tab: "code", hasCodebuffKey: true, pref: true, manual: false }), "opencode")
+test("l'override manuel gagne toujours, dans les deux sens et pour tout agent", () => {
+  assert.equal(effectiveBackend({ hasCodebuffKey: true, pref: true, manual: true }), "freebuff")
+  assert.equal(effectiveBackend({ hasCodebuffKey: false, pref: false, manual: true }), "freebuff")
+  assert.equal(effectiveBackend({ hasCodebuffKey: true, pref: true, manual: false }), "opencode")
 })
 
 test("le bouton cycle auto → forcé → désactivé → auto", () => {

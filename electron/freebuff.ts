@@ -94,7 +94,9 @@ export async function runFreebuff(options: {
       agent,
       prompt: `Tu es le backend Freebuff intégré à Aven. Agent Aven : ${options.task}. Réponds en français.\n\n${options.prompt.trim()}`,
       previousRun,
-      maxAgentSteps: 20,
+      // v9.1.0 : l'orchestrateur projet a besoin de plus de pas pour déléguer aux
+      // agents spécialisés puis synthétiser (30 comme son pendant OpenCode).
+      maxAgentSteps: options.task === "projet" ? 30 : 20,
       signal: controller.signal,
       handleEvent: (event: FreebuffEvent) => {
         const type = String(event?.type ?? "")

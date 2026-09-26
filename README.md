@@ -1,8 +1,17 @@
-# Aven v9.0.1
+# Aven v9.1.0
 
 Application de bureau (Electron) : une chatbox avec **3 agents commutables** (code, recherche, analyse) et un
 sous-agent (code-reviewer), branchée sur **OpenCode 2.0.10** et un catalogue d’agents strictement gratuit (OpenRouter Free / OpenCode Zen).
 
+> **v9.1.0 — Projet à part, Freebuff moteur, navigation revue** : ① l'agent **projet** est
+> à part (carte dédiée du hub, badge « orchestrateur », retiré du sélecteur d'agents) et
+> délègue aux agents de base code / recherche / analyse ; ② le sélecteur d'agents en haut
+> à droite disparaît ; ③ bouton **Accueil** dans la barre de fenêtre (masqué sur l'accueil) ;
+> ④ bouton **Agents** dans la barre de titre pour quitter une conversation et rechoisir ;
+> ⑤ **Freebuff devient le moteur de tous les agents** quand la clé Codebuff existe (réglage
+> dédié, override composeur conservé) ; ⑥ notifications de bureau (jamais au premier plan,
+> tour terminé > 8 s, échecs, permissions, formulaires) et **diagnostic copiable** sans
+> aucune clé API ; barre d'onglets historique supprimée.
 > **v9.0.1 — Réparation du démarrage** : les espaces créés avant la v9.0.0 n'avaient pas
 > l'agent **projet** (liste de synchro figée) → « Agents introuvables après 90s » au lancement.
 > Les agents sont désormais **découverts dans le gabarit de l'app** : tout nouvel agent sera

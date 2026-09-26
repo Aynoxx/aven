@@ -126,6 +126,9 @@ export type OpenCodeApi = {
   announcerActivity: () => Promise<void>
   announcerSetEnabled: (on: boolean) => Promise<boolean>
   announcerTest: (text: string) => Promise<void>
+  prefs: () => Promise<{ notifications: boolean }>
+  setNotifications: (on: boolean) => Promise<{ notifications: boolean }>
+  diagnostic: () => Promise<string>
   onEvent: (cb: (ev: { type: string; data: Record<string, any> }) => void) => () => void
 }
 

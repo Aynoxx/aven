@@ -46,6 +46,9 @@ contextBridge.exposeInMainWorld("opencode", {
   announcerActivity: () => call("announcer:activity"),
   announcerSetEnabled: (on: boolean) => call("announcer:setEnabled", on),
   announcerTest: (text: string) => call("announcer:test", text),
+  prefs: () => call("prefs:get"),
+  setNotifications: (on: boolean) => call("prefs:setNotifications", on),
+  diagnostic: () => call("app:diagnostic"),
   onEvent: (cb: (ev: { type: string; data: Record<string, unknown> }) => void) => {
     const listener = (_e: unknown, ev: { type: string; data: Record<string, unknown> }) => cb(ev)
     ipcRenderer.on("opencode:event", listener)
