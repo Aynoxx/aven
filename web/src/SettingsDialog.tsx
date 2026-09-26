@@ -46,18 +46,27 @@ export default function SettingsDialog(props: {
   useEffect(() => { api.prefs().then((p) => setNotifications(p.notifications)).catch(() => setNotifications(true)) }, [])
   // CLI Freebuff gratuit (v9.1.2) : statut chargé une fois, actions visibles.
   const [cli, setCli] = useState<{ installed: boolean; version?: string } | null>(null)
+  // v9.1.4 : l'installation est visible — bouton « Installation en cours… » pendant le poll.
+  const [cliInstalling, setCliInstalling] = useState(false)
   useEffect(() => { api.freebuffCliStatus().then(setCli).catch(() => setCli({ installed: false })) }, [])
   const cliAction = async (action: "launch" | "login" | "install") => {
     try {
-      await api.freebuffCliLaunch(action)
-      // v9.1.3 : après une installation, le statut est re-vérifié automatiquement —
-      // l'utilisateur n'a pas à fermer/rouvrir le panneau pour voir « CLI installé ».
       if (action === "install") {
-        for (let i = 0; i < 12; i++) {
-          await new Promise((r) => setTimeout(r, 5_000))
-          const status = await api.freebuffCliStatus()
-          if (status.installed) { setCli(status); break }
+        setCliInstalling(true)
+        try {
+          await api.freebuffCliLaunch(action)
+          // Après une installation, le statut est re-vérifié automatiquement (jusqu'à 60 s) :
+          // l'utilisateur n'a pas à fermer/rouvrir le panneau pour voir « CLI installé ».
+          for (let i = 0; i < 12; i++) {
+            await new Promise((r) => setTimeout(r, 5_000))
+            const status = await api.freebuffCliStatus()
+            if (status.installed) { setCli(status); break }
+          }
+        } finally {
+          setCliInstalling(false)
         }
+      } else {
+        await api.freebuffCliLaunch(action)
       }
     } catch (e) { props.onError(e) }
   }
@@ -211,7 +220,7 @@ export default function SettingsDialog(props: {
         <span className="hint">{cli === null ? "Vérification…" : cli.installed ? <b><Icon name="check" size={12} /> CLI installé{cli.version ? ` — v${cli.version}` : ""}</b> : "CLI non installé"}</span>
         {cli?.installed && <button className="button primary" onClick={() => void cliAction("launch")}>Ouvrir Freebuff dans le terminal</button>}
         {cli?.installed && <button className="button secondary" onClick={() => void cliAction("login")}>Se connecter</button>}
-        {!cli?.installed && <button className="button primary" onClick={() => void cliAction("install")}>Installer le CLI (npm)</button>}
+        {!cli?.installed && <button className="button primary" disabled={cliInstalling} onClick={() => void cliAction("install")}>{cliInstalling ? "Installation en cours…" : "Installer le CLI (npm)"}</button>}
       </div>
       <h4>Priorité des modèles par agent</h4>
       <p className="hint">Chaque agent reçoit explicitement le premier modèle disponible de sa chaîne de priorité. Si ce modèle est temporairement indisponible, le routeur passe au suivant et la session est mise à jour.</p>

@@ -16,6 +16,13 @@ import { groupChatsByAgent } from "./chat-groups"
 import { Icon, type IconName } from "./icons"
 import "./App.css"
 
+// Durée d'affichage d'un avis du hub (v9.1.4) : le bandeau s'efface tout seul au lieu de
+// recouvrir l'interface indéfiniment.
+const HOME_NOTICE_TTL = 6_000
+// Message exact affiché quand le CLI Freebuff est absent : le bandeau du hub reconnaît
+// ce texte pour proposer le bouton « Installer » en direct.
+const FREEBUFF_MISSING_NOTICE = "Le CLI Freebuff n'est pas installé : Paramètres → Freebuff CLI gratuit → « Installer le CLI (npm) »."
+
 type Notice = { id: string; text: string }
 
 function orderAgents(agents: Agent[], order: string[]) {
@@ -52,6 +59,12 @@ export default function App() {
   const [notices, setNotices] = useState<Notice[]>([])
   const [showHome, setShowHome] = useState(true)
   const [homeNotice, setHomeNotice] = useState<string | null>(null)
+  // v9.1.4 : le bandeau d'avis s'efface tout seul (il masquait l'interface indéfiniment).
+  useEffect(() => {
+    if (!homeNotice) return
+    const t = setTimeout(() => setHomeNotice(null), HOME_NOTICE_TTL)
+    return () => clearTimeout(t)
+  }, [homeNotice])
   const [showAgentsPage, setShowAgentsPage] = useState(false)
   const [agentsLoading, setAgentsLoading] = useState(true)
   const [agentsError, setAgentsError] = useState<string>()
@@ -117,7 +130,7 @@ export default function App() {
           try {
             const status = await api.freebuffCliStatus()
             if (!status.installed) {
-              setHomeNotice("Le CLI Freebuff n'est pas installé : Paramètres → Freebuff CLI gratuit → « Installer le CLI (npm) ».")
+              setHomeNotice(FREEBUFF_MISSING_NOTICE)
               return
             }
             await api.freebuffCliLaunch("launch")
@@ -883,7 +896,23 @@ export default function App() {
                   </span>
                 </button>
 
-                {homeNotice && <div className="home-notice" role="status">{homeNotice}</div>}
+                {homeNotice && (
+                  <div className="home-notice" role="status">
+                    <span>{homeNotice}</span>
+                    {homeNotice === FREEBUFF_MISSING_NOTICE && (
+                      <button
+                        className="button primary home-notice-action"
+                        type="button"
+                        onClick={() => { api.freebuffCliLaunch("install").catch((e) => setHomeNotice(e instanceof Error ? e.message : String(e))) }}
+                      >
+                        Installer
+                      </button>
+                    )}
+                    <button className="home-notice-close" type="button" aria-label="Fermer l'avis" onClick={() => setHomeNotice(null)}>
+                      <Icon name="close" size={12} />
+                    </button>
+                  </div>
+                )}
 
 
                 {showStats && (
@@ -1165,7 +1194,7 @@ export default function App() {
                 <article key={a.id} className={`agent-card ${a.id === tab ? "active" : ""} ${a.id === "projet" ? "agent-card-orchestrator" : ""}`}>
                   <div className="agent-card-icon"><Icon name={a.id === "projet" ? "sparkle" : "agent"} size={24} /></div>
                   <div className="agent-card-body">
-                    <span className="agent-card-id">{a.id}{a.id === "projet" && <em className="orchestrator-badge">orchestrateur</em>}</span>
+                    <span className="agent-card-id">{a.id}{a.id === "projet" && <em className="orchestrator-badge">orchestrateur</em>}{(a.id === "analyse" || a.id === "recherche") && <em className="readonly-badge">lecture seule</em>}</span>
                     {renamingAgent === a.id ? (
                       <input
                         className="rename-input"
@@ -1194,14 +1223,19 @@ export default function App() {
                   {(() => {
                     const group = groupChatsByAgent(chats, [a.id])[0]
                     if (!group?.chats.length) return null
+                    // v9.1.4 : 2 conversations max par carte + compteur « +N autres » —
+                    // la liste longue encombrait la page (le hub reste l'endroit « reprendre »).
+                    const shown = group.chats.slice(0, 2)
+                    const extra = group.chats.length - shown.length
                     return (
                       <div className="agent-card-chats">
-                        {group.chats.slice(0, 4).map((c) => (
+                        {shown.map((c) => (
                           <button key={c.id} className="chat-main" onClick={() => openConversationFromSidebar(c)} type="button" title="Ouvrir cette conversation">
                             <span className="chat-title">{c.title}</span>
                             <span className="chat-meta">{c.updated ? new Date(c.updated).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" }) : ""}</span>
                           </button>
                         ))}
+                        {extra > 0 && <span className="agent-card-chats-more">+{extra} autre{extra > 1 ? "s" : ""}</span>}
                       </div>
                     )
                   })()}

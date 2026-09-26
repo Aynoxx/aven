@@ -464,12 +464,27 @@ function registerIpc() {
     }
   }
   ipcMain.handle("freebuff:status", () => checkFreebuffCli())
+  // npm est-il utilisable dans l'environnement de l'app ? (garde v9.1.4 : une fenêtre
+  // d'installation doit échouer avec un message clair, jamais avec une erreur Windows brute.)
+  async function checkNpm(): Promise<boolean> {
+    try {
+      const { execFile } = await import("node:child_process")
+      await new Promise<void>((resolve, reject) => {
+        execFile("npm", ["--version"], { timeout: 8_000, shell: true }, (err) => (err ? reject(err) : resolve()))
+      })
+      return true
+    } catch {
+      return false
+    }
+  }
   ipcMain.handle("freebuff:launch", async (_e, action: "launch" | "login" | "install" = "launch") => {
     if (process.platform !== "win32") throw new Error(unsupportedPlatform(process.platform))
     // L'installation npm ne présuppose pas la présence du CLI : c'est justement son but.
     if (action !== "install") {
       const status = await checkFreebuffCli()
       if (!status.installed) throw new Error(freebuffMissingMessage())
+    } else if (!(await checkNpm())) {
+      throw new Error("npm est introuvable sur cet ordinateur. Installe Node.js (npm inclus) depuis https://nodejs.org, puis retente « Installer le CLI » — ou dans un terminal : npx --yes freebuff.")
     }
     const { spawn } = await import("node:child_process")
     const cmd = buildLaunchCommand(workspace, action)

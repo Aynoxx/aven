@@ -5,8 +5,10 @@ import { buildLaunchCommand, freebuffMissingMessage, parseVersionOutput, unsuppo
 test("buildLaunchCommand : start /D sur l'espace, arguments séparés (spawn-safe)", () => {
   const cmd = buildLaunchCommand("C:\\Users\\Liam\\Documents\\Aven-workspace")
   assert.equal(cmd.command, "cmd")
+  // v9.1.4 : titre de fenêtre VIDE quoté — sinon `start` prend le 1er argument quoté
+  // pour le programme à lancer (« Windows ne trouve pas 'Freebuff' »).
   assert.deepEqual(cmd.args, [
-    "/c", "start", "Freebuff", "/D", "C:\\Users\\Liam\\Documents\\Aven-workspace",
+    "/c", "start", "\"\"", "/D", "C:\\Users\\Liam\\Documents\\Aven-workspace",
     "cmd", "/k", "freebuff", "--cwd", "C:\\Users\\Liam\\Documents\\Aven-workspace",
   ])
 })
@@ -24,6 +26,15 @@ test("buildLaunchCommand : login sur l'espace, install = npm global sans dossier
   assert.deepEqual(install.args.slice(-4), ["npm", "install", "-g", "freebuff"])
   assert.ok(!install.args.includes("/D"))
   assert.throws(() => buildLaunchCommand(""), /Aucun espace/)
+})
+
+test("buildLaunchCommand : le titre vide quoté précède toujours la cible (anti-régression v9.1.4)", () => {
+  for (const action of ["launch", "login", "install"]) {
+    const cmd = buildLaunchCommand("C:\\ws", action)
+    const i = cmd.args.indexOf("start")
+    assert.equal(cmd.args[i + 1], "\"\"", `action ${action} : le titre vide doit venir juste après start`)
+    assert.ok(!cmd.args.includes("Freebuff"), "plus aucun titre quoté interprétable comme programme")
+  }
 })
 
 test("freebuffMissingMessage : message d'installation clair (v9.1.3, plus de terminal « freebuff introuvable »)", () => {

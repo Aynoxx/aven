@@ -262,7 +262,12 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
 .voice-core-label { position:absolute; bottom:34px; z-index:2; color:var(--muted); font-size:var(--font-size-xs); font-weight:700; letter-spacing:.04em; pointer-events:none; }
 .voice-core.dictation-recording { border-color:var(--rose, #f43f5e); animation:dictation-pulse 1.2s ease-in-out infinite; }
 .voice-core.dictation-recording .voice-mic { background:linear-gradient(180deg,var(--rose, #f43f5e),color-mix(in srgb,var(--rose, #f43f5e) 64%,var(--panel-solid))); }
-.home-notice { position:absolute; z-index:8; left:50%; bottom:12px; transform:translateX(-50%); max-width:min(90%,520px); padding:9px 13px; border:1px solid var(--border); border-radius:999px; background:color-mix(in srgb,var(--panel-solid) 92%,transparent); color:var(--muted); font-size:var(--font-size-xs); box-shadow:var(--shadow); }
+/* v9.1.4 : l'avis vit dans le coin bas-GAUCHE du hub — en bas au centre, il masquait
+   la carte Statistiques ; le coin reste hors du cercle de cartes à toutes les tailles. */
+.home-notice { position:absolute; z-index:8; left:8px; bottom:8px; max-width:min(100%,480px); padding:8px 10px 8px 13px; border:1px solid var(--border); border-radius:14px; background:color-mix(in srgb,var(--panel-solid) 94%,transparent); color:var(--muted); font-size:var(--font-size-xs); box-shadow:var(--shadow); display:flex; align-items:center; gap:8px; }
+.home-notice-action { min-height:26px; padding:0 10px; font-size:var(--font-size-xs); border-radius:999px; }
+.home-notice-close { border:0; background:transparent; color:var(--muted); cursor:pointer; font-size:12px; line-height:1; padding:3px 5px; border-radius:6px; }
+.home-notice-close:hover { color:var(--text); background:var(--panel-soft); }
 
 /* Boîtes de dialogue (Réglages, Notes, formulaire d'agent, demande de permission…).
    Il manquait tout le centrage et le style de base : .overlay ne centrait rien et
@@ -514,10 +519,12 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
 .home-recent-new { margin-top: auto; width: 100%; justify-content: center; }
 
 .home-hub {
-  position: relative; width: min(100%, 760px, calc(100vh - 178px)); aspect-ratio: 1 / 1; height: auto; min-height: 0; margin: 0;
+  /* v9.1.4 : rayon et tailles réduits — à ~716 px de hauteur utile, la 6ᵉ carte
+     (Statistiques, 180°) était coupée par le bord inférieur ; marge haute resserrée. */
+  position: relative; width: min(100%, 760px, calc(100vh - 130px)); aspect-ratio: 1 / 1; height: auto; min-height: 0; margin: 0;
   container-type: inline-size;
-  --hub-r: clamp(230px, 42cqw, 320px);
-  --hub-card-w: clamp(132px, 11.5vw, 158px); --hub-card-h: clamp(104px, 8vw, 118px); --hub-core: clamp(214px, 27vmin, 270px);
+  --hub-r: clamp(196px, 37cqw, 272px);
+  --hub-card-w: clamp(124px, 11vw, 148px); --hub-card-h: clamp(98px, 7.6vw, 110px); --hub-core: clamp(184px, 24vmin, 236px);
 }
 .home-hub::after { content:""; position:absolute; left:50%; top:50%; width:calc(var(--hub-r) * 2); height:calc(var(--hub-r) * 2); transform:translate(-50%,-50%); border-radius:50%; border:1px solid color-mix(in srgb, var(--accent) 11%, transparent); pointer-events:none; }
 .hub-grid-glow { position:absolute; inset:4%; border-radius:50%; background-image:linear-gradient(color-mix(in srgb, var(--accent) 3%, transparent) 1px, transparent 1px),linear-gradient(90deg,color-mix(in srgb,var(--accent) 3%,transparent) 1px,transparent 1px); background-size:44px 44px; mask-image:radial-gradient(circle,#000 0 40%,transparent 72%); opacity:.55; pointer-events:none; }
@@ -592,7 +599,8 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
 .agents-page-header { display:flex; align-items:flex-start; justify-content:space-between; gap:24px; margin-bottom:24px; }
 .agents-page-header h1 { margin:4px 0 6px; font-size:clamp(var(--font-size-2xl),3vw,32px); letter-spacing:-.035em; }
 .agents-page-header p { margin:0; max-width:640px; color:var(--muted); font-size:var(--font-size-sm); line-height:1.55; }
-.agents-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+/* v9.1.4 : grille fluide — 3 à 4 colonnes sur grand écran au lieu de 2 fixes. */
+.agents-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(340px, 1fr)); gap:14px; }
 .agent-card { min-width:0; display:grid; grid-template-columns:auto minmax(0,1fr); gap:14px; padding:16px; border:1px solid var(--border); border-radius:18px; background:var(--panel); box-shadow:0 12px 34px color-mix(in srgb,var(--text) 4%,transparent); }
 .agent-card.active { border-color:var(--accent-border); box-shadow:0 14px 38px color-mix(in srgb,var(--accent) 8%,transparent); }
 .agent-card-icon { width:46px; height:46px; display:grid; place-items:center; border-radius:14px; background:var(--accent-soft); color:var(--accent); }
@@ -601,7 +609,12 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
 .agent-card-body h2 { margin:0 0 5px; font-size:var(--font-size-lg); }
 .agent-card-body p { margin:0; color:var(--muted); font-size:var(--font-size-sm); line-height:1.5; }
 .agent-card-actions { grid-column:2; display:flex; gap:7px; flex-wrap:wrap; }
-.agent-card-actions .button { flex:0 0 auto; }
+/* v9.1.4 : boutons d'action homogènes (l'ancien « Ouvrir » paraissait éteint/étriqué
+   à côté de « Renommer »). */
+.agent-card-actions .button { flex:0 0 auto; min-height:36px; padding:0 16px; font-weight:680; }
+/* v9.1.4 : badge « lecture seule » des agents analyse et recherche. */
+.readonly-badge { font-style: normal; font-size: var(--font-size-xs); font-weight: 700; color: var(--muted); border: 1px solid var(--border-strong); border-radius: 999px; padding: 1px 7px; margin-left: 6px; }
+.agent-card-chats-more { color:var(--muted); font-size:var(--font-size-xs); padding:2px 10px; }
 .agents-empty { grid-column:1 / -1; min-height:300px; display:grid; place-items:center; align-content:center; text-align:center; color:var(--muted); }
 .agents-empty h2 { margin:8px 0 5px; color:var(--text); font-size:var(--font-size-lg); }
 .agents-empty p { margin:0; max-width:520px; font-size:var(--font-size-sm); line-height:1.5; }

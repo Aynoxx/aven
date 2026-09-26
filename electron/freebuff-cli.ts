@@ -9,22 +9,25 @@ export type FreebuffCliCommand = { command: string; args: string[] }
 
 /**
  * Commande qui ouvre une console Windows sur le dossier donné, prête à lancer Freebuff.
- * Chaque argument est spawné SÉPARÉMENT (pas de chaîne concaténée) : `start` reçoit le
- * titre puis `/D <dossier>` (dossier de départ), et le `cmd /k` enfant n'a AUCUN
- * guillemet imbriqué à analyser — le spawn Node cite chaque argument lui-même.
+ * Chaque argument est spawné SÉPARÉMENT (pas de chaîne concaténée) : `start` reçoit un
+ * TITRE VIDE QUOTÉ (v9.1.4) puis `/D <dossier>` (dossier de départ), et le `cmd /k`
+ * enfant n'a AUCUN guillemet imbriqué à analyser — le spawn Node cite chaque argument
+ * lui-même. Sans le titre vide, `start` prend le premier argument quoté pour le
+ * PROGRAMME à lancer (« Windows ne trouve pas 'Freebuff' »).
  */
 export function buildLaunchCommand(workspace: string, action: "launch" | "login" | "install" = "launch"): FreebuffCliCommand {
   const ws = String(workspace || "").trim()
   if (!ws) throw new Error("Aucun espace de travail actif.")
 
+  // Titre vide quoté pour `start` : sémantique « titre de fenêtre », pas « programme ».
   if (action === "install") {
     // Pas besoin de dossier : installation globale npm, visible dans la fenêtre.
-    return { command: "cmd", args: ["/c", "start", "Freebuff", "cmd", "/k", "npm", "install", "-g", "freebuff"] }
+    return { command: "cmd", args: ["/c", "start", "\"\"", "cmd", "/k", "npm", "install", "-g", "freebuff"] }
   }
   if (action === "login") {
-    return { command: "cmd", args: ["/c", "start", "Freebuff", "/D", ws, "cmd", "/k", "freebuff", "login"] }
+    return { command: "cmd", args: ["/c", "start", "\"\"", "/D", ws, "cmd", "/k", "freebuff", "login"] }
   }
-  return { command: "cmd", args: ["/c", "start", "Freebuff", "/D", ws, "cmd", "/k", "freebuff", "--cwd", ws] }
+  return { command: "cmd", args: ["/c", "start", "\"\"", "/D", ws, "cmd", "/k", "freebuff", "--cwd", ws] }
 }
 
 /**
