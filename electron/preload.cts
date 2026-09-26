@@ -49,6 +49,8 @@ contextBridge.exposeInMainWorld("opencode", {
   prefs: () => call("prefs:get"),
   setNotifications: (on: boolean) => call("prefs:setNotifications", on),
   diagnostic: () => call("app:diagnostic"),
+  freebuffCliStatus: () => call("freebuff:status"),
+  freebuffCliLaunch: (action: "launch" | "login" | "install") => call("freebuff:launch", action),
   onEvent: (cb: (ev: { type: string; data: Record<string, unknown> }) => void) => {
     const listener = (_e: unknown, ev: { type: string; data: Record<string, unknown> }) => cb(ev)
     ipcRenderer.on("opencode:event", listener)

@@ -31,7 +31,7 @@ assert.match(app, /key: "project", label: "Projet"/)
 assert.match(app, /hub-card-\$\{item\.key\}/) // classe construite depuis item.key
 assert.match(app, /agent-card-orchestrator/)
 assert.match(app, /orchestrator-badge/)
-assert.match(css, /--hub-angle:60deg/) // cartes réparties régulièrement (v9.1.1 : 6 cartes)
+assert.match(css, /--hub-angle:(60|51\.43)deg/) // cartes réparties régulièrement (6 en v9.1.1, 7 en v9.1.2)
 assert.match(css, /\.hub-card-project/)
 
 // ② plus de sélecteur d'agents en haut à droite.

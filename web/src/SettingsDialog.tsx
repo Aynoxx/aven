@@ -44,6 +44,12 @@ export default function SettingsDialog(props: {
   const [busy, setBusy] = useState(false)
   const [notifications, setNotifications] = useState<boolean | null>(null) // null = pas encore chargé
   useEffect(() => { api.prefs().then((p) => setNotifications(p.notifications)).catch(() => setNotifications(true)) }, [])
+  // CLI Freebuff gratuit (v9.1.2) : statut chargé une fois, actions visibles.
+  const [cli, setCli] = useState<{ installed: boolean; version?: string } | null>(null)
+  useEffect(() => { api.freebuffCliStatus().then(setCli).catch(() => setCli({ installed: false })) }, [])
+  const cliAction = async (action: "launch" | "login" | "install") => {
+    try { await api.freebuffCliLaunch(action) } catch (e) { props.onError(e) }
+  }
   const changeNotifications = async (on: boolean) => {
     setNotifications(on)
     try { await api.setNotifications(on) } catch (e) { props.onError(e) }
@@ -190,6 +196,14 @@ export default function SettingsDialog(props: {
       <p className="hint">Prévient quand un agent a besoin de toi : permission demandée, formulaire, tour terminé (s’il a duré plus de 8 s) ou échoué. Jamais quand la fenêtre est au premier plan.</p>
       <label className="toggle-row"><span>Activer les notifications</span><input type="checkbox" checked={notifications !== false} onChange={(e) => void changeNotifications(e.target.checked)} /></label>
       <div className="row"><button className="button secondary" onClick={() => void copyDiagnostic()}>Copier le diagnostic</button><span className="hint">Versions, état du moteur, agents et derniers événements — sans aucune clé API.</span></div>
+      <h4>Freebuff CLI gratuit</h4>
+      <p className="hint">Le free tier de Freebuff (sessions quotidiennes, financé par les pubs texte) vit dans son CLI interactif — pas dans le SDK, qui exige une clé payante. Aven ouvre une fenêtre de terminal directement sur ton espace de travail : tu y parles à Freebuff, tes fichiers restent les mêmes.</p>
+      <div className="row">
+        <span className="hint">{cli === null ? "Vérification…" : cli.installed ? <b><Icon name="check" size={12} /> CLI installé{cli.version ? ` — v${cli.version}` : ""}</b> : "CLI non installé"}</span>
+        {cli?.installed && <button className="button primary" onClick={() => void cliAction("launch")}>Ouvrir Freebuff dans le terminal</button>}
+        {cli?.installed && <button className="button secondary" onClick={() => void cliAction("login")}>Se connecter</button>}
+        {!cli?.installed && <button className="button primary" onClick={() => void cliAction("install")}>Installer le CLI (npm)</button>}
+      </div>
       <h4>Priorité des modèles par agent</h4>
       <p className="hint">Chaque agent reçoit explicitement le premier modèle disponible de sa chaîne de priorité. Si ce modèle est temporairement indisponible, le routeur passe au suivant et la session est mise à jour.</p>
       {state.warning && <p className="err">Table de priorités : {state.warning}</p>}

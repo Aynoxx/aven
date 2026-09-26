@@ -129,6 +129,8 @@ export type OpenCodeApi = {
   prefs: () => Promise<{ notifications: boolean }>
   setNotifications: (on: boolean) => Promise<{ notifications: boolean }>
   diagnostic: () => Promise<string>
+  freebuffCliStatus: () => Promise<{ installed: boolean; version?: string }>
+  freebuffCliLaunch: (action?: "launch" | "login" | "install") => Promise<boolean>
   onEvent: (cb: (ev: { type: string; data: Record<string, any> }) => void) => () => void
 }
 

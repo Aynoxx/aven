@@ -658,6 +658,7 @@ export default function App() {
   const HubIcon = ({ kind }: { kind: string }) => {
     const icons: Record<string, IconName> = {
       project: "sparkle", // v9.1.0 : l'orchestrateur porte la marque Aven (à part des agents)
+      freebuff: "terminal", // v9.1.2 : le CLI gratuit vit dans un terminal
       agent: "agent",
       files: "folder",
       notes: "file",
@@ -713,6 +714,8 @@ export default function App() {
     const nav = [
       // v9.1.0 : « projet » est à part — carte dédiée d'orchestrateur, hors sélecteur d'agents.
       { key: "project", label: "Projet", kind: "project", hint: "Orchestrateur des agents", action: () => selectAgent("projet") },
+      // v9.1.2 : le CLI Freebuff gratuit (ad-financé) s'ouvre dans un terminal sur l'espace.
+      { key: "freebuff", label: "Freebuff", kind: "freebuff", hint: "CLI gratuit (terminal)", action: () => { api.freebuffCliLaunch("launch").catch((e) => { setHomeNotice(e instanceof Error ? e.message : String(e)) }) } },
       { key: "agents", label: "Agents", kind: "agent", hint: orderedAgents.length === 1 ? "Agent actif" : `${orderedAgents.length} agents`, action: openAgentsPage },
       { key: "stats", label: "Statistiques", kind: "stats", hint: "Usage de l'app", action: openStats },
       { key: "files", label: "Fichiers", kind: "files", hint: "Parcourir l’espace", action: () => api.openWorkspace().catch(fail) },

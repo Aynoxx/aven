@@ -1,8 +1,13 @@
-# Aven v9.1.1
+# Aven v9.1.2
 
 Application de bureau (Electron) : une chatbox avec **3 agents commutables** (code, recherche, analyse) et un
 sous-agent (code-reviewer), branchée sur **OpenCode 2.0.10** et un catalogue d’agents strictement gratuit (OpenRouter Free / OpenCode Zen).
 
+> **v9.1.2 — Freebuff CLI gratuit à portée de clic** : le free tier de Freebuff (sessions
+> quotidiennes, financé par les pubs texte) vit dans son CLI interactif — Aven l'ouvre dans
+> une vraie fenêtre de terminal directement sur ton espace de travail (carte hub « Freebuff »
+> ou Réglages : statut, connexion, installation). Le chat Aven reste sur les modèles gratuits
+> OpenCode, ou sur le SDK Codebuff avec clé.
 > **v9.1.1 — Hub dédoublonné, Freebuff sans blocage** : l'ancienne carte « Projets »
 > (espaces de travail) est retirée du hub — elle faisait doublon avec la nouvelle carte
 > « Projet » (orchestrateur) ; les espaces restent dans Paramètres → Configuration. Le mode

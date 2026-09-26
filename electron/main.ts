@@ -6,6 +6,7 @@ import { makeOps } from "./operations.js"
 import { addDiscoveredFreeModels, loadTable } from "./priorities.js"
 import { EXPECTED_VERSION } from "./opencode-bridge.js"
 import { FREEBUFF_MODEL_LABEL } from "./freebuff.js"
+import { buildLaunchCommand, parseVersionOutput, unsupportedPlatform } from "./freebuff-cli.js"
 import { Router } from "./router.js"
 import { relayEvents, startOpenCode, TABS, type Bridge } from "./opencode-bridge.js"
 import { aggregateStats, countDictation, readDictationStats } from "./stats.js"
@@ -442,6 +443,32 @@ function registerIpc() {
   ipcMain.handle("notes:pins", () => loadPinned(workspace))
   // v9.0.0 : les notes sont de vrais fichiers — chemin affiché et ouverture du dossier.
   ipcMain.handle("notes:dir", () => notesDir(workspace))
+
+  // CLI Freebuff gratuit (v9.1.2) : statut + ouverture d'une console sur l'espace actif.
+  ipcMain.handle("freebuff:status", async () => {
+    try {
+      const { execFile } = await import("node:child_process")
+      const out = await new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+        // shell requis : le launcher freebuff est un .cmd sous Windows (Node le refuse sans shell).
+        execFile("freebuff", ["--version"], { timeout: 8_000, shell: true }, (err, stdout, stderr) => {
+          if (err && !stdout && !stderr) reject(err)
+          else resolve({ stdout: String(stdout ?? ""), stderr: String(stderr ?? "") })
+        })
+      })
+      return parseVersionOutput(out.stdout, out.stderr)
+    } catch {
+      return { installed: false as const }
+    }
+  })
+  ipcMain.handle("freebuff:launch", async (_e, action: "launch" | "login" | "install" = "launch") => {
+    if (process.platform !== "win32") throw new Error(unsupportedPlatform(process.platform))
+    const { spawn } = await import("node:child_process")
+    const cmd = buildLaunchCommand(workspace, action)
+    // detached + fenêtre console : start() ouvre la fenêtre et retourne immédiatement.
+    const child = spawn(cmd.command, cmd.args, { detached: true, stdio: "ignore", windowsVerbatimArguments: true })
+    child.unref()
+    return true
+  })
   ipcMain.handle("notes:openFolder", () => {
     mkdirSync(notesDir(workspace), { recursive: true })
     return shell.openPath(notesDir(workspace))

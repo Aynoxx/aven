@@ -548,16 +548,15 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
 .hub-card-copy { display:grid; justify-items:center; gap:2px; min-width:0; text-align:center; }
 .hub-card-copy strong { font-size:var(--font-size-md); font-weight:780; letter-spacing:.005em; }
 .hub-card-copy small { max-width:130px; color:var(--muted); font-size:var(--font-size-xs); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-/* v9.1.1 : 6 cartes réparties régulièrement (360/6 = 60°). La carte « Projet »
-   (orchestrateur, à part) prend la position du haut ; l'ancienne carte « Projets »
-   (espaces de travail) est retirée : c'était le doublon visuel avec « Projet »,
-   les espaces restent dans Paramètres → Configuration. */
+/* v9.1.2 : 7 cartes réparties régulièrement (360/7 ≈ 51,43°). « Projet » (orchestrateur)
+   en haut, « Freebuff » (CLI gratuit, terminal) juste à côté — libellés distincts. */
 .hub-card-project { --hub-angle:0deg; }
-.hub-card-notes { --hub-angle:60deg; }
-.hub-card-stats { --hub-angle:120deg; }
-.hub-card-agents { --hub-angle:180deg; }
-.hub-card-settings { --hub-angle:240deg; }
-.hub-card-files { --hub-angle:300deg; }
+.hub-card-freebuff { --hub-angle:51.43deg; }
+.hub-card-notes { --hub-angle:102.86deg; }
+.hub-card-stats { --hub-angle:154.29deg; }
+.hub-card-agents { --hub-angle:205.71deg; }
+.hub-card-settings { --hub-angle:257.14deg; }
+.hub-card-files { --hub-angle:308.57deg; }
 
 /* Tuiles du panneau de statistiques (v8.11.0). */
 /* v9.1.0 : l'agent « projet » est à part — badge orchestrateur + liseré distinct. */
