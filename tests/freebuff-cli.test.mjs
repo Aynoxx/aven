@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import { buildLaunchCommand, parseVersionOutput, unsupportedPlatform } from "../electron/freebuff-cli.ts"
+import { buildLaunchCommand, freebuffMissingMessage, parseVersionOutput, unsupportedPlatform } from "../electron/freebuff-cli.ts"
 
 test("buildLaunchCommand : start /D sur l'espace, arguments séparés (spawn-safe)", () => {
   const cmd = buildLaunchCommand("C:\\Users\\Liam\\Documents\\Aven-workspace")
@@ -24,6 +24,13 @@ test("buildLaunchCommand : login sur l'espace, install = npm global sans dossier
   assert.deepEqual(install.args.slice(-4), ["npm", "install", "-g", "freebuff"])
   assert.ok(!install.args.includes("/D"))
   assert.throws(() => buildLaunchCommand(""), /Aucun espace/)
+})
+
+test("freebuffMissingMessage : message d'installation clair (v9.1.3, plus de terminal « freebuff introuvable »)", () => {
+  const msg = freebuffMissingMessage()
+  assert.match(msg, /pas install/)
+  assert.match(msg, /npm install -g freebuff/)
+  assert.match(msg, /Param[eè]tres/i)
 })
 
 test("parseVersionOutput : installe avec version, ou non installé", () => {

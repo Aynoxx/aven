@@ -1,8 +1,19 @@
-# Aven v9.1.2
+# Aven v9.1.3
 
 Application de bureau (Electron) : une chatbox avec **3 agents commutables** (code, recherche, analyse) et un
 sous-agent (code-reviewer), branchée sur **OpenCode 2.0.10** et un catalogue d’agents strictement gratuit (OpenRouter Free / OpenCode Zen).
 
+> **v9.1.3 — Hub épuré, vocal qui exécute, Freebuff sans piège** : ① la carte
+> « Paramètres » quitte le cercle central (6 cartes à 60°) — l'accès reste dans la barre
+> de fenêtre et l'icône de l'accueil ; ② le bouton « Freebuff » de la chatbox est retiré,
+> tout comme le champ clé Codebuff des Réglages et le réglage « Utiliser Freebuff comme
+> moteur des agents » : le chat repart proprement sur les modèles gratuits OpenCode
+> (l'agent vocal gagne « ouvre Freebuff », « statistiques » et « nouvelle conversation ») ;
+> ③ les commandes vocales sont réellement exécutées — trois nouvelles actions, un filet
+> de secours déterministe quand la classification Groq échoue, et une exécution fiabilisée ;
+> ④ le bouton Freebuff CLI ne renvoie plus « freebuff introuvable » dans un terminal : le
+> statut est vérifié avant lancement, avec un message d'installation clair si besoin, et le
+> quoting Windows des chemins avec espaces est corrigé.
 > **v9.1.2 — Freebuff CLI gratuit à portée de clic** : le free tier de Freebuff (sessions
 > quotidiennes, financé par les pubs texte) vit dans son CLI interactif — Aven l'ouvre dans
 > une vraie fenêtre de terminal directement sur ton espace de travail (carte hub « Freebuff »

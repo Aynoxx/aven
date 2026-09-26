@@ -2,6 +2,8 @@
 // TOUS les agents (projet, code, recherche, analyse) quand une clé Codebuff est
 // enregistrée et que le réglage est actif. Le bouton du composeur reste l'override
 // manuel, dans les deux sens (tri-état : auto / forcé Freebuff / forcé OpenCode).
+// v9.1.3 : plus branché à l'UI (champ clé Codebuff et bouton Freebuff retirés — l'envoi
+// repart systématiquement sur OpenCode) ; module conservé, testé, pour un retour éventuel.
 // Pur : testable avec Node seul.
 
 export type Backend = "opencode" | "freebuff"

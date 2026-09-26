@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import { AGENT_IDS, APP_ACTIONS, INTENT_SYSTEM_PROMPT, classifyIntent, intentOfCompletion } from "../electron/voice-intent.ts"
+import { AGENT_IDS, APP_ACTIONS, INTENT_SYSTEM_PROMPT, classifyIntent, fallbackIntent, intentOfCompletion } from "../electron/voice-intent.ts"
 import { transcribeSpeech } from "../electron/voice.ts"
 
 /** Fabrique un fetch factice qui répond selon l'URL appelée (même principe que voice.test.mjs).
@@ -23,6 +23,30 @@ function fakeFetch(routes) {
 const KEY = "gsk_test"
 
 // ── Prompt : liste fermée et neutralité ──
+
+// ── Filet de secours déterministe (v9.1.3) ──
+
+test("fallbackIntent : commandes d'application courantes reconnues sans réseau", () => {
+  assert.deepEqual(fallbackIntent("ouvre les paramètres"), { intent: "app", action: "open-settings" })
+  assert.deepEqual(fallbackIntent("Ouvre les paramètres stp"), { intent: "app", action: "open-settings" })
+  assert.deepEqual(fallbackIntent("affiche mes notes"), { intent: "app", action: "open-notes" })
+  assert.deepEqual(fallbackIntent("ouvre la page des agents"), { intent: "app", action: "open-agents" })
+  assert.deepEqual(fallbackIntent("lance Freebuff"), { intent: "app", action: "open-freebuff" })
+  assert.deepEqual(fallbackIntent("ouvre freebuff dans le terminal"), { intent: "app", action: "open-freebuff" })
+  assert.deepEqual(fallbackIntent("montre les statistiques"), { intent: "app", action: "open-stats" })
+  assert.deepEqual(fallbackIntent("nouvelle conversation"), { intent: "app", action: "new-chat" })
+  assert.deepEqual(fallbackIntent("crée une nouvelle discussion"), { intent: "app", action: "new-chat" })
+})
+
+test("fallbackIntent : routage d'agent et garde anti-faux positifs", () => {
+  assert.deepEqual(fallbackIntent("passe sur l'agent code"), { intent: "agent", target: "code" })
+  assert.deepEqual(fallbackIntent("bascule sur analyse"), { intent: "agent", target: "analyse" })
+  assert.deepEqual(fallbackIntent("mets-toi sur recherche"), { intent: "agent", target: "recherche" })
+  assert.equal(fallbackIntent("ouvre le fichier main.ts"), undefined) // demande de contenu, pas une commande
+  assert.equal(fallbackIntent("corrige le bug dans les paramètres du composant"), undefined)
+  assert.equal(fallbackIntent(""), undefined)
+  assert.equal(fallbackIntent("euh".repeat(30)), undefined) // trop long pour une commande
+})
 
 test("le prompt d'intention liste les actions, les agents et interdit de répondre à la demande", () => {
   for (const action of APP_ACTIONS) assert.ok(INTENT_SYSTEM_PROMPT.includes(`"${action}"`), action)
@@ -95,6 +119,18 @@ test("classifyIntent : 429 = erreur lisible (l'appelant dégradera)", async () =
 
 // ── Pipeline complet : parallélisme et dégradation gracieuse ──
 
+test("transcribeSpeech : le classifieur reste prioritaire sur le fallback (résultat normal)", async () => {
+  const f = fakeFetch([
+    { match: "/audio/transcriptions", body: { text: "euh ouvre les paramètres stp" } },
+    { match: "/chat/completions", body: { choices: [{ message: { content: "Ouvre les paramètres." } }] }, left: 1 },
+    { match: "/chat/completions", body: { choices: [{ message: { content: '{"intent":"app","action":"open-settings"}' } }] } },
+  ])
+  const result = await transcribeSpeech(new Blob(["a"], { type: "audio/webm" }), f, KEY)
+  assert.equal(result.cleaned, "Ouvre les paramètres.")
+  assert.deepEqual(result.intent, { intent: "app", action: "open-settings" })
+  assert.equal(f.calls.length, 3) // 1 STT + 2 passes texte
+})
+
 test("transcribeSpeech : reformage et intention arrivent ensemble dans le résultat", async () => {
   const f = fakeFetch([
     { match: "/audio/transcriptions", body: { text: "euh ouvre les paramètres stp" } },
@@ -108,7 +144,7 @@ test("transcribeSpeech : reformage et intention arrivent ensemble dans le résul
   assert.equal(f.calls.length, 3) // 1 STT + 2 passes texte
 })
 
-test("transcribeSpeech : échec du classifieur = texte conservé, intention absente, dictée utilisable", async () => {
+test("transcribeSpeech : échec du classifieur = texte conservé, dictée utilisable", async () => {
   const f = fakeFetch([
     { match: "/audio/transcriptions", body: { text: "ouvre les paramètres" } },
     { match: "/chat/completions", body: { choices: [{ message: { content: "Ouvre les paramètres." } }] }, left: 1 },
@@ -116,8 +152,21 @@ test("transcribeSpeech : échec du classifieur = texte conservé, intention abse
   ])
   const result = await transcribeSpeech(new Blob(["a"], { type: "audio/webm" }), f, KEY)
   assert.equal(result.cleaned, "Ouvre les paramètres.")
-  assert.equal(result.intent, undefined)
+  // v9.1.3 : le filet de secours déterministe sauve la commande malgré l'échec du classifieur.
+  assert.deepEqual(result.intent, { intent: "app", action: "open-settings" })
   assert.equal(result.warning, undefined) // seule la passe qui échoue rapporte son warning
+})
+
+test("transcribeSpeech : texte ordinaire + classifieur en échec = aucune intention (comportement v8.7.9)", async () => {
+  const f = fakeFetch([
+    { match: "/audio/transcriptions", body: { text: "explique-moi le bug du composant" } },
+    { match: "/chat/completions", fail: "Rate limit exceeded", status: 429 },
+  ])
+  const result = await transcribeSpeech(new Blob(["a"], { type: "audio/webm" }), f, KEY)
+  assert.equal(result.raw, "explique-moi le bug du composant")
+  assert.equal(result.cleaned, undefined)
+  assert.equal(result.intent, undefined) // aucun motif de commande : dictée ordinaire
+  assert.equal(result.warning, "Rate limit exceeded")
 })
 
 test("transcribeSpeech : échec du reformage n'empêche pas le routage d'intention", async () => {

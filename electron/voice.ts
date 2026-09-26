@@ -9,7 +9,7 @@
 //      n'est jamais bloquante, et une passe manquante dégrade sans casser l'autre.
 // Sans dépendance à Electron : testable avec Node seul (fetch et clé injectables).
 import { loadKeys } from "./settings.js"
-import { classifyIntent, type DictationIntent } from "./voice-intent.js"
+import { classifyIntent, fallbackIntent, type DictationIntent } from "./voice-intent.js"
 
 const GROQ_BASE = "https://api.groq.com/openai/v1"
 export const STT_MODEL = process.env.AVEN_VOICE_STT_MODEL || "whisper-large-v3-turbo"
@@ -142,6 +142,14 @@ export async function transcribeSpeech(
     result.warning = reason instanceof Error ? reason.message : String(reason)
   }
   // L'intention est best effort : absente = la dictée se comporte comme en v8.7.9.
-  if (intentRes.status === "fulfilled") result.intent = intentRes.value
+  // v9.1.3 : filet de secours déterministe — si la classification a échoué OU a répondu
+  // « chat » alors qu'un motif de commande clair est dicté, l'intention est déduite du
+  // texte. L'exécution (routeAppAction) reste côté renderer, rien ne part chez l'agent.
+  if (intentRes.status === "fulfilled") {
+    const classified = intentRes.value
+    result.intent = classified.intent === "chat" ? (fallbackIntent(raw) ?? classified) : classified
+  } else {
+    result.intent = fallbackIntent(raw)
+  }
   return result
 }

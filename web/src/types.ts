@@ -39,7 +39,7 @@ export type WorkspaceEntry = { path: string; name: string }
 export type FileSyncResult = { file: string; status: "created" | "updated" | "unchanged" | "custom" }
 export type Note = { id: string; title: string; markdown: string; updated: number }
 // Miroir de electron/voice-intent.ts (contrat IPC identique, types dupliqués volontairement).
-export type AppAction = "open-notes" | "open-settings" | "open-agents" | "open-projects" | "open-workspace"
+export type AppAction = "open-notes" | "open-settings" | "open-agents" | "open-projects" | "open-workspace" | "open-freebuff" | "open-stats" | "new-chat"
 export type DictationIntent =
   | { intent: "app"; action: AppAction } // commande d'application à exécuter
   | { intent: "agent"; target?: string } // tâche pour un autre agent (absent = courant)

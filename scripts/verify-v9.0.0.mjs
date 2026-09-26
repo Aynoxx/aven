@@ -48,8 +48,8 @@ assert.match(app, /openConversationFromSidebar/)
 assert.match(app, /chatGroups/)
 assert.match(app, /agent-card-chats/)
 assert.match(appearance, /chatsGroupedByAgent/)
-// v9.1.0 : freebuffDefaultCode a été remplacé par freebuffAsEngine (moteur de tous les agents).
-assert.match(appearance, /freebuffAsEngine|freebuffDefaultCode/)
+// v9.1.3 : freebuffDefaultCode/freebuffAsEngine ont disparu (clé Codebuff retirée de l'app).
+assert.ok(!/freebuffDefaultCode|freebuffAsEngine/.test(appearance), "les champs Freebuff doivent avoir disparu de l'apparence")
 assert.match(settings, /Grouper les conversations par agent/)
 assert.match(testsGroups, /groupChatsByAgent/)
 
@@ -68,11 +68,11 @@ for (const entry of Object.values(table.models)) {
 }
 
 // 5. Freebuff prioritaire sur l'agent code.
+// v9.1.3 : le bouton composeur et le champ clé Codebuff sont retirés — l'envoi repart
+// systématiquement sur OpenCode ; la règle reste testée dans son module pur (dormant).
 assert.match(backend, /effectiveBackend/)
-assert.match(app, /freebuffOverride/)
-assert.match(app, /nextManualChoice/)
-assert.match(appearance, /freebuffDefaultCode/)
-assert.match(settings, /Freebuff comme moteur|Freebuff par défaut sur/)
+assert.ok(!/freebuffOverride/.test(app), "l'override Freebuff du composeur doit avoir disparu (v9.1.3)")
+assert.ok(!/Freebuff comme moteur/.test(settings), "le réglage « Freebuff comme moteur » doit avoir disparu (v9.1.3)")
 assert.match(testsBackend, /effectiveBackend/)
 
 // Régressions : les acquis v8.x restent en place.

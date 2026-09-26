@@ -48,11 +48,13 @@ assert.match(app, /setShowHome\(false\); setShowAgentsPage\(true\)/)
 assert.match(app, /Voir la page des agents/)
 
 // ⑤ Freebuff moteur de tous les agents.
+// v9.1.3 : la clé Codebuff, le bouton composeur et le réglage « moteur des agents » sont
+// retirés (l'envoi repart sur OpenCode) ; le module backend-choice et le chemin main
+// freebuff restent en place (dormants). La sonde du chemin main est conservée.
 assert.match(backend, /hasCodebuffKey && options\.pref/)
 assert.ok(!/tab === "code"/.test(backend), "la règle ne doit plus être limitée à l'agent code")
-assert.match(appearance, /freebuffAsEngine/)
-assert.match(appearance, /freebuffDefaultCode/) // migration de l'ancienne clé conservée
-assert.match(settingsDialog, /Utiliser Freebuff comme moteur des agents/)
+assert.doesNotMatch(appearance, /freebuffAsEngine/, "le champ freebuffAsEngine doit avoir disparu de l'apparence (v9.1.3)")
+assert.doesNotMatch(settingsDialog, /Utiliser Freebuff comme moteur des agents/, "le réglage « Utiliser Freebuff comme moteur des agents » doit avoir disparu (v9.1.3)")
 assert.match(freebuff, /options\.task === "projet" \? 30 : 20/)
 
 // ⑥a notifications de bureau.

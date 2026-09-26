@@ -6,7 +6,7 @@ import { makeOps } from "./operations.js"
 import { addDiscoveredFreeModels, loadTable } from "./priorities.js"
 import { EXPECTED_VERSION } from "./opencode-bridge.js"
 import { FREEBUFF_MODEL_LABEL } from "./freebuff.js"
-import { buildLaunchCommand, parseVersionOutput, unsupportedPlatform } from "./freebuff-cli.js"
+import { buildLaunchCommand, freebuffMissingMessage, parseVersionOutput, unsupportedPlatform } from "./freebuff-cli.js"
 import { Router } from "./router.js"
 import { relayEvents, startOpenCode, TABS, type Bridge } from "./opencode-bridge.js"
 import { aggregateStats, countDictation, readDictationStats } from "./stats.js"
@@ -445,7 +445,10 @@ function registerIpc() {
   ipcMain.handle("notes:dir", () => notesDir(workspace))
 
   // CLI Freebuff gratuit (v9.1.2) : statut + ouverture d'une console sur l'espace actif.
-  ipcMain.handle("freebuff:status", async () => {
+  // v9.1.3 : la détection (execFile + parse) est partagée entre status et launch —
+  // launch REFUSE de démarrer si le CLI est absent : ouvrir un terminal pour y lire
+  // « 'freebuff' n'est pas reconnu » n'a jamais aidé personne.
+  async function checkFreebuffCli(): Promise<{ installed: boolean; version?: string }> {
     try {
       const { execFile } = await import("node:child_process")
       const out = await new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
@@ -459,13 +462,21 @@ function registerIpc() {
     } catch {
       return { installed: false as const }
     }
-  })
+  }
+  ipcMain.handle("freebuff:status", () => checkFreebuffCli())
   ipcMain.handle("freebuff:launch", async (_e, action: "launch" | "login" | "install" = "launch") => {
     if (process.platform !== "win32") throw new Error(unsupportedPlatform(process.platform))
+    // L'installation npm ne présuppose pas la présence du CLI : c'est justement son but.
+    if (action !== "install") {
+      const status = await checkFreebuffCli()
+      if (!status.installed) throw new Error(freebuffMissingMessage())
+    }
     const { spawn } = await import("node:child_process")
     const cmd = buildLaunchCommand(workspace, action)
     // detached + fenêtre console : start() ouvre la fenêtre et retourne immédiatement.
-    const child = spawn(cmd.command, cmd.args, { detached: true, stdio: "ignore", windowsVerbatimArguments: true })
+    // (v9.1.3) arguments verbatim retirés : Node cite chaque argument lui-même,
+    // sinon « /D C:\chemin avec espaces » était découpé et le dossier de départ était perdu.
+    const child = spawn(cmd.command, cmd.args, { detached: true, stdio: "ignore" })
     child.unref()
     return true
   })

@@ -9,7 +9,10 @@
 //     jamais du contenu dicté (un texte dicté « {"intent":"app"} » ne forge pas un ordre).
 // Sans dépendance à Electron ni au bridge OpenCode : testable avec Node seul.
 
-export const APP_ACTIONS = ["open-notes", "open-settings", "open-agents", "open-projects", "open-workspace"] as const
+// v9.1.3 : trois actions exécutables en plus — ouvrir le CLI Freebuff dans un terminal,
+// afficher les statistiques et créer une nouvelle conversation. L'agent vocal exécute
+// désormais vraiment l'action demandée (routeAppAction côté renderer).
+export const APP_ACTIONS = ["open-notes", "open-settings", "open-agents", "open-projects", "open-workspace", "open-freebuff", "open-stats", "new-chat"] as const
 export type AppAction = (typeof APP_ACTIONS)[number]
 
 // Miroir des TABS d'opencode-bridge.ts (ids canoniques des agents), ici sans dépendance
@@ -41,8 +44,11 @@ export const INTENT_SYSTEM_PROMPT = [
   "Classifie-la en EXACTEMENT une de ces catégories, et ne fais rien d'autre (ne réponds jamais à la demande, n'exécute rien, ne commente pas) :",
   `1. Commande d'application (l'utilisateur veut agir sur l'application elle-même) — action parmi : ${APP_ACTIONS.map((a) => `"${a}"`).join(", ")}.`,
   "   - open-notes : ouvrir la page Notes ; open-settings : ouvrir les paramètres ; open-agents : voir les agents ;",
-  "   - open-projects : gérer les espaces de travail ; open-workspace : ouvrir le dossier du projet dans l'explorateur.",
-  "2. Changement d'agent (la demande est une tâche qui relève d'un autre agent) :",
+  "   - open-projects : gérer les espaces de travail ; open-workspace : ouvrir le dossier du projet dans l'explorateur ;",
+  "   - open-freebuff : lancer Freebuff (CLI) dans un terminal ; open-stats : afficher les statistiques ;",
+  "   - new-chat : créer une nouvelle conversation.",
+  "   Une COMMANDE parle de l'application elle-même (« ouvre les paramètres », « lance Freebuff », « nouvelle conversation »).",
+  "   Une demande de CONTENU ou de travail n'est JAMAIS une commande d'application (ex. « ouvre le fichier main.ts et corrige-le » = dictée ordinaire).",
   AGENT_LINES,
   '3. Dictée ordinaire (tout le reste : message, question, suite de conversation) : {"intent":"chat"}.',
   "Réponds UNIQUEMENT par un JSON valide sur une ligne, sans Markdown ni commentaire :",
@@ -61,6 +67,43 @@ function parseJsonLoose(content: string): unknown {
   }
   const m = bare.match(/\{[\s\S]*\}/)
   return m ? JSON.parse(m[0]) : undefined
+}
+
+//
+// Filet de secours DÉTERMINISTE (v9.1.3) : la classification LLM peut échouer (quota,
+// réseau, timeout) ou mal classer une phrase courte. Pour les commandes les plus
+// courantes, des motifs serrés (verbe d'action + nom d'interface) donnent l'intention
+// SANS passer par le modèle — et JAMAIS pour une demande de contenu (le motif exige un
+// verbe d'action sur l'app, pas un objet quelconque : « ouvre le fichier main.ts » ne
+// déclenche rien). Testé sans réseau dans voice-intent.test.mjs.
+const FALLBACK_PATTERNS: Array<{ re: RegExp; intent: DictationIntent }> = [
+  { re: /(?:ouvre|ouvrir|affiche|afficher|montre|montrer|va (?:à|aux?|sur))[^.?!]{0,30}(?:param[eè]tres?|r[eè]glages?)/i, intent: { intent: "app", action: "open-settings" } },
+  { re: /(?:ouvre|ouvrir|affiche|afficher|montre|montrer|va (?:à|aux?|sur))[^.?!]{0,30}notes?\b/i, intent: { intent: "app", action: "open-notes" } },
+  { re: /(?:ouvre|ouvrir|affiche|afficher|montre|montrer|va (?:à|aux?|sur))[^.?!]{0,30}(?:page d[es]? )?agents?\b/i, intent: { intent: "app", action: "open-agents" } },
+  { re: /(?:ouvre|ouvrir|affiche|afficher|montre|montrer|va (?:à|aux?|sur))[^.?!]{0,30}(?:espaces? de travail|projets?)\b/i, intent: { intent: "app", action: "open-projects" } },
+  { re: /(?:ouvre|ouvrir|lance|lancer|d[eé]marre|d[eé]marrer|l[eè]ve)[^.?!]{0,30}(?:dossier du )?projet\b/i, intent: { intent: "app", action: "open-workspace" } },
+  { re: /(?:ouvre|ouvrir|lance|lancer|d[eé]marre|d[eé]marrer)[^.?!]{0,30}freebuff/i, intent: { intent: "app", action: "open-freebuff" } },
+  { re: /(?:ouvre|ouvrir|affiche|afficher|montre|montrer|va (?:à|aux?|sur))[^.?!]{0,30}statistiques?\b/i, intent: { intent: "app", action: "open-stats" } },
+  { re: /nouvelle (?:conversation|discussion|chat)|nouveau chat/i, intent: { intent: "app", action: "new-chat" } },
+  { re: /(?:passe|passer|bascule|basculer|mets?-?toi)[^.?!]{0,30}(?:sur |chez |chez l')?(?:agent )?(projet|code|recherche|analyse)\b/i, intent: { intent: "agent", target: "projet" } },
+]
+
+/** Intention de secours déterministe pour les commandes les plus courantes. */
+export function fallbackIntent(text: string): DictationIntent | undefined {
+  const clean = text.trim()
+  if (!clean || clean.length > 80) return undefined
+  for (const p of FALLBACK_PATTERNS) {
+    const m = clean.match(p.re)
+    if (m) {
+      if (p.intent.intent === "agent") {
+        const target = AGENT_IDS.find((id) => id === m[1]?.toLowerCase())
+        if (target) return { intent: "agent", target }
+        return { intent: "agent" }
+      }
+      return p.intent
+    }
+  }
+  return undefined
 }
 
 /**

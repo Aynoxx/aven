@@ -550,13 +550,13 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
 .hub-card-copy small { max-width:130px; color:var(--muted); font-size:var(--font-size-xs); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 /* v9.1.2 : 7 cartes réparties régulièrement (360/7 ≈ 51,43°). « Projet » (orchestrateur)
    en haut, « Freebuff » (CLI gratuit, terminal) juste à côté — libellés distincts. */
+/* v9.1.3 : 6 cartes réparties à 60° (la carte « Paramètres » a quitté le cercle). */
 .hub-card-project { --hub-angle:0deg; }
-.hub-card-freebuff { --hub-angle:51.43deg; }
-.hub-card-notes { --hub-angle:102.86deg; }
-.hub-card-stats { --hub-angle:154.29deg; }
-.hub-card-agents { --hub-angle:205.71deg; }
-.hub-card-settings { --hub-angle:257.14deg; }
-.hub-card-files { --hub-angle:308.57deg; }
+.hub-card-freebuff { --hub-angle:60deg; }
+.hub-card-notes { --hub-angle:120deg; }
+.hub-card-stats { --hub-angle:180deg; }
+.hub-card-agents { --hub-angle:240deg; }
+.hub-card-files { --hub-angle:300deg; }
 
 /* Tuiles du panneau de statistiques (v8.11.0). */
 /* v9.1.0 : l'agent « projet » est à part — badge orchestrateur + liseré distinct. */

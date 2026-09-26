@@ -13,7 +13,6 @@ import { useAppearance } from "./appearance"
 import { useDictation } from "./voice-dictation"
 import { buildPrompt, selectionWithin } from "./selection-actions"
 import { groupChatsByAgent } from "./chat-groups"
-import { effectiveBackend, nextManualChoice, type ManualChoice } from "./backend-choice"
 import { Icon, type IconName } from "./icons"
 import "./App.css"
 
@@ -46,9 +45,6 @@ export default function App() {
   const [messages, setMessages] = useState<Msg[]>([])
   const [live, setLive] = useState<Live>(emptyLive)
   const [input, setInput] = useState("")
-  // v9.0.0 : Freebuff prioritaire sur l'agent code (si clé + réglage) ; le bouton du
-  // composeur reste un override manuel tri-état (auto / forcé / désactivé).
-  const [freebuffOverride, setFreebuffOverride] = useState<ManualChoice>(null)
   const [error, setError] = useState<string>()
   const [appState, setAppState] = useState<AppState>({ status: "starting", keys: {}, providers: [], updatesConfigured: false })
   const [showSettings, setShowSettings] = useState(false)
@@ -115,8 +111,34 @@ export default function App() {
       case "open-workspace":
         void api.openWorkspace().catch(fail)
         return "Dossier du projet ouvert."
+      // v9.1.3 : Freebuff CLI, statistiques et nouvelle conversation exécutables à la voix.
+      case "open-freebuff":
+        void (async () => {
+          try {
+            const status = await api.freebuffCliStatus()
+            if (!status.installed) {
+              setHomeNotice("Le CLI Freebuff n'est pas installé : Paramètres → Freebuff CLI gratuit → « Installer le CLI (npm) ».")
+              return
+            }
+            await api.freebuffCliLaunch("launch")
+            setHomeNotice("Freebuff lancé dans une fenêtre de terminal.")
+          } catch (e) {
+            setHomeNotice(e instanceof Error ? e.message : String(e))
+          }
+        })()
+        return "Freebuff…"
+      case "open-stats":
+        openStats()
+        return "Statistiques ouvertes."
+      case "new-chat":
+        void newChat()
+        return "Nouvelle conversation créée."
     }
   }
+  // v9.1.3 : ref mis à jour à chaque rendu — la commande vocale appelle TOUJOURS la
+  // dernière version de routeAppAction (closures fraîches : états, handlers, freebuffCli).
+  const routeAppActionRef = useRef(routeAppAction)
+  routeAppActionRef.current = routeAppAction
   const [dictationMeta, setDictationMeta] = useState<{ cleaned: boolean; warning?: string; showRaw: boolean; rawText: string; cleanedText: string }>({ cleaned: false, showRaw: false, rawText: "", cleanedText: "" })
   const dictation = useDictation({
     onText: (result) => {
@@ -128,8 +150,10 @@ export default function App() {
       // Commande d'application : exécution immédiate — le texte ne va PAS au composeur.
       // La confirmation vit dans le journal des événements de routage (visible depuis la
       // conversation) ; l'écran ouvert est lui-même le retour principal.
+      // (v9.1.3) Passé par la ref : la closure de useDictation est créée une fois, la ref
+      // garantit que l'action s'appuie sur les états et handlers COURANTS.
       if (intent?.intent === "app") {
-        const confirmation = routeAppAction(intent.action)
+        const confirmation = routeAppActionRef.current(intent.action)
         setNotices((ns) => [...ns.slice(-19), { id: `${Date.now()}-intent`, text: confirmation }])
         // Le hub reste la surface active quand seule l'explorateur s'ouvre par-dessus.
         if (showHomeRef.current && intent.action === "open-workspace") setHomeNotice(confirmation)
@@ -226,11 +250,6 @@ export default function App() {
     liveRef.current = next
     setLive(next)
   }
-
-  useEffect(() => {
-    // v9.0.0 : l'override Freebuff tri-état se réinitialise quand la clé disparaît.
-    if (!appState.keys.codebuff) setFreebuffOverride(null)
-  }, [appState.keys.codebuff])
 
   const closeNotesToHome = useCallback(() => {
     setShowNotes(false)
@@ -496,24 +515,14 @@ export default function App() {
   }
   const sendText = async (text: string) => {
     if (!chatId || live.busy) return
-    const explicitFreebuff = /^\/freebuff\s+/i.test(text.trim())
-    const prompt = explicitFreebuff ? text.trim().replace(/^\/freebuff\s+/i, "").trim() : text.trim()
+    const prompt = text.trim()
     if (!prompt) return
-    const backend: "opencode" | "freebuff" = explicitFreebuff
-      ? "freebuff"
-      : effectiveBackend({ hasCodebuffKey: !!appState.keys.codebuff, pref: appearance.freebuffAsEngine, manual: freebuffOverride })
     setError(undefined)
     setFollowBottom(true)
     setMessages((m) => [...m, { id: `local-${Date.now()}`, role: "user", text: prompt }])
     setLiveBoth({ ...emptyLive, busy: true })
     try {
-      const result = await api.send(chatId, prompt, backend)
-      if (result.backend === "freebuff") {
-        setChats((cs) => cs.map((c) => c.id === chatId ? { ...c, model: result.model ?? "Freebuff / Codebuff SDK", updated: Date.now() } : c))
-        setNotices((ns) => [...ns.slice(-19), { id: `${Date.now()}-freebuff`, text: "Freebuff a terminé ce tour." }])
-        await reload(chatId)
-        setLiveBoth(emptyLive)
-      }
+      await api.send(chatId, prompt)
     } catch (e) {
       setLiveBoth(emptyLive)
       if (!(e instanceof Error && /interrompu/i.test(e.message))) fail(e)
@@ -715,12 +724,15 @@ export default function App() {
       // v9.1.0 : « projet » est à part — carte dédiée d'orchestrateur, hors sélecteur d'agents.
       { key: "project", label: "Projet", kind: "project", hint: "Orchestrateur des agents", action: () => selectAgent("projet") },
       // v9.1.2 : le CLI Freebuff gratuit (ad-financé) s'ouvre dans un terminal sur l'espace.
-      { key: "freebuff", label: "Freebuff", kind: "freebuff", hint: "CLI gratuit (terminal)", action: () => { api.freebuffCliLaunch("launch").catch((e) => { setHomeNotice(e instanceof Error ? e.message : String(e)) }) } },
+      // v9.1.3 : passe par routeAppAction ("open-freebuff") : si le CLI est absent, un avis
+      // clair remplace le terminal « 'freebuff' n'est pas reconnu » de la v9.1.2.
+      { key: "freebuff", label: "Freebuff", kind: "freebuff", hint: "CLI gratuit (terminal)", action: () => setHomeNotice(routeAppAction("open-freebuff")) },
       { key: "agents", label: "Agents", kind: "agent", hint: orderedAgents.length === 1 ? "Agent actif" : `${orderedAgents.length} agents`, action: openAgentsPage },
       { key: "stats", label: "Statistiques", kind: "stats", hint: "Usage de l'app", action: openStats },
       { key: "files", label: "Fichiers", kind: "files", hint: "Parcourir l’espace", action: () => api.openWorkspace().catch(fail) },
       { key: "notes", label: "Notes", kind: "notes", hint: "Vos notes Markdown", action: () => { setShowAgentsPage(false); setShowSettings(false); setShowHome(false); setNotesInitialId(undefined); setShowNotes(true) } },
-      { key: "settings", label: "Paramètres", kind: "settings", hint: "Configuration & apparence", action: () => openConfiguration() },
+      // v9.1.3 : la carte « Paramètres » quitte le cercle (6 cartes à 60°) — le bouton
+      // « Paramètres » de la barre de fenêtre et l'icône de la barre d'accueil restent.
     ]
     const recent = chats.slice(0, 3)
     const allConversations = chats
@@ -989,7 +1001,7 @@ export default function App() {
         <span className="eyebrow">MODÈLE ACTIF</span>
         <strong>{labelOf(currentModel)}</strong>
       </div>
-      <span className="model-assignment">{currentModel === "Freebuff / Codebuff SDK" ? "Backend Freebuff · SDK Codebuff" : currentModel ? `Priorité agent · ${agentName(tab)}` : "Résolution du modèle…"}</span>
+      <span className="model-assignment">{currentModel ? `Priorité agent · ${agentName(tab)}` : "Résolution du modèle…"}</span>
     </div>
   )
 
@@ -1030,25 +1042,12 @@ export default function App() {
                 <Icon name="microphone" size={16} />
               </button>
             )}
-            {appState.keys.codebuff && (() => {
-              const activeFreebuff = effectiveBackend({ hasCodebuffKey: true, pref: appearance.freebuffAsEngine, manual: freebuffOverride }) === "freebuff"
-              return (
-                <button
-                  className={`button ${activeFreebuff ? "primary" : "secondary"}`}
-                  type="button"
-                  onClick={() => setFreebuffOverride((value) => nextManualChoice(value))}
-                  title="Freebuff (SDK Codebuff) : peut consommer des crédits. Clic : forcer → désactiver → automatique. Par défaut, Freebuff est le moteur de tous les agents."
-                >
-                  {activeFreebuff ? "Freebuff actif" : "Freebuff"}
-                </button>
-              )
-            })()}
             <span className="composer-hint">
               {dictation.state === "recording" ? "J’écoute… relâche pour transcrire (Échap pour annuler)."
                 : dictation.state === "transcribing" ? "Transcription…"
                 : dictationMeta.cleaned && !dictationMeta.showRaw && input ? "Texte dicté éclairci — clique pour voir le brut."
                 : dictationMeta.warning ? `Dictée non reformée : ${dictationMeta.warning}`
-                : effectiveBackend({ hasCodebuffKey: !!appState.keys.codebuff, pref: appearance.freebuffAsEngine, manual: freebuffOverride }) === "freebuff" ? "Backend Freebuff / Codebuff SDK." : "Envoyez votre message à l’agent."}
+                : "Envoyez votre message à l’agent."}
             </span>
             {dictationMeta.cleaned && input && (
               <button

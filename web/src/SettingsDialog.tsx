@@ -48,7 +48,18 @@ export default function SettingsDialog(props: {
   const [cli, setCli] = useState<{ installed: boolean; version?: string } | null>(null)
   useEffect(() => { api.freebuffCliStatus().then(setCli).catch(() => setCli({ installed: false })) }, [])
   const cliAction = async (action: "launch" | "login" | "install") => {
-    try { await api.freebuffCliLaunch(action) } catch (e) { props.onError(e) }
+    try {
+      await api.freebuffCliLaunch(action)
+      // v9.1.3 : après une installation, le statut est re-vérifié automatiquement —
+      // l'utilisateur n'a pas à fermer/rouvrir le panneau pour voir « CLI installé ».
+      if (action === "install") {
+        for (let i = 0; i < 12; i++) {
+          await new Promise((r) => setTimeout(r, 5_000))
+          const status = await api.freebuffCliStatus()
+          if (status.installed) { setCli(status); break }
+        }
+      }
+    } catch (e) { props.onError(e) }
   }
   const changeNotifications = async (on: boolean) => {
     setNotifications(on)
@@ -187,17 +198,15 @@ export default function SettingsDialog(props: {
   const renderGeneral = () => (
     <div className="settings-pane">
       <h4>Clés API</h4>
-      <p className="hint">Les modèles texte payants sont désactivés. OpenRouter Free est optionnel, Groq sert à la dictée vocale, et Freebuff / Codebuff peut être activé comme backend externe. Les clés sont chiffrées par le système et ne quittent jamais l’application.</p>
+      <p className="hint">Les modèles texte payants sont désactivés. OpenRouter Free est optionnel et Groq sert à la dictée vocale. Les clés sont chiffrées par le système et ne quittent jamais l’application.</p>
       {state.providers.map((p) => <div key={p.id} className="field"><b>{p.label} {state.keys[p.id] && <span className="key-status"><Icon name="check" size={12} />clé enregistrée</span>}</b><span className="hint">{p.note}</span>{state.keyWarnings?.[p.id] && <span className="err">{state.keyWarnings[p.id]}</span>}<div className="row"><input className="settings-input" type="password" placeholder={state.keys[p.id] ? "Remplacer la clé…" : "Coller la clé…"} value={inputs[p.id] ?? ""} onChange={(e) => setInputs((i) => ({ ...i, [p.id]: e.target.value }))} /><button className="button primary" disabled={!inputs[p.id]?.trim()} onClick={() => save(p.id, inputs[p.id])}>Enregistrer</button>{state.keys[p.id] && <button className="button danger" onClick={() => save(p.id, "")}>Effacer</button>}<button className="button secondary" onClick={() => api.openExternal(p.url)}>Obtenir une clé</button></div></div>)}
-      <div className="settings-callout"><b>Modèles Aven gratuits uniquement</b><span><code>OpenRouter Free</code> fournit des modèles gratuits pour les agents, <code>Groq</code> alimente la dictée vocale (maintiens le bouton micro ou Ctrl+Maj+V ; le texte arrive dans le composeur, à relire avant d’envoyer), et <code>Freebuff / Codebuff SDK</code> est un backend séparé, optionnel, qui nécessite une clé Codebuff et peut consommer des crédits : il ne remplace pas le client Freebuff gratuit.</span></div>
-      <label className="toggle-row"><span>Utiliser Freebuff comme moteur des agents</span><input type="checkbox" checked={appearance.freebuffAsEngine} onChange={(e) => props.onAppearanceChange({ freebuffAsEngine: e.target.checked })} /></label>
-      <p className="hint">S’applique uniquement si une clé Codebuff est enregistrée : les agents projet, code, recherche et analyse tournent alors sur le SDK Codebuff (base, researcher, thinker) au lieu d’OpenCode. Le bouton « Freebuff » du composeur force ou désactive le backend pour la conversation en cours.</p>
+      <div className="settings-callout"><b>Modèles Aven gratuits uniquement</b><span><code>OpenRouter Free</code> fournit des modèles gratuits pour les agents et <code>Groq</code> alimente la dictée vocale (maintiens le bouton micro ou Ctrl+Maj+V ; le texte arrive dans le composeur, à relire avant d’envoyer).</span></div>
       <h4>Notifications de bureau</h4>
       <p className="hint">Prévient quand un agent a besoin de toi : permission demandée, formulaire, tour terminé (s’il a duré plus de 8 s) ou échoué. Jamais quand la fenêtre est au premier plan.</p>
       <label className="toggle-row"><span>Activer les notifications</span><input type="checkbox" checked={notifications !== false} onChange={(e) => void changeNotifications(e.target.checked)} /></label>
       <div className="row"><button className="button secondary" onClick={() => void copyDiagnostic()}>Copier le diagnostic</button><span className="hint">Versions, état du moteur, agents et derniers événements — sans aucune clé API.</span></div>
       <h4>Freebuff CLI gratuit</h4>
-      <p className="hint">Le free tier de Freebuff (sessions quotidiennes, financé par les pubs texte) vit dans son CLI interactif — pas dans le SDK, qui exige une clé payante. Aven ouvre une fenêtre de terminal directement sur ton espace de travail : tu y parles à Freebuff, tes fichiers restent les mêmes.</p>
+      <p className="hint">Le free tier de Freebuff (sessions quotidiennes, financé par les pubs texte) vit dans son CLI interactif. Aven ouvre une fenêtre de terminal directement sur ton espace de travail : tu y parles à Freebuff, tes fichiers restent les mêmes.</p>
       <div className="row">
         <span className="hint">{cli === null ? "Vérification…" : cli.installed ? <b><Icon name="check" size={12} /> CLI installé{cli.version ? ` — v${cli.version}` : ""}</b> : "CLI non installé"}</span>
         {cli?.installed && <button className="button primary" onClick={() => void cliAction("launch")}>Ouvrir Freebuff dans le terminal</button>}

@@ -36,8 +36,9 @@ assert.ok(freebuff.includes('codebuff/thinker@latest'))
 assert.ok(freebuff.includes('codebuff/researcher@latest'))
 assert.ok(freebuff.includes('previousRun'))
 assert.ok(history.includes('freebuff-history.json'))
-assert.ok(app.includes('useFreebuff'))
-assert.ok(app.includes('explicitFreebuff'))
+// v9.1.3 : le préfixe caché /freebuff et le hook useFreebuff ont disparu de l'UI.
+assert.ok(!app.includes('useFreebuff'))
+assert.ok(!app.includes('explicitFreebuff'))
 assert.ok(preload.includes('backend?: "opencode" | "freebuff"'))
 assert.ok(types.includes('export type SendResult'))
 

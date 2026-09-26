@@ -29,6 +29,16 @@ export function useDictation(options: {
     chunksRef.current = []
   }, [])
 
+  // Les callbacks (onText/onError/…) fournis par l'app sont capturés une fois pour toute
+  // la vie du hook : sans ref, une closure périmée voyait des états obsolètes et la
+  // commande vocale pouvait s'exécuter avec des handlers invalides (v9.1.3).
+  const optionsRef = useRef(options)
+  optionsRef.current = options
+  const onText = useCallback((result: DictationResult) => optionsRef.current.onText(result), [])
+  const onError = useCallback((message: string) => optionsRef.current.onError(message), [])
+  const onTooShort = useCallback(() => optionsRef.current.onTooShort?.(), [])
+  const onEmpty = useCallback(() => optionsRef.current.onEmpty?.(), [])
+
   const start = useCallback(async () => {
     if (recorderRef.current || state !== "idle") return
     try {
@@ -55,7 +65,7 @@ export function useDictation(options: {
         cleanup()
         if (blob.size < 1200) { // < ~75 ms d'audio : clic involontaire — on prévient, on n'ignore pas
           setState("idle")
-          options.onTooShort?.()
+          onTooShort()
           return
         }
         setState("transcribing")
@@ -63,14 +73,14 @@ export function useDictation(options: {
           .then((result) => {
             setState("idle")
             if (!result.raw?.trim()) {
-              options.onEmpty?.() // silence ou bruit sans parole : message clair plutôt que rien
+              onEmpty() // silence ou bruit sans parole : message clair plutôt que rien
               return
             }
-            options.onText(result)
+            onText(result)
           })
           .catch((err) => {
             setState("error")
-            options.onError(err instanceof Error ? err.message : String(err))
+            onError(err instanceof Error ? err.message : String(err))
           })
       }
       recorderRef.current = recorder
@@ -82,9 +92,9 @@ export function useDictation(options: {
       const message = err instanceof DOMException && err.name === "NotAllowedError"
         ? "L'accès au microphone a été refusé. Autorise-le pour Aven puis réessaie."
         : err instanceof Error ? err.message : String(err)
-      options.onError(message)
+      onError(message)
     }
-  }, [cleanup, options, state])
+  }, [cleanup, onText, onError, onTooShort, onEmpty, state])
 
   const stop = useCallback(() => {
     // L'arrêt déclenche onstop → envoi + transcription.

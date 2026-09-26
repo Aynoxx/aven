@@ -5,7 +5,6 @@ export type ProviderInfo = { id: string; label: string; env: string; url: string
 
 export const PROVIDERS: ProviderInfo[] = [
   { id: "openrouter", label: "OpenRouter Free", env: "OPENROUTER_API_KEY", url: "https://openrouter.ai/keys", note: "Accès au catalogue gratuit OpenRouter. Les variantes :free sont à 0 $ ; quotas du plan Free appliqués par OpenRouter." },
-  { id: "codebuff", label: "Freebuff / Codebuff SDK", env: "CODEBUFF_API_KEY", url: "https://www.codebuff.com/api-keys", note: "Backend Freebuff intégré par le SDK officiel Codebuff. Optionnel : ce SDK peut consommer des crédits Codebuff ; ce n’est pas le client Freebuff gratuit ad-supported.", openCodeEnv: false },
   { id: "groq", label: "Groq (dictée vocale)", env: "GROQ_API_KEY", url: "https://console.groq.com/keys", note: "Dicter dans le composeur (bouton micro ou Ctrl+Maj+V). Transcription Whisper + reformage côté Groq ; le texte reste modifiable avant envoi. Free tier : ~2 000 transcriptions/jour.", openCodeEnv: false },
 ]
 export type OpenRouterKeyProbe =

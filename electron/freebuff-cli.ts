@@ -28,6 +28,14 @@ export function buildLaunchCommand(workspace: string, action: "launch" | "login"
 }
 
 /**
+ * Message quand le CLI Freebuff n'est pas installé : on REFUSE d'ouvrir un terminal
+ * qui afficherait « 'freebuff' n'est pas reconnu » et on dit comment l'installer.
+ */
+export function freebuffMissingMessage(): string {
+  return "Le CLI Freebuff n'est pas installé sur cet ordinateur. Dans Aven : Paramètres → Freebuff CLI gratuit → « Installer le CLI (npm) », ou dans un terminal : npm install -g freebuff."
+}
+
+/**
  * Parse la sortie de `freebuff --version` : installé ? quelle version ?
  * Accepte « 0.0.203 », « freebuff/0.0.203 » ou toute ligne contenant un semver.
  */

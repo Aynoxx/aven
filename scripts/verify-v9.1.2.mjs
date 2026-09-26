@@ -31,7 +31,9 @@ assert.match(cli, /\/D/, "start /D doit définir le dossier de départ (pas de c
 assert.match(main, /freebuff:status/)
 assert.match(main, /freebuff:launch/)
 assert.match(main, /parseVersionOutput/)
-assert.match(main, /windowsVerbatimArguments/)
+// v9.1.3 : les arguments verbatim (quoting cassé des chemins avec espaces) ont disparu.
+assert.match(main, /detached: true, stdio: "ignore"/)
+assert.ok(!/windowsVerbatimArguments/.test(main), "les arguments verbatim doivent avoir disparu (v9.1.3)")
 assert.match(preload, /freebuffCliStatus/)
 assert.match(preload, /freebuffCliLaunch/)
 assert.match(types, /freebuffCliStatus/)
@@ -41,7 +43,7 @@ assert.match(types, /freebuffCliLaunch/)
 assert.match(app, /key: "freebuff", label: "Freebuff"/)
 assert.match(app, /freebuffCliLaunch\("launch"\)/)
 assert.match(css, /\.hub-card-freebuff/)
-assert.match(css, /--hub-angle:51\.43deg/) // 7 cartes réparties
+assert.match(css, /--hub-angle:60deg/) // v9.1.3 : 6 cartes réparties à 60°
 assert.match(settingsDialog, /Freebuff CLI gratuit/)
 assert.match(settingsDialog, /Ouvrir Freebuff dans le terminal/)
 assert.match(settingsDialog, /Installer le CLI/)
