@@ -5,7 +5,7 @@ import { parseRef, refOf } from "./model-ref.js"
 import { TABS, type Bridge } from "./opencode-bridge.js"
 import { isArchived, listArchived, setArchived } from "./archive.js"
 import { clearFreebuffHistory, getFreebuffMessages } from "./freebuff-history.js"
-import { FREEBUFF_MODEL_LABEL, interruptFreebuff, runFreebuff } from "./freebuff.js"
+import { FREEBUFF_MODEL_LABEL, interruptFreebuff, isBillingError, runFreebuff } from "./freebuff.js"
 
 export type ChatMsg = {
   id: string
@@ -205,7 +205,7 @@ export function makeOps(current: () => Bridge, router: () => Router | null = () 
       return [...main, ...freebuff].sort((a, b) => (a.created ?? 0) - (b.created ?? 0))
     },
 
-    async send(id: string, text: string, backend: "opencode" | "freebuff" = "opencode") {
+    async send(id: string, text: string, backend: "opencode" | "freebuff" = "opencode"): Promise<{ backend: "opencode" | "freebuff"; response?: string; model?: string }> {
       const clean = text.trim()
       if (!clean) throw new Error("Message vide")
       const b = current()
@@ -214,13 +214,25 @@ export function makeOps(current: () => Bridge, router: () => Router | null = () 
         const info = await b.client.session.get({ sessionID: id })
         const rawAgent = String(info.agent ?? "code")
         const task: Task = (TASKS as readonly string[]).includes(rawAgent) ? (rawAgent as Task) : "code"
-        const result = await runFreebuff({
-          chatId: id,
-          task,
-          prompt: clean,
-          cwd: b.workspace,
-          notify: (text) => notify?.(id, text),
-        })
+        let result: Awaited<ReturnType<typeof runFreebuff>>
+        try {
+          result = await runFreebuff({
+            chatId: id,
+            task,
+            prompt: clean,
+            cwd: b.workspace,
+            notify: (text) => notify?.(id, text),
+          })
+        } catch (err) {
+          // v9.1.1 : compte Codebuff sans crédits (Payment Required) → repli automatique
+          // sur les modèles gratuits OpenCode, avec un avis clair dans la conversation.
+          // Aucun autre échec ne replie : une vraie erreur reste visible.
+          if (!isBillingError(err)) throw err
+          const notice = "Freebuff indisponible (crédits Codebuff épuisés) : ce tour part sur les modèles gratuits OpenCode."
+          notify?.(id, notice)
+          console.warn(`[freebuff] ${notice}`)
+          return await this.send(id, text, "opencode")
+        }
         try {
           if ((info.title ?? DEFAULT_TITLE) === DEFAULT_TITLE) await b.client.session.update({ sessionID: id, title: titleFrom(clean) })
         } catch (err) {

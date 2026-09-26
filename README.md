@@ -1,8 +1,14 @@
-# Aven v9.1.0
+# Aven v9.1.1
 
 Application de bureau (Electron) : une chatbox avec **3 agents commutables** (code, recherche, analyse) et un
 sous-agent (code-reviewer), branchée sur **OpenCode 2.0.10** et un catalogue d’agents strictement gratuit (OpenRouter Free / OpenCode Zen).
 
+> **v9.1.1 — Hub dédoublonné, Freebuff sans blocage** : l'ancienne carte « Projets »
+> (espaces de travail) est retirée du hub — elle faisait doublon avec la nouvelle carte
+> « Projet » (orchestrateur) ; les espaces restent dans Paramètres → Configuration. Le mode
+> Freebuff ne bloque plus quand le compte Codebuff n'a plus de crédits (Payment Required) :
+> le tour bascule automatiquement sur les modèles gratuits OpenCode, avec un avis dans la
+> conversation.
 > **v9.1.0 — Projet à part, Freebuff moteur, navigation revue** : ① l'agent **projet** est
 > à part (carte dédiée du hub, badge « orchestrateur », retiré du sélecteur d'agents) et
 > délègue aux agents de base code / recherche / analyse ; ② le sélecteur d'agents en haut

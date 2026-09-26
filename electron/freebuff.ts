@@ -52,6 +52,15 @@ function errorText(err: unknown): string {
   return String(err)
 }
 
+/**
+ * Erreur de facturation Codebuff (compte sans crédits, 402 Payment Required…).
+ * Exportée pour le repli automatique : sur ce cas ET SEULEMENT CE CAS, Aven renvoie le
+ * tour sur les modèles gratuits OpenCode au lieu d'afficher une erreur bloquante.
+ */
+export function isBillingError(err: unknown): boolean {
+  return /payment required|\b402\b|insufficient|crédit|credit/i.test(errorText(err))
+}
+
 export function isFreebuffRunning(chatId: string) {
   return running.has(chatId)
 }

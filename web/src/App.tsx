@@ -661,7 +661,6 @@ export default function App() {
       agent: "agent",
       files: "folder",
       notes: "file",
-      projects: "grid",
       settings: "settings",
       stats: "chart",
     }
@@ -718,7 +717,6 @@ export default function App() {
       { key: "stats", label: "Statistiques", kind: "stats", hint: "Usage de l'app", action: openStats },
       { key: "files", label: "Fichiers", kind: "files", hint: "Parcourir l’espace", action: () => api.openWorkspace().catch(fail) },
       { key: "notes", label: "Notes", kind: "notes", hint: "Vos notes Markdown", action: () => { setShowAgentsPage(false); setShowSettings(false); setShowHome(false); setNotesInitialId(undefined); setShowNotes(true) } },
-      { key: "projects", label: "Projets", kind: "projects", hint: "Espaces de travail", action: () => openConfiguration("workspaces") },
       { key: "settings", label: "Paramètres", kind: "settings", hint: "Configuration & apparence", action: () => openConfiguration() },
     ]
     const recent = chats.slice(0, 3)
