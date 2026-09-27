@@ -29,7 +29,8 @@ contextBridge.exposeInMainWorld("opencode", {
   archiveChat: (id: string, archived: boolean) => call("chats:archive", id, archived),
   exportChat: (id: string) => call("chats:export", id),
   messages: (id: string) => call("chats:messages", id),
-  send: (id: string, text: string, backend?: "opencode" | "freebuff") => call("chats:send", id, text, backend),
+  // v9.1.6 : plus de paramètre backend — l'envoi passe uniquement par OpenCode.
+  send: (id: string, text: string) => call("chats:send", id, text),
   interrupt: (id: string) => call("chats:interrupt", id),
   reply: (sessionID: string, requestID: string, decision: string) => call("permissions:reply", sessionID, requestID, decision),
   replyForm: (sessionID: string, formID: string, answer: Record<string, unknown>) => call("forms:reply", sessionID, formID, answer),
@@ -51,6 +52,13 @@ contextBridge.exposeInMainWorld("opencode", {
   diagnostic: () => call("app:diagnostic"),
   freebuffCliStatus: () => call("freebuff:status"),
   freebuffCliLaunch: (action: "launch" | "login" | "install") => call("freebuff:launch", action),
+  // v9.2.0 : canaux du PTY embarqué (protocole freebuff-pty) — pas de WebSocket : le
+  // flux passe par IPC, et les événements freebuff.pty.* arrivent via onEvent ci-dessous.
+  freebuffPtyInput: (data: string) => call("freebuff:pty:input", data),
+  freebuffPtyResize: (cols: number, rows: number) => call("freebuff:pty:resize", cols, rows),
+  freebuffPtySignal: (signal: "SIGINT") => call("freebuff:pty:signal", signal),
+  freebuffPtyRestart: () => call("freebuff:pty:restart"),
+  freebuffPtyActive: () => call("freebuff:pty:active"),
   onEvent: (cb: (ev: { type: string; data: Record<string, unknown> }) => void) => {
     const listener = (_e: unknown, ev: { type: string; data: Record<string, unknown> }) => cb(ev)
     ipcRenderer.on("opencode:event", listener)

@@ -4,9 +4,10 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 
-// v9.1.5 : plus aucun espace « Par défaut » imposé. Ces tests verrouillent le nouveau
-// contrat : un registre absent/vide est un état NORMAL (l'utilisateur doit choisir son
-// espace), et le retrait du dernier espace ramène à cet état de choix.
+// v9.1.6 : plus AUCUN projet par défaut — même implicite. Un registre sans « active »
+// explicite est un état « à choisir » : activeWorkspace renvoie null même si la liste
+// n'est pas vide, et l'écran de choix liste les projets connus. Ces tests verrouillent
+// ce contrat (l'ancien repli « premier connu » a été retiré).
 
 // workspaces.ts importe "electron" (stub) et lit/écrit workspaces.json dans
 // app.getPath("userData") : chaque test isole son registre dans un dossier temporaire.
@@ -29,19 +30,28 @@ test("registre absent : liste vide, aucun espace actif (plus de « Par défaut �
   } finally { cleanup() }
 })
 
-test("registre sans espace : registerWorkspace crée le PREMIER espace, sans rien imposer", () => {
+test("registre rempli sans choix : liste présente mais activeWorkspace null (à choisir)", () => {
+  const { cleanup } = useTempRegistry({ list: [{ path: "C:\\x", name: "X" }] })
+  try {
+    assert.deepEqual(listWorkspaces().map((w) => w.name), ["X"])
+    // v9.1.6 : l'ancien repli « premier connu » démarrait un espace sans choix — retiré.
+    assert.equal(activeWorkspace(), null)
+  } finally { cleanup() }
+})
+
+test("registre sans espace : registerWorkspace crée le PREMIER espace, sans l'activer", () => {
   const { cleanup, base } = useTempRegistry(undefined)
   try {
     const entry = registerWorkspace(base, "Mon espace")
     assert.equal(entry.name, "Mon espace")
     assert.deepEqual(listWorkspaces(), [entry])
-    // Fallback historique : sans choix explicite, le premier connu devient l'espace
-    // renvoyé (le boot démarre dessus). Le null n'arrive qu'à la liste vide.
-    assert.deepEqual(activeWorkspace(), entry)
+    // v9.1.6 : l'enregistrement n'active rien — seul un choix explicite (setActiveWorkspace
+    // via l'écran de choix ou le sélecteur) démarre un espace.
+    assert.equal(activeWorkspace(), null)
   } finally { cleanup() }
 })
 
-test("activeWorkspace : espace activé puis bascule — la sélection suit l'enregistrement", () => {
+test("activeWorkspace : null tant qu'aucun choix, puis l'espace activé suit l'enregistrement", () => {
   const { cleanup, base } = useTempRegistry(undefined)
   try {
     const dirA = path.join(base, "a")
@@ -49,7 +59,7 @@ test("activeWorkspace : espace activé puis bascule — la sélection suit l'enr
     mkdirSync(dirA); mkdirSync(dirB) // setActiveWorkspace exige des dossiers existants
     registerWorkspace(dirA, "A")
     registerWorkspace(dirB, "B")
-    assert.equal(activeWorkspace().path, dirA) // fallback : premier connu tant qu'aucun choix
+    assert.equal(activeWorkspace(), null) // rien n'est choisi : l'écran de choix s'affiche
     setActiveWorkspace(dirB)
     assert.equal(activeWorkspace().path, dirB)
     setActiveWorkspace(dirA)
@@ -69,7 +79,7 @@ test("removeWorkspace du dernier espace : retour à l'état « à choisir » (li
   } finally { cleanup() }
 })
 
-test("removeWorkspace de l'espace actif parmi plusieurs : plus d'active fantôme", () => {
+test("removeWorkspace de l'espace actif parmi plusieurs : plus d'active fantôme, choix redemandé", () => {
   const { cleanup, base } = useTempRegistry(undefined)
   try {
     const dirA = path.join(base, "a")
@@ -80,16 +90,16 @@ test("removeWorkspace de l'espace actif parmi plusieurs : plus d'active fantôme
     setActiveWorkspace(dirA)
     removeWorkspace(dirA)
     assert.deepEqual(listWorkspaces().map((w) => w.path), [dirB])
-    // L'« active » pointant l'espace retiré est effacé : activeWorkspace retombe sur le
-    // premier restant (jamais un espace fantôme). Avec la liste vide, il renvoie null.
-    assert.equal(activeWorkspace().path, dirB)
+    // v9.1.6 : l'actif retiré laisse la sélection vide — l'écran de choix repropose B,
+    // mais rien ne démarre tout seul (plus de bascule « premier restant »).
+    assert.equal(activeWorkspace(), null)
   } finally { cleanup() }
 })
 
-test("activeWorkspace : liste non vide sans actif → premier connu (jamais un espace retiré)", () => {
-  const { cleanup } = useTempRegistry({ list: [{ path: "C:\\x", name: "X" }] })
+test("registre avec active pointant un espace retiré : état « à choisir » (jamais un fantôme)", () => {
+  const { cleanup } = useTempRegistry({ list: [{ path: "C:\\x", name: "X" }], active: "C:\\y" })
   try {
-    assert.equal(activeWorkspace().path, "C:\\x")
+    assert.equal(activeWorkspace(), null)
   } finally { cleanup() }
 })
 

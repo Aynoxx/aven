@@ -5,8 +5,10 @@ import { fileURLToPath } from "node:url"
 import { makeOps } from "./operations.js"
 import { addDiscoveredFreeModels, loadTable } from "./priorities.js"
 import { EXPECTED_VERSION } from "./opencode-bridge.js"
-import { FREEBUFF_MODEL_LABEL } from "./freebuff.js"
 import { buildLaunchCommand, freebuffBusyMessage, freebuffMissingMessage, parseVersionOutput, unsupportedPlatform } from "./freebuff-cli.js"
+// v9.2.0 : PTY du CLI freebuff embarqué (protocole freebuff-pty) — session persistante :
+// fermer la vue ne tue pas le process, la réouverture rejoue le scrollback.
+import { startFreebuffPty, writeFreebuffPty, resizeFreebuffPty, signalFreebuffPty, restartFreebuffPty, stopFreebuffPty, isFreebuffPtyActive, freebuffPtyPid, loadPtyModule, DEFAULT_PTY_COLS, DEFAULT_PTY_ROWS } from "./freebuff-pty.js"
 import { Router } from "./router.js"
 import { relayEvents, startOpenCode, TABS, type Bridge } from "./opencode-bridge.js"
 import { aggregateStats, countDictation, readDictationStats } from "./stats.js"
@@ -107,6 +109,8 @@ let state: AppState = { status: "starting", keys: {}, providers: providersLite, 
 let bootQueue: Promise<void> = Promise.resolve()
 let bootGeneration = 0
 let shutdownPromise: Promise<void> | null = null
+// v9.2.0 : le PTY est un singleton dans freebuff-pty.ts (mono-session : deux CLI
+// simultanés déclencheraient le « takeover » du serveur Freebuff).
 
 const ops = makeOps(
   () => {
@@ -114,7 +118,6 @@ const ops = makeOps(
     return bridge
   },
   () => router,
-  (sessionID, text) => win?.webContents.send("opencode:event", { type: "router.notice", data: { sessionID, model: FREEBUFF_MODEL_LABEL, text } }),
 )
 
 // Annonceur vocal (v8.7.9) : événements OpenCode → courtes phrases parlées (SAPI Windows).
@@ -457,15 +460,11 @@ function registerIpc() {
     const wasActive = !!workspace && path.resolve(workspace) === path.resolve(dir)
     removeWorkspace(dir)
     const list = listWorkspaces()
-    // v9.1.5 : dernier espace retiré → retour à l'écran de choix (le moteur s'arrête :
-    // boot() sans espace ne laisse rien tourner sur un dossier fantôme).
-    if (!list.length) {
+    // v9.1.6 : retirer l'espace actif — dernier ou non — ramène TOUJOURS à l'écran de
+    // choix. L'ancienne bascule « premier restant » était encore un projet par défaut
+    // déguisé : on ne démarre jamais un espace sans que l'utilisateur l'ait choisi.
+    if (wasActive) {
       workspace = ""
-      await boot()
-    } else if (wasActive) {
-      // L'espace actif vient d'être retiré : bascule immédiate sur le premier restant.
-      setActiveWorkspace(list[0].path)
-      workspace = list[0].path
       await boot()
     }
     return list
@@ -500,16 +499,22 @@ function registerIpc() {
     }
   }
   ipcMain.handle("freebuff:status", () => checkFreebuffCli())
-  // v9.1.5 : freebuff.exe tourne-t-il déjà ? Deux CLI simultanés sur le même compte
+  // v9.1.5 : le CLI freebuff tourne-t-il déjà ? Deux CLI simultanés sur le même compte
   // déclenchent un « takeover » de session côté serveur (erreur « released or taken
-  // over by another instance »). Best effort : si tasklist échoue, on laisse passer.
+  // over by another instance »). Best effort : si la détection échoue, on laisse passer.
+  // (revue E2E v9.2.1) Détection affinée : ① le CLI vit dans .config\manicode — l'app
+  // DESKTOP Freebuff (@codebufffreebuff-desktop\Freebuff.exe) porte le même nom insensible
+  // à la casse et fait des faux positifs permanents avec un simple tasklist ; ② le filtre
+  // vérifie donc le chemin COMPLET ; ③ notre propre PTY embarqué est exclu : fermer la vue
+  // puis rouvrir doit REPRENDRE la session (replay), pas être bloqué par elle.
   async function isFreebuffProcessRunning(): Promise<boolean> {
     try {
       const { execFile } = await import("node:child_process")
       const out = await new Promise<string>((resolve, reject) => {
-        execFile("tasklist", ["/FI", "IMAGENAME eq freebuff.exe", "/FO", "CSV", "/NH"], { timeout: 6_000 }, (err, stdout) => (err ? reject(err) : resolve(String(stdout ?? ""))))
+        execFile("powershell", ["-NoProfile", "-Command", `Get-CimInstance Win32_Process -Filter "name='freebuff.exe'" | Where-Object { $_.ExecutablePath -like '*\\.config\\manicode*' } | Select-Object -First 1 ProcessId | ForEach-Object { $_.ProcessId }`], { timeout: 10_000 }, (err, stdout) => (err ? reject(err) : resolve(String(stdout ?? ""))))
       })
-      return /freebuff\.exe/i.test(out)
+      const pids = out.split(/\r?\n/).map((l) => l.trim()).filter((l) => /^\d+$/.test(l))
+      return pids.some((pid) => Number(pid) !== freebuffPtyPid())
     } catch {
       return false
     }
@@ -536,10 +541,40 @@ function registerIpc() {
       // v9.1.5 : le serveur Freebuff « reprend » (takeover) la session d'un compte quand
       // deux CLI tournent en même temps — l'utilisateur voyait « This Freebuff session was
       // released or taken over… » dans un des deux terminaux. On refuse poliment d'en
-      // ouvrir un deuxième tant que freebuff.exe tourne déjà.
-      if (await isFreebuffProcessRunning()) throw new Error(freebuffBusyMessage())
+      // ouvrir un deuxième tant que le CLI tourne déjà. (revue E2E v9.2.1) Notre PROPRE
+      // PTY est exclu de la garde : rouvrir la vue doit REPRENDRE la session (replay).
+      if (isFreebuffPtyActive()) {
+        // Notre session tourne déjà : PAS de garde, PAS de nouveau spawn — on rejoint la
+        // session existante (le bloc launch ci-dessous renverra le replay via l'événement).
+      } else if (await isFreebuffProcessRunning()) {
+        throw new Error(freebuffBusyMessage())
+      }
     } else if (!(await checkNpm())) {
       throw new Error("npm est introuvable sur cet ordinateur. Installe Node.js (npm inclus) depuis https://nodejs.org, puis retente « Installer le CLI » — ou dans un terminal : npx --yes freebuff.")
+    }
+    // v9.2.0 : « launch » EMBARQUE le CLI dans un PTY (TUI affiché dans Aven) au lieu
+    // d'une console externe — mêmes garde-fous que l'ancien chemin. « login » et
+    // « install » restent des fenêtres externes : actions courtes, non composables avec
+    // une session longue (se connecter installe/écrit ailleurs, pas avec le TUI ouvert).
+    if (action === "launch") {
+      try {
+        await loadPtyModule(app.isPackaged, __dirname)
+      } catch (err) {
+        throw new Error(`Module PTY indisponible : ${err instanceof Error ? err.message : String(err)}. Réinstalle Aven.`)
+      }
+      const { replay } = startFreebuffPty({
+        cwd: requireWorkspace(),
+        cols: DEFAULT_PTY_COLS,
+        rows: DEFAULT_PTY_ROWS,
+        handlers: {
+          onData: (chunk) => win?.webContents.send("opencode:event", { type: "freebuff.pty.data", data: { chunk } }),
+          onStatus: (state) => win?.webContents.send("opencode:event", { type: "freebuff.pty.status", data: { state } }),
+          onExit: (code, signal) => win?.webContents.send("opencode:event", { type: "freebuff.pty.exit", data: { code, signal } }),
+          onError: (message) => win?.webContents.send("opencode:event", { type: "freebuff.pty.error", data: { message } }),
+        },
+      })
+      if (replay) win?.webContents.send("opencode:event", { type: "freebuff.pty.replay", data: { buffer: replay } })
+      return true
     }
     const { spawn } = await import("node:child_process")
     const cmd = buildLaunchCommand(requireWorkspace(), action)
@@ -550,6 +585,18 @@ function registerIpc() {
     child.unref()
     return true
   })
+
+  // ── Canaux du PTY embarqué (v9.2.0, protocole freebuff-pty) ────────────────────
+  // No-op silencieux sans session : la vue n'appelle ces canaux que lorsqu'elle est
+  // affichée, et un PTY peut mourir entre-temps (échec de boot épuisé, exit du CLI).
+  ipcMain.handle("freebuff:pty:input", (_e, data: string) => { writeFreebuffPty(String(data ?? "")) })
+  ipcMain.handle("freebuff:pty:resize", (_e, cols: number, rows: number) => { resizeFreebuffPty(Number(cols), Number(rows)) })
+  ipcMain.handle("freebuff:pty:signal", (_e, signal: "SIGINT") => { signalFreebuffPty(signal) })
+  ipcMain.handle("freebuff:pty:restart", () => { restartFreebuffPty() })
+  ipcMain.handle("freebuff:pty:active", () => isFreebuffPtyActive())
+
+  // (v9.2.0 : les canaux WS freebuffBridge:start/stop ont disparu avec le pont — le PTY
+  // transite désormais par IPC directs, sans serveur WebSocket local.)
   ipcMain.handle("notes:openFolder", () => {
     const dir = notesDir(requireWorkspace())
     mkdirSync(dir, { recursive: true })
@@ -591,7 +638,8 @@ function registerIpc() {
   ipcMain.handle("chats:delete", (_e, id: string) => ops.deleteChat(id))
   ipcMain.handle("chats:archive", (_e, id: string, archived: boolean) => ops.archiveChat(id, archived))
   ipcMain.handle("chats:messages", (_e, id: string) => ops.messages(id))
-  ipcMain.handle("chats:send", (_e, id: string, text: string, backend?: "opencode" | "freebuff") => ops.send(id, text, backend))
+  // v9.1.6 : plus de paramètre backend — l'envoi passe uniquement par OpenCode.
+  ipcMain.handle("chats:send", (_e, id: string, text: string) => ops.send(id, text))
   ipcMain.handle("chats:interrupt", (_e, id: string) => ops.interrupt(id))
   ipcMain.handle("notes:export", async (_e, id: string) => {
     if (!win) return null
@@ -703,5 +751,10 @@ app.on("before-quit", (event) => {
   }
   isQuitting = true
   globalShortcut.unregisterAll()
-  void shutdown().finally(() => app.quit())
+  // v9.2.0 : le PTY freebuff meurt avec l'app (le process est tué, la session CLI ne
+  // doit pas survivre à Aven et gêner un prochain lancement). NB : la fermeture de la
+  // VUE, elle, ne l'arrête pas (session persistante — voir freebuff-pty.ts).
+  stopFreebuffPty()
+  void shutdown()
+    .finally(() => app.quit())
 })

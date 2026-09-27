@@ -1,4 +1,5 @@
 import assert from "node:assert/strict"
+import { existsSync as existsSync2 } from "node:fs"
 import { readFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
@@ -10,10 +11,8 @@ const read = (p) => readFileSync(path.join(root, p), "utf8")
 const pkg = JSON.parse(read("package.json"))
 const app = read("web/src/App.tsx")
 const css = read("web/src/App.css")
-const backend = read("web/src/backend-choice.ts")
 const appearance = read("web/src/appearance.ts")
 const settingsDialog = read("web/src/SettingsDialog.tsx")
-const freebuff = read("electron/freebuff.ts")
 const notify = read("electron/notify-policy.ts")
 const prefs = read("electron/prefs.ts")
 const diagnostic = read("electron/diagnostic.ts")
@@ -49,13 +48,11 @@ assert.match(app, /Voir la page des agents/)
 
 // ⑤ Freebuff moteur de tous les agents.
 // v9.1.3 : la clé Codebuff, le bouton composeur et le réglage « moteur des agents » sont
-// retirés (l'envoi repart sur OpenCode) ; le module backend-choice et le chemin main
-// freebuff restent en place (dormants). La sonde du chemin main est conservée.
-assert.match(backend, /hasCodebuffKey && options\.pref/)
-assert.ok(!/tab === "code"/.test(backend), "la règle ne doit plus être limitée à l'agent code")
+// retirés (l'envoi repart sur OpenCode). v9.1.6 : le module backend-choice et le chemin
+// main freebuff sont PURGÉS — les sondes correspondantes le vérifient désormais par absence.
+assert.ok(!existsSync2("web/src/backend-choice.ts"), "backend-choice.ts doit rester supprimé (purge v9.1.6)")
 assert.doesNotMatch(appearance, /freebuffAsEngine/, "le champ freebuffAsEngine doit avoir disparu de l'apparence (v9.1.3)")
 assert.doesNotMatch(settingsDialog, /Utiliser Freebuff comme moteur des agents/, "le réglage « Utiliser Freebuff comme moteur des agents » doit avoir disparu (v9.1.3)")
-assert.match(freebuff, /options\.task === "projet" \? 30 : 20/)
 
 // ⑥a notifications de bureau.
 assert.match(notify, /export function shouldNotify/)

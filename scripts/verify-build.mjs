@@ -52,7 +52,10 @@ const probes = [
   { file: "voice.js", marker: "chat/completions", why: "passe de reformage présente" },
   { file: "main.js", marker: "auth_tokens", absent: true, why: "l'ancien endpoint vocal duplex (retiré) doit rester absent" },
   { file: "main.js", marker: "versionWarning", why: "avertissement d'écart de version OpenCode" },
-  { file: "operations.js", marker: "getFreebuffMessages", why: "fusion de l'historique Freebuff dans messages()" },
+  // v9.1.6 : chemin SDK Freebuff purgé — le marqueur de fusion d'historique doit rester ABSENT du build.
+  { file: "operations.js", marker: "getFreebuffMessages", absent: true, why: "chemin SDK Freebuff purgé (aucune fusion d'historique local)" },
+  { file: "freebuff-pty.js", marker: "startFreebuffPty", why: "PTY embarqué du CLI freebuff (v9.2.0)" },
+  { file: "freebuff-pty.js", marker: "loadPtyModule", why: "module ConPTY prébuildé chargé au boot (revue v9.2.1)" },
   { file: "router.js", marker: "session.revert", why: "renvoi de message sans duplication (stage/commit)" },
   { file: "model-ref.js", marker: "parseRef", why: "module partagé model-ref présent" },
   { file: "priorities.js", marker: "-free", why: "détection dynamique des modèles gratuits OpenCode" },

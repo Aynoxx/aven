@@ -1,7 +1,8 @@
 export type Agent = { id: string; name: string; defaultName?: string; description: string }
 export type Chat = { id: string; title: string; agent?: string; model?: string; updated?: number; archived?: boolean }
 export type ToolInfo = { id: string; name: string; status: string; output?: string }
-export type SendResult = { backend: "opencode" | "freebuff"; response?: string; model?: string }
+// v9.1.6 : plus de backend "freebuff" — l'envoi passe uniquement par OpenCode.
+export type SendResult = { backend: "opencode" }
 
 export type Msg = {
   id: string
@@ -111,7 +112,8 @@ export type OpenCodeApi = {
   archiveChat: (id: string, archived: boolean) => Promise<void>
   exportChat: (id: string) => Promise<string | null>
   messages: (id: string) => Promise<Msg[]>
-  send: (id: string, text: string, backend?: "opencode" | "freebuff") => Promise<SendResult>
+  // v9.1.6 : plus de paramètre backend — l'envoi passe uniquement par OpenCode.
+  send: (id: string, text: string) => Promise<SendResult>
   interrupt: (id: string) => Promise<void>
   reply: (sessionID: string, requestID: string, decision: Decision) => Promise<void>
   replyForm: (sessionID: string, formID: string, answer: FormAnswer) => Promise<void>
@@ -133,6 +135,14 @@ export type OpenCodeApi = {
   diagnostic: () => Promise<string>
   freebuffCliStatus: () => Promise<{ installed: boolean; version?: string }>
   freebuffCliLaunch: (action?: "launch" | "login" | "install") => Promise<boolean>
+  // v9.2.0 : pont PTY freebuff — le port WS est local (127.0.0.1), reused = pont déjà actif.
+  // v9.2.0 : PTY embarqué (protocole freebuff-pty) — pas de WebSocket, flux par IPC ;
+  // les événements freebuff.pty.* transitent par onEvent.
+  freebuffPtyInput: (data: string) => Promise<void>
+  freebuffPtyResize: (cols: number, rows: number) => Promise<void>
+  freebuffPtySignal: (signal: "SIGINT") => Promise<void>
+  freebuffPtyRestart: () => Promise<void>
+  freebuffPtyActive: () => Promise<boolean>
   onEvent: (cb: (ev: { type: string; data: Record<string, any> }) => void) => () => void
 }
 

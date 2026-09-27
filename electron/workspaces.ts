@@ -32,10 +32,14 @@ export function listWorkspaces(): WorkspaceEntry[] {
   return read().list
 }
 
-/** Espace actif : celui enregistré, sinon le premier connu ; null si aucun espace n'existe encore. */
+/** Espace actif : UNIQUEMENT celui enregistré explicitement ; null tant qu'aucun choix n'a été fait.
+ *  (v9.1.6) Le repli historique « premier connu » était un projet par défaut déguisé : le boot
+ *  démarrait dessus sans que l'utilisateur n'ait jamais rien choisi. Désormais, un registre
+ *  sans « active » (ou pointant un espace retiré) signifie « à choisir » — l'écran de choix
+ *  s'affiche, avec la liste des espaces déjà connus proposés au clic. */
 export function activeWorkspace(): WorkspaceEntry | null {
   const st = read()
-  return st.list.find((w) => w.path === st.active) ?? st.list[0] ?? null
+  return st.list.find((w) => w.path === st.active) ?? null
 }
 
 export function setActiveWorkspace(dir: string) {

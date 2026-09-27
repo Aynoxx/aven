@@ -2,7 +2,12 @@ node_modules/
 dist/
 dist-electron/
 web/dist/
+web/node_modules/
 release/
+
+# État local du runtime et captures d'investigation (jamais versionnés)
+.freebuff/
+.opencode-app/
 
 # Outils locaux et journaux
 tools/

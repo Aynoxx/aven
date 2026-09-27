@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { readFileSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 
@@ -12,17 +12,14 @@ const main = read("electron/main.ts")
 const notes = read("electron/notes.ts")
 const bridge = read("electron/opencode-bridge.ts")
 const priorities = read("electron/priorities.ts")
-const freebuff = read("electron/freebuff.ts")
 const intent = read("electron/voice-intent.ts")
 const app = read("web/src/App.tsx")
 const appearance = read("web/src/appearance.ts")
-const backend = read("web/src/backend-choice.ts")
 const groups = read("web/src/chat-groups.ts")
 const dialog = read("web/src/NotesDialog.tsx")
 const settings = read("web/src/SettingsDialog.tsx")
 const agent = read(".opencode/agents/projet.md")
 const table = JSON.parse(read("model-priorities.json"))
-const testsBackend = read("tests/backend-choice.test.mjs")
 const testsGroups = read("tests/chat-groups.test.mjs")
 
 // ── Version et périmètre v9.0.0 ──
@@ -57,7 +54,6 @@ assert.match(testsGroups, /groupChatsByAgent/)
 assert.match(bridge, /\["projet", "code", "recherche", "analyse"\]/)
 assert.match(priorities, /\["projet", "code", "analyse", "recherche"\]/)
 assert.match(priorities, /task === "projet"/) // héritage des priorités de code
-assert.match(freebuff, /projet: "codebuff\/base@latest"/)
 assert.match(intent, /\["projet", "code", "recherche", "analyse"\]/)
 assert.match(agent, /mode: primary/)
 assert.match(agent, /resource: code/)
@@ -70,10 +66,10 @@ for (const entry of Object.values(table.models)) {
 // 5. Freebuff prioritaire sur l'agent code.
 // v9.1.3 : le bouton composeur et le champ clé Codebuff sont retirés — l'envoi repart
 // systématiquement sur OpenCode ; la règle reste testée dans son module pur (dormant).
-assert.match(backend, /effectiveBackend/)
+// v9.1.6 : la sonde backend-choice (module purgé, jamais branché depuis v9.1.3) est retirée.
+assert.ok(!existsSync("web/src/backend-choice.ts"), "backend-choice.ts doit rester supprimé")
 assert.ok(!/freebuffOverride/.test(app), "l'override Freebuff du composeur doit avoir disparu (v9.1.3)")
 assert.ok(!/Freebuff comme moteur/.test(settings), "le réglage « Freebuff comme moteur » doit avoir disparu (v9.1.3)")
-assert.match(testsBackend, /effectiveBackend/)
 
 // Régressions : les acquis v8.x restent en place.
 assert.match(read("electron/voice.ts"), /allSettled/)

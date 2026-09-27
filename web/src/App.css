@@ -273,6 +273,20 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
 .workspace-picker { width:min(560px, 100%); }
 .workspace-picker .row { margin-top:14px; flex-wrap:wrap; }
 .workspace-picker .err { margin:10px 0 0; }
+/* v9.1.6 : liste des projets déjà connus, choisis en un clic depuis l'écran d'accueil. */
+.workspace-picker-list { display:grid; gap:8px; margin-top:14px; }
+.workspace-picker-item { display:flex; flex-direction:column; align-items:flex-start; gap:2px; padding:10px 12px; border:1px solid var(--border); border-radius:12px; background:var(--panel-soft); cursor:pointer; text-align:left; }
+.workspace-picker-item:hover { border-color:var(--accent-border); background:var(--panel); }
+.workspace-picker-name { display:flex; align-items:center; gap:8px; font-weight:600; color:var(--text); }
+.workspace-picker-path { font-size:var(--font-size-xs); color:var(--muted); word-break:break-all; }
+
+/* v9.2.0 : terminal Freebuff intégré (pont PTY, xterm.js). Le dialog hérite du
+   système .dialog ; xterm a besoin d'un hôte dimensionné et d'un fond opaque. */
+.bridge-dialog { width: min(920px, 100%); }
+.bridge-status-row { align-items: center; justify-content: space-between; margin: 0 0 10px; }
+.bridge-actions { gap: 8px; }
+.bridge-term-host { height: min(56vh, 480px); border: 1px solid var(--border-strong); border-radius: 12px; background: #12151d; overflow: hidden; }
+.bridge-term-host .xterm { padding: 8px; height: 100%; }
 
 /* Boîtes de dialogue (Réglages, Notes, formulaire d'agent, demande de permission…).
    Il manquait tout le centrage et le style de base : .overlay ne centrait rien et
@@ -479,6 +493,11 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
 .home-control { height: 36px; border: 1px solid var(--border); background: var(--home-surface); color: var(--text); cursor: pointer; transition: transform .16s ease, border-color .16s ease, background .16s ease, box-shadow .16s ease; }
 .home-control:hover { border-color: var(--accent-border); background: var(--accent-soft); transform: translateY(-1px); box-shadow: 0 8px 20px color-mix(in srgb, var(--accent) 8%, transparent); }
 .home-control:active { transform: translateY(0); }
+/* v9.1.6 : bouton « Changer de projet » de la barre du hub — libellé caché quand la
+   fenêtre rétrécit, l'icône dossier reste seule (comportement du chip agent historique). */
+.home-project-button { padding-inline: 12px; font-weight: 600; }
+.home-project-button span { white-space: nowrap; }
+.home-project-button svg { color: var(--accent); }
 
 .home-status { display: inline-flex; align-items: center; gap: 7px; padding: 0 5px 0 6px; color: var(--muted); font-size: var(--font-size-sm); white-space: nowrap; }
 .home-status .status-dot { width: 6px; height: 6px; }
@@ -511,7 +530,10 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
   padding: 10px 11px; border: 1px solid var(--border); border-radius: 14px; background: var(--home-surface-soft); color: var(--text); text-align: left; cursor: pointer;
   transition: transform .16s ease, border-color .16s ease, background .16s ease, box-shadow .16s ease;
 }
-.home-recent-item:hover { border-color: var(--accent-border); background: var(--accent-soft); transform: translateY(-1px); box-shadow: 0 10px 26px color-mix(in srgb, var(--accent) 7%, transparent); }
+.home-recent-item:hover, .home-recent-item:focus-visible { border-color: var(--accent-border); background: var(--accent-soft); transform: translateY(-1px); box-shadow: 0 10px 26px color-mix(in srgb, var(--accent) 7%, transparent); }
+/* v9.1.6 : navigation flèches — l'item focusé est traité comme survolé (liseré accent),
+   le focus natif reste actif (accessibilité, RULES.md §12.2). */
+.home-recent-item:focus-visible { outline: none; }
 .home-recent-icon { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; background: var(--accent-soft); color: var(--accent); }
 .home-recent-copy { min-width: 0; display: grid; gap: 2px; }
 .home-recent-copy strong, .home-recent-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -591,11 +613,24 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
 .hub-picker-list,.home-modal-list { display:grid; gap:6px; }
 .hub-picker-item,.home-modal-item { text-align:left; border:1px solid var(--border); border-radius:12px; padding:10px 12px; background:var(--panel); color:var(--text); cursor:pointer; display:grid; gap:2px; transition:.16s ease; }
 .hub-picker-item:hover,.home-modal-item:hover { border-color:var(--accent-border); background:var(--panel-soft); transform:translateY(-1px); }
+/* v9.1.6 : navigation flèches — le focus clavier reçoit le même liseré que le survol.
+   outline:none assumé : le liseré accent + fond couvrent l'indice de focus (RULES.md §12.2). */
+.home-modal-item:focus-visible { outline:none; border-color:var(--accent-border); background:var(--panel-soft); transform:translateY(-1px); }
+.home-modal-list,.home-recent-list { scroll-behavior:smooth; }
 .hub-picker-item.active { border-color:var(--accent-border); background:var(--accent-soft); box-shadow:inset 0 0 0 1px var(--accent-border); }
 .hub-picker-item strong { font-size:var(--font-size-md); }
 .hub-picker-item small { color:var(--muted); font-size:var(--font-size-xs); line-height:1.4; }
 .home-modal-item { grid-template-columns:auto minmax(0,1fr) auto; align-items:center; }
 .home-modal-empty { padding:28px 14px; text-align:center; color:var(--muted); font-size:var(--font-size-sm); }
+/* v9.1.6 : modal « Changer de projet » du hub — même squelette que le sélecteur de
+   conversations, avec marque explicite du projet actif (badge + coche). */
+.project-modal { width:min(480px,100%); }
+.project-modal-hint { margin:0 0 12px; }
+.project-item.current { border-color:var(--accent-border); background:var(--accent-soft); box-shadow:inset 0 0 0 1px var(--accent-border); cursor:default; }
+.project-item.current:hover { transform:none; }
+.project-current-badge { font-style:normal; font-size:var(--font-size-xs); font-weight:700; color:var(--accent); border:1px solid var(--accent-border); border-radius:999px; padding:0 7px; margin-left:8px; }
+.project-modal-actions { margin-top:14px; flex-wrap:wrap; }
+.project-item .home-recent-copy small { white-space:normal; word-break:break-all; }
 .back-home-button { min-height:34px; padding-inline:12px; }
 
 /* Vue agents : page autonome et stable, au lieu d’un simple basculement vers un chat vide. */
@@ -629,6 +664,8 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
   .home-toolbar { grid-template-columns:1fr auto; }
   .home-command { grid-column:1 / -1; grid-row:2; order:3; }
   .home-toolbar-actions { grid-column:2; }
+  .home-project-button span { display:none; }
+  .home-project-button { padding-inline:0; width:36px; justify-content:center; }
   .home-workspace { grid-template-columns:1fr; grid-template-rows:minmax(0,1fr) auto; }
   .home-hub-stage { min-height:420px; }
   .home-hub { width:min(100%, 640px); --hub-r:clamp(150px, 42cqw, 260px); --hub-card-w:clamp(112px, 17vw, 140px); --hub-card-h:clamp(90px, 13vw, 108px); --hub-core:clamp(168px, 28vmin, 224px); }
@@ -640,6 +677,7 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
 @media (max-width: 700px) {
   .home-toolbar { padding-inline:12px; gap:9px; }
   .home-brand-copy small,.home-status { display:none; }
+  .project-modal-actions .button { flex:1; min-width:0; font-size:var(--font-size-xs); }
   .home-command { min-height:40px; }
   .home-content { padding:12px; }
   .home-hub-stage { min-height:360px; }

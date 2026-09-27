@@ -1,17 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import type { FormEvent, MouseEvent, ReactNode } from "react"
+import type { FormEvent, KeyboardEvent as ReactKeyboardEvent, MouseEvent, ReactNode } from "react"
 import { api } from "./api"
 import Markdown from "./Markdown"
 import MessageBubble from "./MessageBubble"
 import { applyEvent, emptyLive, type Live } from "./stream"
-import type { Agent, AppAction, AppState, Chat, Decision, FormAnswer, Msg, StreamEvent } from "./types"
+import type { Agent, AppAction, AppState, Chat, Decision, FormAnswer, Msg, StreamEvent, WorkspaceEntry } from "./types"
 import type { AggregatedStats } from "./types"
 import FormDialog from "./FormDialog"
 import SettingsDialog from "./SettingsDialog"
 import NotesDialog from "./NotesDialog"
+// v9.2.0 : terminal Freebuff intégré (pont PTY, protocole freebuff-bridge).
+import FreebuffTerminalDialog from "./FreebuffTerminalDialog"
 import { useAppearance } from "./appearance"
 import { useDictation } from "./voice-dictation"
 import { buildPrompt, selectionWithin } from "./selection-actions"
+// v9.1.6 : navigation clavier des listes du hub — flèches Haut/Bas, Home/End.
+// La logique (bouclage, index) vit dans le module pur arrow-navigation.ts, testé.
+import { nextArrowIndex, type ArrowKey } from "./arrow-navigation"
 import { groupChatsByAgent } from "./chat-groups"
 import { Icon, type IconName } from "./icons"
 import "./App.css"
@@ -75,6 +80,8 @@ export default function App() {
       setShowSettings(false)
       setShowNotes(false)
       setShowAgentsPage(false)
+      setShowProjectPicker(false)
+      setShowFreebuffBridge(false)
       setShowHome(true)
     }
   }, [appState.needsWorkspace])
@@ -82,8 +89,15 @@ export default function App() {
   const [agentsLoading, setAgentsLoading] = useState(true)
   const [agentsError, setAgentsError] = useState<string>()
   const [showConversationPicker, setShowConversationPicker] = useState(false)
+  // v9.1.6 : « Changer de projet » directement depuis le hub — un modal dédié liste les
+  // espaces connus, sans passer par les Réglages. Le changement redémarre le moteur
+  // côté main (api.switchWorkspace), l'état remonte par le poll de app:state existant.
+  const [showProjectPicker, setShowProjectPicker] = useState(false)
+  const [projectList, setProjectList] = useState<WorkspaceEntry[]>([])
   const [showNotes, setShowNotes] = useState(false)
   const [notesInitialId, setNotesInitialId] = useState<string | undefined>()
+  // v9.2.0 : vue du TUI freebuff dans l'app (pont PTY local, session persistante).
+  const [showFreebuffBridge, setShowFreebuffBridge] = useState(false)
   // Barre d'actions sur sélection (v8.9.0) : position viewport de la mini-barre flottante.
   const [selBar, setSelBar] = useState<{ text: string; top: number; left: number } | null>(null)
   const selBarRef = useRef(selBar)
@@ -122,7 +136,7 @@ export default function App() {
     switch (action) {
       case "open-notes":
         setShowAgentsPage(false); setShowSettings(false); setShowHome(false)
-        setShowConversationPicker(false)
+        setShowConversationPicker(false); setShowProjectPicker(false)
         setNotesInitialId(undefined); setShowNotes(true)
         return "Notes ouvertes."
       case "open-settings":
@@ -139,6 +153,8 @@ export default function App() {
         return "Dossier du projet ouvert."
       // v9.1.3 : Freebuff CLI, statistiques et nouvelle conversation exécutables à la voix.
       case "open-freebuff":
+        // v9.2.0 : le TUI s'affiche DANS Aven via le pont PTY (session persistante) —
+        // la console externe reste disponible depuis les Réglages si préférée.
         void (async () => {
           try {
             const status = await api.freebuffCliStatus()
@@ -146,8 +162,12 @@ export default function App() {
               setHomeNotice(FREEBUFF_MISSING_NOTICE)
               return
             }
-            await api.freebuffCliLaunch("launch")
-            setHomeNotice("Freebuff lancé dans une fenêtre de terminal.")
+            // (revue E2E v9.2.1) On ne masque PLUS l'écran courant : le terminal est un
+            // dialogue qui recouvre le hub (ou la conversation) — à la fermeture,
+            // l'utilisateur retrouve son écran d'origine au lieu d'une vue vide.
+            setShowAgentsPage(false); setShowSettings(false)
+            setShowConversationPicker(false); setShowProjectPicker(false)
+            setShowFreebuffBridge(true)
           } catch (e) {
             setHomeNotice(e instanceof Error ? e.message : String(e))
           }
@@ -203,6 +223,7 @@ export default function App() {
       // l'utilisateur ne voit rien après le relâchement.
       setShowHome(false)
       setShowConversationPicker(false)
+      setShowProjectPicker(false)
       setShowAgentsPage(false)
       setHomeNotice(null)
       requestAnimationFrame(() => textareaRef.current?.focus())
@@ -283,6 +304,7 @@ export default function App() {
     setShowSettings(false)
     setShowAgentsPage(false)
     setShowConversationPicker(false)
+    setShowProjectPicker(false)
     setShowHome(true)
   }, [])
 
@@ -464,6 +486,8 @@ export default function App() {
           return
         }
         if (showConversationPicker) setShowConversationPicker(false)
+        else if (showProjectPicker) setShowProjectPicker(false) // v9.1.6 : le modal projet suit Échap
+        else if (showFreebuffBridge) setShowFreebuffBridge(false) // v9.2.0 : la session continue en tâche de fond
         else if (showAgentsPage) { setShowAgentsPage(false); setShowHome(true) }
         else if (showNotes) closeNotesToHome()
         else if (showSettings) setShowSettings(false)
@@ -485,7 +509,7 @@ export default function App() {
       window.removeEventListener("keydown", onKey)
       window.removeEventListener("keyup", onKeyUp)
     }
-  }, [live.busy, live.forms, chatId, showSettings, showAgentsPage, showConversationPicker, showHome, showNotes, tab, closeNotesToHome])
+  }, [live.busy, live.forms, chatId, showSettings, showAgentsPage, showConversationPicker, showProjectPicker, showFreebuffBridge, showHome, showNotes, tab, closeNotesToHome])
 
   const newChat = async () => {
     if (!tab) return
@@ -494,6 +518,7 @@ export default function App() {
       setChats((prev) => [c, ...prev])
       setChatId(c.id)
       setShowConversationPicker(false)
+      setShowProjectPicker(false)
       setShowAgentsPage(false)
       setShowHome(false)
       requestAnimationFrame(() => textareaRef.current?.focus())
@@ -664,6 +689,72 @@ export default function App() {
     api.getStats().then(setStats).catch((e) => { setShowStats(false); fail(e) })
   }
 
+  // ── Navigation clavier des listes (v9.1.6, corrigé v9.2.0) ─────────────────────
+  // FIX « Rendered fewer hooks than expected » : la première version définissait un
+  // HOOK (useState/useRef/useEffect) appelé DANS renderHome(), fonction exécutée
+  // CONDITIONNELLEMENT — en quittant l'accueil React voyait soudain moins de hooks
+  // et l'ErrorBoundary masquait toute l'app. Les hooks ne vivent JAMAIS dans une
+  // fonction de rendu. Ici : AUCUN état React — la sélection EST le focus DOM
+  // (modèle ARIA : le focus suit la sélection, Entrée/Espace restent natifs) et le
+  // calcul reste dans arrow-navigation.ts (pur, testé, RULES.md §8).
+  const arrowListNav = (listRef: { current: HTMLDivElement | null }) => ({
+    onKeyDown: (e: ReactKeyboardEvent) => {
+      const key = e.key as ArrowKey
+      if (key !== "ArrowDown" && key !== "ArrowUp" && key !== "Home" && key !== "End") return
+      const items = listRef.current?.querySelectorAll<HTMLButtonElement>(":scope > button")
+      if (!items?.length) return
+      e.preventDefault() // la page ne défile pas : seules les flèches naviguent
+      const current = Array.from(items).indexOf(document.activeElement as HTMLButtonElement)
+      const next = nextArrowIndex(key, current, items.length)
+      if (next === null) return
+      items[next].focus() // le focus suit la sélection (bouclage et extrémités inclus)
+    },
+  })
+  const recentListRef = useRef<HTMLDivElement>(null)
+  const conversationsListRef = useRef<HTMLDivElement>(null)
+  const projectsListRef = useRef<HTMLDivElement>(null)
+
+  // ── Changer de projet depuis le hub (v9.1.6) ────────────────────────────────────
+  // La liste est relue À CHAQUE ouverture (workspace:list) : jamais une copie figée de
+  // l'état du démarrage — un espace ajouté dans les Réglages apparaît ici aussitôt.
+  const openProjectPicker = () => {
+    api.workspaces().then((list) => { setProjectList(list); setShowProjectPicker(true) }).catch(fail)
+  }
+  // Même logique que SettingsDialog.switchWs : bascule côté main puis reprise de l'état
+  // frais (le moteur redémarre) en réinitialisant conversation et agent, comme au démarrage.
+  const switchProject = async (dir: string) => {
+    try {
+      setShowProjectPicker(false)
+      const next = await api.switchWorkspace(dir)
+      setAppState(next)
+      if (next.workspace !== appState.workspace) {
+        setChats([])
+        setChatId(null)
+        setTab("")
+        preferredChatIdRef.current = null
+      }
+      setHomeNotice(`Projet actif : ${next.workspace ? next.workspace.split(/[\\/]/).pop() : dir}`)
+    } catch (e) {
+      fail(e)
+    }
+  }
+  const addProjectFromHub = async (mode: "create" | "existing") => {
+    try {
+      setShowProjectPicker(false)
+      const res = mode === "create" ? await api.createWorkspace("") : await api.addExistingWorkspace()
+      if (!res) return // annulation dans le sélecteur Windows : aucun changement
+      const next = res.state
+      setAppState(next)
+      setChats([])
+      setChatId(null)
+      setTab("")
+      preferredChatIdRef.current = null
+      setHomeNotice(`Projet actif : ${res.entry.name}`)
+    } catch (e) {
+      fail(e)
+    }
+  }
+
   const orderedAgents = useMemo(() => orderAgents(agents, appearance.agentOrder), [agents, appearance.agentOrder])
   const workspaceName = appState.workspace ? appState.workspace.split(/[\\/]/).pop() : undefined
   const visibleChats = useMemo(() => chats.filter((c) => !search.trim() || c.title.toLowerCase().includes(search.trim().toLowerCase())), [chats, search])
@@ -713,6 +804,7 @@ export default function App() {
     setChatId(null)
     setShowAgentsPage(false)
     setShowConversationPicker(false)
+    setShowProjectPicker(false)
     setShowSettings(false)
     setShowNotes(false)
     setShowHome(false)
@@ -724,6 +816,7 @@ export default function App() {
     setShowSettings(false)
     setShowNotes(false)
     setShowConversationPicker(false)
+    setShowProjectPicker(false)
     setShowAgentsPage(true)
   }
 
@@ -733,6 +826,7 @@ export default function App() {
     setShowSettings(false)
     setShowNotes(false)
     setShowConversationPicker(false)
+    setShowProjectPicker(false)
     setShowHome(true)
   }
 
@@ -765,6 +859,12 @@ export default function App() {
     const online = appState.status === "ready"
     const command = homeCommand.trim()
 
+    // v9.1.6 : flèches Haut/Bas dans les listes du hub (fabrique SANS hook — voir
+    // le fix « Rendered fewer hooks » ci-dessus ; la sélection est le focus DOM).
+    const recentNav = arrowListNav(recentListRef)
+    const conversationsNav = arrowListNav(conversationsListRef)
+    const projectsNav = arrowListNav(projectsListRef)
+
     const submitHomeCommand = async (e: FormEvent<HTMLFormElement>) => {
       e.preventDefault()
       if (!command) return
@@ -777,6 +877,7 @@ export default function App() {
         setShowHome(false)
         setShowAgentsPage(false)
         setShowConversationPicker(false)
+        setShowProjectPicker(false)
         setInput(command)
         setHomeCommand("")
         requestAnimationFrame(() => textareaRef.current?.focus())
@@ -796,6 +897,7 @@ export default function App() {
       setChatId(chat.id)
       setHomeCommand("")
       setShowConversationPicker(false)
+      setShowProjectPicker(false)
       setShowAgentsPage(false)
       setShowHome(false)
       requestAnimationFrame(() => textareaRef.current?.focus())
@@ -823,6 +925,11 @@ export default function App() {
               <span className="status-dot" />
               <span>{online ? "En ligne" : appState.status === "starting" ? "Démarrage" : "Indisponible"}</span>
             </span>
+            {/* v9.1.6 : changement de projet sans passer par les Réglages. */}
+            <button className="button secondary home-control home-project-button" onClick={openProjectPicker} aria-label="Changer de projet" title="Changer de projet" type="button">
+              <Icon name="folder" size={15} />
+              <span>Changer de projet</span>
+            </button>
             <button className="button button-icon home-icon-button home-control" onClick={() => openConfiguration()} aria-label="Ouvrir les paramètres" title="Paramètres" type="button">
               <HubIcon kind="settings" />
             </button>
@@ -839,7 +946,8 @@ export default function App() {
                 </div>
                 <button className="button ghost home-text-button" onClick={() => setShowConversationPicker(true)} type="button">Tout voir</button>
               </div>
-              <div className="home-recent-list">
+              {/* v9.1.6 : flèches Haut/Bas naviguent parmi les conversations récentes. */}
+              <div className="home-recent-list" ref={recentListRef} onKeyDown={recentNav.onKeyDown}>
                 {recent.map((chat) => (
                   <button key={chat.id} className="home-recent-item" onClick={() => openConversation(chat)} type="button">
                     <span className="home-recent-icon"><HubIcon kind={chat.agent === tab ? "agent" : "notes"} /></span>
@@ -962,7 +1070,8 @@ export default function App() {
                 <div><span className="eyebrow">CONVERSATIONS</span><h2>Toutes les conversations</h2></div>
                 <button className="button button-icon dialog-close" onClick={() => setShowConversationPicker(false)} aria-label="Fermer" type="button"><Icon name="close" size={17} /></button>
               </div>
-              <div className="home-modal-list">
+              {/* v9.1.6 : flèches Haut/Bas naviguent, Entrée ouvre la conversation focusée. */}
+              <div className="home-modal-list" ref={conversationsListRef} onKeyDown={conversationsNav.onKeyDown}>
                 {allConversations.map((chat) => (
                   <button key={chat.id} className="home-modal-item" onClick={() => openConversation(chat)} type="button">
                     <span className="home-recent-icon"><HubIcon kind="notes" /></span>
@@ -971,6 +1080,36 @@ export default function App() {
                   </button>
                 ))}
                 {!allConversations.length && <div className="home-modal-empty">Aucune conversation active pour cet agent.</div>}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* v9.1.6 : sélecteur de projet du hub — liste relue à l'ouverture, projet actif
+            marqué, création/ouverture de dossier disponibles sans passer par les Réglages. */}
+        {showProjectPicker && (
+          <div className="home-modal-overlay" role="dialog" aria-modal="true" aria-label="Changer de projet" onClick={(e) => { if (e.target === e.currentTarget) setShowProjectPicker(false) }}>
+            <div className="home-modal project-modal">
+              <div className="home-modal-header">
+                <div><span className="eyebrow">PROJETS</span><h2>Changer de projet</h2></div>
+                <button className="button button-icon dialog-close" onClick={() => setShowProjectPicker(false)} aria-label="Fermer" type="button"><Icon name="close" size={17} /></button>
+              </div>
+              <p className="hint project-modal-hint">Chaque projet a ses conversations, agents et réglages. Un clic l'active et redémarre le moteur dessus.</p>
+              {/* v9.1.6 : flèches Haut/Bas naviguent, Entrée active le projet focusé.
+                  Le projet ACTIF est présélectionné à l'ouverture (initialArrowIndex). */}
+              <div className="home-modal-list" ref={projectsListRef} onKeyDown={projectsNav.onKeyDown}>
+                {projectList.map((w) => (
+                  <button key={w.path} className={`home-modal-item project-item ${w.path === appState.workspace ? "current" : ""}`} onClick={() => void switchProject(w.path)} type="button" title={w.path === appState.workspace ? "Projet actif" : "Activer ce projet"}>
+                    <span className="home-recent-icon"><Icon name="folder" size={16} /></span>
+                    <span className="home-recent-copy"><strong>{w.name}{w.path === appState.workspace ? <em className="project-current-badge">actif</em> : null}</strong><small>{w.path}</small></span>
+                    <span className="home-recent-arrow">{w.path === appState.workspace ? <Icon name="check" size={16} /> : <Icon name="chevron-right" size={18} />}</span>
+                  </button>
+                ))}
+                {!projectList.length && <div className="home-modal-empty">Aucun projet enregistré pour l'instant.</div>}
+              </div>
+              <div className="row project-modal-actions">
+                <button className="button primary" onClick={() => void addProjectFromHub("create")} type="button">Créer un nouvel espace…</button>
+                <button className="button secondary" onClick={() => void addProjectFromHub("existing")} type="button">Ouvrir un dossier existant…</button>
               </div>
             </div>
           </div>
@@ -1164,18 +1303,29 @@ export default function App() {
         </div>
       </div>
 
-      {/* v9.1.5 : aucun espace de travail — Aven ne crée plus de dossier « Par défaut »
-          en douce : l'utilisateur choisit ou crée son dossier, le moteur démarre après. */}
+      {/* v9.1.6 : aucun projet par défaut — même quand des espaces sont déjà connus, rien
+          ne démarre sans un choix explicite. L'écran liste les projets existants (un clic
+          les active), et permet d'en créer un nouveau ou d'ouvrir un dossier existant. */}
       {appState.needsWorkspace && (
         <div className="overlay">
           <div className="dialog workspace-picker">
             <span className="eyebrow">PREMIERS PAS</span>
             <h3>Choisis ton espace de travail</h3>
             <p className="hint">
-              Chaque espace a ses propres conversations, agents et réglages. Crée un dossier
-              (le sélecteur Windows permet d'en créer un nouveau) ou ouvre un dossier
-              existant — plus aucun dossier « Par défaut » n'est créé à ta place.
+              Chaque espace a ses propres conversations, agents et réglages. Choisis un
+              projet existant, crée un nouveau dossier (le sélecteur Windows le permet) ou
+              ouvre un dossier existant — plus aucun projet n'est choisi à ta place.
             </p>
+            {!!appState.workspaces?.length && (
+              <div className="workspace-picker-list">
+                {appState.workspaces.map((w) => (
+                  <button key={w.path} className="workspace-picker-item" onClick={() => api.switchWorkspace(w.path).catch(fail)} type="button">
+                    <span className="workspace-picker-name"><Icon name="folder" size={15} />{w.name}</span>
+                    <span className="workspace-picker-path">{w.path}</span>
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="row">
               <button className="button primary" onClick={() => api.createWorkspace("").catch(fail)} type="button">Créer un nouvel espace…</button>
               <button className="button secondary" onClick={() => api.addExistingWorkspace().catch(fail)} type="button">Ouvrir un dossier existant…</button>
@@ -1306,7 +1456,7 @@ export default function App() {
             {appearance.showSidebar && (
               <aside className="sidebar">
                 <div className="sidebar-top">
-                  <div className="sidebar-heading"><div><span className="eyebrow">CONVERSATIONS</span><strong>{showArchived ? "Archivées" : agentName(tab)}</strong></div><button className="button primary small" onClick={newChat} disabled={!tab}><Icon name="plus" size={16} /></button></div>
+                  <div className="sidebar-heading"><div><span className="eyebrow">CONVERSATIONS</span><strong>{showArchived ? "Archivées" : agentName(tab)}</strong></div><button className="button primary small" onClick={newChat} disabled={!tab} aria-label="Nouvelle conversation" title="Nouvelle conversation (Ctrl+N)"><Icon name="plus" size={16} /></button></div>
                   <div className="search-wrap"><span><Icon name="search" size={16} /></span><input ref={searchRef} className="search" placeholder="Rechercher" value={search} onChange={(e) => setSearch(e.target.value)} /></div>
                   <button className={`archive-toggle ${showArchived ? "selected" : ""}`} onClick={() => { setShowArchived((value) => !value); setChatId(null) }}><span><Icon name="archive-list" size={15} /></span>{showArchived ? "Revenir aux actives" : "Voir les archivées"}</button>
                 </div>
@@ -1368,6 +1518,9 @@ export default function App() {
 
       {form && <FormDialog key={form.id} form={form} onSubmit={answerForm} onCancel={cancelForm} />}
       {showNotes && <NotesDialog initialId={notesInitialId} onClose={closeNotesToHome} onError={fail} />}
+      {/* v9.2.0 : terminal Freebuff intégré — session persistante côté main, la fermeture
+          de la vue n'arrête pas le process (contrat du protocole freebuff-bridge). */}
+      {showFreebuffBridge && <FreebuffTerminalDialog onClose={() => setShowFreebuffBridge(false)} onError={fail} />}
 
       {selBar && (
         <div className="selbar" role="toolbar" aria-label="Actions sur la sélection" style={{ top: selBar.top, left: selBar.left }}>

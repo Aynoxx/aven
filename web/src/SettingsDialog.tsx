@@ -217,10 +217,10 @@ export default function SettingsDialog(props: {
       <label className="toggle-row"><span>Activer les notifications</span><input type="checkbox" checked={notifications !== false} onChange={(e) => void changeNotifications(e.target.checked)} /></label>
       <div className="row"><button className="button secondary" onClick={() => void copyDiagnostic()}>Copier le diagnostic</button><span className="hint">Versions, état du moteur, agents et derniers événements — sans aucune clé API.</span></div>
       <h4>Freebuff CLI gratuit</h4>
-      <p className="hint">Le free tier de Freebuff (sessions quotidiennes, financé par les pubs texte) vit dans son CLI interactif. Aven ouvre une fenêtre de terminal directement sur ton espace de travail : tu y parles à Freebuff, tes fichiers restent les mêmes.</p>
+      <p className="hint">Le free tier de Freebuff (sessions quotidiennes, financé par les pubs texte) vit dans son CLI interactif. v9.2.0 : il s'affiche DANS Aven (terminal intégré, session persistante) — la carte « Freebuff » de l'accueil ouvre la vue ; « Se connecter » reste une console externe (action courte, incompatible avec une session ouverte).</p>
       <div className="row">
         <span className="hint">{cli === null ? "Vérification…" : cli.installed ? <b><Icon name="check" size={12} /> CLI installé{cli.version ? ` — v${cli.version}` : ""}</b> : "CLI non installé"}</span>
-        {cli?.installed && <button className="button primary" onClick={() => void cliAction("launch")}>Ouvrir Freebuff dans le terminal</button>}
+        {cli?.installed && <button className="button secondary" onClick={() => void cliAction("login")}>Se connecter</button>}
         {cli?.installed && <button className="button secondary" onClick={() => void cliAction("login")}>Se connecter</button>}
         {!cli?.installed && <button className="button primary" disabled={cliInstalling} onClick={() => void cliAction("install")}>{cliInstalling ? "Installation en cours…" : "Installer le CLI (npm)"}</button>}
       </div>

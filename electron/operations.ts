@@ -1,11 +1,9 @@
 import { loadNames, setName } from "./agent-names.js"
 import type { Router } from "./router.js"
-import { TASKS, type Task } from "./priorities.js"
+import type { Task } from "./priorities.js"
 import { parseRef, refOf } from "./model-ref.js"
 import { TABS, type Bridge } from "./opencode-bridge.js"
 import { isArchived, listArchived, setArchived } from "./archive.js"
-import { clearFreebuffHistory, getFreebuffMessages } from "./freebuff-history.js"
-import { FREEBUFF_MODEL_LABEL, interruptFreebuff, isBillingError, runFreebuff } from "./freebuff.js"
 
 export type ChatMsg = {
   id: string
@@ -96,8 +94,10 @@ async function listAgents(b: Bridge) {
 export const DEFAULT_TITLE = "Nouvelle conversation"
 export const MAX_TITLE = 120
 
+// v9.1.6 : le 3ᵉ paramètre `notify` (avis du repli Freebuff→OpenCode) a disparu avec
+// le chemin SDK ; les avis de routage passent par le Router (sonde notify déjà branchée).
 /** Toutes les opérations exposées à l'interface. Sans Electron : testable avec Node seul. */
-export function makeOps(current: () => Bridge, router: () => Router | null = () => null, notify?: (sessionID: string, text: string) => void) {
+export function makeOps(current: () => Bridge, router: () => Router | null = () => null) {
   return {
     async agents() {
       return listAgents(current())
@@ -164,10 +164,8 @@ export function makeOps(current: () => Bridge, router: () => Router | null = () 
     async deleteChat(id: string) {
       const b = current()
       router()?.forget(id)
-      interruptFreebuff(id)
       await b.client.session.interrupt({ sessionID: id }).catch(() => undefined)
       await b.client.session.remove({ sessionID: id })
-      clearFreebuffHistory(id)
       setArchived(b.workspace, id, false) // nettoie l'entrée d'archive si elle existait
     },
 
@@ -197,49 +195,17 @@ export function makeOps(current: () => Bridge, router: () => Router | null = () 
         if (messages.length) main.push(...messages.map((m) => ({ ...m, agent: m.agent ?? c.agent })))
       }
 
-      // Les tours envoyés au backend Freebuff ne passent volontairement pas dans OpenCode.
-      // Leur transcript local est donc fusionné ici afin de survivre aux rechargements.
-      const freebuff = getFreebuffMessages(id).map((m) => ({
-        id: m.id, role: m.role, text: m.text, agent: m.agent, model: m.model, error: m.error, created: m.timestamp,
-      }))
-      return [...main, ...freebuff].sort((a, b) => (a.created ?? 0) - (b.created ?? 0))
+      // Les sous-agents ont été rattachés ci-dessus ; tri chronologique unique.
+      return main.sort((a, b) => (a.created ?? 0) - (b.created ?? 0))
     },
 
-    async send(id: string, text: string, backend: "opencode" | "freebuff" = "opencode"): Promise<{ backend: "opencode" | "freebuff"; response?: string; model?: string }> {
+    // v9.1.6 : le paramètre backend disparaît — l'envoi passe UNIQUEMENT par OpenCode.
+    // (Le free tier Freebuff vit dans son CLI/terminal intégré ; l'ancien chemin SDK
+    // Codebuff payant a été retiré. Contrat simplifié côté IPC et côté interface.)
+    async send(id: string, text: string): Promise<{ backend: "opencode" }> {
       const clean = text.trim()
       if (!clean) throw new Error("Message vide")
       const b = current()
-
-      if (backend === "freebuff") {
-        const info = await b.client.session.get({ sessionID: id })
-        const rawAgent = String(info.agent ?? "code")
-        const task: Task = (TASKS as readonly string[]).includes(rawAgent) ? (rawAgent as Task) : "code"
-        let result: Awaited<ReturnType<typeof runFreebuff>>
-        try {
-          result = await runFreebuff({
-            chatId: id,
-            task,
-            prompt: clean,
-            cwd: b.workspace,
-            notify: (text) => notify?.(id, text),
-          })
-        } catch (err) {
-          // v9.1.1 : compte Codebuff sans crédits (Payment Required) → repli automatique
-          // sur les modèles gratuits OpenCode, avec un avis clair dans la conversation.
-          // Aucun autre échec ne replie : une vraie erreur reste visible.
-          if (!isBillingError(err)) throw err
-          const notice = "Freebuff indisponible (crédits Codebuff épuisés) : ce tour part sur les modèles gratuits OpenCode."
-          notify?.(id, notice)
-          console.warn(`[freebuff] ${notice}`)
-          return await this.send(id, text, "opencode")
-        }
-        try {
-          if ((info.title ?? DEFAULT_TITLE) === DEFAULT_TITLE) await b.client.session.update({ sessionID: id, title: titleFrom(clean) })
-        } catch (err) {
-          console.error("[titre freebuff]", err)
-        }
-        return { backend: "freebuff" as const, response: result.response, model: result.model }
-      }
 
       // Titre automatique au 1er message, SEULEMENT si le titre est encore celui par défaut (un renommage manuel n'est jamais écrasé).
       try {
@@ -257,7 +223,6 @@ export function makeOps(current: () => Bridge, router: () => Router | null = () 
     },
 
     async interrupt(id: string) {
-      interruptFreebuff(id)
       await current().client.session.interrupt({ sessionID: id }).catch(() => undefined)
     },
 

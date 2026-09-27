@@ -1,4 +1,5 @@
 import assert from "node:assert/strict"
+import { existsSync as existsSync3 } from "node:fs"
 import { readFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
@@ -10,7 +11,6 @@ const read = (p) => readFileSync(path.join(root, p), "utf8")
 const pkg = JSON.parse(read("package.json"))
 const app = read("web/src/App.tsx")
 const css = read("web/src/App.css")
-const freebuff = read("electron/freebuff.ts")
 const operations = read("electron/operations.ts")
 
 // ── Version ──
@@ -23,10 +23,10 @@ assert.ok(!/hub-card-projects/.test(css), "le CSS de la carte « Projets » doit
 assert.match(app, /key: "project", label: "Projet"/) // la carte orchestrateur reste
 
 // 2. Repli automatique sur OpenCode quand Freebuff tombe sur une erreur de facturation.
-assert.match(freebuff, /export function isBillingError/)
-assert.match(freebuff, /payment required/i)
-assert.match(operations, /if \(!isBillingError\(err\)\) throw err/)
-assert.match(operations, /return await this\.send\(id, text, "opencode"\)/)
-assert.match(operations, /crédits Codebuff épuisés/)
+// v9.1.6 : le chemin SDK (et son repli facturation) est PURGÉ — l'envoi ne passe que par
+// OpenCode ; la sonde vérifie désormais l'absence du chemin, l'esprit v9.1.1 reste : aucun
+// tour ne doit dépendre d'un compte Codebuff.
+assert.ok(!existsSync3("electron/freebuff.ts"), "electron/freebuff.ts (SDK Codebuff) doit rester supprimé (purge v9.1.6)")
+assert.ok(!/isBillingError|runFreebuff/.test(operations), "plus aucune trace du repli facturation dans operations")
 
 console.log("v9.1.1 verification: OK")
