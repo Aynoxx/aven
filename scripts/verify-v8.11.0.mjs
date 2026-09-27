@@ -30,7 +30,8 @@ assert.match(stats, /writeJsonAtomicPretty/)
 assert.match(stats, /stats\.json/)
 
 // Comptage branché sur la dictée + IPC stats:get.
-assert.match(main, /countDictation\(workspace\)/)
+// v9.1.5 : countDictation passe par requireWorkspace() (plus d'espace imposé au boot).
+assert.match(main, /countDictation\(requireWorkspace\(\)\)/)
 assert.match(main, /stats:get/)
 assert.match(preload, /getStats/)
 assert.match(types, /AggregatedStats/)

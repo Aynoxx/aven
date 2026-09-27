@@ -6,7 +6,7 @@ import { makeOps } from "./operations.js"
 import { addDiscoveredFreeModels, loadTable } from "./priorities.js"
 import { EXPECTED_VERSION } from "./opencode-bridge.js"
 import { FREEBUFF_MODEL_LABEL } from "./freebuff.js"
-import { buildLaunchCommand, freebuffMissingMessage, parseVersionOutput, unsupportedPlatform } from "./freebuff-cli.js"
+import { buildLaunchCommand, freebuffBusyMessage, freebuffMissingMessage, parseVersionOutput, unsupportedPlatform } from "./freebuff-cli.js"
 import { Router } from "./router.js"
 import { relayEvents, startOpenCode, TABS, type Bridge } from "./opencode-bridge.js"
 import { aggregateStats, countDictation, readDictationStats } from "./stats.js"
@@ -19,7 +19,7 @@ import { Announcer } from "./announcer.js"
 import { notifyContent, shouldNotify } from "./notify-policy.js"
 import { loadPrefs, saveNotifications } from "./prefs.js"
 import { buildDiagnostic } from "./diagnostic.js"
-import { activeWorkspace, ensureDefaultRegistered, listWorkspaces, registerWorkspace, removeWorkspace, setActiveWorkspace, validateWorkspacePath } from "./workspaces.js"
+import { activeWorkspace, listWorkspaces, registerWorkspace, removeWorkspace, setActiveWorkspace, validateWorkspacePath } from "./workspaces.js"
 import type { FileSyncResult } from "./workspace-sync.js"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -39,6 +39,9 @@ if (!app.requestSingleInstanceLock()) {
 type AppState = {
   status: "starting" | "ready" | "error"
   error?: string
+  // v9.1.5 : vrai tant qu'aucun espace de travail n'existe — l'interface montre l'écran
+  // de choix au lieu de laisser un moteur démarrer sur un dossier imposé.
+  needsWorkspace?: boolean
   keys: Record<string, boolean> // quels fournisseurs ont une clé (les clés elles-mêmes ne quittent JAMAIS ce process)
   keyWarnings?: Record<string, string> // clé enregistrée mais aucun modèle actif détecté (best effort)
   providers: { id: string; label: string; url: string; note: string }[]
@@ -158,6 +161,18 @@ async function speakWithSapi(text: string): Promise<void> {
 
 /** (Re)démarre OpenCode. Les demandes concurrentes sont sérialisées et obsolètes. */
 async function bootImpl(requestedWorkspace: string, generation: number) {
+  if (!requestedWorkspace) {
+    // Sans espace de travail : rien à démarrer, l'interface affiche l'écran de choix.
+    state = {
+      status: "starting",
+      keys: Object.fromEntries(PROVIDERS.map((p) => [p.id, !!loadKeys()[p.id]])),
+      providers: providersLite,
+      workspaces: listWorkspaces(),
+      needsWorkspace: true,
+      updatesConfigured,
+    }
+    return
+  }
   const keys = loadKeys()
   const flags = Object.fromEntries(PROVIDERS.map((p) => [p.id, !!keys[p.id]]))
   const keyWarnings: Record<string, string> = {}
@@ -291,7 +306,8 @@ function notifyFromEvent(ev: { type: string; data: Record<string, unknown> }) {
 }
 
 function boot() {
-  const requestedWorkspace = path.resolve(workspace)
+  // (v9.1.5) resolve("") renverrait le CWD : on ne résout que si un espace est choisi.
+  const requestedWorkspace = workspace ? path.resolve(workspace) : ""
   const generation = ++bootGeneration
   const run = bootQueue.then(() => bootImpl(requestedWorkspace, generation))
   bootQueue = run.catch(() => undefined)
@@ -376,7 +392,14 @@ function registerIpc() {
   ipcMain.handle("window:toggleMaximize", () => { if (win?.isMaximized()) win.unmaximize(); else win?.maximize(); return true })
   ipcMain.handle("window:close", () => { win?.close(); return true })
   ipcMain.handle("app:state", () => state)
-  ipcMain.handle("app:openWorkspace", () => shell.openPath(workspace))
+  ipcMain.handle("app:openWorkspace", () => shell.openPath(requireWorkspace()))
+
+  // v9.1.5 : sans espace de travail, tout ce qui lit workspace doit échouer avec un
+  // message clair (pas de notes/stats/fichiers sur un dossier vide «".
+  const requireWorkspace = (): string => {
+    if (!workspace) throw new Error("Choisis d'abord un espace de travail (écran d'accueil ou Paramètres → Espaces de travail).")
+    return workspace
+  }
   ipcMain.handle("settings:setKey", async (_e, provider: string, key: string) => {
     saveKey(String(provider), String(key ?? ""))
     await boot() // OpenCode est relancé avec les nouvelles clés
@@ -430,19 +453,32 @@ function registerIpc() {
     await boot()
     return { entry, state }
   })
-  ipcMain.handle("workspace:remove", (_e, dir: string) => {
+  ipcMain.handle("workspace:remove", async (_e, dir: string) => {
+    const wasActive = !!workspace && path.resolve(workspace) === path.resolve(dir)
     removeWorkspace(dir)
-    return listWorkspaces()
+    const list = listWorkspaces()
+    // v9.1.5 : dernier espace retiré → retour à l'écran de choix (le moteur s'arrête :
+    // boot() sans espace ne laisse rien tourner sur un dossier fantôme).
+    if (!list.length) {
+      workspace = ""
+      await boot()
+    } else if (wasActive) {
+      // L'espace actif vient d'être retiré : bascule immédiate sur le premier restant.
+      setActiveWorkspace(list[0].path)
+      workspace = list[0].path
+      await boot()
+    }
+    return list
   })
 
   ipcMain.handle("agents:list", () => ops.agents())
   ipcMain.handle("chats:list", (_e, agent?: string, includeArchived?: boolean) => ops.chats(agent, includeArchived))
-  ipcMain.handle("notes:list", () => listNotes(workspace))
-  ipcMain.handle("notes:get", (_e, id: string) => getNote(workspace, String(id)))
-  ipcMain.handle("notes:togglePin", (_e, id: string) => togglePin(workspace, String(id)))
-  ipcMain.handle("notes:pins", () => loadPinned(workspace))
+  ipcMain.handle("notes:list", () => listNotes(requireWorkspace()))
+  ipcMain.handle("notes:get", (_e, id: string) => getNote(requireWorkspace(), String(id)))
+  ipcMain.handle("notes:togglePin", (_e, id: string) => togglePin(requireWorkspace(), String(id)))
+  ipcMain.handle("notes:pins", () => loadPinned(requireWorkspace()))
   // v9.0.0 : les notes sont de vrais fichiers — chemin affiché et ouverture du dossier.
-  ipcMain.handle("notes:dir", () => notesDir(workspace))
+  ipcMain.handle("notes:dir", () => notesDir(requireWorkspace()))
 
   // CLI Freebuff gratuit (v9.1.2) : statut + ouverture d'une console sur l'espace actif.
   // v9.1.3 : la détection (execFile + parse) est partagée entre status et launch —
@@ -464,6 +500,20 @@ function registerIpc() {
     }
   }
   ipcMain.handle("freebuff:status", () => checkFreebuffCli())
+  // v9.1.5 : freebuff.exe tourne-t-il déjà ? Deux CLI simultanés sur le même compte
+  // déclenchent un « takeover » de session côté serveur (erreur « released or taken
+  // over by another instance »). Best effort : si tasklist échoue, on laisse passer.
+  async function isFreebuffProcessRunning(): Promise<boolean> {
+    try {
+      const { execFile } = await import("node:child_process")
+      const out = await new Promise<string>((resolve, reject) => {
+        execFile("tasklist", ["/FI", "IMAGENAME eq freebuff.exe", "/FO", "CSV", "/NH"], { timeout: 6_000 }, (err, stdout) => (err ? reject(err) : resolve(String(stdout ?? ""))))
+      })
+      return /freebuff\.exe/i.test(out)
+    } catch {
+      return false
+    }
+  }
   // npm est-il utilisable dans l'environnement de l'app ? (garde v9.1.4 : une fenêtre
   // d'installation doit échouer avec un message clair, jamais avec une erreur Windows brute.)
   async function checkNpm(): Promise<boolean> {
@@ -483,11 +533,16 @@ function registerIpc() {
     if (action !== "install") {
       const status = await checkFreebuffCli()
       if (!status.installed) throw new Error(freebuffMissingMessage())
+      // v9.1.5 : le serveur Freebuff « reprend » (takeover) la session d'un compte quand
+      // deux CLI tournent en même temps — l'utilisateur voyait « This Freebuff session was
+      // released or taken over… » dans un des deux terminaux. On refuse poliment d'en
+      // ouvrir un deuxième tant que freebuff.exe tourne déjà.
+      if (await isFreebuffProcessRunning()) throw new Error(freebuffBusyMessage())
     } else if (!(await checkNpm())) {
       throw new Error("npm est introuvable sur cet ordinateur. Installe Node.js (npm inclus) depuis https://nodejs.org, puis retente « Installer le CLI » — ou dans un terminal : npx --yes freebuff.")
     }
     const { spawn } = await import("node:child_process")
-    const cmd = buildLaunchCommand(workspace, action)
+    const cmd = buildLaunchCommand(requireWorkspace(), action)
     // detached + fenêtre console : start() ouvre la fenêtre et retourne immédiatement.
     // (v9.1.3) arguments verbatim retirés : Node cite chaque argument lui-même,
     // sinon « /D C:\chemin avec espaces » était découpé et le dossier de départ était perdu.
@@ -496,8 +551,9 @@ function registerIpc() {
     return true
   })
   ipcMain.handle("notes:openFolder", () => {
-    mkdirSync(notesDir(workspace), { recursive: true })
-    return shell.openPath(notesDir(workspace))
+    const dir = notesDir(requireWorkspace())
+    mkdirSync(dir, { recursive: true })
+    return shell.openPath(dir)
   })
   // Dictée vocale (v8.7.8) : blob audio du renderer → Groq (transcription + reformage).
   // Renvoie { raw, cleaned?, cleanedBy?, warning? } ; lève seulement si la transcription
@@ -513,7 +569,7 @@ function registerIpc() {
         : "chat"
         : "absente"
       console.log(`[dictée] OK — brut: ${result.raw.length} car.` + (result.cleaned ? `, éclairci: ${result.cleaned.length} car.` : "") + (result.warning ? `, warning: ${result.warning}` : "") + `, intention: ${intent}`)
-      try { countDictation(workspace) } catch { /* les stats ne doivent jamais casser la dictée */ }
+      try { countDictation(requireWorkspace()) } catch { /* les stats ne doivent jamais casser la dictée */ }
       return result
     } catch (err) {
       console.error("[dictée] échec de transcription :", err instanceof Error ? err.message : String(err))
@@ -539,7 +595,7 @@ function registerIpc() {
   ipcMain.handle("chats:interrupt", (_e, id: string) => ops.interrupt(id))
   ipcMain.handle("notes:export", async (_e, id: string) => {
     if (!win) return null
-    const note = getNote(workspace, String(id))
+    const note = getNote(requireWorkspace(), String(id))
     const safeName = note.title.replace(/[\\/:*?"<>|]/g, "_").slice(0, 80) || "note"
     const res = await dialog.showSaveDialog(win, {
       title: "Exporter la note",
@@ -554,7 +610,7 @@ function registerIpc() {
     const chats = await ops.chats(undefined, true).catch(() => [])
     const modelCounters: Record<string, number> = {}
     for (const c of chats) if (c.model) modelCounters[c.model] = (modelCounters[c.model] ?? 0) + 1
-    return aggregateStats({ chats, dictations: readDictationStats(workspace), modelCounters }, [...TABS])
+    return aggregateStats({ chats, dictations: readDictationStats(requireWorkspace()), modelCounters }, [...TABS])
   })
   ipcMain.handle("chats:export", async (_e, id: string) => {
     if (!win) return null
@@ -615,8 +671,12 @@ function registerIpc() {
 app.whenReady().then(() => {
   // Modèle de config : à la racine du projet en dev, dans resources/ une fois packagé.
   templateDir = isDev ? path.resolve(__dirname, "..") : process.resourcesPath
-  ensureDefaultRegistered()
-  workspace = activeWorkspace().path
+  // v9.1.5 : AUCUN espace imposé. Sans espace enregistré, l'app reste en « starting +
+  // needsWorkspace » et l'interface montre l'écran de choix ; boot() ne part jamais
+  // avec un dossier vide.
+  workspace = activeWorkspace()?.path ?? ""
+  state = { ...state, needsWorkspace: !workspace }
+  trace(`workspace initial : ${workspace || "(aucun — choix demandé à l'utilisateur)"}`)
   // Microphone : autorisation explicite, réservée à LA fenêtre d'Aven (dictée push-to-talk).
   // Défini UNE seule fois ici.
   session.defaultSession.setPermissionCheckHandler((webContents, permission, _requestingOrigin) => {

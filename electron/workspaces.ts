@@ -10,18 +10,17 @@ function registryFile() {
   return path.join(app.getPath("userData"), "workspaces.json")
 }
 
-function defaultWorkspace(): WorkspaceEntry {
-  return { path: path.join(app.getPath("documents"), "Aven-workspace"), name: "Par défaut" }
-}
-
+// v9.1.5 : plus AUCUN espace imposé. Un registre absent ou vide signifie « l'utilisateur
+// n'a pas encore choisi son espace » — l'app démarre sur un écran de choix au lieu de
+// créer en douce un dossier « Aven-workspace » dans Documents.
 function read(): Stored {
   try {
     const st = JSON.parse(readFileSync(registryFile(), "utf8")) as Stored
-    if (st.list?.length) return st
+    return { list: Array.isArray(st.list) ? st.list : [], active: st.active }
   } catch {
     /* première utilisation, ou fichier absent */
   }
-  return { list: [defaultWorkspace()] }
+  return { list: [] }
 }
 
 function write(st: Stored) {
@@ -33,10 +32,10 @@ export function listWorkspaces(): WorkspaceEntry[] {
   return read().list
 }
 
-/** Espace actif : celui enregistré, sinon le premier connu (toujours au moins l'espace par défaut). */
-export function activeWorkspace(): WorkspaceEntry {
+/** Espace actif : celui enregistré, sinon le premier connu ; null si aucun espace n'existe encore. */
+export function activeWorkspace(): WorkspaceEntry | null {
   const st = read()
-  return st.list.find((w) => w.path === st.active) ?? st.list[0]
+  return st.list.find((w) => w.path === st.active) ?? st.list[0] ?? null
 }
 
 export function setActiveWorkspace(dir: string) {
@@ -67,14 +66,9 @@ export function registerWorkspace(dir: string, name: string): WorkspaceEntry {
   return entry
 }
 
+// v9.1.5 : retirer le dernier espace est permis — l'app repasse alors sur l'écran de choix.
 export function removeWorkspace(dir: string) {
   const st = read()
   const list = st.list.filter((w) => w.path !== dir)
-  if (!list.length) list.push(defaultWorkspace()) // toujours garder au moins un espace
   write({ list, active: st.active === dir ? undefined : st.active })
-}
-
-export function ensureDefaultRegistered() {
-  const st = read()
-  if (!existsSync(registryFile())) write(st) // matérialise le registre dès le premier lancement
 }

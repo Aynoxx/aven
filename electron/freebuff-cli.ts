@@ -39,6 +39,16 @@ export function freebuffMissingMessage(): string {
 }
 
 /**
+ * Message quand un CLI Freebuff tourne déjà (v9.1.5) : le serveur Freebuff n'autorise
+ * qu'une session à la fois par compte — un deuxième terminal se fait « reprendre »
+ * (takeover) et affiche « This Freebuff session was released or taken over by another
+ * instance ». On refuse d'ouvrir le doublon et on explique quoi faire.
+ */
+export function freebuffBusyMessage(): string {
+  return "Un terminal Freebuff est déjà ouvert. Le serveur n'accepte qu'une seule session par compte : utiliser les deux provoquerait l'erreur « session released or taken over ». Continue dans le terminal existant, ou ferme-le puis relance depuis Aven."
+}
+
+/**
  * Parse la sortie de `freebuff --version` : installé ? quelle version ?
  * Accepte « 0.0.203 », « freebuff/0.0.203 » ou toute ligne contenant un semver.
  */

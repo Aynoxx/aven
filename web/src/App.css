@@ -269,6 +269,11 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
 .home-notice-close { border:0; background:transparent; color:var(--muted); cursor:pointer; font-size:12px; line-height:1; padding:3px 5px; border-radius:6px; }
 .home-notice-close:hover { color:var(--text); background:var(--panel-soft); }
 
+/* v9.1.5 : écran de premier choix d'espace de travail (plus de « Par défaut » imposé). */
+.workspace-picker { width:min(560px, 100%); }
+.workspace-picker .row { margin-top:14px; flex-wrap:wrap; }
+.workspace-picker .err { margin:10px 0 0; }
+
 /* Boîtes de dialogue (Réglages, Notes, formulaire d'agent, demande de permission…).
    Il manquait tout le centrage et le style de base : .overlay ne centrait rien et
    .dialog n'existait dans aucune règle, donc les panneaux s'affichaient sans fond ni

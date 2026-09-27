@@ -66,6 +66,8 @@ export type AggregatedStats = {
 export type AppState = {
   status: "starting" | "ready" | "error"
   error?: string
+  // v9.1.5 : vrai tant qu'aucun espace de travail n'existe — l'app montre l'écran de choix.
+  needsWorkspace?: boolean
   keys: Record<string, boolean> // la clé elle-même n'est JAMAIS envoyée à l'interface
   keyWarnings?: Record<string, string>
   providers: ProviderLite[]

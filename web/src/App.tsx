@@ -22,6 +22,9 @@ const HOME_NOTICE_TTL = 6_000
 // Message exact affiché quand le CLI Freebuff est absent : le bandeau du hub reconnaît
 // ce texte pour proposer le bouton « Installer » en direct.
 const FREEBUFF_MISSING_NOTICE = "Le CLI Freebuff n'est pas installé : Paramètres → Freebuff CLI gratuit → « Installer le CLI (npm) »."
+// v9.1.5 : si un terminal Freebuff tourne déjà, le lancement est REFUSÉ côté main
+// (une seule session par compte, sinon « session taken over ») — le message d'erreur
+// clair remonte tel quel dans le bandeau du hub via le catch de routeAppAction.
 
 type Notice = { id: string; text: string }
 
@@ -65,6 +68,16 @@ export default function App() {
     const t = setTimeout(() => setHomeNotice(null), HOME_NOTICE_TTL)
     return () => clearTimeout(t)
   }, [homeNotice])
+  // v9.1.5 : plus aucun espace de travail — tous les panneaux laissent place à l'écran
+  // de choix (sinon le sélecteur resterait masqué sous les Réglages ouverts).
+  useEffect(() => {
+    if (appState.needsWorkspace) {
+      setShowSettings(false)
+      setShowNotes(false)
+      setShowAgentsPage(false)
+      setShowHome(true)
+    }
+  }, [appState.needsWorkspace])
   const [showAgentsPage, setShowAgentsPage] = useState(false)
   const [agentsLoading, setAgentsLoading] = useState(true)
   const [agentsError, setAgentsError] = useState<string>()
@@ -1150,6 +1163,27 @@ export default function App() {
           <button className="window-control close" onClick={() => window.opencode.closeWindow()} aria-label="Fermer"><Icon name="close" size={16} /></button>
         </div>
       </div>
+
+      {/* v9.1.5 : aucun espace de travail — Aven ne crée plus de dossier « Par défaut »
+          en douce : l'utilisateur choisit ou crée son dossier, le moteur démarre après. */}
+      {appState.needsWorkspace && (
+        <div className="overlay">
+          <div className="dialog workspace-picker">
+            <span className="eyebrow">PREMIERS PAS</span>
+            <h3>Choisis ton espace de travail</h3>
+            <p className="hint">
+              Chaque espace a ses propres conversations, agents et réglages. Crée un dossier
+              (le sélecteur Windows permet d'en créer un nouveau) ou ouvre un dossier
+              existant — plus aucun dossier « Par défaut » n'est créé à ta place.
+            </p>
+            <div className="row">
+              <button className="button primary" onClick={() => api.createWorkspace("").catch(fail)} type="button">Créer un nouvel espace…</button>
+              <button className="button secondary" onClick={() => api.addExistingWorkspace().catch(fail)} type="button">Ouvrir un dossier existant…</button>
+            </div>
+            {error && <p className="err">{error}</p>}
+          </div>
+        </div>
+      )}
 
       {!showHome && appState.status !== "ready" && (
         <div className="status-banner">

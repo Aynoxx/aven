@@ -1,8 +1,20 @@
-# Aven v9.1.4
+# Aven v9.1.5
 
 Application de bureau (Electron) : une chatbox avec **3 agents commutables** (code, recherche, analyse) et un
 sous-agent (code-reviewer), branchée sur **OpenCode 2.0.10** et un catalogue d’agents strictement gratuit (OpenRouter Free / OpenCode Zen).
 
+> **v9.1.5 — Plus de projet « Par défaut », l'espace se choisit, Freebuff sans
+> session volée** : ① Aven ne crée plus aucun dossier « Par défaut » dans Documents —
+> au premier lancement (ou après le retrait du dernier espace), un écran dédié propose
+> de créer ou choisir le dossier de travail, et le moteur ne démarre qu'après ce choix
+> (création/sélection = activation immédiate) ; ② le bouton « Utiliser » des espaces de
+> travail, qui ne changeait en réalité JAMAIS d'espace (chemin ignoré depuis la v9.0.0),
+> bascule vraiment maintenant ; ③ contre l'erreur « This Freebuff session was released
+> or taken over by another instance » : Aven détecte un freebuff.exe déjà actif et refuse
+> d'ouvrir un deuxième terminal avec un message qui explique le takeover (le serveur
+> Freebuff n'accepte qu'une session par compte) au lieu de laisser deux CLI se voler la
+> session. Note : les espaces déjà existants sont conservés — seul le dossier imposé de
+> frais disparait.
 > **v9.1.4 — Le bouton Freebuff enfin fiable, hub et page Agents peaufinés** : ① le
 > lancement du CLI ne déclenche plus « Windows ne trouve pas 'Freebuff' » (titre de
 > fenêtre `start` vide quoté), l'installation vérifie d'abord npm (message clair + repli

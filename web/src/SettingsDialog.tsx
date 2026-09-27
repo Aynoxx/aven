@@ -105,9 +105,11 @@ export default function SettingsDialog(props: {
       setBusy(false)
     }
   }
-  const switchWs = async (_dir: string) => {
+  const switchWs = async (dir: string) => {
     setBusy(true)
-    try { await refreshAfterRestart() } catch (e) { props.onError(e) } finally { setBusy(false) }
+    // v9.1.5 : le chemin était IGNORÉ avant (seul un refresh était fait) — le bouton
+    // « Utiliser » ne changeait jamais d'espace. On bascule vraiment, puis on refresh.
+    try { await api.switchWorkspace(dir); await refreshAfterRestart() } catch (e) { props.onError(e) } finally { setBusy(false) }
   }
   const addExistingWs = async () => {
     setBusy(true)
@@ -229,8 +231,8 @@ export default function SettingsDialog(props: {
       {!!state.removedModels?.length && <p className="hint">Modèles payants retirés de cet espace : {state.removedModels.join(", ")}.</p>}
       {Object.entries(state.assignments ?? {}).map(([agent, chain]) => <p key={agent} className="hint"><b>{agent}</b> : {chain.length ? chain.slice(0, 5).map((m, i) => `${i + 1}. ${m.label}`).join("  →  ") + (chain.length > 5 ? `  (+${chain.length - 5})` : "") : "aucun modèle disponible"}</p>)}
       <h4 id="workspaces-section">Espaces de travail</h4>
-      <p className="hint">Chaque espace a ses propres conversations, agents et priorités. Les clés API sont partagées entre tous.</p>
-      {(state.workspaces ?? []).map((w) => <div key={w.path} className="row"><span style={{ flex: 1 }}>{w.path === state.workspace ? <b className="current-workspace"><Icon name="dot" size={10} />{w.name}</b> : w.name} <span className="hint">{w.path}</span></span>{w.path !== state.workspace && <button className="button secondary" disabled={busy} onClick={() => switchWs(w.path)}>Utiliser</button>}{w.path !== state.workspace && (state.workspaces?.length ?? 0) > 1 && <button className="button danger" disabled={busy} onClick={() => removeWs(w.path)}>Retirer de la liste</button>}</div>)}
+      <p className="hint">Chaque espace a ses propres conversations, agents et priorités. Les clés API sont partagées entre tous. Retirer le dernier espace ramène à l’écran de choix (plus aucun dossier n’est créé à ta place).</p>
+      {(state.workspaces ?? []).map((w) => <div key={w.path} className="row"><span style={{ flex: 1 }}>{w.path === state.workspace ? <b className="current-workspace"><Icon name="dot" size={10} />{w.name}</b> : w.name} <span className="hint">{w.path}</span></span>{w.path !== state.workspace && <button className="button secondary" disabled={busy} onClick={() => switchWs(w.path)}>Utiliser</button>}<button className="button danger" disabled={busy} onClick={() => removeWs(w.path)}>Retirer de la liste</button></div>)}
       <div className="row"><input className="settings-input" placeholder="Nom du nouvel espace…" value={newWsName} onChange={(e) => setNewWsName(e.target.value)} /><button className="button primary" onClick={createWs}>Créer un nouvel espace</button><button className="button secondary" onClick={addExistingWs}>Ouvrir un dossier existant</button></div>
       {!!state.sync?.length && <><h4>Fichiers de config du dossier de travail</h4>{state.sync.map((s) => <p key={s.file} className="hint"><code>{s.file}</code> : {SYNC_LABEL[s.status] ?? s.status}</p>)}</>}
       {state.versionWarning && <p className="err">{state.versionWarning}</p>}

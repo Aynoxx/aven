@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import { buildLaunchCommand, freebuffMissingMessage, parseVersionOutput, unsupportedPlatform } from "../electron/freebuff-cli.ts"
+import { buildLaunchCommand, freebuffBusyMessage, freebuffMissingMessage, parseVersionOutput, unsupportedPlatform } from "../electron/freebuff-cli.ts"
 
 test("buildLaunchCommand : start /D sur l'espace, arguments séparés (spawn-safe)", () => {
   const cmd = buildLaunchCommand("C:\\Users\\Liam\\Documents\\Aven-workspace")
@@ -42,6 +42,14 @@ test("freebuffMissingMessage : message d'installation clair (v9.1.3, plus de ter
   assert.match(msg, /pas install/)
   assert.match(msg, /npm install -g freebuff/)
   assert.match(msg, /Param[eè]tres/i)
+})
+
+test("freebuffBusyMessage : refuse le 2e terminal, explique le takeover de session (v9.1.5)", () => {
+  const msg = freebuffBusyMessage()
+  assert.match(msg, /déjà ouvert/)
+  assert.match(msg, /une seule session/i)
+  assert.match(msg, /taken over/) // l'erreur exacte vue par l'utilisateur doit être expliquée
+  assert.match(msg, /ferme-le/i)
 })
 
 test("parseVersionOutput : installe avec version, ou non installé", () => {
