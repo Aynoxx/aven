@@ -49,7 +49,9 @@ for (const f of fontFamilies) {
 assert.match(icon, /export type IconName =/)
 assert.match(iconReadme, /Ajouter une nouvelle icône dans le type `IconName`/)
 // Aucun composant n'embarque son propre <svg> local (l'unique <svg> est celui d'Icon.tsx).
-const jsxFiles = ["web/src/App.tsx", "web/src/SettingsDialog.tsx", "web/src/NotesDialog.tsx", "web/src/FormDialog.tsx", "web/src/MessageBubble.tsx", "web/src/Markdown.tsx", "web/src/RichMarkdown.tsx", "web/src/ErrorBoundary.tsx"]
+// v9.3.0 : NotesView.tsx remplace NotesDialog.tsx, FilesView.tsx arrive — la règle
+// « un seul <svg> (Icon.tsx) » s'applique aux nouvelles vues aussi.
+const jsxFiles = ["web/src/App.tsx", "web/src/SettingsDialog.tsx", "web/src/NotesView.tsx", "web/src/FilesView.tsx", "web/src/FormDialog.tsx", "web/src/MessageBubble.tsx", "web/src/Markdown.tsx", "web/src/RichMarkdown.tsx", "web/src/ErrorBoundary.tsx"]
 for (const f of jsxFiles) {
   const content = read(f)
   assert.ok(!/<svg[\s>]/.test(content),

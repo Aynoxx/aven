@@ -5,10 +5,12 @@ import Markdown from "./Markdown"
 import MessageBubble from "./MessageBubble"
 import { applyEvent, emptyLive, type Live } from "./stream"
 import type { Agent, AppAction, AppState, Chat, Decision, FormAnswer, Msg, StreamEvent, WorkspaceEntry } from "./types"
-import type { AggregatedStats } from "./types"
 import FormDialog from "./FormDialog"
 import SettingsDialog from "./SettingsDialog"
-import NotesDialog from "./NotesDialog"
+// v9.3.0 : vue Notes complète (rendu Markdown, édition, tags par agent) remplaçant le modal.
+import NotesView from "./NotesView"
+// v9.3.0 : explorateur de fichiers intégré (lecture seule, cloisonné à l'espace).
+import FilesView from "./FilesView"
 // v9.2.0 : terminal Freebuff intégré (pont PTY, protocole freebuff-bridge).
 import FreebuffTerminalDialog from "./FreebuffTerminalDialog"
 import { useAppearance } from "./appearance"
@@ -63,7 +65,7 @@ export default function App() {
   const [error, setError] = useState<string>()
   const [appState, setAppState] = useState<AppState>({ status: "starting", keys: {}, providers: [], updatesConfigured: false })
   const [showSettings, setShowSettings] = useState(false)
-  const [settingsSection, setSettingsSection] = useState<"general" | "appearance">("general")
+  const [settingsSection, setSettingsSection] = useState<"general" | "appearance" | "usage">("general")
   const [notices, setNotices] = useState<Notice[]>([])
   const [showHome, setShowHome] = useState(true)
   const [homeNotice, setHomeNotice] = useState<string | null>(null)
@@ -79,6 +81,7 @@ export default function App() {
     if (appState.needsWorkspace) {
       setShowSettings(false)
       setShowNotes(false)
+      setShowFiles(false)
       setShowAgentsPage(false)
       setShowProjectPicker(false)
       setShowFreebuffBridge(false)
@@ -89,15 +92,29 @@ export default function App() {
   const [agentsLoading, setAgentsLoading] = useState(true)
   const [agentsError, setAgentsError] = useState<string>()
   const [showConversationPicker, setShowConversationPicker] = useState(false)
-  // v9.1.6 : « Changer de projet » directement depuis le hub — un modal dédié liste les
+  // v9.1.6 (libellés v9.3.0 : « Espaces ») : gestion des espaces directement depuis le hub —
   // espaces connus, sans passer par les Réglages. Le changement redémarre le moteur
   // côté main (api.switchWorkspace), l'état remonte par le poll de app:state existant.
   const [showProjectPicker, setShowProjectPicker] = useState(false)
   const [projectList, setProjectList] = useState<WorkspaceEntry[]>([])
   const [showNotes, setShowNotes] = useState(false)
   const [notesInitialId, setNotesInitialId] = useState<string | undefined>()
+  // v9.3.0 : explorateur de fichiers intégré (lecture seule) — remplace l'ouverture
+  // externe de l'Explorateur Windows, qui reste disponible depuis la vue elle-même.
+  const [showFiles, setShowFiles] = useState(false)
   // v9.2.0 : vue du TUI freebuff dans l'app (pont PTY local, session persistante).
   const [showFreebuffBridge, setShowFreebuffBridge] = useState(false)
+  // v9.3.0 : pastille d'état Freebuff du hub — "active" (session PTY vivante), "ready"
+  // (CLI installé) ou "missing". Rechargée au montage et à chaque fermeture du terminal.
+  const [freebuffPillState, setFreebuffPillState] = useState<"active" | "ready" | "missing">("missing")
+  useEffect(() => {
+    void (async () => {
+      try {
+        const [active, status] = await Promise.all([api.freebuffPtyActive(), api.freebuffCliStatus()])
+        setFreebuffPillState(active ? "active" : status.installed ? "ready" : "missing")
+      } catch { setFreebuffPillState("missing") }
+    })()
+  }, [showFreebuffBridge])
   // Barre d'actions sur sélection (v8.9.0) : position viewport de la mini-barre flottante.
   const [selBar, setSelBar] = useState<{ text: string; top: number; left: number } | null>(null)
   const selBarRef = useRef(selBar)
@@ -135,9 +152,7 @@ export default function App() {
   const routeAppAction = (action: AppAction): string => {
     switch (action) {
       case "open-notes":
-        setShowAgentsPage(false); setShowSettings(false); setShowHome(false)
-        setShowConversationPicker(false); setShowProjectPicker(false)
-        setNotesInitialId(undefined); setShowNotes(true)
+        openNotesView()
         return "Notes ouvertes."
       case "open-settings":
         openConfiguration()
@@ -147,10 +162,13 @@ export default function App() {
         return "Page des agents ouverte."
       case "open-projects":
         openConfiguration("workspaces")
-        return "Espaces de travail ouverts."
+        return "Espaces ouverts."
       case "open-workspace":
-        void api.openWorkspace().catch(fail)
-        return "Dossier du projet ouvert."
+        // v9.3.0 : la route vocale ouvre l'explorateur INTÉGRÉ (l'Explorateur Windows
+        // reste accessible d'un clic dans la vue). L'écran courant est conservé : la
+        // vue recouvre, comme le terminal Freebuff v9.2.1.
+        openFilesView()
+        return "Fichiers de l'espace ouverts."
       // v9.1.3 : Freebuff CLI, statistiques et nouvelle conversation exécutables à la voix.
       case "open-freebuff":
         // v9.2.0 : le TUI s'affiche DANS Aven via le pont PTY (session persistante) —
@@ -174,8 +192,10 @@ export default function App() {
         })()
         return "Freebuff…"
       case "open-stats":
-        openStats()
-        return "Statistiques ouvertes."
+        // v9.3.0 : les statistiques vivent dans les Réglages, onglet « Usage ».
+        openConfiguration()
+        setSettingsSection("usage")
+        return "Statistiques ouvertes (Réglages → Usage)."
       case "new-chat":
         void newChat()
         return "Nouvelle conversation créée."
@@ -300,12 +320,53 @@ export default function App() {
 
   const closeNotesToHome = useCallback(() => {
     setShowNotes(false)
+    setShowFiles(false)
     setNotesInitialId(undefined)
     setShowSettings(false)
     setShowAgentsPage(false)
     setShowConversationPicker(false)
     setShowProjectPicker(false)
     setShowHome(true)
+  }, [])
+
+  // ── Vues Notes et Fichiers (v9.3.0) ──────────────────────────────────────────
+  // Ouvertures centralisées : les deux vues RECOURVENT l'écran courant (comme le
+  // terminal Freebuff v9.2.1) — on ne masque plus showHome, la fermeture rend l'écran
+  // d'origine. Ouverture des Notes depuis une conversation : la note créée hérite de
+  // l'agent courant (pré-étiquetage).
+  const openNotesView = (initialId?: string) => {
+    setShowFiles(false)
+    setShowSettings(false)
+    setShowAgentsPage(false)
+    setShowConversationPicker(false)
+    setShowProjectPicker(false)
+    setNotesInitialId(initialId)
+    setShowNotes(true)
+  }
+  const openFilesView = () => {
+    setShowNotes(false)
+    setShowSettings(false)
+    setShowAgentsPage(false)
+    setShowConversationPicker(false)
+    setShowProjectPicker(false)
+    setShowFiles(true)
+  }
+  // « Joindre à la conversation » / « Faire analyser » : le texte atterrit dans le
+  // composeur de l'onglet actif (créée si besoin), comme la dictée — l'utilisateur valide.
+  const composeIntoChat = useCallback(async (text: string) => {
+    setShowNotes(false)
+    setShowFiles(false)
+    setShowHome(false)
+    if (!chatIdRef.current && tabRef.current) {
+      try {
+        const c = await api.createChat(tabRef.current)
+        setChats((prev) => [c, ...prev])
+        setChatId(c.id)
+      } catch (e) { fail(e); return }
+    }
+    setDictationMeta({ cleaned: false, showRaw: false, rawText: "", cleanedText: "" })
+    setInput(text)
+    requestAnimationFrame(() => textareaRef.current?.focus())
   }, [])
 
   const loadChats = useCallback(async (agent: string) => {
@@ -488,6 +549,7 @@ export default function App() {
         if (showConversationPicker) setShowConversationPicker(false)
         else if (showProjectPicker) setShowProjectPicker(false) // v9.1.6 : le modal projet suit Échap
         else if (showFreebuffBridge) setShowFreebuffBridge(false) // v9.2.0 : la session continue en tâche de fond
+        else if (showFiles) closeNotesToHome() // v9.3.0 : Échap ferme l'explorateur intégré
         else if (showAgentsPage) { setShowAgentsPage(false); setShowHome(true) }
         else if (showNotes) closeNotesToHome()
         else if (showSettings) setShowSettings(false)
@@ -509,7 +571,7 @@ export default function App() {
       window.removeEventListener("keydown", onKey)
       window.removeEventListener("keyup", onKeyUp)
     }
-  }, [live.busy, live.forms, chatId, showSettings, showAgentsPage, showConversationPicker, showProjectPicker, showFreebuffBridge, showHome, showNotes, tab, closeNotesToHome])
+  }, [live.busy, live.forms, chatId, showSettings, showAgentsPage, showConversationPicker, showProjectPicker, showFreebuffBridge, showHome, showNotes, showFiles, tab, closeNotesToHome])
 
   const newChat = async () => {
     if (!tab) return
@@ -680,14 +742,8 @@ export default function App() {
   }
   const agentName = (id: string) => agents.find((a) => a.id === id)?.name ?? id
 
-  // Carte « Statistiques » du hub (v8.11.0) : chiffres clés de l'usage (conversations,
-  // dictées, modèles). Les données sont rechargées à chaque ouverture.
-  const [stats, setStats] = useState<AggregatedStats | null>(null)
-  const [showStats, setShowStats] = useState(false)
-  const openStats = () => {
-    setShowStats(true)
-    api.getStats().then(setStats).catch((e) => { setShowStats(false); fail(e) })
-  }
+  // (v9.3.0 : les statistiques ont quitté le hub pour l'onglet « Usage » des Réglages —
+  // la vue du hub ne compte plus que des cartes d'action et de contenu.)
 
   // ── Navigation clavier des listes (v9.1.6, corrigé v9.2.0) ─────────────────────
   // FIX « Rendered fewer hooks than expected » : la première version définissait un
@@ -714,7 +770,7 @@ export default function App() {
   const conversationsListRef = useRef<HTMLDivElement>(null)
   const projectsListRef = useRef<HTMLDivElement>(null)
 
-  // ── Changer de projet depuis le hub (v9.1.6) ────────────────────────────────────
+  // ── Gérer les espaces depuis le hub (v9.1.6, renommage v9.3.0) ──────────────────
   // La liste est relue À CHAQUE ouverture (workspace:list) : jamais une copie figée de
   // l'état du démarrage — un espace ajouté dans les Réglages apparaît ici aussitôt.
   const openProjectPicker = () => {
@@ -733,7 +789,7 @@ export default function App() {
         setTab("")
         preferredChatIdRef.current = null
       }
-      setHomeNotice(`Projet actif : ${next.workspace ? next.workspace.split(/[\\/]/).pop() : dir}`)
+      setHomeNotice(`Espace actif : ${next.workspace ? next.workspace.split(/[\\/]/).pop() : dir}`)
     } catch (e) {
       fail(e)
     }
@@ -749,7 +805,7 @@ export default function App() {
       setChatId(null)
       setTab("")
       preferredChatIdRef.current = null
-      setHomeNotice(`Projet actif : ${res.entry.name}`)
+      setHomeNotice(`Espace actif : ${res.entry.name}`)
     } catch (e) {
       fail(e)
     }
@@ -789,7 +845,7 @@ export default function App() {
       files: "folder",
       notes: "file",
       settings: "settings",
-      stats: "chart",
+      stats: "chart", // v9.3.0 : l'onglet Usage des Réglages réutilise l'icône
     }
     return <Icon name={icons[kind] ?? "sparkle"} />
   }
@@ -840,19 +896,20 @@ export default function App() {
 
 
   const renderHome = () => {
+    // v9.3.0 : hub reformé — 5 cartes à 72°. Trois étages lisibles : FAIRE (Projet,
+    // Agents, Freebuff), CONTENU (Fichiers, Notes). Statistiques → Réglages/Usage.
     const nav = [
       // v9.1.0 : « projet » est à part — carte dédiée d'orchestrateur, hors sélecteur d'agents.
       { key: "project", label: "Projet", kind: "project", hint: "Orchestrateur des agents", action: () => selectAgent("projet") },
+      { key: "agents", label: "Agents", kind: "agent", hint: orderedAgents.length === 1 ? "Agent actif" : `${orderedAgents.length} agents`, action: openAgentsPage },
       // v9.1.2 : le CLI Freebuff gratuit (ad-financé) s'ouvre dans un terminal sur l'espace.
       // v9.1.3 : passe par routeAppAction ("open-freebuff") : si le CLI est absent, un avis
       // clair remplace le terminal « 'freebuff' n'est pas reconnu » de la v9.1.2.
       { key: "freebuff", label: "Freebuff", kind: "freebuff", hint: "CLI gratuit (terminal)", action: () => setHomeNotice(routeAppAction("open-freebuff")) },
-      { key: "agents", label: "Agents", kind: "agent", hint: orderedAgents.length === 1 ? "Agent actif" : `${orderedAgents.length} agents`, action: openAgentsPage },
-      { key: "stats", label: "Statistiques", kind: "stats", hint: "Usage de l'app", action: openStats },
-      { key: "files", label: "Fichiers", kind: "files", hint: "Parcourir l’espace", action: () => api.openWorkspace().catch(fail) },
-      { key: "notes", label: "Notes", kind: "notes", hint: "Vos notes Markdown", action: () => { setShowAgentsPage(false); setShowSettings(false); setShowHome(false); setNotesInitialId(undefined); setShowNotes(true) } },
-      // v9.1.3 : la carte « Paramètres » quitte le cercle (6 cartes à 60°) — le bouton
-      // « Paramètres » de la barre de fenêtre et l'icône de la barre d'accueil restent.
+      // v9.3.0 : Fichiers et Notes = le CONTENU de l'espace — vues intégrées (l'Explorateur
+      // Windows reste disponible d'un clic dans la vue Fichiers).
+      { key: "files", label: "Fichiers", kind: "files", hint: "Explorer l'espace", action: openFilesView },
+      { key: "notes", label: "Notes", kind: "notes", hint: "Notes Markdown par agent", action: () => openNotesView() },
     ]
     const recent = chats.slice(0, 3)
     const allConversations = chats
@@ -910,6 +967,7 @@ export default function App() {
             <div className="brand-mark" aria-hidden="true"><Icon name="sparkle" size={18} /></div>
             <span className="home-brand-copy">
               <strong>Aven</strong>
+              {/* v9.3.0 : le nom de l'ESPACE actif est visible en permanence. */}
               <small>{workspaceName || "Espace de travail"}</small>
             </span>
           </button>
@@ -925,10 +983,17 @@ export default function App() {
               <span className="status-dot" />
               <span>{online ? "En ligne" : appState.status === "starting" ? "Démarrage" : "Indisponible"}</span>
             </span>
-            {/* v9.1.6 : changement de projet sans passer par les Réglages. */}
-            <button className="button secondary home-control home-project-button" onClick={openProjectPicker} aria-label="Changer de projet" title="Changer de projet" type="button">
+            {/* v9.1.6 (libellés v9.3.0 : « Espaces ») : gestion des espaces sans passer
+                par les Réglages. La liste est relue à chaque ouverture. */}
+            <button className="button secondary home-control home-project-button" onClick={openProjectPicker} aria-label="Gérer les espaces" title="Gérer les espaces" type="button">
               <Icon name="folder" size={15} />
-              <span>Changer de projet</span>
+              <span>Espaces</span>
+            </button>
+            {/* v9.3.0 : pastille d'état Freebuff — le second assistant devient visible
+                d'un coup d'œil (CLI installé ? session active ?). Clic = ouvrir le terminal. */}
+            <button className={`freebuff-pill ${freebuffPillState}`} onClick={() => setHomeNotice(routeAppAction("open-freebuff"))} aria-label={`Freebuff : ${freebuffPillState === "active" ? "session active" : freebuffPillState === "ready" ? "CLI installé" : "CLI non installé"}`} title={freebuffPillState === "active" ? "Session Freebuff active — ouvrir le terminal" : freebuffPillState === "ready" ? "CLI Freebuff installé — ouvrir le terminal" : "CLI Freebuff non installé — voir comment l'installer"} type="button">
+              <span className="freebuff-pill-dot" aria-hidden="true" />
+              <span className="freebuff-pill-label">Freebuff</span>
             </button>
             <button className="button button-icon home-icon-button home-control" onClick={() => openConfiguration()} aria-label="Ouvrir les paramètres" title="Paramètres" type="button">
               <HubIcon kind="settings" />
@@ -946,14 +1011,16 @@ export default function App() {
                 </div>
                 <button className="button ghost home-text-button" onClick={() => setShowConversationPicker(true)} type="button">Tout voir</button>
               </div>
-              {/* v9.1.6 : flèches Haut/Bas naviguent parmi les conversations récentes. */}
+              {/* v9.1.6 : flèches Haut/Bas naviguent parmi les conversations récentes.
+                  v9.3.0 : badge de l'agent propriétaire — le hub montre QUI possède chaque
+                  conversation (cohérent avec la page Agents et le regroupement v9.0.0). */}
               <div className="home-recent-list" ref={recentListRef} onKeyDown={recentNav.onKeyDown}>
                 {recent.map((chat) => (
                   <button key={chat.id} className="home-recent-item" onClick={() => openConversation(chat)} type="button">
                     <span className="home-recent-icon"><HubIcon kind={chat.agent === tab ? "agent" : "notes"} /></span>
                     <span className="home-recent-copy">
                       <strong>{chat.title || "Conversation"}</strong>
-                      <small>{chat.model || agentName(chat.agent || tab)}</small>
+                      <small><em className="home-recent-agent">{agentName(chat.agent || tab)}</em>{chat.model ? ` · ${chat.model}` : ""}</small>
                     </span>
                     <span className="home-recent-arrow"><Icon name="chevron-right" size={16} /></span>
                   </button>
@@ -1035,29 +1102,6 @@ export default function App() {
                   </div>
                 )}
 
-
-                {showStats && (
-                  <div className="hub-picker-overlay" role="dialog" aria-modal="true" aria-label="Statistiques" onClick={(e) => { if (e.target === e.currentTarget) setShowStats(false) }}>
-                    <div className="hub-picker">
-                      <div className="hub-picker-header">
-                        <div><span className="eyebrow">STATISTIQUES</span><strong className="hub-picker-title">Usage de l'application</strong></div>
-                        <button className="button button-icon dialog-close" onClick={() => setShowStats(false)} aria-label="Fermer" type="button"><Icon name="close" size={17} /></button>
-                      </div>
-                      <div className="hub-picker-list stats-grid">
-                        <div className="stat-tile"><strong>{stats ? stats.totalChats : "…"}</strong><small>conversations actives</small></div>
-                        <div className="stat-tile"><strong>{stats ? stats.archivedChats : "…"}</strong><small>archivées</small></div>
-                        <div className="stat-tile"><strong>{stats ? stats.dictationsTotal : "…"}</strong><small>dictées ({stats ? stats.dictationsToday : "…"} aujourd'hui)</small></div>
-                        {stats?.perAgent.map((e) => (
-                          <div key={e.agent} className="stat-tile"><strong>{e.count}</strong><small>conversations · {agentName(e.agent)}</small></div>
-                        ))}
-                        {stats?.topModels.length ? (
-                          <div className="stat-tile stat-wide"><strong>{stats.topModels.map((m) => `${m.model} (${m.count})`).join(" · ")}</strong><small>modèles les plus utilisés</small></div>
-                        ) : null}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
               </section>
             </div>
           </div>
@@ -1087,25 +1131,27 @@ export default function App() {
 
         {/* v9.1.6 : sélecteur de projet du hub — liste relue à l'ouverture, projet actif
             marqué, création/ouverture de dossier disponibles sans passer par les Réglages. */}
+        {/* v9.1.6 — libellés v9.3.0 (« Espaces ») : le modal liste les espaces connus,
+            actif marqué, création/ouverture de dossier disponibles sans les Réglages. */}
         {showProjectPicker && (
-          <div className="home-modal-overlay" role="dialog" aria-modal="true" aria-label="Changer de projet" onClick={(e) => { if (e.target === e.currentTarget) setShowProjectPicker(false) }}>
+          <div className="home-modal-overlay" role="dialog" aria-modal="true" aria-label="Gérer les espaces" onClick={(e) => { if (e.target === e.currentTarget) setShowProjectPicker(false) }}>
             <div className="home-modal project-modal">
               <div className="home-modal-header">
-                <div><span className="eyebrow">PROJETS</span><h2>Changer de projet</h2></div>
+                <div><span className="eyebrow">ESPACES</span><h2>Gérer les espaces</h2></div>
                 <button className="button button-icon dialog-close" onClick={() => setShowProjectPicker(false)} aria-label="Fermer" type="button"><Icon name="close" size={17} /></button>
               </div>
-              <p className="hint project-modal-hint">Chaque projet a ses conversations, agents et réglages. Un clic l'active et redémarre le moteur dessus.</p>
-              {/* v9.1.6 : flèches Haut/Bas naviguent, Entrée active le projet focusé.
-                  Le projet ACTIF est présélectionné à l'ouverture (initialArrowIndex). */}
+              <p className="hint project-modal-hint">Chaque espace a ses conversations, agents et réglages. Un clic l'active et redémarre le moteur dessus.</p>
+              {/* v9.1.6 : flèches Haut/Bas naviguent, Entrée active l'espace focusé.
+                  L'espace ACTIF est présélectionné à l'ouverture (initialArrowIndex). */}
               <div className="home-modal-list" ref={projectsListRef} onKeyDown={projectsNav.onKeyDown}>
                 {projectList.map((w) => (
-                  <button key={w.path} className={`home-modal-item project-item ${w.path === appState.workspace ? "current" : ""}`} onClick={() => void switchProject(w.path)} type="button" title={w.path === appState.workspace ? "Projet actif" : "Activer ce projet"}>
+                  <button key={w.path} className={`home-modal-item project-item ${w.path === appState.workspace ? "current" : ""}`} onClick={() => void switchProject(w.path)} type="button" title={w.path === appState.workspace ? "Espace actif" : "Activer cet espace"}>
                     <span className="home-recent-icon"><Icon name="folder" size={16} /></span>
                     <span className="home-recent-copy"><strong>{w.name}{w.path === appState.workspace ? <em className="project-current-badge">actif</em> : null}</strong><small>{w.path}</small></span>
                     <span className="home-recent-arrow">{w.path === appState.workspace ? <Icon name="check" size={16} /> : <Icon name="chevron-right" size={18} />}</span>
                   </button>
                 ))}
-                {!projectList.length && <div className="home-modal-empty">Aucun projet enregistré pour l'instant.</div>}
+                {!projectList.length && <div className="home-modal-empty">Aucun espace enregistré pour l'instant.</div>}
               </div>
               <div className="row project-modal-actions">
                 <button className="button primary" onClick={() => void addProjectFromHub("create")} type="button">Créer un nouvel espace…</button>
@@ -1313,8 +1359,8 @@ export default function App() {
             <h3>Choisis ton espace de travail</h3>
             <p className="hint">
               Chaque espace a ses propres conversations, agents et réglages. Choisis un
-              projet existant, crée un nouveau dossier (le sélecteur Windows le permet) ou
-              ouvre un dossier existant — plus aucun projet n'est choisi à ta place.
+              espace existant, crée un nouveau dossier (le sélecteur Windows le permet) ou
+              ouvre un dossier existant — plus aucun espace n'est choisi à ta place.
             </p>
             {!!appState.workspaces?.length && (
               <div className="workspace-picker-list">
@@ -1517,7 +1563,28 @@ export default function App() {
       )}
 
       {form && <FormDialog key={form.id} form={form} onSubmit={answerForm} onCancel={cancelForm} />}
-      {showNotes && <NotesDialog initialId={notesInitialId} onClose={closeNotesToHome} onError={fail} />}
+      {/* v9.3.0 : vue Notes complète (rendu Markdown, édition, tags par agent, « joindre
+          à la conversation ») — remplace l'ancien modal Notes de v8.x. */}
+      {showNotes && (
+        <NotesView
+          initialId={notesInitialId}
+          agents={orderedAgents.map((a) => ({ id: a.id, name: a.name }))}
+          currentAgent={tab}
+          onCompose={(text) => void composeIntoChat(text)}
+          onClose={closeNotesToHome}
+          onError={fail}
+        />
+      )}
+      {/* v9.3.0 : explorateur de fichiers intégré — lecture seule, cloisonné à l'espace
+          côté main (safeResolve) ; « Faire analyser par un agent » passe par le composeur. */}
+      {showFiles && (
+        <FilesView
+          agents={orderedAgents.map((a) => ({ id: a.id, name: a.name }))}
+          onCompose={(text) => void composeIntoChat(text)}
+          onClose={closeNotesToHome}
+          onError={fail}
+        />
+      )}
       {/* v9.2.0 : terminal Freebuff intégré — session persistante côté main, la fermeture
           de la vue n'arrête pas le process (contrat du protocole freebuff-bridge). */}
       {showFreebuffBridge && <FreebuffTerminalDialog onClose={() => setShowFreebuffBridge(false)} onError={fail} />}

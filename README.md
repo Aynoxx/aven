@@ -1,4 +1,4 @@
-# Aven v9.2.0
+# Aven v9.3.0
 
 > ## Avant de modifier ce projet (IA ou humain)
 > Lis **`AGENTS.md`** puis **`RULES.md`** : ils fixent les règles universelles de
@@ -11,6 +11,19 @@
 Application de bureau (Electron) : une chatbox avec **3 agents commutables** (code, recherche, analyse) et un
 sous-agent (code-reviewer), branchée sur **OpenCode 2.0.10** et un catalogue d’agents strictement gratuit (OpenRouter Free / OpenCode Zen).
 
+> **v9.3.0 — Restructuration : une carte claire des features** : ① le hub devient le
+> cockpit de l'espace — 5 cartes (Projet, Agents, Freebuff = FAIRE ; Fichiers, Notes =
+> CONTENU), le nom de l'espace actif dans l'en-tête, une pastille d'état Freebuff (CLI
+> installé ? session active ?) et les conversations récentes montrant leur agent ;
+> ② les **Statistiques** migrent dans les Réglages, onglet **Usage** ; ③ les **Notes**
+> deviennent une vraie vue : rendu Markdown, édition intégrée, **tags par agent** (filtre
+> dans la liste), « Joindre à la conversation » ; ④ les **Fichiers** s'explorent DANS
+> Aven (lecture seule, cloisonné à l'espace par une barrière testée : safeResolve), avec
+> aperçu texte et « Faire analyser par un agent » ; ⑤ « projets » s'appelle désormais
+> **« Espaces »** partout (identifiants techniques inchangés) ; ⑥ le prompt de l'agent
+> « projet » gagne un protocole d'orchestration (reformulation, délégation en énoncés
+> autonomes, vérification, synthèse). Les commandes vocales suivent : « fichiers » ouvre
+> l'explorateur intégré, « statistiques » ouvre Réglages → Usage.
 > **v9.2.0 — Le terminal Freebuff intégré, plus de crash d'affichage** : ① la carte
 > « Freebuff » ouvre désormais le CLI DANS Aven (xterm.js) — session persistante (fermer
 > la vue ne l'arrête pas, l'écran exact est retrouvé à la réouverture), retry automatique
@@ -136,6 +149,19 @@ npm run package:win    # produit release/dist : installeur NSIS + version portab
 Tu choisis ton dossier de travail au premier lancement (écran dédié — plus aucun dossier imposé, v9.1.5). `opencode.jsonc` et
 `.opencode\agents\*.md` y sont copiés (**jamais écrasés ensuite** : tes modifications restent). Bouton « Ouvrir le dossier » dans Réglages.
 Les agents ne touchent donc ni au code de l'app ni au dossier d'installation.
+
+## La carte des features (v9.3.0)
+
+Trois étages, pour savoir « où cliquer » :
+
+| Étage | Features | Rôle |
+|---|---|---|
+| **Faire** | **Projet** (orchestrateur), **Agents** (spécialistes), **Freebuff** (CLI externe gratuit) | Trois façons de travailler, rôles affichés |
+| **Contenu** | **Fichiers** (explorateur intégré), **Notes** (base de connaissance) | Ce sur quoi les agents travaillent — et ils s'y connectent |
+| **Cadre** | **Espaces** (en-tête du hub, tout y vit), **Réglages** (Configuration, Apparence, **Usage**) | Le contenant et la configuration |
+
+Interactions entre features : un fichier → « Faire analyser par un agent » (composeur) ; une note → « Joindre à la conversation » ;
+une conversation → tags d'agent sur les notes ; la pastille Freebuff → terminal intégré en un clic.
 
 ## Convention de versionnement
 - `vX` : grosse mise à jour / changement majeur.

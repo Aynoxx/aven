@@ -37,6 +37,15 @@ contextBridge.exposeInMainWorld("opencode", {
   cancelForm: (sessionID: string, formID: string) => call("forms:cancel", sessionID, formID),
   notesList: () => call("notes:list"),
   noteGet: (id: string) => call("notes:get", id),
+  // v9.3.0 : édition intégrée + tags par agent.
+  noteSave: (id: string, title: string, markdown: string) => call("notes:save", id, title, markdown),
+  noteSetTags: (id: string, tags: string[]) => call("notes:setTags", id, tags),
+  noteTags: (id: string) => call("notes:tags", id),
+  // v9.3.0 : explorateur de fichiers intégré (lecture seule, cloisonné à l'espace).
+  filesList: (relative: string) => call("files:list", relative),
+  filesRead: (relative: string) => call("files:read", relative),
+  filesBreadcrumb: (relative: string) => call("files:breadcrumb", relative),
+  filesOpen: (relative: string) => call("files:open", relative),
   noteTogglePin: (id: string) => call("notes:togglePin", id),
   notePins: () => call("notes:pins"),
   noteExport: (id: string) => call("notes:export", id),

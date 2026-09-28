@@ -47,7 +47,7 @@ assert.match(app, /key: "freebuff", label: "Freebuff"/)
 assert.match(app, /showFreebuffBridge/, "v9.2.0 : le hub ouvre le terminal Freebuff intégré")
 assert.match(app, /freebuffCliLaunch\("install"\)/, "le flux d'installation reste branché (avis hub)")
 assert.match(css, /\.hub-card-freebuff/)
-assert.match(css, /--hub-angle:60deg/) // v9.1.3 : 6 cartes réparties à 60°
+assert.match(css, /--hub-angle:72deg/) // v9.3.0 : 5 cartes réparties à 72° (Statistiques → Réglages/Usage)
 assert.match(settingsDialog, /Freebuff CLI gratuit/)
 // v9.2.0 : le lancement quotidien vit dans le terminal intégré (carte hub) ; les
 // Réglages gardent connexion (console externe) et installation.

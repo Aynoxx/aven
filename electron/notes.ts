@@ -1,7 +1,7 @@
 // Notes Markdown de l'espace de travail (page « Notes » de l'interface).
 // Extrait de l'ancien app-tools.ts lors du retrait du backend vocal (v8.7.7) :
 // les notes restent une fonctionnalité autonome, indépendante du vocal.
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from "node:fs"
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
 import path from "node:path"
 
 const NOTE_DIR = (workspace: string) => path.join(workspace, ".opencodeapp", "notes")
@@ -36,6 +36,34 @@ export function getNote(workspace: string, id: string) {
   const markdown = readFileSync(file, "utf8")
   const first = markdown.match(/^#\s+(.+)$/m)
   return { id, title: cleanTitle(first?.[1] ?? id.replace(/\.md$/i, "")), markdown, updated: Math.round(statSync(file).mtimeMs) }
+}
+
+/**
+ * Crée ou met à jour une note (v9.3.0, vue Notes intégrée) : la note est un VRAI
+ * fichier .md dans l'espace. `id` vide = création (titre imposé, id dérivé du titre).
+ * Retourne la note telle que listNotes la renvoie.
+ */
+export function saveNote(workspace: string, id: string, title: string, markdown: string) {
+  ensureNoteDir(workspace)
+  const cleanTitleFinal = cleanTitle(title)
+  const body = String(markdown ?? "")
+  // Création : id dérivé du titre, avec suffixe si collision (note-2, note-3…).
+  let finalId = String(id || "").trim()
+  if (!finalId) {
+    const base = safeId(cleanTitleFinal)
+    finalId = `${base}.md`
+    let n = 2
+    while (existsSync(notePath(workspace, finalId))) {
+      finalId = `${base}-${n}.md`
+      n++
+    }
+  }
+  const file = notePath(workspace, finalId)
+  // La 1re ligne d'un titre absent du corps est écrite comme titre Markdown.
+  const hasTitle = /^#\s+/m.test(body)
+  const content = hasTitle ? body : `# ${cleanTitleFinal}\n\n${body}`
+  writeFileSync(file, content.endsWith("\n") ? content : `${content}\n`, "utf8")
+  return getNote(workspace, finalId)
 }
 
 export { ensureNoteDir, notePath, safeId, cleanTitle }

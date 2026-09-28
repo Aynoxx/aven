@@ -43,9 +43,13 @@ assert.match(preload, /voiceTranscribe/) // contrat inchangé côté transport
 // Renderer : commandes app exécutées directement (mêmes handlers que le hub),
 // changement d'agent, et le texte ne part JAMAIS automatiquement chez l'agent.
 assert.match(app, /routeAppAction/)
-assert.match(app, /open-notes[\s\S]{0,200}setShowNotes\(true\)/)
+// v9.3.0 : l'ouverture Notes passe par openNotesView() (vue intégrée) — le contrat
+// « la route open-notes montre bien les notes » reste vérifié.
+assert.match(app, /open-notes[\s\S]{0,120}openNotesView/)
 assert.match(app, /open-settings[\s\S]{0,120}openConfiguration\(\)/)
-assert.match(app, /open-workspace[\s\S]{0,120}api\.openWorkspace\(\)/)
+// v9.3.0 : « open-workspace » ouvre l'explorateur intégré (l'Explorateur Windows reste
+// accessible d'un clic dans la vue) — la route reste exigée (commentaires inclus dans la fenêtre).
+assert.match(app, /open-workspace[\s\S]{0,300}openFilesView/)
 assert.match(app, /intent\?\.intent === "agent"[\s\S]{0,200}selectAgent\(target\)/)
 assert.match(app, /setInput\(text\)/) // validation Entrée conservée
 

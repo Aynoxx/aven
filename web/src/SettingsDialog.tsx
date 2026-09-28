@@ -1,7 +1,7 @@
 import { useEffect, useState, type CSSProperties } from "react"
 import { api } from "./api"
 import { Icon } from "./icons"
-import type { Agent, AppState } from "./types"
+import type { Agent, AppState, AggregatedStats } from "./types"
 import type { AppearanceConfig, BlockId } from "./appearance"
 
 const SYNC_LABEL: Record<string, string> = {
@@ -11,7 +11,8 @@ const SYNC_LABEL: Record<string, string> = {
   custom: "personnalisé — laissé tel quel",
 }
 
-type Section = "general" | "appearance"
+// v9.3.0 : 3 onglets — Configuration | Apparence | Usage (les statistiques quittent le hub).
+type Section = "general" | "appearance" | "usage"
 
 export default function SettingsDialog(props: {
   state: AppState
@@ -49,6 +50,12 @@ export default function SettingsDialog(props: {
   // v9.1.4 : l'installation est visible — bouton « Installation en cours… » pendant le poll.
   const [cliInstalling, setCliInstalling] = useState(false)
   useEffect(() => { api.freebuffCliStatus().then(setCli).catch(() => setCli({ installed: false })) }, [])
+  // v9.3.0 : onglet Usage — statistiques rechargées à chaque ouverture de l'onglet.
+  const [stats, setStats] = useState<AggregatedStats | null>(null)
+  useEffect(() => {
+    if (section !== "usage") return
+    api.getStats().then(setStats).catch((e) => props.onError(e))
+  }, [section, props.onError])
   const cliAction = async (action: "launch" | "login" | "install") => {
     try {
       if (action === "install") {
@@ -230,7 +237,7 @@ export default function SettingsDialog(props: {
       {!!state.newModels?.length && <p className="hint">Nouveaux modèles ajoutés automatiquement à ta table de priorités : {state.newModels.join(", ")}.</p>}
       {!!state.removedModels?.length && <p className="hint">Modèles payants retirés de cet espace : {state.removedModels.join(", ")}.</p>}
       {Object.entries(state.assignments ?? {}).map(([agent, chain]) => <p key={agent} className="hint"><b>{agent}</b> : {chain.length ? chain.slice(0, 5).map((m, i) => `${i + 1}. ${m.label}`).join("  →  ") + (chain.length > 5 ? `  (+${chain.length - 5})` : "") : "aucun modèle disponible"}</p>)}
-      <h4 id="workspaces-section">Espaces de travail</h4>
+      <h4>Espaces</h4>
       <p className="hint">Chaque espace a ses propres conversations, agents et priorités. Les clés API sont partagées entre tous. Retirer le dernier espace ramène à l’écran de choix (plus aucun dossier n’est créé à ta place).</p>
       {(state.workspaces ?? []).map((w) => <div key={w.path} className="row"><span style={{ flex: 1 }}>{w.path === state.workspace ? <b className="current-workspace"><Icon name="dot" size={10} />{w.name}</b> : w.name} <span className="hint">{w.path}</span></span>{w.path !== state.workspace && <button className="button secondary" disabled={busy} onClick={() => switchWs(w.path)}>Utiliser</button>}<button className="button danger" disabled={busy} onClick={() => removeWs(w.path)}>Retirer de la liste</button></div>)}
       <div className="row"><input className="settings-input" placeholder="Nom du nouvel espace…" value={newWsName} onChange={(e) => setNewWsName(e.target.value)} /><button className="button primary" onClick={createWs}>Créer un nouvel espace</button><button className="button secondary" onClick={addExistingWs}>Ouvrir un dossier existant</button></div>
@@ -242,5 +249,25 @@ export default function SettingsDialog(props: {
     </div>
   )
 
-  return <div className="overlay"><div className="dialog wide unified-settings"><header className="unified-settings-header"><div><span className="eyebrow">RÉGLAGES</span><h3>Configuration et apparence</h3><p className="hint">Un seul panneau commun pour les réglages techniques et l’apparence de l’application.</p></div><button className="button button-icon dialog-close" onClick={props.onClose} aria-label="Fermer" type="button"><Icon name="close" size={17} /></button></header><nav className="settings-tabs" aria-label="Sections des paramètres"><button className={section === "general" ? "selected" : ""} onClick={() => setSection("general")}>Configuration</button><button className={section === "appearance" ? "selected" : ""} onClick={() => setSection("appearance")}>Apparence</button></nav><div className="unified-settings-scroll">{section === "appearance" ? renderAppearance() : renderGeneral()}</div></div></div>
+  // Onglet Usage (v9.3.0) : les statistiques du hub (v8.11.0) migrées en section Réglages.
+  const renderUsage = () => (
+    <div className="settings-pane">
+      <h4>Usage de l'application</h4>
+      <p className="hint">Conversations, dictées et modèles — comptés dans l'espace actif.</p>
+      <div className="stats-grid">
+        <div className="stat-tile"><strong>{stats ? stats.totalChats : "…"}</strong><small>conversations actives</small></div>
+        <div className="stat-tile"><strong>{stats ? stats.archivedChats : "…"}</strong><small>archivées</small></div>
+        <div className="stat-tile"><strong>{stats ? stats.dictationsTotal : "…"}</strong><small>dictées ({stats ? stats.dictationsToday : "…"} aujourd'hui)</small></div>
+        {stats?.perAgent.map((e) => (
+          <div key={e.agent} className="stat-tile"><strong>{e.count}</strong><small>conversations · {props.agents.find((a) => a.id === e.agent)?.name ?? e.agent}</small></div>
+        ))}
+        {stats?.topModels.length ? (
+          <div className="stat-tile stat-wide"><strong>{stats.topModels.map((m) => `${m.model} (${m.count})`).join(" · ")}</strong><small>modèles les plus utilisés</small></div>
+        ) : null}
+      </div>
+      <div className="row"><button className="button secondary" onClick={() => api.getStats().then(setStats).catch((e) => props.onError(e))} type="button">Actualiser</button></div>
+    </div>
+  )
+
+  return <div className="overlay"><div className="dialog wide unified-settings"><header className="unified-settings-header"><div><span className="eyebrow">RÉGLAGES</span><h3>Configuration et apparence</h3><p className="hint">Un seul panneau commun pour les réglages techniques, l’apparence et l’usage de l’application.</p></div><button className="button button-icon dialog-close" onClick={props.onClose} aria-label="Fermer" type="button"><Icon name="close" size={17} /></button></header><nav className="settings-tabs" aria-label="Sections des paramètres"><button className={section === "general" ? "selected" : ""} onClick={() => setSection("general")}>Configuration</button><button className={section === "appearance" ? "selected" : ""} onClick={() => setSection("appearance")}>Apparence</button><button className={section === "usage" ? "selected" : ""} onClick={() => setSection("usage")}>Usage</button></nav><div className="unified-settings-scroll">{section === "appearance" ? renderAppearance() : section === "usage" ? renderUsage() : renderGeneral()}</div></div></div>
 }

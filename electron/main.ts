@@ -14,8 +14,10 @@ import { relayEvents, startOpenCode, TABS, type Bridge } from "./opencode-bridge
 import { aggregateStats, countDictation, readDictationStats } from "./stats.js"
 import { probeOpenRouterKey, PROVIDERS } from "./providers.js"
 import { loadKeys, saveKey, seedWorkspace } from "./settings.js"
-import { getNote, listNotes, notesDir } from "./notes.js"
-import { loadPinned, togglePin } from "./notes-meta.js"
+import { getNote, listNotes, notesDir, saveNote } from "./notes.js"
+import { loadPinned, loadTags, setTags, togglePin } from "./notes-meta.js"
+// v9.3.0 : explorateur intégré de l'espace (lecture seule, cloisonné par safeResolve).
+import { breadcrumbOf, listWorkspaceDir, readWorkspaceFile, safeResolve as safeResolveWorkspacePath } from "./workspace-files.js"
 import { transcribeSpeech } from "./voice.js"
 import { Announcer } from "./announcer.js"
 import { notifyContent, shouldNotify } from "./notify-policy.js"
@@ -478,6 +480,24 @@ function registerIpc() {
   ipcMain.handle("notes:pins", () => loadPinned(requireWorkspace()))
   // v9.0.0 : les notes sont de vrais fichiers — chemin affiché et ouverture du dossier.
   ipcMain.handle("notes:dir", () => notesDir(requireWorkspace()))
+  // v9.3.0 : édition intégrée — création/mise à jour d'une note + tags par agent.
+  ipcMain.handle("notes:save", (_e, id: string, title: string, markdown: string) => saveNote(requireWorkspace(), String(id ?? ""), String(title ?? ""), String(markdown ?? "")))
+  ipcMain.handle("notes:setTags", (_e, id: string, tags: string[]) => setTags(requireWorkspace(), String(id ?? ""), Array.isArray(tags) ? tags.map(String) : []))
+  ipcMain.handle("notes:tags", (_e, id: string) => loadTags(requireWorkspace(), String(id ?? "")))
+
+  // ── Explorateur de fichiers de l'espace (v9.3.0) — lecture seule, cloisonné ────
+  // Toute résolution passe par safeResolve (workspace-files.ts, testé) : jamais de
+  // lecture hors de la racine, quel que soit l'identifiant envoyé par l'interface.
+  ipcMain.handle("files:list", (_e, relative: string) => listWorkspaceDir(requireWorkspace(), String(relative ?? "")))
+  ipcMain.handle("files:read", (_e, relative: string) => readWorkspaceFile(requireWorkspace(), String(relative ?? "")))
+  ipcMain.handle("files:breadcrumb", (_e, relative: string) => breadcrumbOf(String(relative ?? "")))
+  ipcMain.handle("files:open", (_e, relative: string) => {
+    const target = requireWorkspace()
+    // Ouverture dans l'Explorateur Windows : racine seule ou sous-dossier résolu sûrement.
+    const rel = String(relative ?? "").trim()
+    const full = rel ? safeResolveWorkspacePath(target, rel) : target
+    return shell.openPath(full)
+  })
 
   // CLI Freebuff gratuit (v9.1.2) : statut + ouverture d'une console sur l'espace actif.
   // v9.1.3 : la détection (execFile + parse) est partagée entre status et launch —

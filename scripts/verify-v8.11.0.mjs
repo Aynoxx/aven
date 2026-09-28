@@ -13,6 +13,7 @@ const main = read("electron/main.ts")
 const preload = read("electron/preload.cts")
 const types = read("web/src/types.ts")
 const app = read("web/src/App.tsx")
+const settingsDialog = read("web/src/SettingsDialog.tsx")
 const icons = read("web/src/icons/Icon.tsx")
 const tests = read("tests/stats.test.mjs")
 const notes = read("electron/notes-meta.ts") // régression v8.10.0
@@ -37,9 +38,13 @@ assert.match(preload, /getStats/)
 assert.match(types, /AggregatedStats/)
 
 // Renderer : carte du hub, panneau, tuiles.
-assert.match(app, /openStats/)
-assert.match(app, /stats:get|getStats\(\)/)
-assert.match(app, /stat-tile/)
+// v9.3.0 : les statistiques vivent dans les Réglages (onglet Usage) — le renderer
+// reste branché sur stats:get via SettingsDialog ; App.tsx garde la route vocale.
+assert.match(app, /case "open-stats"/)
+assert.match(settingsDialog, /getStats\(\)/)
+// v9.3.0 : l'appel getStats() vit dans SettingsDialog (onglet Usage) — App.tsx garde l'IPC via la route vocale.
+assert.match(app + read("web/src/SettingsDialog.tsx"), /stats:get|getStats\(\)/)
+assert.match(settingsDialog, /stat-tile/)
 assert.match(icons, /"chart"/)
 
 // Tests présents.

@@ -39,6 +39,10 @@ export type ProviderLite = { id: string; label: string; url: string; note: strin
 export type WorkspaceEntry = { path: string; name: string }
 export type FileSyncResult = { file: string; status: "created" | "updated" | "unchanged" | "custom" }
 export type Note = { id: string; title: string; markdown: string; updated: number }
+// v9.3.0 : explorateur de fichiers de l'espace (miroir de electron/workspace-files.ts).
+export type FileEntry = { name: string; path: string; kind: "dir" | "file"; size: number; modified: number }
+export type TextFile = { path: string; size: number; truncated: boolean; content: string }
+export type Breadcrumb = { label: string; path: string }[]
 // Miroir de electron/voice-intent.ts (contrat IPC identique, types dupliqués volontairement).
 export type AppAction = "open-notes" | "open-settings" | "open-agents" | "open-projects" | "open-workspace" | "open-freebuff" | "open-stats" | "new-chat"
 export type DictationIntent =
@@ -120,6 +124,15 @@ export type OpenCodeApi = {
   cancelForm: (sessionID: string, formID: string) => Promise<void>
   notesList: () => Promise<Note[]>
   noteGet: (id: string) => Promise<Note>
+  // v9.3.0 : édition intégrée + tags par agent.
+  noteSave: (id: string, title: string, markdown: string) => Promise<Note>
+  noteSetTags: (id: string, tags: string[]) => Promise<string[]>
+  noteTags: (id: string) => Promise<string[]>
+  // v9.3.0 : explorateur de fichiers intégré (lecture seule, cloisonné à l'espace).
+  filesList: (relative: string) => Promise<FileEntry[]>
+  filesRead: (relative: string) => Promise<TextFile>
+  filesBreadcrumb: (relative: string) => Promise<Breadcrumb>
+  filesOpen: (relative: string) => Promise<string>
   noteTogglePin: (id: string) => Promise<string[]>
   notePins: () => Promise<string[]>
   noteExport: (id: string) => Promise<string | null>

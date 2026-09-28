@@ -1,23 +1,64 @@
 // Métadonnées des notes (v8.10.0) : épinglage persistant par espace de travail.
 // Fichier `.opencode-app/notes-meta.json` dans l'espace actif — même convention que
 // agent-names.json et archived.json. Sans dépendance à Electron : testable avec Node seul.
+// v9.3.0 : le fichier porte aussi les TAGS PAR AGENT de chaque note (carte mentale :
+// une note peut être liée à un ou plusieurs agents, filtre dans la vue Notes).
 import { readFileSync } from "node:fs"
 import path from "node:path"
 import { writeJsonAtomicPretty } from "./atomic-file.js"
 
 export const MAX_PINNED = 20
+export const MAX_NOTE_TAGS = 6
 
 const file = (workspace: string) => path.join(workspace, ".opencode-app", "notes-meta.json")
 
-type NotesMeta = { pinned: string[] }
+type NotesMeta = { pinned: string[]; tags?: Record<string, string[]> }
 
 function readMeta(workspace: string): NotesMeta {
   try {
     const raw = JSON.parse(readFileSync(file(workspace), "utf8")) as NotesMeta
-    return { pinned: Array.isArray(raw.pinned) ? raw.pinned.filter((id) => typeof id === "string") : [] }
+    const tags: Record<string, string[]> = {}
+    if (raw.tags && typeof raw.tags === "object") {
+      for (const [id, list] of Object.entries(raw.tags)) {
+        if (!Array.isArray(list)) continue
+        // Défense : jamais de traversée de chemin dans les identifiants (même règle que pinned).
+        const cleanId = path.basename(String(id).replace(/[\\/]+/g, "/"))
+        const clean = list.filter((t) => typeof t === "string" && t.trim()).map((t) => String(t).trim().slice(0, 30))
+        if (cleanId && clean.length) tags[cleanId] = [...new Set(clean)].slice(0, MAX_NOTE_TAGS)
+      }
+    }
+    return { pinned: Array.isArray(raw.pinned) ? raw.pinned.filter((id) => typeof id === "string") : [], tags }
   } catch {
-    return { pinned: [] }
+    return { pinned: [], tags: {} }
   }
+}
+
+/** Tags par agent d'une note (liste vide si aucune). */
+export function loadTags(workspace: string, id: string): string[] {
+  const clean = path.basename(String(id || "").replace(/[\\/]+/g, "/"))
+  return readMeta(workspace).tags?.[clean] ?? []
+}
+
+/** Remplace les tags d'une note. Normalisation : accents retirés, minuscules, tirets. */
+export function setTags(workspace: string, id: string, tags: string[]): string[] {
+  const clean = path.basename(String(id || "").replace(/[\\/]+/g, "/"))
+  if (!clean || clean !== String(id || "")) throw new Error("Note invalide")
+  const normalized = normalizeTags(tags)
+  const meta = readMeta(workspace)
+  meta.tags = { ...(meta.tags ?? {}) }
+  if (normalized.length) meta.tags[clean] = normalized
+  else delete meta.tags[clean]
+  writeJsonAtomicPretty(file(workspace), meta)
+  return normalized
+}
+
+/** Normalise une liste de tags : minuscules, sans accents, 30 car. max, dédoublonnée. */
+export function normalizeTags(tags: unknown): string[] {
+  const out = (Array.isArray(tags) ? tags : [])
+    .map((t) => String(t ?? "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "").replace(/-{2,}/g, "-").replace(/^-+|-+$/g, ""))
+    .filter(Boolean)
+    .slice(0, MAX_NOTE_TAGS)
+  return [...new Set(out)]
 }
 
 export function loadPinned(workspace: string): string[] {

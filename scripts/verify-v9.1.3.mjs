@@ -27,7 +27,8 @@ assert.ok(vMaj * 10000 + vMin * 100 + vPatch >= 90103, `version trop ancienne : 
 // ① Plus de carte « Paramètres » dans le hub circulaire (6 cartes réparties à 60°).
 assert.ok(!/key: "settings"/.test(app), "la carte « Paramètres » doit avoir disparu du hub")
 assert.ok(!/\.hub-card-settings/.test(css), "le CSS .hub-card-settings doit avoir disparu")
-assert.match(css, /--hub-angle:300deg/) // 6ᵉ et dernière carte de l'orbite
+// v9.3.0 : 5 cartes à 72° (Statistiques → Réglages/Usage) — la sonde suit le cercle.
+assert.match(css, /--hub-angle:288deg/) // 5ᵉ et dernière carte de l'orbite
 // L'accès aux réglages reste possible hors du hub (barre de fenêtre + barre d'accueil).
 assert.match(app, /Ouvrir les paramètres/)
 
@@ -45,7 +46,9 @@ assert.match(intent, /n'est JAMAIS une commande/) // garde : une demande de cont
 assert.match(voice, /fallbackIntent\(raw\)/) // filet de secours dans le pipeline
 assert.match(types, /"open-freebuff" \| "open-stats" \| "new-chat"/)
 assert.match(app, /case "open-freebuff"/)
-assert.match(app, /case "open-stats"/)
+// v9.3.0 : la carte hub « Statistiques » a rejoint les Réglages (onglet Usage) — la
+// ROUTE vocale open-stats reste exigée (elle ouvre désormais Réglages → Usage).
+assert.match(app, /case "open-stats"/, "la route vocale statistiques reste câblée")
 assert.match(app, /case "new-chat"/)
 assert.match(app, /routeAppActionRef\.current\(intent\.action\)/) // exécution avec closure fraîche
 assert.match(dictation, /optionsRef/) // callbacks de dictée toujours à jour

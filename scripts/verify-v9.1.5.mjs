@@ -44,7 +44,8 @@ assert.match(app, /workspace-picker-item/, "liste des projets existants attendue
 assert.match(css, /\.workspace-picker-item/, "CSS de la liste des projets attendu")
 
 // I. Changer de projet depuis le hub (v9.1.6) : bouton + modal dédié, sans les Réglages.
-assert.match(app, /Changer de projet/, "le bouton du hub doit exister")
+// v9.3.0 : le bouton s'appelle « Espaces » (renommage d'affichage, mécanique inchangée).
+assert.match(app, /<span>Espaces<\/span>/, "le bouton du hub doit exister")
 assert.match(app, /openProjectPicker/, "l'ouverture doit relire la liste des espaces")
 assert.match(app, /api\.workspaces\(\)\.then/, "la liste doit être relue à chaque ouverture (jamais figée)")
 assert.match(app, /showProjectPicker/, "modal projet attendu")
