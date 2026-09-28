@@ -7,6 +7,9 @@ release/
 
 # État local du runtime et captures d'investigation (jamais versionnés)
 .freebuff/
+# Pont agents généré par Aven (miroir .opencode → CLI Freebuff, v9.5.0) :
+# contenu régénéré à chaque lancement, jamais versionné.
+.agents/
 .opencode-app/
 # Notes Markdown créées quand l'espace actif est le dépôt lui-même (v9.3.0)
 .opencodeapp/

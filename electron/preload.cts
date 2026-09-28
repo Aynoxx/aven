@@ -58,6 +58,7 @@ contextBridge.exposeInMainWorld("opencode", {
   announcerTest: (text: string) => call("announcer:test", text),
   prefs: () => call("prefs:get"),
   setNotifications: (on: boolean) => call("prefs:setNotifications", on),
+  setFreebuffResume: (on: boolean) => call("prefs:setFreebuffResume", on),
   diagnostic: () => call("app:diagnostic"),
   freebuffCliStatus: () => call("freebuff:status"),
   // v9.4.0 : « launch » transmet les dimensions xterm réelles (TUI lisible dès l'ouverture).

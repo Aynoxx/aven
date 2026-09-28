@@ -1,5 +1,5 @@
 import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, Notification, session, shell, Tray } from "electron"
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { makeOps } from "./operations.js"
@@ -14,6 +14,8 @@ import { relayEvents, startOpenCode, TABS, type Bridge } from "./opencode-bridge
 import { aggregateStats, countDictation, readDictationStats } from "./stats.js"
 import { probeOpenRouterKey, PROVIDERS } from "./providers.js"
 import { loadKeys, saveKey, seedWorkspace } from "./settings.js"
+import { buildAgentsDir, readTemplateAgents } from "./agents-bridge.js"
+import { loadPrefs, saveFreebuffResume, saveNotifications } from "./prefs.js"
 import { getNote, listNotes, notesDir, saveNote } from "./notes.js"
 import { loadPinned, loadTags, setTags, togglePin } from "./notes-meta.js"
 // v9.3.0 : explorateur intégré de l'espace (lecture seule, cloisonné par safeResolve).
@@ -21,7 +23,6 @@ import { breadcrumbOf, listWorkspaceDir, readWorkspaceFile, safeResolve as safeR
 import { transcribeSpeech } from "./voice.js"
 import { Announcer } from "./announcer.js"
 import { notifyContent, shouldNotify } from "./notify-policy.js"
-import { loadPrefs, saveNotifications } from "./prefs.js"
 import { buildDiagnostic } from "./diagnostic.js"
 import { activeWorkspace, listWorkspaces, registerWorkspace, removeWorkspace, setActiveWorkspace, validateWorkspacePath } from "./workspaces.js"
 import type { FileSyncResult } from "./workspace-sync.js"
@@ -56,6 +57,8 @@ type AppState = {
   sync?: FileSyncResult[] // état des fichiers de config au dernier démarrage (créé / mis à jour / personnalisé)
   newModels?: string[]
   removedModels?: string[]
+  // v9.5.0 : fichiers du pont agents écrits/mis à jour à la dernière synchro (.agents/…).
+  agentsBridge?: string[]
   assignments?: Record<string, { ref: string; label: string }[]> // agent → modèles par ordre de priorité (lecture seule)
   warning?: string
   versionWarning?: string // version du serveur OpenCode ≠ version attendue par le client
@@ -196,6 +199,19 @@ async function bootImpl(requestedWorkspace: string, generation: number) {
   const env = Object.fromEntries(PROVIDERS.filter((p) => p.openCodeEnv !== false && keys[p.id] && (p.id !== "openrouter" || openRouterUsable)).map((p) => [p.env, keys[p.id]]))
   try {
     const sync = seedWorkspace(requestedWorkspace, templateDir)
+    // v9.5.0 : pont agents — le dossier .agents/ du CLI Freebuff est resynchronisé
+    // ici (miroir des agents OpenCode + mcp.json des notes). Un échec (disque plein,
+    // chemin bizarre) n'empêche JAMAIS le boot : le TUI reste utilisable sans pont.
+    let agentsBridgeWritten: string[] = []
+    try {
+      agentsBridgeWritten = buildAgentsDir(
+        requestedWorkspace,
+        readTemplateAgents(templateDir),
+        path.join(templateDir, "aven-mcp-server.mjs"),
+      )
+    } catch (err) {
+      console.warn(`[agents-bridge] synchronisation impossible : ${err instanceof Error ? err.message : String(err)}`)
+    }
     state = {
       status: "starting",
       keys: flags,
@@ -206,6 +222,7 @@ async function bootImpl(requestedWorkspace: string, generation: number) {
       newModels: sync.newModels,
       removedModels: sync.removedModels,
       updatesConfigured,
+      agentsBridge: agentsBridgeWritten,
     }
     await shutdown()
     if (generation !== bootGeneration) return
@@ -588,6 +605,11 @@ function registerIpc() {
         cwd: requireWorkspace(),
         cols: cols ?? DEFAULT_PTY_COLS,
         rows: rows ?? DEFAULT_PTY_ROWS,
+        // v9.5.0 : l'agent Freebuff partage le catalogue d'agents d'Aven (--trust-agents
+        // lit le .agents/ généré à la synchro) et peut reprendre la dernière conversation
+        // (préférence, défaut : nouvelle conversation).
+        trustAgents: existsSync(path.join(requireWorkspace(), ".agents", "aven-code.ts")),
+        resume: loadPrefs().freebuffResume === true,
         handlers: {
           onData: (chunk) => win?.webContents.send("opencode:event", { type: "freebuff.pty.data", data: { chunk } }),
           onStatus: (state) => win?.webContents.send("opencode:event", { type: "freebuff.pty.status", data: { state } }),
@@ -707,6 +729,7 @@ function registerIpc() {
   // Notifications de bureau (v9.1.0) : interrupteur persistant dans userData.
   ipcMain.handle("prefs:get", () => loadPrefs())
   ipcMain.handle("prefs:setNotifications", (_e, on: boolean) => saveNotifications(on === true))
+  ipcMain.handle("prefs:setFreebuffResume", (_e, on: boolean) => saveFreebuffResume(on === true))
   // Diagnostic copiable (v9.1.0) : les valeurs de clés ne quittent JAMAIS ce process —
   // seuls leurs identifiants de provider sont listés (test anti-fuite sur buildDiagnostic).
   ipcMain.handle("app:diagnostic", () =>

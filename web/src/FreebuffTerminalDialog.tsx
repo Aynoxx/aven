@@ -2,15 +2,16 @@ import { useEffect, useRef, useState } from "react"
 import { api } from "./api"
 import { Icon } from "./icons"
 
-// Terminal Freebuff intégré (v9.2.0, protocole freebuff-pty) : le TUI freebuff
-// s'affiche dans un vrai émulateur (xterm.js). Le process tourne côté MAIN dans un
-// PTY (conhost caché — node-pty exige un compilateur MSVC absent de ce poste) :
-// fermer ce dialogue ne le tue pas, à la réouverture le scrollback est rejoué
-// (session persistante). Pas de WebSocket : le flux transite par IPC et les
-// événements freebuff.pty.* arrivent via onEvent (comme router.notice).
+// Agent Freebuff intégré (v9.5.0, refonte de la vue « terminal » v9.2.0) : le TUI
+// freebuff reste le TRANSPORT (process PTY côté main, émulateur xterm.js hors écran
+// pour parser l'ANSI), mais la vue n'est plus un terminal : l'écran montre une
+// CONVERSATION D'AGENT — présence (« En ligne »), transcript dérivé du buffer
+// (lignes de spinner et bordures retirées), prompts rapides, composeur avec Entrée
+// pour envoyer. Le terminal brut reste accessible d'un clic (rattrapage visuel).
+// Fermer la vue n'arrête pas freebuff : à la réouverture, l'écran est reconstruit
+// depuis le scrollback (session persistante, comme avant).
 
-// Thème du terminal dérivé des tokens de l'app (RULES.md §3) : lisibilité dans les
-// thèmes clair ET sombre, sans nouvelle couleur en dur hors palette de l'émulateur.
+// Thème de l'émulateur caché (contraste pour le parsing, jamais montré par défaut).
 const XTERM_THEME = {
   background: "#12151d",
   foreground: "#f4f5f8",
@@ -25,18 +26,59 @@ type PtyEvent =
   | { type: "freebuff.pty.exit"; data: { code: number; signal?: number } }
   | { type: "freebuff.pty.error"; data: { message: string } }
 
-function statusText(ev: Extract<PtyEvent, { type: "freebuff.pty.status" }>["data"]): string {
-  if (ev.state === "starting") return "Démarrage de freebuff…"
-  if (ev.state === "restarting") return "Échec au démarrage, nouvelle tentative…"
-  return "Connecté au CLI Freebuff."
+function presenceOf(data: Extract<PtyEvent, { type: "freebuff.pty.status" }>["data"]): { label: string; online: boolean } {
+  if (data.state === "starting") return { label: "Freebuff démarre…", online: false }
+  if (data.state === "restarting") return { label: "Nouvelle tentative…", online: false }
+  return { label: "En ligne", online: true }
 }
+
+// Lignes qui ne sont pas du discours : spinners braille, bordures de boîtes,
+// barres de progression. Elles sont retirées du transcript « conversation ».
+const NON_SPEECH = /^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏✓✔✗·∙•←↑→↓—─━│┌┐└┘╭╮╰╯═║+-=|/\\^\s]*$/
 
 export default function FreebuffTerminalDialog(props: { onClose: () => void; onError: (e: unknown) => void }) {
   const termHostRef = useRef<HTMLDivElement>(null)
-  const termRef = useRef<{ write: (s: string) => void; focus: () => void; dispose: () => void } | null>(null)
+  const termRef = useRef<{ write: (s: string) => void; focus: () => void; dispose: () => void; buffer: { active: { length: number; getLine: (i: number) => { translateToString: (trim?: boolean) => string } | null } } } | null>(null)
   const fitRef = useRef<{ fit: () => void; dispose: () => void } | null>(null)
-  const [status, setStatus] = useState("Démarrage…")
+  const chatRef = useRef<HTMLDivElement>(null)
+  const [presence, setPresence] = useState<{ label: string; online: boolean }>({ label: "Freebuff démarre…", online: false })
   const [isError, setIsError] = useState(false)
+  const [errorMsg, setErrorMsg] = useState("")
+  const [chatLines, setChatLines] = useState<string[]>([])
+  const [showRaw, setShowRaw] = useState(false)
+  const [resume, setResume] = useState(false)
+  const [draft, setDraft] = useState("")
+  const renderTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Transcript « conversation » : dérivé du buffer xterm (source unique de vérité),
+  // coalescé pour ne pas rescanner à chaque octet.
+  const scheduleRender = () => {
+    if (renderTimer.current) return
+    renderTimer.current = setTimeout(() => {
+      renderTimer.current = null
+      const term = termRef.current
+      if (!term) return
+      const buf = term.buffer.active
+      const out: string[] = []
+      const max = 400
+      for (let i = Math.max(0, buf.length - max); i < buf.length; i++) {
+        const line = buf.getLine(i)
+        if (!line) continue
+        const t = line.translateToString(true)
+        if (!t.trim()) {
+          if (out.length && out[out.length - 1] !== "") out.push("")
+          continue
+        }
+        if (NON_SPEECH.test(t)) continue
+        out.push(t.replace(/\s+$/, ""))
+      }
+      setChatLines(out)
+      requestAnimationFrame(() => {
+        const el = chatRef.current
+        if (el) el.scrollTop = el.scrollHeight
+      })
+    }, 140)
+  }
 
   useEffect(() => {
     let disposed = false
@@ -44,7 +86,9 @@ export default function FreebuffTerminalDialog(props: { onClose: () => void; onE
 
     const boot = async () => {
       try {
-        // Imports dynamiques : xterm ne pèse dans le bundle qu'à l'ouverture du terminal.
+        // Préférence de reprise (v9.5.0) : « Reprendre la dernière conversation ».
+        api.prefs().then((p) => { if (!disposed) setResume(p.freebuffResume === true) }).catch(() => undefined)
+        // Imports dynamiques : xterm ne pèse dans le bundle qu'à l'ouverture de la vue.
         const [{ Terminal }, { FitAddon }] = await Promise.all([import("@xterm/xterm"), import("@xterm/addon-fit")])
         if (disposed || !termHostRef.current) return
         const term = new Terminal({
@@ -58,13 +102,8 @@ export default function FreebuffTerminalDialog(props: { onClose: () => void; onE
         term.loadAddon(fit)
         term.open(termHostRef.current)
         fit.fit()
-        termRef.current = term
+        termRef.current = term as unknown as typeof termRef.current
         fitRef.current = fit
-        term.focus()
-
-        // Saisie → PTY (freebuff:pty:input). Le resize reste protocolaire (ConPTY
-        // Windows ignore le resize distant ; le TUI recalcule à son rythme).
-        term.onData((data) => { void api.freebuffPtyInput(data) })
 
         const onResize = () => {
           fit.fit()
@@ -80,32 +119,36 @@ export default function FreebuffTerminalDialog(props: { onClose: () => void; onE
           switch (ev.type) {
             case "freebuff.pty.replay":
               term.write(String(ev.data.buffer ?? ""))
+              scheduleRender()
               break
             case "freebuff.pty.data":
               term.write(String(ev.data.chunk ?? ""))
+              scheduleRender()
               break
-            case "freebuff.pty.status":
-              setIsError(false)
-              setStatus(statusText(ev.data as never))
+            case "freebuff.pty.status": {
+              const p = presenceOf(ev.data as { state: "starting" | "running" | "restarting" })
+              setPresence(p)
+              if (ev.data.state === "running") setIsError(false)
               break
+            }
             case "freebuff.pty.error":
-              setStatus(String(ev.data.message ?? ""))
+              setErrorMsg(String(ev.data.message ?? ""))
               setIsError(true)
               break
             case "freebuff.pty.exit":
-              setStatus(`freebuff s'est terminé (code ${ev.data.code}). Utilise « Redémarrer la session ».`)
+              setErrorMsg(`Freebuff s'est terminé (code ${ev.data.code}). Utilise « Redémarrer la session ».`)
               setIsError(true)
               break
           }
         })
         if (disposed) { off(); return }
 
-        // Démarre (ou récupère) la session : freebuff:launch action "launch" appelle
-        // startFreebuffPty côté main ; le replay éventuel arrive via l'événement ci-dessus.
+        // Démarre (ou récupère) la session : le lancement transmet les dimensions
+        // réelles de l'émulateur (v9.4.0) et les options du pont agents (v9.5.0).
         await api.freebuffCliLaunch("launch", term.cols, term.rows)
       } catch (e) {
         if (!disposed) {
-          setStatus(e instanceof Error ? e.message : String(e))
+          setErrorMsg(e instanceof Error ? e.message : String(e))
           setIsError(true)
         }
       }
@@ -114,6 +157,7 @@ export default function FreebuffTerminalDialog(props: { onClose: () => void; onE
 
     return () => {
       disposed = true
+      if (renderTimer.current) { clearTimeout(renderTimer.current); renderTimer.current = null }
       cleanupResize?.()
       // Session persistante : on ferme la VUE, pas le process (contrat du protocole).
       fitRef.current?.dispose()
@@ -123,9 +167,18 @@ export default function FreebuffTerminalDialog(props: { onClose: () => void; onE
     }
   }, [])
 
+  const send = () => {
+    const text = draft.trim()
+    if (!text) return
+    // Le TUI consomme une ligne à la fois : Entrée = \r (le composeur local garde \n).
+    void api.freebuffPtyInput(text.replace(/\n/g, "\r") + "\r")
+    setDraft("")
+    if (showRaw) termRef.current?.focus()
+  }
+
   const restartSession = () => {
     setIsError(false)
-    setStatus("Redémarrage de la session…")
+    setErrorMsg("")
     termRef.current?.write("\x1b[2J\x1b[H") // efface l'écran local (le scrollback main repart)
     void api.freebuffPtyRestart().catch((e) => props.onError(e))
   }
@@ -134,34 +187,90 @@ export default function FreebuffTerminalDialog(props: { onClose: () => void; onE
     void api.freebuffPtySignal("SIGINT").catch((e) => props.onError(e))
   }
 
+  const toggleResume = (on: boolean) => {
+    setResume(on)
+    void api.setFreebuffResume(on).catch(() => setResume(!on))
+  }
+
   return (
-    <div className="overlay" role="dialog" aria-modal="true" aria-label="Terminal Freebuff" onClick={(e) => { if (e.target === e.currentTarget) props.onClose() }}>
+    <div className="overlay" role="dialog" aria-modal="true" aria-label="Agent Freebuff" onClick={(e) => { if (e.target === e.currentTarget) props.onClose() }}>
       <div className="dialog wide bridge-dialog">
         <header className="unified-settings-header">
           <div>
-            <span className="eyebrow">FREEBUFF</span>
-            <h3>Terminal Freebuff intégré</h3>
+            <span className="eyebrow">ASSISTANT EXTERNE GRATUIT</span>
+            <h3>Freebuff</h3>
             <p className="hint">
-              Session persistante : fermer cette fenêtre n'arrête pas freebuff, tu retrouves
-              l'écran exact à la réouverture. Le process tourne dans Aven (aucune console
-              externe, aucun port réseau).
+              Le même espace de travail que tes agents Aven, en sessions quotidiennes
+              gratuites. Fermer cette fenêtre n'arrête pas l'agent : tu retrouves la
+              conversation à la réouverture.
             </p>
           </div>
           <button className="button button-icon dialog-close" onClick={props.onClose} aria-label="Fermer" type="button"><Icon name="close" size={17} /></button>
         </header>
+
         <div className="row bridge-status-row">
-          <span className="hint" role="status">{status}</span>
+          <span className="agent-presence" role="status">
+            <span className={`agent-presence-dot ${presence.online ? "online" : ""}`} aria-hidden="true" />
+            {presence.label}
+          </span>
           <span className="row bridge-actions">
-            <button className="button secondary" type="button" onClick={sendInterrupt} title="Interrompt le tour en cours (Ctrl+C envoyé au terminal)">
+            <button className="button secondary" type="button" onClick={sendInterrupt} title="Interrompt le tour en cours (Ctrl+C envoyé à l'agent)">
               <Icon name="close" size={14} />Interrompre
             </button>
-            <button className="button secondary" type="button" onClick={restartSession} title="Tue la session et relance une neuve (utile si freebuff se bloque sans crasher)">
+            <button className="button secondary" type="button" onClick={restartSession} title="Redémarre l'agent (utile s'il se bloque sans crasher)">
               <Icon name="restore" size={14} />Redémarrer la session
+            </button>
+            <button className="button secondary" type="button" onClick={() => { setShowRaw(!showRaw); if (!showRaw) setTimeout(() => termRef.current?.focus(), 50) }} aria-pressed={showRaw} title="Affiche le terminal brut (pour suivre ce que l'agent voit exactement)">
+              <Icon name="terminal" size={14} />{showRaw ? "Vue conversation" : "Vue terminal"}
             </button>
           </span>
         </div>
-        {isError && <p className="err" role="alert">{status}</p>}
-        <div className="bridge-term-host" ref={termHostRef} />
+
+        {isError && <p className="err" role="alert">{errorMsg}</p>}
+
+        {/* Vue conversation : transcript dérivé du buffer, sans spinner ni bordures.
+            L'émulateur reste monté (métriques fiables) mais invisible par défaut. */}
+        {!showRaw && (
+          <div className="agent-chat" ref={chatRef} aria-live="polite" aria-label="Conversation avec l'agent Freebuff">
+            {chatLines.length === 0 && (
+              <p className="hint agent-chat-empty">
+                {presence.online ? "Dis bonjour à Freebuff, ou choisis un prompt rapide ci-dessous." : "L'agent démarre…"}
+              </p>
+            )}
+            {chatLines.map((line, i) => (
+              <p key={i} className={`agent-line${/^(vous|tu|moi)\s*[:>]/i.test(line) ? " agent-line-user" : ""}`}>{line}</p>
+            ))}
+          </div>
+        )}
+        <div className={`bridge-term-host${showRaw ? "" : " agent-term-hidden"}`} ref={termHostRef} />
+
+        {/* Prompts rapides : remplissent le composeur (l'utilisateur garde la main). */}
+        {!showRaw && (
+          <div className="agent-quick" role="group" aria-label="Prompts rapides">
+            {["Que peux-tu faire dans cet espace ?", "Résume l'état du projet", "Que vois-tu dans les fichiers ?"].map((q) => (
+              <button key={q} className="agent-quick-chip" type="button" onClick={() => setDraft(q)}>{q}</button>
+            ))}
+          </div>
+        )}
+
+        <div className="agent-composer">
+          <textarea
+            className="agent-composer-input"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send() } }}
+            placeholder={presence.online ? "Écris à Freebuff… (Entrée pour envoyer, Maj+Entrée pour un retour à la ligne)" : "Attends que l'agent soit en ligne…"}
+            aria-label="Message pour l'agent Freebuff"
+            rows={2}
+          />
+          <button className="button primary agent-composer-send" onClick={send} disabled={!draft.trim() || !presence.online} type="button" aria-label="Envoyer le message">
+            <Icon name="chevron-right" size={16} />Envoyer
+          </button>
+        </div>
+        <label className="agent-resume">
+          <input type="checkbox" checked={resume} onChange={(e) => toggleResume(e.target.checked)} />
+          Reprendre la dernière conversation à l'ouverture (sinon, nouvelle conversation)
+        </label>
       </div>
     </div>
   )

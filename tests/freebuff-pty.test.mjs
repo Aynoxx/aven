@@ -29,6 +29,14 @@ test("buildPtyCommand : refuse un espace vide (requireWorkspace en amont)", () =
   assert.throws(() => buildPtyCommand("   "), /Aucun espace/)
 })
 
+// v9.5.0 : pont agents — le CLI lit le .agents/ d'Aven (--trust-agents) et peut
+// reprendre la dernière conversation (--continue), selon les options de lancement.
+test("buildPtyCommand : --trust-agents et --continue ajoutés proprement", () => {
+  assert.deepEqual(buildPtyCommand("C:\\Espace", { trustAgents: true, resume: true }).args, ["/c", "freebuff", "--cwd", "C:\\Espace", "--trust-agents", "--continue"])
+  assert.deepEqual(buildPtyCommand("C:\\Espace", { trustAgents: true }).args, ["/c", "freebuff", "--cwd", "C:\\Espace", "--trust-agents"])
+  assert.deepEqual(buildPtyCommand("C:\\Espace", { resume: false }).args, ["/c", "freebuff", "--cwd", "C:\\Espace"])
+})
+
 test("ptyBackoffMs : backoff 1 s, 2 s, 4 s (tentatives 1, 2, 3)", () => {
   assert.equal(ptyBackoffMs(1), 1000)
   assert.equal(ptyBackoffMs(2), 2000)

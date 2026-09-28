@@ -80,11 +80,18 @@ export function ptyModulePath(__dirname: string, isPackaged: boolean): string {
 /**
  * Commande qui lance le CLI dans le PTY. (Le CLI est un shim .cmd npm : on passe par
  * `cmd /c` — ConPTY fournit la console, le shell n'est là que pour résoudre le shim.)
+ * (v9.5.0) Pont agents : `--trust-agents` charge le dossier .agents/ généré par Aven
+ * (mêmes agents que l'interface, sans demande de confirmation) et `resume` ajoute
+ * `--continue` (reprendre la dernière conversation du compte au lieu d'en ouvrir une
+ * neuve — le CLI gère lui-même l'identifiant, aucun mode headless requis).
  */
-export function buildPtyCommand(workspace: string): { file: string; args: string[] } {
+export function buildPtyCommand(workspace: string, opts: { trustAgents?: boolean; resume?: boolean } = {}): { file: string; args: string[] } {
   const clean = String(workspace || "").trim()
   if (!clean) throw new Error("Aucun espace de travail actif pour le terminal Freebuff.")
-  return { file: "cmd.exe", args: ["/c", "freebuff", "--cwd", clean] }
+  const args = ["/c", "freebuff", "--cwd", clean]
+  if (opts.trustAgents) args.push("--trust-agents")
+  if (opts.resume) args.push("--continue")
+  return { file: "cmd.exe", args }
 }
 
 type PtySession = {
@@ -103,6 +110,9 @@ let bootTimer: NodeJS.Timeout | null = null
 let backoffTimer: NodeJS.Timeout | null = null
 let restartTimer: NodeJS.Timeout | null = null
 let cwdPending = ""
+/** Options de lancement persistées entre les spawns/retries (v9.5.0) : le pont agents
+ * et la reprise de conversation s'appliquent aussi aux redémarrages automatiques. */
+let launchOptsPending: { trustAgents?: boolean; resume?: boolean } = {}
 let sizePending = { cols: DEFAULT_PTY_COLS, rows: DEFAULT_PTY_ROWS }
 
 /** PID du process CLI de NOTRE session PTY (exclu des gardes anti-takeover de main.ts :
@@ -175,7 +185,7 @@ const spawnSession = (cwd: string, cols: number, rows: number) => {
 
   let pty: PtyProcess
   try {
-    const cmd = buildPtyCommand(cwd)
+    const cmd = buildPtyCommand(cwd, launchOptsPending)
     if (!spawnImpl) throw new Error("Module PTY non chargé (loadPtyModule attendu au boot).")
     pty = spawnImpl(cmd.file, cmd.args, { cwd, cols, rows, env: process.env as Record<string, string> })
   } catch (err) {
@@ -221,8 +231,9 @@ const spawnSession = (cwd: string, cols: number, rows: number) => {
  * déjà active (reconnexion d'une fenêtre sans relancer le process — la session freebuff
  * survit à la fermeture de la vue tant qu'Aven tourne).
  */
-export function startFreebuffPty(opts: { cwd: string; cols?: number; rows?: number; handlers: FreebuffPtyEvents }): { replay: string } {
+export function startFreebuffPty(opts: { cwd: string; cols?: number; rows?: number; trustAgents?: boolean; resume?: boolean; handlers: FreebuffPtyEvents }): { replay: string } {
   cwdPending = opts.cwd
+  launchOptsPending = { trustAgents: opts.trustAgents === true, resume: opts.resume === true }
   sizePending = { cols: opts.cols ?? DEFAULT_PTY_COLS, rows: opts.rows ?? DEFAULT_PTY_ROWS }
   const firstAttach = !events
   events = opts.handlers

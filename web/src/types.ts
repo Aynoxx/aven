@@ -83,6 +83,8 @@ export type AppState = {
   sync?: FileSyncResult[]
   newModels?: string[]
   removedModels?: string[]
+  // v9.5.0 : fichiers du pont agents écrits/mis à jour à la dernière synchro (.agents/…).
+  agentsBridge?: string[]
   assignments?: Record<string, { ref: string; label: string }[]> // agent → modèles par ordre de priorité (lecture seule)
   warning?: string
   versionWarning?: string // version du serveur OpenCode ≠ version attendue par le client
@@ -146,8 +148,9 @@ export type OpenCodeApi = {
   announcerActivity: () => Promise<void>
   announcerSetEnabled: (on: boolean) => Promise<boolean>
   announcerTest: (text: string) => Promise<void>
-  prefs: () => Promise<{ notifications: boolean }>
+  prefs: () => Promise<{ notifications: boolean; freebuffResume?: boolean }>
   setNotifications: (on: boolean) => Promise<{ notifications: boolean }>
+  setFreebuffResume: (on: boolean) => Promise<{ notifications: boolean; freebuffResume?: boolean }>
   diagnostic: () => Promise<string>
   freebuffCliStatus: () => Promise<{ installed: boolean; version?: string }>
   freebuffCliLaunch: (action?: "launch" | "login" | "install", cols?: number, rows?: number) => Promise<boolean>

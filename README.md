@@ -1,4 +1,4 @@
-# Aven v9.4.0
+# Aven v9.5.0
 
 > ## Avant de modifier ce projet (IA ou humain)
 > Lis **`AGENTS.md`** puis **`RULES.md`** : ils fixent les règles universelles de
@@ -11,6 +11,19 @@
 Application de bureau (Electron) : une chatbox avec **3 agents commutables** (code, recherche, analyse) et un
 sous-agent (code-reviewer), branchée sur **OpenCode 2.0.10** et un catalogue d’agents strictement gratuit (OpenRouter Free / OpenCode Zen).
 
+> **v9.5.0 — Le pont agents : Aven, cerveau unique des deux moteurs** : ① **catalogue
+d'agents partagé** : les agents Aven (projet, code, recherche, analyse, code-reviewer)
+sont convertis en définitions TypeScript dans le dossier `.agents/` de l'espace — le CLI
+Freebuff est lancé avec `--trust-agents` et propose donc LES MÊMES agents que
+l'interface, sur des modèles gratuits (tes propres fichiers `.agents/` ne sont jamais
+touchés) ; ② **notes ouvertes à Freebuff** : un serveur MCP embarqué expose liste,
+lecture et recherche des notes de l'espace (`.agents/mcp.json` généré, lecture seule) ;
+③ **reprise de conversation** : une préférence fait rouvrir Freebuff sur sa dernière
+conversation (`--continue`) au lieu d'en créer une neuve ; ④ **la vue « terminal »
+devient une conversation d'agent** : présence « En ligne », transcript lisible (les
+spinners et bordures TUI sont filtrés), prompts rapides, composeur avec Entrée pour
+envoyer et option « Reprendre la dernière conversation » — le terminal brut reste
+accessible d'un clic pour ceux qui aiment voir la mécanique.
 > **v9.4.0 — Architecture complète : un cerveau, deux moteurs** : ① **page Assistants**
 unifiée (carte « Agents ») : chaque assistant — agents Aven et Freebuff — sur une seule
 page, avec un tableau « qui fait quoi » en ouverture et le panneau d'état/actions
@@ -142,7 +155,7 @@ npm run package:win    # produit release/dist : installeur NSIS + version portab
 
 - **Sans clé** : les modèles « Sans clé (OpenCode Zen) » (`opencode/…-free`) fonctionnent dès le premier lancement.
 - **Avec clé** : bouton **Paramètres** → une clé OpenRouter Free (agents) et une clé Groq (dictée vocale). Les clés sont chiffrées par Windows et ne sont jamais renvoyées à l'interface.
-- **Freebuff** (v9.4.0) : l'assistant externe gratuit vit sur la page **Assistants** (état, installer, terminal intégré persistant — la pastille du hub reste en raccourci). Une seule session par compte : ferme le terminal avant d'en rouvrir un ailleurs.
+- **Freebuff** (v9.5.0) : un **agent** intégré à l'espace, pas un terminal — mêmes agents que tes agents Aven (pont `.agents/`), mêmes notes (serveur MCP, lecture seule), transcript conversationnel avec composeur, reprise de conversation en option. Une seule session par compte.
 - **Routage des modèles par priorité** : chaque modèle a une **priorité par agent** dans `model-priorities.json` et Aven assigne explicitement le premier modèle disponible à chaque nouvelle session.
   (1 = le meilleur ; « code », « analyse », « recherche »). Chaque agent utilise le meilleur modèle **disponible** (clé saisie) et non saturé.
   Le classement se recalcule au démarrage et à chaque enregistrement de clé ; il s'affiche dans Réglages. Changer d'onglet change donc de modèle.
@@ -173,7 +186,7 @@ Trois étages, pour savoir « où cliquer » :
 | **Cadre** | **Espaces** (en-tête du hub, tout y vit), **Réglages** (Configuration, Apparence, **Usage**) | Le contenant et la configuration |
 
 Interactions entre features : un fichier → « Faire analyser par un agent » (composeur) ; une note → « Joindre à la conversation » ;
-une conversation → tags d'agent sur les notes ; la page **Assistants** → tableau « qui fait quoi », panneau et terminal Freebuff ; une sélection de code → « Faire relire » (code-reviewer).
+une conversation → tags d'agent sur les notes ; la page **Assistants** → tableau « qui fait quoi », panneau et agent Freebuff (mêmes agents via le pont `.agents/`, mêmes notes via MCP) ; une sélection de code → « Faire relire » (code-reviewer).
 
 ## Convention de versionnement
 - `vX` : grosse mise à jour / changement majeur.
@@ -193,7 +206,9 @@ une conversation → tags d'agent sur les notes ; la page **Assistants** → tab
 - `web/src/FormDialog.tsx` : boîte de dialogue des questions de l'agent (outil `question`).
 - `build/icon.png` : icône de l'app (remplace-la par la tienne, 512×512 minimum).
 - `.opencode/agents/*.md` + `opencode.jsonc` : agents (format V2 : `permissions:` = liste de règles, la dernière qui correspond gagne).
-- `electron/freebuff-pty.ts` : PTY embarqué du CLI Freebuff (terminal intégré, v9.2.0). Sans dépendance Electron, testé.
+- `electron/freebuff-pty.ts` : PTY embarqué du CLI Freebuff (agent intégré, v9.2.0 ; `--trust-agents`/`--continue` en v9.5.0). Sans dépendance Electron, testé.
+- `electron/agents-bridge.ts` : pont catalogue d'agents — convertit les agents OpenCode en définitions TypeScript du CLI Freebuff (`.agents/`), génère le `mcp.json` des notes (v9.5.0).
+- `aven-mcp-server.mjs` : serveur MCP embarqué (zéro dépendance) qui expose les notes de l'espace à Freebuff.
 - `electron/freebuff-cli.ts` : détection/lancement console externe du CLI (connexion, installation).
 - `NOTES-VERIFIEES.md` : faits vérifiés sur OpenCode 2.0.10 (à lire avant de toucher au pont).
 

@@ -49,7 +49,7 @@ const ASSISTANT_MAP = [
   { label: "Analyser des données, chiffrer", who: "agent analyse" },
   { label: "Piloter tout le projet", who: "agent projet (orchestrateur)" },
   { label: "Relire sans modifier", who: "agent code-reviewer (via « Faire relire »)" },
-  { label: "Grosse session quotidienne gratuite", who: "CLI Freebuff (terminal intégré)" },
+  { label: "Grosse session quotidienne gratuite", who: "agent Freebuff (intégré)" },
 ] as const
 
 export default function App() {
@@ -1564,7 +1564,7 @@ export default function App() {
               <div className="agent-card-body">
                 <span className="agent-card-id">freebuff <em className={"assistants-freebuff-state " + freebuffPillState}>{freebuffPillState === "active" ? "session active" : freebuffPillState === "ready" ? "CLI installé" : "CLI non installé"}</em></span>
                 <h2>CLI Freebuff</h2>
-                <p>Assistant gratuit (ad-financé) dans un terminal intégré à l'espace. Idéal pour les grosses sessions quotidiennes ; les agents Aven restent l'entrée principale, avec le routeur de modèles gratuits.</p>
+                <p>Agent gratuit (ad-financé) intégré à l'espace : mêmes agents et mêmes notes que tes agents Aven, en sessions quotidiennes gratuites. Les agents Aven restent l'entrée principale, avec le routeur de modèles gratuits.</p>
               </div>
               <div className="agent-card-actions">
                 {freebuffPillState === "missing" && (
@@ -1573,7 +1573,7 @@ export default function App() {
                   </button>
                 )}
                 <button className="button primary" onClick={() => setShowFreebuffBridge(true)} type="button">
-                  <Icon name="terminal" size={14} />Ouvrir le terminal
+                  <Icon name="terminal" size={14} />Ouvrir l'agent Freebuff
                 </button>
               </div>
             </article>
