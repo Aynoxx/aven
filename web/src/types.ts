@@ -114,6 +114,9 @@ export type OpenCodeApi = {
   renameChat: (id: string, title: string) => Promise<{ id: string; title: string }>
   renameAgent: (id: string, name: string) => Promise<Agent[]>
   archiveChat: (id: string, archived: boolean) => Promise<void>
+  // v9.4.0 : sélecteur de modèle interactif (ref absent = retour au « Auto » du routeur).
+  setChatModel: (id: string, ref?: string) => Promise<Chat>
+  modelChain: (agent: string) => Promise<{ ref: string; label: string }[]>
   exportChat: (id: string) => Promise<string | null>
   messages: (id: string) => Promise<Msg[]>
   // v9.1.6 : plus de paramètre backend — l'envoi passe uniquement par OpenCode.
@@ -147,7 +150,7 @@ export type OpenCodeApi = {
   setNotifications: (on: boolean) => Promise<{ notifications: boolean }>
   diagnostic: () => Promise<string>
   freebuffCliStatus: () => Promise<{ installed: boolean; version?: string }>
-  freebuffCliLaunch: (action?: "launch" | "login" | "install") => Promise<boolean>
+  freebuffCliLaunch: (action?: "launch" | "login" | "install", cols?: number, rows?: number) => Promise<boolean>
   // v9.2.0 : pont PTY freebuff — le port WS est local (127.0.0.1), reused = pont déjà actif.
   // v9.2.0 : PTY embarqué (protocole freebuff-pty) — pas de WebSocket, flux par IPC ;
   // les événements freebuff.pty.* transitent par onEvent.

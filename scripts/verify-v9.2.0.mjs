@@ -40,7 +40,7 @@ assert.match(pty, /buildPtyCommand/, "la commande PTY est factorisée (testable)
 
 // C. Session persistante côté renderer : fermer la vue n'arrête PAS le process.
 assert.match(dialog, /session persistante|persistante/i, "le dialogue documente la persistance")
-assert.match(dialog, /freebuffCliLaunch\("launch"\)/, "la vue démarre le PTY via freebuff:launch")
+assert.ok(dialog.includes("freebuffCliLaunch(\"launch\""), "la vue démarre le PTY via freebuff:launch (dimensions ajoutées en v9.4.0)")
 assert.match(dialog, /freebuff\.pty\.replay/, "le scrollback rejoué est attendu à la réouverture")
 assert.match(dialog, /role="dialog"/, "le dialogue terminal est un role=dialog accessible")
 

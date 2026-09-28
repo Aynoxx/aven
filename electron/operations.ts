@@ -161,6 +161,33 @@ export function makeOps(current: () => Bridge, router: () => Router | null = () 
       return { id: s.id, title: s.title, agent: fresh.agent ?? s.agent, model: resolved }
     },
 
+    /**
+     * (v9.4.0) Change le modèle d'une conversation existante via session.switchModel.
+     * C'est le versant « manuel » du routeur : « Auto » reste le défaut (le Router
+     * attribue et bascule tout seul), un choix explicite épingle le modèle jusqu'à
+     * ce que l'utilisateur revienne sur « Auto » (nouveau switchModel).
+     */
+    async setChatModel(id: string, ref?: string) {
+      const b = current()
+      if (ref) {
+        await b.client.session.switchModel({ sessionID: id, model: parseRef(ref) })
+      } else {
+        // « Auto » : on réaligne la session sur le meilleur modèle disponible selon
+        // le Router (sa logique : chaîne de priorité + cooldowns + quotas).
+        const auto = router()?.pick("projet")
+        if (!auto) throw new Error("Aucun modèle disponible : impossible de revenir en « Auto ».")
+        await b.client.session.switchModel({ sessionID: id, model: parseRef(auto) })
+      }
+      const fresh = await b.client.session.get({ sessionID: id })
+      return { id, agent: fresh.agent, model: refOf(fresh.model) }
+    },
+
+    /** (v9.4.0) Chaîne de priorité d'un agent, pour le sélecteur de modèles de l'interface. */
+    chainFor(agent: string): { ref: string; label: string }[] {
+      const chains = router()?.chains
+      return (chains?.[agent as Task] ?? []).map((c) => ({ ref: c.ref, label: c.label }))
+    },
+
     async deleteChat(id: string) {
       const b = current()
       router()?.forget(id)

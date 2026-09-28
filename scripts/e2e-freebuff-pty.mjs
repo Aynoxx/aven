@@ -1,8 +1,8 @@
 // Harnais E2E du terminal Freebuff intégré (v9.2.0) : pilote l'app Aven RÉELLE en dev
 // via Chrome DevTools Protocol (Runtime.evaluate), sans toucher au code de test.
-// Scénario : état de l'app → ouverture de la vue terminal (routeAppAction) → vivacité
-// du TUI (écran non vide) → saisie (Entrée sur le prompt) → fermeture de la vue
-// (process VIVANT = session persistante) → réouverture (replay du scrollback).
+// Scénario : état de l'app → ouverture de la vue terminal (page Assistants ou pastille
+// du hub, v9.4.0) → vivacité du TUI (écran non vide) → saisie (Entrée sur le prompt) →
+// fermeture de la vue (process VIVANT = session persistante) → réouverture (replay).
 // Aucune dépendance : WebSocket client RFC6455 écrit à la main (le projet n'a pas de
 // client ws côté Node et on n'ajoute pas une dep juste pour un harnais).
 //
@@ -54,6 +54,16 @@ class Cdp {
   close() { this.ws.close() }
 }
 
+// v9.4.0 : le terminal s'ouvre depuis la page Assistants (« Ouvrir le terminal »)
+// ou la pastille du hub — la carte dédiée a quitté le cercle du hub.
+const OPEN_TERMINAL_SNIPPET = `(() => {
+  const panelBtn = [...document.querySelectorAll(".assistants-freebuff button")].find(b => b.textContent.includes("Ouvrir le terminal"))
+  const btn = panelBtn ?? document.querySelector(".freebuff-pill")
+  if (!btn) throw new Error("bouton du terminal Freebuff introuvable (page Assistants ou pastille)")
+  btn.click()
+  return true
+})()`
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 const targets = await (await fetch(`http://127.0.0.1:${CDP_PORT}/json/list`)).json()
@@ -63,16 +73,21 @@ const cdp = await Cdp.attach(page.id)
 cdp.start()
 
 // ── 0. État de l'app ────────────────────────────────────────────────────────────
+// v9.4.0 : l'app peut être restée sur une conversation — on repart à l'accueil
+// (la pastille du hub n'existe que là).
+await cdp.eval(`(() => {
+  const back = document.querySelector('[aria-label^="Retour"]')
+  if (back) back.click()
+  return true
+})()`)
+await sleep(800)
 const state = await cdp.eval(`({ status: (window.__aven_state?.() ?? "n/a"), hasApi: !!window.opencode })`)
 log("app joignable", true, `api=${state.hasApi}`)
 
 // ── 1. Ouverture du terminal intégré (même chemin que la carte hub) ────────────
 await cdp.eval(`(async () => {
   document.querySelector('[aria-label="Ouvrir les paramètres"]') // noop de garde
-  const btn = [...document.querySelectorAll("button")].find(b => (b.getAttribute("aria-label") ?? "") === "Terminal Freebuff intégré" || b.textContent.includes("Freebuff"))
-  if (!btn) throw new Error("carte Freebuff introuvable dans le hub")
-  btn.click()
-  return true
+  return ${OPEN_TERMINAL_SNIPPET}
 })()`)
 await sleep(2500)
 
@@ -111,12 +126,7 @@ log("vue fermée", closed)
 const stillActive = true // prouvé à l'étape 5 : le refus « déjà ouvert » n'apparaît pas
 
 // ── 5. Réouverture : le replay doit restituer l'écran exact ────────────────────
-await cdp.eval(`(() => {
-  const btn = [...document.querySelectorAll("button")].find(b => (b.getAttribute("aria-label") ?? "") === "Terminal Freebuff intégré" || b.textContent.includes("Freebuff"))
-  if (!btn) throw new Error("carte Freebuff introuvable au retour hub")
-  btn.click()
-  return true
-})()`)
+await cdp.eval(OPEN_TERMINAL_SNIPPET)
 await sleep(3000)
 const reopened = await cdp.eval(`(() => ({
   open: !!document.querySelector('[aria-label="Terminal Freebuff"]'),

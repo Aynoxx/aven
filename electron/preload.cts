@@ -60,7 +60,11 @@ contextBridge.exposeInMainWorld("opencode", {
   setNotifications: (on: boolean) => call("prefs:setNotifications", on),
   diagnostic: () => call("app:diagnostic"),
   freebuffCliStatus: () => call("freebuff:status"),
-  freebuffCliLaunch: (action: "launch" | "login" | "install") => call("freebuff:launch", action),
+  // v9.4.0 : « launch » transmet les dimensions xterm réelles (TUI lisible dès l'ouverture).
+  freebuffCliLaunch: (action: "launch" | "login" | "install", cols?: number, rows?: number) => call("freebuff:launch", action, cols, rows),
+  // v9.4.0 : sélecteur de modèle — changer le modèle d'une conversation / lire la chaîne d'un agent.
+  setChatModel: (id: string, ref?: string) => call("chats:setModel", id, ref),
+  modelChain: (agent: string) => call("chats:chain", agent),
   // v9.2.0 : canaux du PTY embarqué (protocole freebuff-pty) — pas de WebSocket : le
   // flux passe par IPC, et les événements freebuff.pty.* arrivent via onEvent ci-dessous.
   freebuffPtyInput: (data: string) => call("freebuff:pty:input", data),

@@ -27,6 +27,9 @@ permissions:
   - action: subagent
     resource: analyse
     effect: allow
+  - action: subagent
+    resource: code-reviewer
+    effect: allow
   - action: question
     resource: "*"
     effect: allow
@@ -39,6 +42,7 @@ sous-tâche à l'agent spécialisé adapté via l'outil subagent :
 - « code » : écrire, corriger ou refactorer du code, exécuter des commandes ;
 - « recherche » : documentation, comparaisons, veille, explications ;
 - « analyse » : données, chiffres, statistiques, rapports.
+- « code-reviewer » : relecture SANS modification (détection de bugs, risques, améliorations) ;
 
 Ne fais pas toi-même ce qu'un agent spécialisé fait mieux : délègue, puis synthétise
 les résultats en une réponse claire et unique. Même pour une demande simple d'un seul
@@ -55,3 +59,6 @@ manquent pour bien découper la demande, pose ta question avant de déléguer.
 5. L'utilisateur peut aussi te demander de tirer parti du CLI Freebuff (l'assistant
    externe gratuit, dans son terminal intégré) : mentionne cette option quand une tâche
    lui convient (session quotidienne gratuite), sans jamais lancer quoi que ce soit toi-même.
+6. L'utilisateur peut aussi choisir le modèle d'une conversation depuis la barre « Modèle »
+   (« Auto » = tu continues de router tout seul) ; si une erreur de modèle survène,
+   rappelle simplement que le routeur bascule sur la chaîne gratuite suivante.

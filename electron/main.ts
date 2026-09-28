@@ -552,7 +552,9 @@ function registerIpc() {
       return false
     }
   }
-  ipcMain.handle("freebuff:launch", async (_e, action: "launch" | "login" | "install" = "launch") => {
+  // v9.4.0 : « launch » accepte les dimensions xterm de la vue terminal — le TUI naît
+  // à la bonne taille au lieu d'un 120×30 figé, source du chevauchement des boîtes.
+  ipcMain.handle("freebuff:launch", async (_e, action: "launch" | "login" | "install" = "launch", cols?: number, rows?: number) => {
     if (process.platform !== "win32") throw new Error(unsupportedPlatform(process.platform))
     // L'installation npm ne présuppose pas la présence du CLI : c'est justement son but.
     if (action !== "install") {
@@ -584,8 +586,8 @@ function registerIpc() {
       }
       const { replay } = startFreebuffPty({
         cwd: requireWorkspace(),
-        cols: DEFAULT_PTY_COLS,
-        rows: DEFAULT_PTY_ROWS,
+        cols: cols ?? DEFAULT_PTY_COLS,
+        rows: rows ?? DEFAULT_PTY_ROWS,
         handlers: {
           onData: (chunk) => win?.webContents.send("opencode:event", { type: "freebuff.pty.data", data: { chunk } }),
           onStatus: (state) => win?.webContents.send("opencode:event", { type: "freebuff.pty.status", data: { state } }),
@@ -657,6 +659,9 @@ function registerIpc() {
   ipcMain.handle("agents:rename", (_e, id: string, name: string) => ops.renameAgent(id, name))
   ipcMain.handle("chats:delete", (_e, id: string) => ops.deleteChat(id))
   ipcMain.handle("chats:archive", (_e, id: string, archived: boolean) => ops.archiveChat(id, archived))
+  // v9.4.0 : sélecteur de modèle interactif — la main de l'utilisateur sur le routeur.
+  ipcMain.handle("chats:setModel", (_e, id: string, ref?: string) => ops.setChatModel(id, ref))
+  ipcMain.handle("chats:chain", (_e, agent: string) => ops.chainFor(agent))
   ipcMain.handle("chats:messages", (_e, id: string) => ops.messages(id))
   // v9.1.6 : plus de paramètre backend — l'envoi passe uniquement par OpenCode.
   ipcMain.handle("chats:send", (_e, id: string, text: string) => ops.send(id, text))

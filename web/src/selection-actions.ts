@@ -5,7 +5,7 @@
 
 export const SELECTION_MAX = 4000 // garde-fou : une sélection démesurée ne doit pas noyer le composeur
 
-export type SelectionPromptAction = "fix" | "explain" | "send"
+export type SelectionPromptAction = "fix" | "explain" | "review" | "send"
 
 /** Texte sélectionné À L'INTÉRIEUR du conteneur donné ("" sinon ou sans DOM). */
 export function selectionWithin(root: Element | null): string {
@@ -26,6 +26,9 @@ export function buildPrompt(action: SelectionPromptAction, selection: string): s
   if (!text) return ""
   if (action === "fix") return `Corrige ce code :\n\n\`\`\`\n${text}\n\`\`\``
   if (action === "explain") return `Explique ce code :\n\n\`\`\`\n${text}\n\`\`\``
+  // v9.4.0 : « Faire relire » — la relecture est confiée à l'agent code-reviewer,
+  // qui détecte les problèmes SANS modifier le code (subagent en lecture seule).
+  if (action === "review") return `Fais relire ce code par l'agent code-reviewer et montre-moi son rapport :\n\n\`\`\`\n${text}\n\`\`\``
   // « Envoyer à l'agent » : citation en bloc, l'utilisateur écrit sa demande à la suite.
   return text.split("\n").map((line) => `> ${line}`).join("\n") + "\n\n"
 }

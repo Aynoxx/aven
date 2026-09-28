@@ -1,4 +1,4 @@
-# Aven v9.3.0
+# Aven v9.4.0
 
 > ## Avant de modifier ce projet (IA ou humain)
 > Lis **`AGENTS.md`** puis **`RULES.md`** : ils fixent les règles universelles de
@@ -11,6 +11,18 @@
 Application de bureau (Electron) : une chatbox avec **3 agents commutables** (code, recherche, analyse) et un
 sous-agent (code-reviewer), branchée sur **OpenCode 2.0.10** et un catalogue d’agents strictement gratuit (OpenRouter Free / OpenCode Zen).
 
+> **v9.4.0 — Architecture complète : un cerveau, deux moteurs** : ① **page Assistants**
+unifiée (carte « Agents ») : chaque assistant — agents Aven et Freebuff — sur une seule
+page, avec un tableau « qui fait quoi » en ouverture et le panneau d'état/actions
+Freebuff (Installer le CLI, Ouvrir le terminal) ; ② le **hub se concentre sur ton espace**
+(4 cartes : Projet, Agents, Fichiers, Notes) — Freebuff quitte le cercle, la pastille
+d'état reste en raccourci ; ③ le **sélecteur de modèle** (barre de l'agent) liste la
+chaîne de priorité du routeur : choisis un modèle précis ou « Auto » pour rendre la main
+au routeur (épinglage via session.switchModel, chaîne recalculée quand les clés
+changent) ; ④ **« Faire relire »** : sélectionne du code → le subagent code-reviewer
+analyse sans modifier, via l'agent code (bascule automatique) ; ⑤ **terminal Freebuff
+lisible** : l'émulateur envoie ses vraies dimensions (colonnes/lignes) au lancement et
+se redimensionne en direct — plus de TUI figée 120×30 ou déformée après un agrandissement.
 > **v9.3.0 — Restructuration : une carte claire des features** : ① le hub devient le
 > cockpit de l'espace — 5 cartes (Projet, Agents, Freebuff = FAIRE ; Fichiers, Notes =
 > CONTENU), le nom de l'espace actif dans l'en-tête, une pastille d'état Freebuff (CLI
@@ -130,7 +142,7 @@ npm run package:win    # produit release/dist : installeur NSIS + version portab
 
 - **Sans clé** : les modèles « Sans clé (OpenCode Zen) » (`opencode/…-free`) fonctionnent dès le premier lancement.
 - **Avec clé** : bouton **Paramètres** → une clé OpenRouter Free (agents) et une clé Groq (dictée vocale). Les clés sont chiffrées par Windows et ne sont jamais renvoyées à l'interface.
-- **Freebuff** (v9.2.0) : la carte « Freebuff » ouvre le CLI gratuit DANS Aven (terminal intégré, session persistante). Une seule session par compte : ferme le terminal avant d'en rouvrir un ailleurs.
+- **Freebuff** (v9.4.0) : l'assistant externe gratuit vit sur la page **Assistants** (état, installer, terminal intégré persistant — la pastille du hub reste en raccourci). Une seule session par compte : ferme le terminal avant d'en rouvrir un ailleurs.
 - **Routage des modèles par priorité** : chaque modèle a une **priorité par agent** dans `model-priorities.json` et Aven assigne explicitement le premier modèle disponible à chaque nouvelle session.
   (1 = le meilleur ; « code », « analyse », « recherche »). Chaque agent utilise le meilleur modèle **disponible** (clé saisie) et non saturé.
   Le classement se recalcule au démarrage et à chaque enregistrement de clé ; il s'affiche dans Réglages. Changer d'onglet change donc de modèle.
@@ -150,18 +162,18 @@ Tu choisis ton dossier de travail au premier lancement (écran dédié — plus 
 `.opencode\agents\*.md` y sont copiés (**jamais écrasés ensuite** : tes modifications restent). Bouton « Ouvrir le dossier » dans Réglages.
 Les agents ne touchent donc ni au code de l'app ni au dossier d'installation.
 
-## La carte des features (v9.3.0)
+## La carte des features (v9.4.0)
 
 Trois étages, pour savoir « où cliquer » :
 
 | Étage | Features | Rôle |
 |---|---|---|
-| **Faire** | **Projet** (orchestrateur), **Agents** (spécialistes), **Freebuff** (CLI externe gratuit) | Trois façons de travailler, rôles affichés |
+| **Faire** | **Projet** (orchestrateur), **Agents** (spécialistes + Freebuff sur la même page) | Deux portes, tous les assistants |
 | **Contenu** | **Fichiers** (explorateur intégré), **Notes** (base de connaissance) | Ce sur quoi les agents travaillent — et ils s'y connectent |
 | **Cadre** | **Espaces** (en-tête du hub, tout y vit), **Réglages** (Configuration, Apparence, **Usage**) | Le contenant et la configuration |
 
 Interactions entre features : un fichier → « Faire analyser par un agent » (composeur) ; une note → « Joindre à la conversation » ;
-une conversation → tags d'agent sur les notes ; la pastille Freebuff → terminal intégré en un clic.
+une conversation → tags d'agent sur les notes ; la page **Assistants** → tableau « qui fait quoi », panneau et terminal Freebuff ; une sélection de code → « Faire relire » (code-reviewer).
 
 ## Convention de versionnement
 - `vX` : grosse mise à jour / changement majeur.

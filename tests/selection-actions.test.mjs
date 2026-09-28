@@ -34,3 +34,10 @@ test("les sélections démesurées sont rognées avec marque d'ellipse", () => {
   assert.ok(SELECTION_MAX >= 1000 && SELECTION_MAX <= 10_000)
   assert.equal(buildPrompt("fix", huge).length > SELECTION_MAX, true) // le prompt reste exploitable
 })
+
+test("buildPrompt : faire relire délègue au subagent code-reviewer", () => {
+  const p = buildPrompt("review", "let a = 2")
+  assert.ok(p.includes("code-reviewer"))
+  assert.match(p, /relire/)
+  assert.ok(p.includes("let a = 2"))
+})

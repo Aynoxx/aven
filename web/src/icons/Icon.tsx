@@ -37,6 +37,7 @@ export type IconName =
   | "chart"
   | "terminal"
   | "slash"
+  | "eye" // v9.4.0 : « Faire relire » (délégation à l'agent code-reviewer)
 
 export interface IconProps {
   name: IconName
@@ -106,6 +107,8 @@ function paths(name: IconName): ReactNode {
       return <><path d="M5 5h14v14H5z" /><path d="M8 9h8M8 12h6M8 15h5" /></>
     case "check":
       return <path d="m5 12 4 4 10-10" />
+    case "eye":
+      return <><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" /><circle cx="12" cy="12" r="3.2" /></>
     case "copy":
       return <><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V6a2 2 0 0 1 2-2h9" /></>
     case "wrench":

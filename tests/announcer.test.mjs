@@ -75,11 +75,11 @@ test("mute : une frappe coupe la voix et vide la file", async () => {
   })
   slow.handle({ type: "session.execution.succeeded", data: { tools: [] } })
   muted = true // l'utilisateur tape pendant la fenêtre de stabilisation
-  await new Promise((r) => setTimeout(r, 60))
+  await new Promise((r) => setTimeout(r, 150))
   assert.equal(spoken.length, 0) // rien n'a été prononcé : coupé par le mute
   muted = false
   slow.handle({ type: "session.execution.started", data: {} }) // le mute levé, on reprend
-  await new Promise((r) => setTimeout(r, 60))
+  await new Promise((r) => setTimeout(r, 150))
   assert.deepEqual(spoken, ["C'est parti."])
 })
 

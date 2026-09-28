@@ -48,8 +48,8 @@ export default function FreebuffTerminalDialog(props: { onClose: () => void; onE
         const [{ Terminal }, { FitAddon }] = await Promise.all([import("@xterm/xterm"), import("@xterm/addon-fit")])
         if (disposed || !termHostRef.current) return
         const term = new Terminal({
-          fontFamily: "var(--font-ui), monospace",
-          fontSize: 12,
+          fontFamily: "Consolas, 'Cascadia Mono', 'Courier New', monospace",
+          fontSize: 13,
           theme: XTERM_THEME,
           cursorBlink: true,
           scrollback: 5000,
@@ -102,7 +102,7 @@ export default function FreebuffTerminalDialog(props: { onClose: () => void; onE
 
         // Démarre (ou récupère) la session : freebuff:launch action "launch" appelle
         // startFreebuffPty côté main ; le replay éventuel arrive via l'événement ci-dessus.
-        await api.freebuffCliLaunch("launch")
+        await api.freebuffCliLaunch("launch", term.cols, term.rows)
       } catch (e) {
         if (!disposed) {
           setStatus(e instanceof Error ? e.message : String(e))

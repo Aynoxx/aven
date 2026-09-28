@@ -28,7 +28,7 @@ assert.ok(vMaj * 10000 + vMin * 100 + vPatch >= 90103, `version trop ancienne : 
 assert.ok(!/key: "settings"/.test(app), "la carte « Paramètres » doit avoir disparu du hub")
 assert.ok(!/\.hub-card-settings/.test(css), "le CSS .hub-card-settings doit avoir disparu")
 // v9.3.0 : 5 cartes à 72° (Statistiques → Réglages/Usage) — la sonde suit le cercle.
-assert.match(css, /--hub-angle:288deg/) // 5ᵉ et dernière carte de l'orbite
+assert.match(css, /--hub-angle:270deg/) // v9.4.0 : la carte Notes ferme l'orbite (4 cartes à 90°)
 // L'accès aux réglages reste possible hors du hub (barre de fenêtre + barre d'accueil).
 assert.match(app, /Ouvrir les paramètres/)
 

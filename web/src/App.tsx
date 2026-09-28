@@ -42,6 +42,16 @@ function orderAgents(agents: Agent[], order: string[]) {
   return [...ordered, ...missing]
 }
 
+// v9.4.0 : orientation rapide — chaque besoin courant pointe vers le bon assistant.
+const ASSISTANT_MAP = [
+  { label: "Écrire, corriger, exécuter", who: "agent code" },
+  { label: "Comprendre, documenter, comparer", who: "agent recherche" },
+  { label: "Analyser des données, chiffrer", who: "agent analyse" },
+  { label: "Piloter tout le projet", who: "agent projet (orchestrateur)" },
+  { label: "Relire sans modifier", who: "agent code-reviewer (via « Faire relire »)" },
+  { label: "Grosse session quotidienne gratuite", who: "CLI Freebuff (terminal intégré)" },
+] as const
+
 export default function App() {
   const [agents, setAgents] = useState<Agent[]>([])
   const [tab, setTab] = useState("")
@@ -122,6 +132,10 @@ export default function App() {
   // "Projets", dans le hub d'accueil, ouvre les Réglages directement sur la liste des espaces
   // de travail plutôt que de rester sur le haut du panneau général.
   const [settingsFocus, setSettingsFocus] = useState<"workspaces" | undefined>(undefined)
+  // v9.4.0 : sélecteur de modèle interactif — la chaîne du routeur devient visible et
+  // pilotable par conversation (« Auto » = le routeur choisit ; un choix épingle le modèle).
+  const [modelChain, setModelChain] = useState<{ ref: string; label: string }[]>([])
+  const [modelMenuOpen, setModelMenuOpen] = useState(false)
   const liveRef = useRef<Live>(emptyLive)
   const rafScheduled = useRef(false)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -288,12 +302,14 @@ export default function App() {
 
   // Applique l'action choisie : routage one-click (Corriger → code, Expliquer → recherche,
   // réutilise la bascule v8.8.0) puis préremplissage du composeur.
-  const applySelection = (action: "fix" | "explain" | "send") => {
+  const applySelection = (action: "fix" | "explain" | "review" | "send") => {
     if (!selBar) return
     setDictationMeta({ cleaned: false, showRaw: false, rawText: "", cleanedText: "" })
     setInput(buildPrompt(action, selBar.text))
     if (action === "fix" && tab !== "code" && agents.some((a) => a.id === "code")) selectAgent("code")
     if (action === "explain" && tab !== "recherche" && agents.some((a) => a.id === "recherche")) selectAgent("recherche")
+    // v9.4.0 : « Faire relire » passe par l'agent code, seul (avec projet) autorisé à déléguer au subagent code-reviewer.
+    if (action === "review" && tab !== "code" && agents.some((a) => a.id === "code")) selectAgent("code")
     setSelBar(null)
     requestAnimationFrame(() => {
       const ta = textareaRef.current
@@ -684,6 +700,28 @@ export default function App() {
     [appState.assignments],
   )
   const currentModel = chats.find((c) => c.id === chatId)?.model
+  // v9.4.0 : la chaîne du routeur pour l'agent actif alimente le sélecteur de la modelbar.
+  useEffect(() => {
+    let stop = false
+    if (!tab) { setModelChain([]); return }
+    api.modelChain(tab).then((chain) => { if (!stop) setModelChain(chain) }).catch(() => { if (!stop) setModelChain([]) })
+    return () => { stop = true }
+  }, [tab, appState.status])
+  // Applique « Auto » (ref absent) ou épingle un modèle ; la session renvoie son modèle effectif.
+  const applyModelChoice = (ref?: string) => {
+    if (!chatId) return
+    setModelMenuOpen(false)
+    api.setChatModel(chatId, ref).then((updated) => {
+      setChats((cs) => cs.map((c) => (c.id === updated.id ? { ...c, model: updated.model ?? c.model } : c)))
+    }).catch(fail)
+  }
+  // Ferme le menu du sélecteur au clic ailleurs.
+  useEffect(() => {
+    if (!modelMenuOpen) return
+    const close = () => setModelMenuOpen(false)
+    window.addEventListener("click", close)
+    return () => window.removeEventListener("click", close)
+  }, [modelMenuOpen])
 
   const form = live.forms[0]
   const answerForm = async (a: FormAnswer) => {
@@ -896,16 +934,13 @@ export default function App() {
 
 
   const renderHome = () => {
-    // v9.3.0 : hub reformé — 5 cartes à 72°. Trois étages lisibles : FAIRE (Projet,
-    // Agents, Freebuff), CONTENU (Fichiers, Notes). Statistiques → Réglages/Usage.
+    // v9.4.0 : hub reformé — 4 cartes à 90° (FAIRE : Projet, Agents · CONTENU : Fichiers,
+    // Notes). Freebuff vit dans Assistants, Statistiques dans Réglages/Usage.
     const nav = [
       // v9.1.0 : « projet » est à part — carte dédiée d'orchestrateur, hors sélecteur d'agents.
       { key: "project", label: "Projet", kind: "project", hint: "Orchestrateur des agents", action: () => selectAgent("projet") },
       { key: "agents", label: "Agents", kind: "agent", hint: orderedAgents.length === 1 ? "Agent actif" : `${orderedAgents.length} agents`, action: openAgentsPage },
-      // v9.1.2 : le CLI Freebuff gratuit (ad-financé) s'ouvre dans un terminal sur l'espace.
-      // v9.1.3 : passe par routeAppAction ("open-freebuff") : si le CLI est absent, un avis
-      // clair remplace le terminal « 'freebuff' n'est pas reconnu » de la v9.1.2.
-      { key: "freebuff", label: "Freebuff", kind: "freebuff", hint: "CLI gratuit (terminal)", action: () => setHomeNotice(routeAppAction("open-freebuff")) },
+      // v9.4.0 : Freebuff quitte le cercle — il vit dans la page Assistants (avec les agents), la pastille reste un raccourci.
       // v9.3.0 : Fichiers et Notes = le CONTENU de l'espace — vues intégrées (l'Explorateur
       // Windows reste disponible d'un clic dans la vue Fichiers).
       { key: "files", label: "Fichiers", kind: "files", hint: "Explorer l'espace", action: openFilesView },
@@ -1227,8 +1262,27 @@ export default function App() {
       <div>
         <span className="eyebrow">MODÈLE ACTIF</span>
         <strong>{labelOf(currentModel)}</strong>
+        {/* v9.4.0 : le modèle devient un choix, pas une affiche — « Auto » rend la main au routeur. */}
+        <div className="model-select" onClick={(e) => e.stopPropagation()}>
+          <button className="button secondary model-select-button" type="button" onClick={() => setModelMenuOpen(!modelMenuOpen)} aria-expanded={modelMenuOpen} aria-haspopup="listbox">
+            <Icon name="chevron-down" size={14} />Choisir le modèle
+          </button>
+          {modelMenuOpen && (
+            <div className="model-select-menu" role="listbox" aria-label="Modèles gratuits disponibles">
+              <button className="model-select-item" type="button" role="option" onClick={() => applyModelChoice(undefined)}>
+                Auto — le routeur choisit
+              </button>
+              {modelChain.map((m) => (
+                <button key={m.ref} className="model-select-item" type="button" role="option" aria-selected={currentModel === m.ref} onClick={() => applyModelChoice(m.ref)} title={m.ref}>
+                  {m.label}
+                </button>
+              ))}
+              {!modelChain.length && <span className="hint model-select-empty">Chaîne indisponible (moteur arrêté ?)</span>}
+            </div>
+          )}
+        </div>
       </div>
-      <span className="model-assignment">{currentModel ? `Priorité agent · ${agentName(tab)}` : "Résolution du modèle…"}</span>
+      <span className="model-assignment">{currentModel ? "Chaîne de l’agent · " + agentName(tab) : "Résolution du modèle…"}</span>
     </div>
   )
 
@@ -1395,17 +1449,26 @@ export default function App() {
         <main className="home-main">{renderHome()}</main>
       ) : showAgentsPage ? (
         <main className="agents-main">
-          <section className="agents-page" aria-label="Gestion des agents">
+          <section className="agents-page" aria-label="Gestion des assistants">
             <header className="agents-page-header">
               <div>
-                <span className="eyebrow">AGENTS</span>
-                <h1>Vos agents</h1>
-                <p>Choisissez un agent, consultez son rôle ou ouvrez directement une conversation.</p>
+                <span className="eyebrow">ASSISTANTS</span>
+                <h1>Vos assistants</h1>
+                <p>Agents Aven et CLI Freebuff : un seul endroit pour choisir qui répond.</p>
               </div>
               <button className="button ghost" onClick={() => { setShowAgentsPage(false); setShowHome(true) }} type="button">
                 <Icon name="arrow-left" size={15} />Accueil
               </button>
             </header>
+            {/* v9.4.0 : tableau « qui fait quoi » — la réponse à « quel assistant pour quel besoin ? ». */}
+            <div className="assistants-map" role="table" aria-label="Quel assistant pour quel besoin">
+              {ASSISTANT_MAP.map((row) => (
+                <div key={row.label} className="assistants-map-row" role="row">
+                  <strong>{row.label}</strong>
+                  <span>{row.who}</span>
+                </div>
+              ))}
+            </div>
             <div className="agents-grid">
               {agentsLoading ? (
                 <div className="agents-empty">
@@ -1494,6 +1557,26 @@ export default function App() {
                 </div>
               )}
             </div>
+            {/* v9.4.0 : Freebuff vit ICI — même page que les agents, un seul « qui répond ».
+                Le hub ne garde plus de carte dédiée : la pastille de l'accueil reste un raccourci. */}
+            <article className="assistants-freebuff">
+              <div className="agent-card-icon"><Icon name="terminal" size={24} /></div>
+              <div className="agent-card-body">
+                <span className="agent-card-id">freebuff <em className={"assistants-freebuff-state " + freebuffPillState}>{freebuffPillState === "active" ? "session active" : freebuffPillState === "ready" ? "CLI installé" : "CLI non installé"}</em></span>
+                <h2>CLI Freebuff</h2>
+                <p>Assistant gratuit (ad-financé) dans un terminal intégré à l'espace. Idéal pour les grosses sessions quotidiennes ; les agents Aven restent l'entrée principale, avec le routeur de modèles gratuits.</p>
+              </div>
+              <div className="agent-card-actions">
+                {freebuffPillState === "missing" && (
+                  <button className="button secondary" onClick={() => api.freebuffCliLaunch("install").catch(fail)} type="button">
+                    <Icon name="plus" size={14} />Installer le CLI
+                  </button>
+                )}
+                <button className="button primary" onClick={() => setShowFreebuffBridge(true)} type="button">
+                  <Icon name="terminal" size={14} />Ouvrir le terminal
+                </button>
+              </div>
+            </article>
           </section>
         </main>
       ) : (
@@ -1594,6 +1677,7 @@ export default function App() {
           <button type="button" title="Copier la sélection" onClick={() => { void navigator.clipboard.writeText(selBar.text); setSelBar(null) }}><Icon name="copy" size={15} /></button>
           <button type="button" title="Corriger ce code (agent code)" onClick={() => applySelection("fix")}><Icon name="wrench" size={15} /></button>
           <button type="button" title="Expliquer ce code (agent recherche)" onClick={() => applySelection("explain")}><Icon name="sparkle" size={15} /></button>
+          <button type="button" title="Faire relire ce code (agent code-reviewer)" onClick={() => applySelection("review")}><Icon name="eye" size={15} /></button>
           <button type="button" title="Citer dans le composeur" onClick={() => applySelection("send")}><Icon name="chevron-right" size={15} /></button>
           <button type="button" className="selbar-close" title="Fermer" onClick={() => setSelBar(null)}><Icon name="close" size={15} /></button>
         </div>

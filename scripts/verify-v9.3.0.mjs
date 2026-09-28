@@ -28,14 +28,14 @@ const filesView = read("web/src/FilesView.tsx")
 const agentProjet = read(".opencode/agents/projet.md")
 const readme = read("README.md")
 
-// A. Hub reformé : 5 cartes (Faire ×3 + Contenu ×2), Statistiques sortie du cercle.
+// A. Hub reformé : Faire ×2 + Contenu ×2 (v9.4.0 : Freebuff a rejoint la page
+// Assistants, Statistiques vit dans Réglages/Usage depuis v9.3.0).
 assert.match(app, /key: "project", label: "Projet"/)
 assert.match(app, /key: "agents", label: "Agents"/)
-assert.match(app, /key: "freebuff", label: "Freebuff"/)
 assert.match(app, /key: "files", label: "Fichiers"/)
 assert.match(app, /key: "notes", label: "Notes"/)
 assert.ok(!/key: "stats"/.test(app), "la carte Statistiques a quitté le cercle du hub (→ Réglages/Usage)")
-assert.match(css, /--hub-angle:72deg/, "5 cartes à 72° attendues")
+assert.match(css, /--hub-angle:90deg/, "4 cartes à 90° attendues (hub v9.4.0)")
 assert.ok(!/\.hub-card-stats \{ --hub-angle/.test(css), "plus d'angle pour la carte stats supprimée")
 
 // B. Pastille d'état Freebuff dans le hub (le second assistant devient visible).
