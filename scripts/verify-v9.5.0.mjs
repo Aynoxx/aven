@@ -23,7 +23,7 @@ const main = read("electron/main.ts")
 const preload = read("electron/preload.cts")
 const types = read("web/src/types.ts")
 const prefs = read("electron/prefs.ts")
-const dialog = read("web/src/FreebuffTerminalDialog.tsx")
+const dialog = read("web/src/FreebuffAgentPage.tsx")
 const css = read("web/src/App.css")
 const readme = read("README.md")
 
@@ -67,6 +67,9 @@ assert.match(dialog, /presenceOf/, "présence (En ligne / démarre…) attendue"
 assert.match(dialog, /NON_SPEECH/, "les spinners et bordures sont filtrés du transcript")
 assert.match(css, /\.agent-composer/, "CSS du composeur attendue")
 assert.match(css, /\.agent-term-hidden/, "CSS de l'émulateur caché attendue")
+// v9.5.1 : la vue est une PAGE pleine (agents-main), pas un dialogue recouvrant.
+assert.match(dialog, /agents-main/, "la vue agent est routée comme la page Agents")
+assert.ok(!dialog.includes("\"overlay\""), "plus aucun overlay : la page se navigue, elle ne recouvre pas")
 
 // F. README : le pont est documenté.
 assert.match(readme, /agents-bridge|\.agents/, "README : pont agents mentionné")

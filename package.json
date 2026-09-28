@@ -1,6 +1,6 @@
 {
   "name": "aven",
-  "version": "9.5.0",
+  "version": "9.5.1",
   "private": true,
   "type": "module",
   "main": "dist-electron/main.js",
@@ -23,7 +23,8 @@
     "typecheck:electron": "tsc --noEmit -p tsconfig.electron.json",
     "typecheck:tests": "tsc --noEmit -p tsconfig.test.json",
     "verify:v9.4.0": "node scripts/verify-v9.4.0.mjs",
-    "verify:v9.5.0": "node scripts/verify-v9.5.0.mjs"
+    "verify:v9.5.0": "node scripts/verify-v9.5.0.mjs",
+    "verify:v9.5.1": "node scripts/verify-v9.5.0.mjs"
   },
   "dependencies": {
     "@lydell/node-pty": "^1.1.0",

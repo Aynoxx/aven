@@ -91,7 +91,7 @@ await cdp.eval(`(async () => {
 })()`)
 await sleep(2500)
 
-const opened = await cdp.eval(`!!document.querySelector('[aria-label="Terminal Freebuff"]')`)
+const opened = await cdp.eval(`!!document.querySelector('[aria-label="Agent Freebuff"] .freebuff-agent-page, [aria-label="Agent Freebuff"]')`)
 log("vue terminal ouverte", opened)
 if (!opened) process.exit(1)
 
@@ -119,9 +119,9 @@ log("saisie acceptée (pas d'erreur IPC)", true, `statut="${afterInput.status}"`
 // ── 4. Fermeture de la vue : le process doit rester VIVANT ─────────────────────
 // (le PID reste la vérité côté main : `freebuffPtyActive` n'est pas exposé au renderer
 // dans cette version — on vérifie via le process réel après coup, et le replay en S5.)
-await cdp.eval(`document.querySelector('[aria-label="Terminal Freebuff"] .dialog-close')?.click()`)
+await cdp.eval(`document.querySelector('[aria-label="Agent Freebuff"] .freebuff-agent-page, [aria-label="Agent Freebuff"] .dialog-close')?.click()`)
 await sleep(800)
-const closed = await cdp.eval(`!document.querySelector('[aria-label="Terminal Freebuff"]')`)
+const closed = await cdp.eval(`!document.querySelector('[aria-label="Agent Freebuff"] .freebuff-agent-page, [aria-label="Agent Freebuff"]')`)
 log("vue fermée", closed)
 const stillActive = true // prouvé à l'étape 5 : le refus « déjà ouvert » n'apparaît pas
 
@@ -129,7 +129,7 @@ const stillActive = true // prouvé à l'étape 5 : le refus « déjà ouvert »
 await cdp.eval(OPEN_TERMINAL_SNIPPET)
 await sleep(3000)
 const reopened = await cdp.eval(`(() => ({
-  open: !!document.querySelector('[aria-label="Terminal Freebuff"]'),
+  open: !!document.querySelector('[aria-label="Agent Freebuff"] .freebuff-agent-page, [aria-label="Agent Freebuff"]'),
   status: document.querySelector(".bridge-status-row [role=status]")?.textContent ?? "",
   hubBelow: !!document.querySelector(".home-hub"),
 }))()`)

@@ -15,7 +15,7 @@ const [vMaj, vMin, vPatch] = pkg.version.split(".").map(Number)
 assert.ok(vMaj * 10000 + vMin * 100 + vPatch >= 90200, `version trop ancienne : ${pkg.version}`)
 
 const pty = read("electron/freebuff-pty.ts")
-const dialog = read("web/src/FreebuffTerminalDialog.tsx")
+const dialog = read("web/src/FreebuffAgentPage.tsx")
 const main = read("electron/main.ts")
 const preload = read("electron/preload.cts")
 const types = read("web/src/types.ts")
@@ -42,7 +42,7 @@ assert.match(pty, /buildPtyCommand/, "la commande PTY est factorisée (testable)
 assert.match(dialog, /session persistante|persistante/i, "le dialogue documente la persistance")
 assert.ok(dialog.includes("freebuffCliLaunch(\"launch\""), "la vue démarre le PTY via freebuff:launch (dimensions ajoutées en v9.4.0)")
 assert.match(dialog, /freebuff\.pty\.replay/, "le scrollback rejoué est attendu à la réouverture")
-assert.match(dialog, /role="dialog"/, "le dialogue terminal est un role=dialog accessible")
+assert.match(dialog, /agents-page/, "v9.5.0 : la vue est une PAGE pleine (plus de dialogue recouvrant)")
 
 // D. IPC complet des deux côtés (main + preload + types), convention domaine:action.
 assert.match(main, /freebuff:pty:input/)

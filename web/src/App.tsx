@@ -12,7 +12,7 @@ import NotesView from "./NotesView"
 // v9.3.0 : explorateur de fichiers intégré (lecture seule, cloisonné à l'espace).
 import FilesView from "./FilesView"
 // v9.2.0 : terminal Freebuff intégré (pont PTY, protocole freebuff-bridge).
-import FreebuffTerminalDialog from "./FreebuffTerminalDialog"
+import FreebuffAgentPage from "./FreebuffAgentPage"
 import { useAppearance } from "./appearance"
 import { useDictation } from "./voice-dictation"
 import { buildPrompt, selectionWithin } from "./selection-actions"
@@ -94,7 +94,7 @@ export default function App() {
       setShowFiles(false)
       setShowAgentsPage(false)
       setShowProjectPicker(false)
-      setShowFreebuffBridge(false)
+      setShowFreebuffAgent(false)
       setShowHome(true)
     }
   }, [appState.needsWorkspace])
@@ -112,8 +112,9 @@ export default function App() {
   // v9.3.0 : explorateur de fichiers intégré (lecture seule) — remplace l'ouverture
   // externe de l'Explorateur Windows, qui reste disponible depuis la vue elle-même.
   const [showFiles, setShowFiles] = useState(false)
-  // v9.2.0 : vue du TUI freebuff dans l'app (pont PTY local, session persistante).
-  const [showFreebuffBridge, setShowFreebuffBridge] = useState(false)
+  // v9.5.0 : page pleine de l'agent Freebuff (comme la page Agents) — remplace le
+  // dialogue v9.2.0 qui recouvrait l'écran courant.
+  const [showFreebuffAgent, setShowFreebuffAgent] = useState(false)
   // v9.3.0 : pastille d'état Freebuff du hub — "active" (session PTY vivante), "ready"
   // (CLI installé) ou "missing". Rechargée au montage et à chaque fermeture du terminal.
   const [freebuffPillState, setFreebuffPillState] = useState<"active" | "ready" | "missing">("missing")
@@ -124,7 +125,7 @@ export default function App() {
         setFreebuffPillState(active ? "active" : status.installed ? "ready" : "missing")
       } catch { setFreebuffPillState("missing") }
     })()
-  }, [showFreebuffBridge])
+  }, [showFreebuffAgent])
   // Barre d'actions sur sélection (v8.9.0) : position viewport de la mini-barre flottante.
   const [selBar, setSelBar] = useState<{ text: string; top: number; left: number } | null>(null)
   const selBarRef = useRef(selBar)
@@ -194,12 +195,9 @@ export default function App() {
               setHomeNotice(FREEBUFF_MISSING_NOTICE)
               return
             }
-            // (revue E2E v9.2.1) On ne masque PLUS l'écran courant : le terminal est un
-            // dialogue qui recouvre le hub (ou la conversation) — à la fermeture,
-            // l'utilisateur retrouve son écran d'origine au lieu d'une vue vide.
-            setShowAgentsPage(false); setShowSettings(false)
-            setShowConversationPicker(false); setShowProjectPicker(false)
-            setShowFreebuffBridge(true)
+            // v9.5.0 : l'agent Freebuff est une PAGE pleine (comme la page Agents) —
+            // navigation exclusive, plus de dialogue recouvrant l'écran courant.
+            openFreebuffAgent()
           } catch (e) {
             setHomeNotice(e instanceof Error ? e.message : String(e))
           }
@@ -564,7 +562,7 @@ export default function App() {
         }
         if (showConversationPicker) setShowConversationPicker(false)
         else if (showProjectPicker) setShowProjectPicker(false) // v9.1.6 : le modal projet suit Échap
-        else if (showFreebuffBridge) setShowFreebuffBridge(false) // v9.2.0 : la session continue en tâche de fond
+        else if (showFreebuffAgent) { setShowAgentsPage(false); setShowSettings(false); setShowNotes(false); setShowConversationPicker(false); setShowProjectPicker(false); setShowFreebuffAgent(false); setShowHome(true) } // v9.5.0 : page agent — Échap revient à l'accueil (session maintenue)
         else if (showFiles) closeNotesToHome() // v9.3.0 : Échap ferme l'explorateur intégré
         else if (showAgentsPage) { setShowAgentsPage(false); setShowHome(true) }
         else if (showNotes) closeNotesToHome()
@@ -587,7 +585,7 @@ export default function App() {
       window.removeEventListener("keydown", onKey)
       window.removeEventListener("keyup", onKeyUp)
     }
-  }, [live.busy, live.forms, chatId, showSettings, showAgentsPage, showConversationPicker, showProjectPicker, showFreebuffBridge, showHome, showNotes, showFiles, tab, closeNotesToHome])
+  }, [live.busy, live.forms, chatId, showSettings, showAgentsPage, showConversationPicker, showProjectPicker, showFreebuffAgent, showHome, showNotes, showFiles, tab, closeNotesToHome])
 
   const newChat = async () => {
     if (!tab) return
@@ -911,7 +909,20 @@ export default function App() {
     setShowNotes(false)
     setShowConversationPicker(false)
     setShowProjectPicker(false)
+    setShowFreebuffAgent(false)
     setShowAgentsPage(true)
+  }
+
+  // v9.5.0 : la page agent Freebuff se navigue comme la page Agents — une seule vue
+  // à la fois, « Accueil » dans la barre de fenêtre pour en sortir.
+  const openFreebuffAgent = () => {
+    setShowHome(false)
+    setShowSettings(false)
+    setShowNotes(false)
+    setShowConversationPicker(false)
+    setShowProjectPicker(false)
+    setShowAgentsPage(false)
+    setShowFreebuffAgent(true)
   }
 
   // v9.1.0 : retour accueil depuis la barre de fenêtre — ferme les panneaux ouverts.
@@ -921,6 +932,7 @@ export default function App() {
     setShowNotes(false)
     setShowConversationPicker(false)
     setShowProjectPicker(false)
+    setShowFreebuffAgent(false)
     setShowHome(true)
   }
 
@@ -1447,6 +1459,10 @@ export default function App() {
 
       {showHome ? (
         <main className="home-main">{renderHome()}</main>
+      ) : showFreebuffAgent ? (
+        /* v9.5.0 : page pleine de l'agent Freebuff — même gabarit que la page Agents,
+           PTY persistant (le boot de la session vit dans le composant). */
+        <FreebuffAgentPage onHome={goHome} onError={fail} />
       ) : showAgentsPage ? (
         <main className="agents-main">
           <section className="agents-page" aria-label="Gestion des assistants">
@@ -1572,7 +1588,7 @@ export default function App() {
                     <Icon name="plus" size={14} />Installer le CLI
                   </button>
                 )}
-                <button className="button primary" onClick={() => setShowFreebuffBridge(true)} type="button">
+                <button className="button primary" onClick={openFreebuffAgent} type="button">
                   <Icon name="terminal" size={14} />Ouvrir l'agent Freebuff
                 </button>
               </div>
@@ -1668,9 +1684,7 @@ export default function App() {
           onError={fail}
         />
       )}
-      {/* v9.2.0 : terminal Freebuff intégré — session persistante côté main, la fermeture
-          de la vue n'arrête pas le process (contrat du protocole freebuff-bridge). */}
-      {showFreebuffBridge && <FreebuffTerminalDialog onClose={() => setShowFreebuffBridge(false)} onError={fail} />}
+
 
       {selBar && (
         <div className="selbar" role="toolbar" aria-label="Actions sur la sélection" style={{ top: selBar.top, left: selBar.left }}>

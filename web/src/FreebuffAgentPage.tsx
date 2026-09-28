@@ -2,14 +2,14 @@ import { useEffect, useRef, useState } from "react"
 import { api } from "./api"
 import { Icon } from "./icons"
 
-// Agent Freebuff intégré (v9.5.0, refonte de la vue « terminal » v9.2.0) : le TUI
-// freebuff reste le TRANSPORT (process PTY côté main, émulateur xterm.js hors écran
-// pour parser l'ANSI), mais la vue n'est plus un terminal : l'écran montre une
-// CONVERSATION D'AGENT — présence (« En ligne »), transcript dérivé du buffer
-// (lignes de spinner et bordures retirées), prompts rapides, composeur avec Entrée
-// pour envoyer. Le terminal brut reste accessible d'un clic (rattrapage visuel).
-// Fermer la vue n'arrête pas freebuff : à la réouverture, l'écran est reconstruit
-// depuis le scrollback (session persistante, comme avant).
+// Page pleine de l'agent Freebuff (v9.5.0) : naviguée comme la page Agents (une seule
+// vue à la fois, bouton « Accueil »), elle REMPLACE le dialogue v9.2.0 qui recouvrait
+// l'écran courant. Le TUI freebuff reste le TRANSPORT (process PTY côté main, émulateur
+// xterm.js hors écran pour parser l'ANSI) : l'écran montre une CONVERSATION D'AGENT —
+// présence (« En ligne »), transcript dérivé du buffer (spinners et bordures filtrés),
+// prompts rapides, composeur avec Entrée pour envoyer. Le terminal brut reste accessible
+// d'un clic (« Vue terminal »). Fermer/quitter la page n'arrête pas freebuff : à la
+// réouverture, l'écran est reconstruit depuis le scrollback (session persistante).
 
 // Thème de l'émulateur caché (contraste pour le parsing, jamais montré par défaut).
 const XTERM_THEME = {
@@ -26,7 +26,7 @@ type PtyEvent =
   | { type: "freebuff.pty.exit"; data: { code: number; signal?: number } }
   | { type: "freebuff.pty.error"; data: { message: string } }
 
-function presenceOf(data: Extract<PtyEvent, { type: "freebuff.pty.status" }>["data"]): { label: string; online: boolean } {
+function presenceOf(data: { state: "starting" | "running" | "restarting" }): { label: string; online: boolean } {
   if (data.state === "starting") return { label: "Freebuff démarre…", online: false }
   if (data.state === "restarting") return { label: "Nouvelle tentative…", online: false }
   return { label: "En ligne", online: true }
@@ -36,7 +36,7 @@ function presenceOf(data: Extract<PtyEvent, { type: "freebuff.pty.status" }>["da
 // barres de progression. Elles sont retirées du transcript « conversation ».
 const NON_SPEECH = /^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏✓✔✗·∙•←↑→↓—─━│┌┐└┘╭╮╰╯═║+-=|/\\^\s]*$/
 
-export default function FreebuffTerminalDialog(props: { onClose: () => void; onError: (e: unknown) => void }) {
+export default function FreebuffAgentPage(props: { onHome: () => void; onError: (e: unknown) => void }) {
   const termHostRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<{ write: (s: string) => void; focus: () => void; dispose: () => void; buffer: { active: { length: number; getLine: (i: number) => { translateToString: (trim?: boolean) => string } | null } } } | null>(null)
   const fitRef = useRef<{ fit: () => void; dispose: () => void } | null>(null)
@@ -88,7 +88,7 @@ export default function FreebuffTerminalDialog(props: { onClose: () => void; onE
       try {
         // Préférence de reprise (v9.5.0) : « Reprendre la dernière conversation ».
         api.prefs().then((p) => { if (!disposed) setResume(p.freebuffResume === true) }).catch(() => undefined)
-        // Imports dynamiques : xterm ne pèse dans le bundle qu'à l'ouverture de la vue.
+        // Imports dynamiques : xterm ne pèse dans le bundle qu'à l'ouverture de la page.
         const [{ Terminal }, { FitAddon }] = await Promise.all([import("@xterm/xterm"), import("@xterm/addon-fit")])
         if (disposed || !termHostRef.current) return
         const term = new Terminal({
@@ -159,7 +159,7 @@ export default function FreebuffTerminalDialog(props: { onClose: () => void; onE
       disposed = true
       if (renderTimer.current) { clearTimeout(renderTimer.current); renderTimer.current = null }
       cleanupResize?.()
-      // Session persistante : on ferme la VUE, pas le process (contrat du protocole).
+      // Session persistante : on quitte la PAGE, pas le process (contrat du protocole).
       fitRef.current?.dispose()
       fitRef.current = null
       termRef.current?.dispose()
@@ -193,19 +193,21 @@ export default function FreebuffTerminalDialog(props: { onClose: () => void; onE
   }
 
   return (
-    <div className="overlay" role="dialog" aria-modal="true" aria-label="Agent Freebuff" onClick={(e) => { if (e.target === e.currentTarget) props.onClose() }}>
-      <div className="dialog wide bridge-dialog">
-        <header className="unified-settings-header">
+    <main className="agents-main">
+      <section className="agents-page freebuff-agent-page" aria-label="Agent Freebuff">
+        <header className="agents-page-header">
           <div>
             <span className="eyebrow">ASSISTANT EXTERNE GRATUIT</span>
-            <h3>Freebuff</h3>
-            <p className="hint">
+            <h1>Freebuff</h1>
+            <p>
               Le même espace de travail que tes agents Aven, en sessions quotidiennes
-              gratuites. Fermer cette fenêtre n'arrête pas l'agent : tu retrouves la
+              gratuites. Quitter cette page n'arrête pas l'agent : tu retrouves la
               conversation à la réouverture.
             </p>
           </div>
-          <button className="button button-icon dialog-close" onClick={props.onClose} aria-label="Fermer" type="button"><Icon name="close" size={17} /></button>
+          <button className="button ghost" onClick={props.onHome} type="button">
+            <Icon name="arrow-left" size={15} />Accueil
+          </button>
         </header>
 
         <div className="row bridge-status-row">
@@ -271,7 +273,7 @@ export default function FreebuffTerminalDialog(props: { onClose: () => void; onE
           <input type="checkbox" checked={resume} onChange={(e) => toggleResume(e.target.checked)} />
           Reprendre la dernière conversation à l'ouverture (sinon, nouvelle conversation)
         </label>
-      </div>
-    </div>
+      </section>
+    </main>
   )
 }

@@ -1,4 +1,4 @@
-# Aven v9.5.0
+# Aven v9.5.1
 
 > ## Avant de modifier ce projet (IA ou humain)
 > Lis **`AGENTS.md`** puis **`RULES.md`** : ils fixent les règles universelles de
@@ -11,6 +11,10 @@
 Application de bureau (Electron) : une chatbox avec **3 agents commutables** (code, recherche, analyse) et un
 sous-agent (code-reviewer), branchée sur **OpenCode 2.0.10** et un catalogue d’agents strictement gratuit (OpenRouter Free / OpenCode Zen).
 
+> **v9.5.1 — L'agent Freebuff devient une page pleine** : la vue quitte son dialogue
+recouvrant — elle se navigue comme la page Agents (une seule vue à la fois, bouton
+« Accueil », Échap revient à l'accueil, session maintenue en quittant). Le hub ou
+la page Assistants t'envoient sur la page, plus jamais de popup devant la conversation.
 > **v9.5.0 — Le pont agents : Aven, cerveau unique des deux moteurs** : ① **catalogue
 d'agents partagé** : les agents Aven (projet, code, recherche, analyse, code-reviewer)
 sont convertis en définitions TypeScript dans le dossier `.agents/` de l'espace — le CLI

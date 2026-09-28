@@ -43,7 +43,7 @@ assert.match(types, /freebuffCliLaunch/)
 // v9.2.0 : le TUI freebuff s'ouvre DANS Aven (pont PTY, session persistante) — la
 // sonde « freebuffCliLaunch("launch") » du hub est remplacée par le terminal intégré ;
 // la console externe reste accessible depuis les Réglages (lancement = install/login).
-assert.match(app, /showFreebuffBridge/, "v9.2.0 : le hub ouvre le terminal Freebuff intégré")
+assert.match(app, /showFreebuffAgent/, "v9.5.0 : l'agent Freebuff est une page pleine (plus de dialogue)")
 assert.match(app, /freebuffCliLaunch\("install"\)/, "le flux d'installation reste branché (avis hub)")
 assert.ok(!css.includes(".hub-card-freebuff"), "v9.4.0 : la carte Freebuff a quitté le hub (page Assistants)")
 assert.match(css, /--hub-angle:90deg/) // v9.4.0 : 4 cartes réparties à 90°
