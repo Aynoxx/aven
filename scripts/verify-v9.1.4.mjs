@@ -42,9 +42,10 @@ assert.match(css, /calc\(100vh - 130px\)/)
 assert.match(css, /--hub-r: clamp\(196px, 37cqw, 272px\)/)
 
 // D. Page Agents allégée : 2 conversations max + compteur, badge lecture seule, grille fluide.
-assert.match(app, /slice\(0, 2\)/)
-assert.match(app, /agent-card-chats-more/)
-assert.match(app, /readonly-badge/)
-assert.match(css, /repeat\(auto-fill, minmax\(340px, 1fr\)\)/)
+// v9.6.0 : la grille d'agents devient la page « Tâches » (orchestrateur + modes) ; les
+// cartes modes montrent la DERNIÈRE conversation de chaque mode, le badge lecture seule
+// quitte les cartes (les modes restent connus par leur description).
+assert.match(app, /tasks-mode-lastchat/, "dernière conversation affichée sur la carte du mode")
+assert.match(css, /repeat\(auto-fill, minmax\(340px, 1fr\)\)|repeat\(auto-fit, minmax\(230px, 1fr\)\)/)
 
 console.log("v9.1.4 verification: OK")

@@ -40,10 +40,11 @@ assert.match(app, /Auto — le routeur choisit/, "l’option Auto rend la main a
 assert.match(css, /.model-select-menu/, "CSS du menu modèle attendu")
 
 // B. Page Assistants unifiée : agents + Freebuff + tableau « qui fait quoi ».
-assert.match(app, /ASSISTANT_MAP/, "tableau qui-fait-quoi attendu")
-assert.match(app, /assistants-map/, "le tableau est rendu")
-assert.match(app, /assistants-freebuff/, "panneau Freebuff de la page Assistants")
-assert.match(app, /Vos assistants/, "en-tête de page renommé")
+// v9.6.0 : la page devient « Tâches » — agent principal (orchestrateur) + modes.
+// ASSISTANT_MAP → MODES ; le tableau .assistants-map est masqué (CSS) ; le panneau
+// .assistants-freebuff quitte la page (Freebuff : pastille hub + carte Projet).
+assert.match(app, /const MODES = \[/, "v9.6.0 : la constante MODES remplace ASSISTANT_MAP")
+assert.match(css, /\.assistants-map \{ display: none; \}/, "v9.6.0 : le tableau v9.4.0 est masqué (sondes d'origine honorées)")
 assert.ok(!/key: "freebuff", label: "Freebuff"/.test(app), "la carte Freebuff a quitté le cercle du hub")
 assert.match(css, /--hub-angle:90deg/, "4 cartes à 90° attendues")
 assert.ok(!/.hub-card-freebuff { --hub-angle/.test(css), "plus d’angle pour la carte Freebuff supprimée")
@@ -56,8 +57,8 @@ assert.match(agentProjet, /resource: code-reviewer/, "projet peut déléguer à 
 
 // D. Terminal Freebuff lisible : dimensions réelles transmises au boot.
 assert.ok(main.includes("cols?: number, rows?: number"), "freebuff:launch accepte cols/rows")
-assert.ok(terminal.includes("freebuffCliLaunch(\"launch\", term.cols, term.rows)"), "les dimensions xterm sont envoyées au lancement")
-assert.ok(terminal.includes("freebuffPtyResize(term.cols, term.rows)"), "redimensionnement immédiat après fit")
+assert.ok(terminal.includes("freebuffCliLaunch(\"launch\", dims.cols, dims.rows)"), "les dimensions xterm sont envoyées au lancement (plancher ptyDims v9.6.0)")
+assert.ok(terminal.includes("freebuffPtyResize(d.cols, d.rows)"), "redimensionnement immédiat après fit (plancher ptyDims v9.6.0)")
 assert.ok(!terminal.includes("var(--font-ui)"), "police xterm fixe (métrique fiable), plus de variable CSS")
 
 // E. README : la carte des assistants est documentée.

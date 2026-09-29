@@ -4,7 +4,7 @@ import { api } from "./api"
 import Markdown from "./Markdown"
 import MessageBubble from "./MessageBubble"
 import { applyEvent, emptyLive, type Live } from "./stream"
-import type { Agent, AppAction, AppState, Chat, Decision, FormAnswer, Msg, StreamEvent, WorkspaceEntry } from "./types"
+import type { Agent, AppAction, AppState, Chat, Decision, FormAnswer, Msg, StreamEvent } from "./types"
 import FormDialog from "./FormDialog"
 import SettingsDialog from "./SettingsDialog"
 // v9.3.0 : vue Notes complète (rendu Markdown, édition, tags par agent) remplaçant le modal.
@@ -43,13 +43,13 @@ function orderAgents(agents: Agent[], order: string[]) {
 }
 
 // v9.4.0 : orientation rapide — chaque besoin courant pointe vers le bon assistant.
-const ASSISTANT_MAP = [
-  { label: "Écrire, corriger, exécuter", who: "agent code" },
-  { label: "Comprendre, documenter, comparer", who: "agent recherche" },
-  { label: "Analyser des données, chiffrer", who: "agent analyse" },
-  { label: "Piloter tout le projet", who: "agent projet (orchestrateur)" },
-  { label: "Relire sans modifier", who: "agent code-reviewer (via « Faire relire »)" },
-  { label: "Grosse session quotidienne gratuite", who: "agent Freebuff (intégré)" },
+// v9.6.0 : la page Tâches = un agent principal (orchestrateur « projet ») et des modes.
+// « Tâche complexe » ouvre l’orchestrateur lui-même : il délègue aux trois autres via subagents.
+const MODES = [
+  { id: "code", icon: "wrench", fallbackName: "Code", desc: "Écrire, corriger, exécuter du code et des commandes." },
+  { id: "analyse", icon: "sparkle", fallbackName: "Analyse", desc: "Données, chiffres, statistiques, rapports." },
+  { id: "recherche", icon: "search", fallbackName: "Recherche", desc: "Documentation, comparaisons, veille, explications." },
+  { id: "projet", icon: "agent", fallbackName: "Tâche complexe", desc: "Orchestre code + analyse + recherche, puis synthétise." },
 ] as const
 
 export default function App() {
@@ -62,8 +62,8 @@ export default function App() {
   const [loadedFor, setLoadedFor] = useState("")
   const [renamingChat, setRenamingChat] = useState<string | null>(null)
   const [chatValue, setChatValue] = useState("")
-  const [renamingAgent, setRenamingAgent] = useState<string | null>(null)
-  const [agentValue, setAgentValue] = useState("")
+// (v9.6.0 : le renommage d'agents a quitté la page Tâches — il reste dans le CLI)
+
   const renameCancelled = useRef(false)
   const renameBusy = useRef(false)
   const creatingRef = useRef<Set<string>>(new Set())
@@ -106,7 +106,6 @@ export default function App() {
   // espaces connus, sans passer par les Réglages. Le changement redémarre le moteur
   // côté main (api.switchWorkspace), l'état remonte par le poll de app:state existant.
   const [showProjectPicker, setShowProjectPicker] = useState(false)
-  const [projectList, setProjectList] = useState<WorkspaceEntry[]>([])
   const [showNotes, setShowNotes] = useState(false)
   const [notesInitialId, setNotesInitialId] = useState<string | undefined>()
   // v9.3.0 : explorateur de fichiers intégré (lecture seule) — remplace l'ouverture
@@ -763,19 +762,7 @@ export default function App() {
     }
   }
 
-  const commitAgentRename = async (id: string) => {
-    if (renameBusy.current) return
-    renameBusy.current = true
-    try {
-      setRenamingAgent(null)
-      if (renameCancelled.current) return
-      setAgents(await api.renameAgent(id, agentValue))
-    } catch (e) {
-      fail(e)
-    } finally {
-      renameBusy.current = false
-    }
-  }
+// (v9.6.0 : commitAgentRename retiré avec le renommage de la page Tâches)
   const agentName = (id: string) => agents.find((a) => a.id === id)?.name ?? id
 
   // (v9.3.0 : les statistiques ont quitté le hub pour l'onglet « Usage » des Réglages —
@@ -804,48 +791,9 @@ export default function App() {
   })
   const recentListRef = useRef<HTMLDivElement>(null)
   const conversationsListRef = useRef<HTMLDivElement>(null)
-  const projectsListRef = useRef<HTMLDivElement>(null)
 
-  // ── Gérer les espaces depuis le hub (v9.1.6, renommage v9.3.0) ──────────────────
-  // La liste est relue À CHAQUE ouverture (workspace:list) : jamais une copie figée de
-  // l'état du démarrage — un espace ajouté dans les Réglages apparaît ici aussitôt.
-  const openProjectPicker = () => {
-    api.workspaces().then((list) => { setProjectList(list); setShowProjectPicker(true) }).catch(fail)
-  }
   // Même logique que SettingsDialog.switchWs : bascule côté main puis reprise de l'état
   // frais (le moteur redémarre) en réinitialisant conversation et agent, comme au démarrage.
-  const switchProject = async (dir: string) => {
-    try {
-      setShowProjectPicker(false)
-      const next = await api.switchWorkspace(dir)
-      setAppState(next)
-      if (next.workspace !== appState.workspace) {
-        setChats([])
-        setChatId(null)
-        setTab("")
-        preferredChatIdRef.current = null
-      }
-      setHomeNotice(`Espace actif : ${next.workspace ? next.workspace.split(/[\\/]/).pop() : dir}`)
-    } catch (e) {
-      fail(e)
-    }
-  }
-  const addProjectFromHub = async (mode: "create" | "existing") => {
-    try {
-      setShowProjectPicker(false)
-      const res = mode === "create" ? await api.createWorkspace("") : await api.addExistingWorkspace()
-      if (!res) return // annulation dans le sélecteur Windows : aucun changement
-      const next = res.state
-      setAppState(next)
-      setChats([])
-      setChatId(null)
-      setTab("")
-      preferredChatIdRef.current = null
-      setHomeNotice(`Espace actif : ${res.entry.name}`)
-    } catch (e) {
-      fail(e)
-    }
-  }
 
   const orderedAgents = useMemo(() => orderAgents(agents, appearance.agentOrder), [agents, appearance.agentOrder])
   const workspaceName = appState.workspace ? appState.workspace.split(/[\\/]/).pop() : undefined
@@ -950,8 +898,10 @@ export default function App() {
     // Notes). Freebuff vit dans Assistants, Statistiques dans Réglages/Usage.
     const nav = [
       // v9.1.0 : « projet » est à part — carte dédiée d'orchestrateur, hors sélecteur d'agents.
-      { key: "project", label: "Projet", kind: "project", hint: "Orchestrateur des agents", action: () => selectAgent("projet") },
-      { key: "agents", label: "Agents", kind: "agent", hint: orderedAgents.length === 1 ? "Agent actif" : `${orderedAgents.length} agents`, action: openAgentsPage },
+      // v9.6.0 : la carte Projet OUVRE L'AGENT FREEBUFF (l'orchestrateur utilisateur devient
+      // l'agent externe gratuit) — le nom « Projet » reste le repère de la porte principale.
+      { key: "project", label: "Projet", kind: "project", hint: "Agent central (Freebuff)", action: openFreebuffAgent },
+      { key: "agents", label: "Tâches", kind: "agent", hint: "Spécialistes par tâche", action: openAgentsPage },
       // v9.4.0 : Freebuff quitte le cercle — il vit dans la page Assistants (avec les agents), la pastille reste un raccourci.
       // v9.3.0 : Fichiers et Notes = le CONTENU de l'espace — vues intégrées (l'Explorateur
       // Windows reste disponible d'un clic dans la vue Fichiers).
@@ -967,7 +917,6 @@ export default function App() {
     // le fix « Rendered fewer hooks » ci-dessus ; la sélection est le focus DOM).
     const recentNav = arrowListNav(recentListRef)
     const conversationsNav = arrowListNav(conversationsListRef)
-    const projectsNav = arrowListNav(projectsListRef)
 
     const submitHomeCommand = async (e: FormEvent<HTMLFormElement>) => {
       e.preventDefault()
@@ -1030,12 +979,6 @@ export default function App() {
               <span className="status-dot" />
               <span>{online ? "En ligne" : appState.status === "starting" ? "Démarrage" : "Indisponible"}</span>
             </span>
-            {/* v9.1.6 (libellés v9.3.0 : « Espaces ») : gestion des espaces sans passer
-                par les Réglages. La liste est relue à chaque ouverture. */}
-            <button className="button secondary home-control home-project-button" onClick={openProjectPicker} aria-label="Gérer les espaces" title="Gérer les espaces" type="button">
-              <Icon name="folder" size={15} />
-              <span>Espaces</span>
-            </button>
             {/* v9.3.0 : pastille d'état Freebuff — le second assistant devient visible
                 d'un coup d'œil (CLI installé ? session active ?). Clic = ouvrir le terminal. */}
             <button className={`freebuff-pill ${freebuffPillState}`} onClick={() => setHomeNotice(routeAppAction("open-freebuff"))} aria-label={`Freebuff : ${freebuffPillState === "active" ? "session active" : freebuffPillState === "ready" ? "CLI installé" : "CLI non installé"}`} title={freebuffPillState === "active" ? "Session Freebuff active — ouvrir le terminal" : freebuffPillState === "ready" ? "CLI Freebuff installé — ouvrir le terminal" : "CLI Freebuff non installé — voir comment l'installer"} type="button">
@@ -1176,37 +1119,8 @@ export default function App() {
           </div>
         )}
 
-        {/* v9.1.6 : sélecteur de projet du hub — liste relue à l'ouverture, projet actif
-            marqué, création/ouverture de dossier disponibles sans passer par les Réglages. */}
-        {/* v9.1.6 — libellés v9.3.0 (« Espaces ») : le modal liste les espaces connus,
-            actif marqué, création/ouverture de dossier disponibles sans les Réglages. */}
-        {showProjectPicker && (
-          <div className="home-modal-overlay" role="dialog" aria-modal="true" aria-label="Gérer les espaces" onClick={(e) => { if (e.target === e.currentTarget) setShowProjectPicker(false) }}>
-            <div className="home-modal project-modal">
-              <div className="home-modal-header">
-                <div><span className="eyebrow">ESPACES</span><h2>Gérer les espaces</h2></div>
-                <button className="button button-icon dialog-close" onClick={() => setShowProjectPicker(false)} aria-label="Fermer" type="button"><Icon name="close" size={17} /></button>
-              </div>
-              <p className="hint project-modal-hint">Chaque espace a ses conversations, agents et réglages. Un clic l'active et redémarre le moteur dessus.</p>
-              {/* v9.1.6 : flèches Haut/Bas naviguent, Entrée active l'espace focusé.
-                  L'espace ACTIF est présélectionné à l'ouverture (initialArrowIndex). */}
-              <div className="home-modal-list" ref={projectsListRef} onKeyDown={projectsNav.onKeyDown}>
-                {projectList.map((w) => (
-                  <button key={w.path} className={`home-modal-item project-item ${w.path === appState.workspace ? "current" : ""}`} onClick={() => void switchProject(w.path)} type="button" title={w.path === appState.workspace ? "Espace actif" : "Activer cet espace"}>
-                    <span className="home-recent-icon"><Icon name="folder" size={16} /></span>
-                    <span className="home-recent-copy"><strong>{w.name}{w.path === appState.workspace ? <em className="project-current-badge">actif</em> : null}</strong><small>{w.path}</small></span>
-                    <span className="home-recent-arrow">{w.path === appState.workspace ? <Icon name="check" size={16} /> : <Icon name="chevron-right" size={18} />}</span>
-                  </button>
-                ))}
-                {!projectList.length && <div className="home-modal-empty">Aucun espace enregistré pour l'instant.</div>}
-              </div>
-              <div className="row project-modal-actions">
-                <button className="button primary" onClick={() => void addProjectFromHub("create")} type="button">Créer un nouvel espace…</button>
-                <button className="button secondary" onClick={() => void addProjectFromHub("existing")} type="button">Ouvrir un dossier existant…</button>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* v9.6.0 : le sélecteur d'espaces du hub est retiré — la gestion des
+            espaces vit dans Réglages → Configuration (et la commande vocale). */}
       </section>
     )
   }
@@ -1465,134 +1379,71 @@ export default function App() {
         <FreebuffAgentPage onHome={goHome} onError={fail} />
       ) : showAgentsPage ? (
         <main className="agents-main">
-          <section className="agents-page" aria-label="Gestion des assistants">
+          <section className="agents-page" aria-label="Tâches et agents">
             <header className="agents-page-header">
               <div>
-                <span className="eyebrow">ASSISTANTS</span>
-                <h1>Vos assistants</h1>
-                <p>Agents Aven et CLI Freebuff : un seul endroit pour choisir qui répond.</p>
+                <span className="eyebrow">TÂCHES</span>
+                <h1>Un agent principal, des modes par besoin</h1>
+                <p>Choisis un mode : l’orchestrateur délègue aux spécialistes du domaine et synthétise.</p>
               </div>
               <button className="button ghost" onClick={() => { setShowAgentsPage(false); setShowHome(true) }} type="button">
                 <Icon name="arrow-left" size={15} />Accueil
               </button>
             </header>
-            {/* v9.4.0 : tableau « qui fait quoi » — la réponse à « quel assistant pour quel besoin ? ». */}
-            <div className="assistants-map" role="table" aria-label="Quel assistant pour quel besoin">
-              {ASSISTANT_MAP.map((row) => (
-                <div key={row.label} className="assistants-map-row" role="row">
-                  <strong>{row.label}</strong>
-                  <span>{row.who}</span>
-                </div>
-              ))}
-            </div>
-            <div className="agents-grid">
-              {agentsLoading ? (
-                <div className="agents-empty">
-                  <div className="empty-symbol"><Icon name="agent" size={24} /></div>
-                  <h2>Chargement des agents…</h2>
-                  <p>Aven récupère les agents disponibles dans l’espace de travail actif.</p>
-                </div>
-              ) : agentsError ? (
-                <div className="agents-empty agents-empty-error">
-                  <div className="empty-symbol"><Icon name="agent" size={24} /></div>
-                  <h2>Impossible de charger les agents</h2>
-                  <p>{agentsError}</p>
-                  <button className="button primary" type="button" onClick={() => { setAgentsLoading(true); setAgentsError(undefined); api.agents().then((a) => { setAgents(a); setTab((cur) => cur || a[0]?.id || "") }).catch((e) => setAgentsError(e instanceof Error ? e.message : String(e))).finally(() => setAgentsLoading(false)) }}>Réessayer</button>
-                </div>
-              ) : orderedAgents.length ? orderedAgents.map((a) => (
-                <article key={a.id} className={`agent-card ${a.id === tab ? "active" : ""} ${a.id === "projet" ? "agent-card-orchestrator" : ""}`}>
-                  <div className="agent-card-icon"><Icon name={a.id === "projet" ? "sparkle" : "agent"} size={24} /></div>
-                  <div className="agent-card-body">
-                    <span className="agent-card-id">{a.id}{a.id === "projet" && <em className="orchestrator-badge">orchestrateur</em>}{(a.id === "analyse" || a.id === "recherche") && <em className="readonly-badge">lecture seule</em>}</span>
-                    {renamingAgent === a.id ? (
-                      <input
-                        className="rename-input"
-                        autoFocus
-                        value={agentValue}
-                        maxLength={30}
-                        placeholder={a.defaultName ?? a.id}
-                        onFocus={(e) => e.target.select()}
-                        onChange={(e) => setAgentValue(e.target.value)}
-                        onBlur={() => void commitAgentRename(a.id)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") void commitAgentRename(a.id)
-                          if (e.key === "Escape") {
-                            e.stopPropagation()
-                            renameCancelled.current = true
-                            setRenamingAgent(null)
-                          }
-                        }}
-                      />
-                    ) : (
-                      <h2>{a.name}</h2>
-                    )}
-                    <p>{a.description || "Agent spécialisé Aven."}</p>
-                  </div>
-                  {/* v9.0.0 : conversations de cet agent, ouvertes avec bascule automatique. */}
-                  {(() => {
-                    const group = groupChatsByAgent(chats, [a.id])[0]
-                    if (!group?.chats.length) return null
-                    // v9.1.4 : 2 conversations max par carte + compteur « +N autres » —
-                    // la liste longue encombrait la page (le hub reste l'endroit « reprendre »).
-                    const shown = group.chats.slice(0, 2)
-                    const extra = group.chats.length - shown.length
-                    return (
-                      <div className="agent-card-chats">
-                        {shown.map((c) => (
-                          <button key={c.id} className="chat-main" onClick={() => openConversationFromSidebar(c)} type="button" title="Ouvrir cette conversation">
-                            <span className="chat-title">{c.title}</span>
-                            <span className="chat-meta">{c.updated ? new Date(c.updated).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" }) : ""}</span>
-                          </button>
-                        ))}
-                        {extra > 0 && <span className="agent-card-chats-more">+{extra} autre{extra > 1 ? "s" : ""}</span>}
-                      </div>
-                    )
-                  })()}
-                  <div className="agent-card-actions">
-                    <button className="button secondary" onClick={() => selectAgent(a.id)} type="button">
-                      Ouvrir
-                    </button>
-                    <button
-                      className="button ghost"
-                      onClick={() => {
-                        renameCancelled.current = false
-                        setAgentValue(a.name)
-                        setRenamingAgent(a.id)
-                      }}
-                      type="button"
-                    >
-                      <Icon name="pencil" size={14} />Renommer
+            {/* v9.6.0 : l’orchestrateur « projet » est l’AGENT PRINCIPAL ; le mode
+                « Tâche complexe » l’ouvre directement, les modes simples pointent les
+                spécialistes (code / analyse / recherche). */}
+            <div className="tasks-principal">
+              <article className={`agent-card tasks-principal-card ${agents.some((a) => a.id === "projet") ? "agent-card-orchestrator" : "tasks-card-off"}`}>
+                <div className="agent-card-icon"><Icon name="sparkle" size={24} /></div>
+                <div className="agent-card-body">
+                  <span className="agent-card-id">projet <em className="orchestrator-badge">agent principal</em></span>
+                  <h2>{agentName("projet")}</h2>
+                  <p>Comprend la demande, la découpe, délègue à code / analyse / recherche, puis synthétise.</p>
+                  <div className="tasks-principal-actions">
+                    <button className="button primary" onClick={() => selectAgent("projet")} disabled={!agents.some((a) => a.id === "projet")} type="button">
+                      <Icon name="agent" size={14} />Ouvrir une conversation
                     </button>
                   </div>
-                </article>
-              )) : (
-                <div className="agents-empty">
-                  <div className="empty-symbol"><Icon name="agent" size={24} /></div>
-                  <h2>Aucun agent disponible</h2>
-                  <p>Vérifiez que le moteur Aven est bien démarré et que ses agents sont présents dans l’espace actif.</p>
                 </div>
-              )}
+              </article>
             </div>
-            {/* v9.4.0 : Freebuff vit ICI — même page que les agents, un seul « qui répond ».
-                Le hub ne garde plus de carte dédiée : la pastille de l'accueil reste un raccourci. */}
-            <article className="assistants-freebuff">
-              <div className="agent-card-icon"><Icon name="terminal" size={24} /></div>
-              <div className="agent-card-body">
-                <span className="agent-card-id">freebuff <em className={"assistants-freebuff-state " + freebuffPillState}>{freebuffPillState === "active" ? "session active" : freebuffPillState === "ready" ? "CLI installé" : "CLI non installé"}</em></span>
-                <h2>CLI Freebuff</h2>
-                <p>Agent gratuit (ad-financé) intégré à l'espace : mêmes agents et mêmes notes que tes agents Aven, en sessions quotidiennes gratuites. Les agents Aven restent l'entrée principale, avec le routeur de modèles gratuits.</p>
+            <div className="tasks-modes">
+              {MODES.map((m) => {
+                const a = agents.find((x) => x.id === m.id)
+                const group = a ? groupChatsByAgent(chats, [a.id])[0] : undefined
+                const lastChat = group?.chats[0]
+                return (
+                  <article key={m.id} className={`tasks-mode-card ${a ? "" : "tasks-card-off"}`}>
+                    <div className="agent-card-icon"><Icon name={m.icon} size={20} /></div>
+                    <div className="agent-card-body">
+                      <span className="agent-card-id">{m.id}</span>
+                      <h2>{a?.name ?? m.fallbackName}</h2>
+                      <p>{m.desc}</p>
+                      {lastChat && (
+                        <button className="chat-main tasks-mode-lastchat" onClick={() => openConversationFromSidebar(lastChat)} type="button" title="Ouvrir la dernière conversation de ce mode">
+                          <span className="chat-title">{lastChat.title}</span>
+                        </button>
+                      )}
+                    </div>
+                    <div className="agent-card-actions">
+                      <button className="button secondary" onClick={() => selectAgent(m.id)} disabled={!a} type="button">
+                        Ouvrir
+                      </button>
+                    </div>
+                  </article>
+                )
+              })}
+            </div>
+            {agentsLoading && <p className="hint">Chargement des agents…</p>}
+            {agentsError && (
+              <div className="agents-empty agents-empty-error">
+                <div className="empty-symbol"><Icon name="agent" size={24} /></div>
+                <h2>Impossible de charger les agents</h2>
+                <p>{agentsError}</p>
+                <button className="button primary" type="button" onClick={() => { setAgentsLoading(true); setAgentsError(undefined); api.agents().then((a) => { setAgents(a); setTab((cur) => cur || a[0]?.id || "") }).catch((e) => setAgentsError(e instanceof Error ? e.message : String(e))).finally(() => setAgentsLoading(false)) }}>Réessayer</button>
               </div>
-              <div className="agent-card-actions">
-                {freebuffPillState === "missing" && (
-                  <button className="button secondary" onClick={() => api.freebuffCliLaunch("install").catch(fail)} type="button">
-                    <Icon name="plus" size={14} />Installer le CLI
-                  </button>
-                )}
-                <button className="button primary" onClick={openFreebuffAgent} type="button">
-                  <Icon name="terminal" size={14} />Ouvrir l'agent Freebuff
-                </button>
-              </div>
-            </article>
+            )}
           </section>
         </main>
       ) : (

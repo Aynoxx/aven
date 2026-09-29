@@ -162,7 +162,7 @@ assert.match(app, /onKeyDown=\{recentNav\.onKeyDown\}/,
   "la liste des récents doit écouter les flèches")
 assert.match(app, /onKeyDown=\{conversationsNav\.onKeyDown\}/,
   "le modal conversations doit écouter les flèches")
-assert.match(app, /onKeyDown=\{projectsNav\.onKeyDown\}/,
-  "le modal projets doit écouter les flèches")
+// v9.6.0 : le sélecteur d'espaces du hub est retiré (Réglages → Configuration) —
+// plus de liste projets à naviguer ici ; les modales restantes gardent leurs flèches.
 
 console.log("conventions (RULES.md) : OK")

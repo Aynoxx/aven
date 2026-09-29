@@ -31,7 +31,7 @@ const readme = read("README.md")
 // A. Hub reformé : Faire ×2 + Contenu ×2 (v9.4.0 : Freebuff a rejoint la page
 // Assistants, Statistiques vit dans Réglages/Usage depuis v9.3.0).
 assert.match(app, /key: "project", label: "Projet"/)
-assert.match(app, /key: "agents", label: "Agents"/)
+assert.match(app, /key: "agents", label: "T\u00e2ches"/) // v9.6.0 : les spécialistes deviennent « Tâches »
 assert.match(app, /key: "files", label: "Fichiers"/)
 assert.match(app, /key: "notes", label: "Notes"/)
 assert.ok(!/key: "stats"/.test(app), "la carte Statistiques a quitté le cercle du hub (→ Réglages/Usage)")
@@ -44,9 +44,10 @@ assert.match(app, /freebuffPtyActive/, "l'état actif lit le PTY embarqué")
 assert.match(css, /\.freebuff-pill/)
 
 // C. Renommage « Espaces » (affichage seul — IPC workspace:* inchangé).
-assert.match(app, /Gérer les espaces/, "modal du hub renommé")
-assert.match(app, /eyebrow">ESPACES/, "eyebrow ESPACES attendu")
-assert.match(app, /Espace actif :/, "les avis du hub parlent d'« espace »")
+// v9.6.0 : le modal espaces du hub est retiré — la gestion vit dans Réglages → Configuration.
+assert.ok(!app.includes('aria-label="Gérer les espaces"'), "le raccourci espaces a quitté le hub (v9.6.0)")
+// v9.6.0 : l'eyebrow ESPACES du modal hub a disparu avec le modal (Réglages).
+// v9.6.0 : les avis « Espace actif » vivaient dans le modal retiré.
 assert.match(settings, /<h4>Espaces<\/h4>/, "Réglages : section « Espaces »")
 assert.ok(!/Changer de projet/.test(app), "l'ancien libellé « Changer de projet » a disparu")
 

@@ -1,4 +1,4 @@
-# Aven v9.5.1
+# Aven v9.6.0
 
 > ## Avant de modifier ce projet (IA ou humain)
 > Lis **`AGENTS.md`** puis **`RULES.md`** : ils fixent les règles universelles de
@@ -11,6 +11,27 @@
 Application de bureau (Electron) : une chatbox avec **3 agents commutables** (code, recherche, analyse) et un
 sous-agent (code-reviewer), branchée sur **OpenCode 2.0.10** et un catalogue d’agents strictement gratuit (OpenRouter Free / OpenCode Zen).
 
+> **v9.6.0 — Projet = Freebuff, Tâches spécialisées, Groq au chat** : ① le raccourci
+« Espaces » quitte le hub (la gestion vit dans Réglages → Configuration) ; ② la carte
+« Projet » ouvre désormais l'**agent Freebuff** (page pleine, nom conservé) — le cerveau
+central, et la page « Agents » devient **« Tâches »** (les spécialistes code, analyse,
+recherche) ; ③ **fix du terminal** : l'émulateur caché garde de vraies dimensions avec
+un plancher 80×24 testé — le TUI ne naît plus cassé/écran vide ; ④ la **barre de
+session** du TUI (temps restant, quota) est extraite et affichée en clair au-dessus de
+la conversation (les pubs restent filtrées) ; ⑤ **Groq devient un fournisseur de chat** :
+la clé Groq (déjà utilisée pour la dictée) injecte aussi llama 3.3, GPT-OSS, Qwen 3…
+dans les chaînes gratuites ; ⑥ **priorités refaites par domaine** : DeepSeek V4 Flash et
+GPT-OSS 120B en tête du code, Nemotron 3 Ultra pour l'analyse, MiMo/Groq pour la recherche.
+> **v9.6.0 — Lisibilité Freebuff + page « Tâches » à modes** : ⑦ la **Vue conversation**
+devient vraiment lisible — le filtrage vit dans un module testé (bordures TUI rognées,
+pubs greptile/« Refer friends »/streak retirées, barres d'état supprimées) et la barre de
+session capture le **quota** (« 40/40 Freebucks remaining ») ; les lignes de prompt
+utilisateur sont marquées visuellement ; ⑧ la page **« Tâches » est redessinée** : un
+**agent principal** (l'orchestrateur « projet », qui délègue aux spécialistes via
+subagents) et **4 modes** — Code, Analyse, Recherche, et **Tâche complexe** (qui ouvre
+l'orchestrateur pour les demandes multi-domaines). L'ancien tableau « qui fait quoi »
+est masqué et le renommage d'agents quitte la page (il reste via le CLI) ; Freebuff
+reste accessible par la pastille du hub et la carte « Projet ».
 > **v9.5.1 — L'agent Freebuff devient une page pleine** : la vue quitte son dialogue
 recouvrant — elle se navigue comme la page Agents (une seule vue à la fois, bouton
 « Accueil », Échap revient à l'accueil, session maintenue en quittant). Le hub ou

@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react"
 import { api } from "./api"
+import { ptyDims } from "./pty-dims"
+// v9.6.0 : filtrage du transcript centralisé (bordures, session, pubs, utilisateur).
+import { buildTranscript, isUserLine } from "./freebuff-transcript"
 import { Icon } from "./icons"
 
 // Page pleine de l'agent Freebuff (v9.5.0) : naviguée comme la page Agents (une seule
@@ -33,9 +36,7 @@ function presenceOf(data: { state: "starting" | "running" | "restarting" }): { l
 }
 
 // Lignes qui ne sont pas du discours : spinners braille, bordures de boîtes,
-// barres de progression. Elles sont retirées du transcript « conversation ».
-const NON_SPEECH = /^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏✓✔✗·∙•←↑→↓—─━│┌┐└┘╭╮╰╯═║+-=|/\\^\s]*$/
-
+// barres de progression, pubs et barres d'état — tout vit dans freebuff-transcript.ts (v9.6.0).
 export default function FreebuffAgentPage(props: { onHome: () => void; onError: (e: unknown) => void }) {
   const termHostRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<{ write: (s: string) => void; focus: () => void; dispose: () => void; buffer: { active: { length: number; getLine: (i: number) => { translateToString: (trim?: boolean) => string } | null } } } | null>(null)
@@ -45,6 +46,8 @@ export default function FreebuffAgentPage(props: { onHome: () => void; onError: 
   const [isError, setIsError] = useState(false)
   const [errorMsg, setErrorMsg] = useState("")
   const [chatLines, setChatLines] = useState<string[]>([])
+  const [userLines, setUserLines] = useState<boolean[]>([])
+  const [sessionBar, setSessionBar] = useState("")
   const [showRaw, setShowRaw] = useState(false)
   const [resume, setResume] = useState(false)
   const [draft, setDraft] = useState("")
@@ -55,24 +58,22 @@ export default function FreebuffAgentPage(props: { onHome: () => void; onError: 
   const scheduleRender = () => {
     if (renderTimer.current) return
     renderTimer.current = setTimeout(() => {
-      renderTimer.current = null
       const term = termRef.current
       if (!term) return
       const buf = term.buffer.active
-      const out: string[] = []
+      const raw: string[] = []
       const max = 400
       for (let i = Math.max(0, buf.length - max); i < buf.length; i++) {
         const line = buf.getLine(i)
         if (!line) continue
-        const t = line.translateToString(true)
-        if (!t.trim()) {
-          if (out.length && out[out.length - 1] !== "") out.push("")
-          continue
-        }
-        if (NON_SPEECH.test(t)) continue
-        out.push(t.replace(/\s+$/, ""))
+        raw.push(line.translateToString(true))
       }
-      setChatLines(out)
+      // v9.6.0 : bordures rognées, barre de session extraite (quota Freebucks),
+      // pubs et barres d'état filtrées, lignes utilisateur marquées.
+      const { lines: parsed, sessionBar: bar } = buildTranscript(raw)
+      setChatLines(parsed.map((l) => l.text))
+      setUserLines(parsed.map((l) => l.user))
+      setSessionBar(bar)
       requestAnimationFrame(() => {
         const el = chatRef.current
         if (el) el.scrollTop = el.scrollHeight
@@ -107,7 +108,8 @@ export default function FreebuffAgentPage(props: { onHome: () => void; onError: 
 
         const onResize = () => {
           fit.fit()
-          void api.freebuffPtyResize(term.cols, term.rows)
+          const d = ptyDims(term)
+          void api.freebuffPtyResize(d.cols, d.rows)
         }
         window.addEventListener("resize", onResize)
         cleanupResize = () => window.removeEventListener("resize", onResize)
@@ -145,7 +147,8 @@ export default function FreebuffAgentPage(props: { onHome: () => void; onError: 
 
         // Démarre (ou récupère) la session : le lancement transmet les dimensions
         // réelles de l'émulateur (v9.4.0) et les options du pont agents (v9.5.0).
-        await api.freebuffCliLaunch("launch", term.cols, term.rows)
+        const dims = ptyDims(term)
+        await api.freebuffCliLaunch("launch", dims.cols, dims.rows)
       } catch (e) {
         if (!disposed) {
           setErrorMsg(e instanceof Error ? e.message : String(e))
@@ -222,16 +225,36 @@ export default function FreebuffAgentPage(props: { onHome: () => void; onError: 
             <button className="button secondary" type="button" onClick={restartSession} title="Redémarre l'agent (utile s'il se bloque sans crasher)">
               <Icon name="restore" size={14} />Redémarrer la session
             </button>
-            <button className="button secondary" type="button" onClick={() => { setShowRaw(!showRaw); if (!showRaw) setTimeout(() => termRef.current?.focus(), 50) }} aria-pressed={showRaw} title="Affiche le terminal brut (pour suivre ce que l'agent voit exactement)">
+            <button className="button secondary" type="button" onClick={() => {
+              const next = !showRaw
+              setShowRaw(next)
+              // En sortant de la vue cachée, l'émulateur reprend ses vraies dimensions :
+              // refit + resize du PTY pour que le TUI se redessine à la bonne taille.
+              setTimeout(() => {
+                fitRef.current?.fit()
+                const term = termRef.current
+                if (term) { const d = ptyDims(term as unknown as { cols: number; rows: number }); void api.freebuffPtyResize(d.cols, d.rows) }
+                if (next) termRef.current?.focus()
+              }, 80)
+            }} aria-pressed={showRaw} title="Affiche le terminal brut (pour suivre ce que l'agent voit exactement)">
               <Icon name="terminal" size={14} />{showRaw ? "Vue conversation" : "Vue terminal"}
             </button>
           </span>
         </div>
 
+        {sessionBar && (
+          <div className="freebuff-sessionbar" role="status" aria-label="Session Freebuff">
+            {sessionBar.split(/[│|]/).map((part) => part.trim()).filter(Boolean).map((part, i) => (
+            <span key={i} className="freebuff-sessionbar-item">{part}</span>
+            ))}
+          </div>
+        )}
+
         {isError && <p className="err" role="alert">{errorMsg}</p>}
 
         {/* Vue conversation : transcript dérivé du buffer, sans spinner ni bordures.
             L'émulateur reste monté (métriques fiables) mais invisible par défaut. */}
+        <div className="agent-stage">
         {!showRaw && (
           <div className="agent-chat" ref={chatRef} aria-live="polite" aria-label="Conversation avec l'agent Freebuff">
             {chatLines.length === 0 && (
@@ -240,11 +263,12 @@ export default function FreebuffAgentPage(props: { onHome: () => void; onError: 
               </p>
             )}
             {chatLines.map((line, i) => (
-              <p key={i} className={`agent-line${/^(vous|tu|moi)\s*[:>]/i.test(line) ? " agent-line-user" : ""}`}>{line}</p>
+              <p key={i} className={`agent-line${(userLines[i] ?? false) || isUserLine(line) ? " agent-line-user" : ""}`}>{line}</p>
             ))}
           </div>
         )}
         <div className={`bridge-term-host${showRaw ? "" : " agent-term-hidden"}`} ref={termHostRef} />
+        </div>
 
         {/* Prompts rapides : remplissent le composeur (l'utilisateur garde la main). */}
         {!showRaw && (

@@ -1,5 +1,7 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
+// v9.6.0 : plancher de dimensions du PTY (la page agent l'exporte, module pur).
+import { ptyDims } from "../web/src/pty-dims.ts"
 import {
   buildPtyCommand,
   ptyBackoffMs,
@@ -74,4 +76,11 @@ test("ptyModulePath : chemin dev (node_modules) vs packagé (app.asar.unpacked)"
 test("défauts de vue terminal : 120×30 (l'émulateur ajustera via resize)", () => {
   assert.equal(DEFAULT_PTY_COLS, 120)
   assert.equal(DEFAULT_PTY_ROWS, 30)
+})
+
+// v9.6.0 : le plancher de dimensions du PTY (fix TUI cassé en page pleine).
+test("ptyDims : jamais moins que 80×24 envoyé au PTY (émulateur caché = fit nul)", () => {
+  assert.deepEqual(ptyDims({ cols: 0, rows: 0 }), { cols: 80, rows: 24 })
+  assert.deepEqual(ptyDims({ cols: 120, rows: 30 }), { cols: 120, rows: 30 })
+  assert.deepEqual(ptyDims({ cols: 1, rows: 1 }), { cols: 80, rows: 24 })
 })

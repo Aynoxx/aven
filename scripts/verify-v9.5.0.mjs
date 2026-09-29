@@ -64,7 +64,8 @@ assert.match(dialog, /agent-composer/, "composeur d'agent attendu")
 assert.match(dialog, /agent-quick/, "prompts rapides attendus")
 assert.match(dialog, /Vue terminal/, "le terminal brut reste accessible en option")
 assert.match(dialog, /presenceOf/, "présence (En ligne / démarre…) attendue")
-assert.match(dialog, /NON_SPEECH/, "les spinners et bordures sont filtrés du transcript")
+// v9.6.0 : le filtrage (spinners, bordures, pubs) vit dans freebuff-transcript.ts.
+assert.match(dialog, /buildTranscript/, "les spinners et bordures sont filtrés du transcript (module v9.6.0)")
 assert.match(css, /\.agent-composer/, "CSS du composeur attendue")
 assert.match(css, /\.agent-term-hidden/, "CSS de l'émulateur caché attendue")
 // v9.5.1 : la vue est une PAGE pleine (agents-main), pas un dialogue recouvrant.

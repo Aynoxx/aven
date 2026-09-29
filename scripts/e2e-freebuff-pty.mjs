@@ -54,12 +54,11 @@ class Cdp {
   close() { this.ws.close() }
 }
 
-// v9.4.0 : le terminal s'ouvre depuis la page Assistants (« Ouvrir le terminal »)
-// ou la pastille du hub — la carte dédiée a quitté le cercle du hub.
+// v9.6.0 : le panneau « Assistants » a quitté la page Tâches — le terminal s'ouvre
+// par la pastille du hub ou la carte « Projet ».
 const OPEN_TERMINAL_SNIPPET = `(() => {
-  const panelBtn = [...document.querySelectorAll(".assistants-freebuff button")].find(b => b.textContent.includes("Ouvrir le terminal"))
-  const btn = panelBtn ?? document.querySelector(".freebuff-pill")
-  if (!btn) throw new Error("bouton du terminal Freebuff introuvable (page Assistants ou pastille)")
+  const btn = document.querySelector(".freebuff-pill") ?? [...document.querySelectorAll(".home-card button, button")].find(b => b.textContent.includes("Projet"))
+  if (!btn) throw new Error("bouton du terminal Freebuff introuvable (pastille ou carte Projet)")
   btn.click()
   return true
 })()`

@@ -45,12 +45,13 @@ assert.match(css, /\.workspace-picker-item/, "CSS de la liste des projets attend
 
 // I. Changer de projet depuis le hub (v9.1.6) : bouton + modal dédié, sans les Réglages.
 // v9.3.0 : le bouton s'appelle « Espaces » (renommage d'affichage, mécanique inchangée).
-assert.match(app, /<span>Espaces<\/span>/, "le bouton du hub doit exister")
-assert.match(app, /openProjectPicker/, "l'ouverture doit relire la liste des espaces")
-assert.match(app, /api\.workspaces\(\)\.then/, "la liste doit être relue à chaque ouverture (jamais figée)")
-assert.match(app, /showProjectPicker/, "modal projet attendu")
-assert.match(app, /switchProject/, "le clic doit basculer via api.switchWorkspace")
-assert.match(app, /project-item/, "le projet actif doit être marqué")
+// v9.6.0 : le bouton « Espaces » du hub est retiré — la gestion vit dans Réglages → Configuration.
+assert.ok(!app.includes("<span>Espaces</span>"), "le bouton Espaces a quitté le hub (v9.6.0)")
+// v9.6.0 : openProjectPicker est retiré avec le modal — Réglages relit la liste en direct.
+// v9.6.0 : la relecture de la liste vit dans SettingsDialog (ouverture des Réglages).
+// v9.6.0 : sondes switchProject / project-item neutralisées (le modal du hub est retiré,
+// la bascule vit dans Réglages → Configuration via settingsDialog, sondée en section D).
+assert.ok(true) // (sondes déplacées)
 assert.match(css, /\.home-project-button/, "CSS du bouton hub attendu")
 assert.match(css, /\.project-item\.current/, "CSS du projet actif attendu")
 // Garde v9.1.1 toujours vraie : PAS de nouvelle carte dans le cercle du hub (doublon « Projets »).

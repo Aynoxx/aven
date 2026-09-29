@@ -98,15 +98,16 @@ const agentsCard = await cdp.eval(`(() => {
   return true
 })()`)
 await sleep(600)
+// v9.6.0 : la page est devenue « Tâches » — agent principal + modes (le tableau v9.4.0
+// est masqué, le panneau Freebuff a quitté la page).
 const assistants = await cdp.eval(`(() => ({
-  heading: [...document.querySelectorAll("h1")].map((h) => h.textContent).find((t) => /assistant/i.test(t)) ?? "",
-  mapRows: document.querySelectorAll(".assistants-map-row").length,
-  reviewerRow: [...document.querySelectorAll(".assistants-map-row")].some((r) => r.textContent.includes("code-reviewer")),
-  freebuffPanel: !!document.querySelector(".assistants-freebuff"),
-  freebuffButtons: [...document.querySelectorAll(".assistants-freebuff button")].map((b) => b.textContent.trim()),
+  heading: [...document.querySelectorAll("h1")].map((h) => h.textContent).find((t) => /mode|agent|principal/i.test(t)) ?? "",
+  modes: document.querySelectorAll(".tasks-mode-card").length,
+  principal: !!document.querySelector(".tasks-principal-card"),
+  off: !!document.querySelector(".assistants-freebuff"),
 }))()`)
-check("page Assistants : en-tête + tableau « qui fait quoi »", agentsCard && /assistant/i.test(assistants.heading) && assistants.mapRows >= 5, `rows=${assistants.mapRows}, h1="${assistants.heading}"`)
-check("page Assistants : ligne code-reviewer + panneau Freebuff", assistants.reviewerRow && assistants.freebuffPanel, `buttons=${JSON.stringify(assistants.freebuffButtons)}`)
+check("page Tâches : en-tête + agent principal", agentsCard && assistants.principal, `h1="${assistants.heading}"`)
+check("page Tâches : 4 modes (code, analyse, recherche, tâche complexe)", assistants.modes === 4 && !assistants.off, `modes=${assistants.modes}`)
 
 // Retour à l'accueil pour la suite.
 await cdp.eval(`(() => {

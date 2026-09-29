@@ -5,7 +5,10 @@ export type ProviderInfo = { id: string; label: string; env: string; url: string
 
 export const PROVIDERS: ProviderInfo[] = [
   { id: "openrouter", label: "OpenRouter Free", env: "OPENROUTER_API_KEY", url: "https://openrouter.ai/keys", note: "Accès au catalogue gratuit OpenRouter. Les variantes :free sont à 0 $ ; quotas du plan Free appliqués par OpenRouter." },
-  { id: "groq", label: "Groq (dictée vocale)", env: "GROQ_API_KEY", url: "https://console.groq.com/keys", note: "Dicter dans le composeur (bouton micro ou Ctrl+Maj+V). Transcription Whisper + reformage côté Groq ; le texte reste modifiable avant envoi. Free tier : ~2 000 transcriptions/jour.", openCodeEnv: false },
+  // v9.6.0 : la clé Groq est AUSSI une clé de chat (openCodeEnv: true → GROQ_API_KEY
+  // est injectée dans le serveur OpenCode) : les modèles groq gratuits du catalogue
+  // (llama-3.3, gpt-oss, qwen3…) rejoignent les chaînes par domaine, aux côtés d'OpenCode.
+  { id: "groq", label: "Groq (chat + dictée)", env: "GROQ_API_KEY", url: "https://console.groq.com/keys", note: "Chat : modèles gratuits ultra-rapides (llama, gpt-oss, qwen) injectés dans les chaînes par tâche. Dictée : bouton micro ou Ctrl+Maj+V (transcription Whisper, texte modifiable). Free tier : quotas généreux." },
 ]
 export type OpenRouterKeyProbe =
   | { status: "valid" }

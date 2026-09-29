@@ -30,6 +30,18 @@ const OPEN_CODE_FREE_IDS = new Set([
   "big-pickle",
 ])
 
+/** v9.6.0 : ids de chat Groq gratuits (la clé GROQ_API_KEY devient aussi une clé de chat).
+ *  Liste fermée : tout nouveau modèle Groq doit être ajouté ici ET dans model-priorities.json. */
+const GROQ_FREE_IDS = new Set([
+  "llama-3.3-70b-versatile",
+  "llama-3.1-8b-instant",
+  "qwen3-32b",
+  "gemma2-9b-it",
+  "openai/gpt-oss-120b",
+  "openai/gpt-oss-20b",
+  "moonshotai/kimi-k2-instruct",
+])
+
 /**
  * Aven est volontairement « free only ». La liste ci-dessus n'est pas la seule porte
  * d'entrée : elle reste le socle éprouvé, et un modèle OpenCode inconnu portant le
@@ -38,6 +50,9 @@ const OPEN_CODE_FREE_IDS = new Set([
  */
 export function isFreeModelRef(ref: string): boolean {
   if (ref.startsWith("openrouter/") && ref.endsWith(":free")) return true
+  // v9.6.0 : les modèles de chat Groq (clé Groq, quotas gratuits généreux) rejoignent
+  // le catalogue — la liste groq/ ci-dessous n'admet QUE les ids connus gratuits.
+  if (ref.startsWith("groq/")) return GROQ_FREE_IDS.has(ref.slice("groq/".length))
   if (!ref.startsWith("opencode/")) return false
   const id = ref.slice("opencode/".length)
   return OPEN_CODE_FREE_IDS.has(id) || id.endsWith("-free")

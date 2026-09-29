@@ -856,3 +856,37 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
 .agent-composer-send { min-height: 52px; }
 .agent-resume { display: inline-flex; align-items: center; gap: 7px; margin-top: 10px; color: var(--muted); font-size: var(--font-size-xs); cursor: pointer; }
 .agent-resume input { accent-color: var(--accent); }
+
+/* ── v9.6.0 : barre de session Freebuff + scène conversation/terminal ─────────── */
+
+/* Barre de session (temps restant, quota) : extraite du TUI, lisible, segments. */
+.freebuff-sessionbar { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: 0 0 8px; padding: 7px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel-soft); color: var(--muted); font-size: var(--font-size-xs); }
+.freebuff-sessionbar-item { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+
+/* Scène : la conversation et l'émulateur occupent la même place — l'émulateur caché
+   garde de VRAIES dimensions (le fit sur 1px cassait le TUI, cf. fix v9.6.0). */
+.agent-stage { position: relative; }
+.agent-stage .agent-term-hidden { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; pointer-events: none; border: 0; }
+
+/* ── v9.6.0 : page « Tâches » — agent principal + modes ───────────────────────── */
+
+/* Agent principal : l'orchestrateur « projet », porte d'entrée de tous les modes. */
+.tasks-principal { margin: 0 0 14px; }
+.tasks-principal-card { display: flex; gap: 14px; align-items: flex-start; padding: 16px 18px; border: 1px solid var(--accent-border); border-radius: 14px; background: var(--accent-soft); }
+.tasks-principal-card h2 { margin: 2px 0 4px; }
+.tasks-principal-actions { display: flex; gap: 10px; margin-top: 10px; }
+
+/* Modes : 4 cartes (code, analyse, recherche, tâche complexe) en grille régulière. */
+.tasks-modes { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+.tasks-mode-card { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel-soft); }
+.tasks-mode-card h2 { margin: 0; font-size: var(--font-size-md); }
+.tasks-mode-card p { margin: 0; color: var(--muted); font-size: var(--font-size-sm); }
+.tasks-mode-card .agent-card-actions { margin-top: auto; }
+.tasks-mode-lastchat { border: 1px solid var(--border); border-radius: 8px; background: transparent; }
+
+/* Mode indisponible (moteur arrêté, agent absent de l'espace) : grisé mais cliquable-sobre. */
+.tasks-card-off { opacity: .55; }
+.tasks-card-off .agent-card-actions { visibility: hidden; }
+
+/* Le tableau v9.4.0 « qui fait quoi » disparaît : les modes PORTENT l'orientation. */
+.assistants-map { display: none; }
