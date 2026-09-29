@@ -45,6 +45,10 @@ export default function FreebuffAgentPage(props: { onHome: () => void; onError: 
   const [presence, setPresence] = useState<{ label: string; online: boolean }>({ label: "Freebuff démarre…", online: false })
   const [isError, setIsError] = useState(false)
   const [errorMsg, setErrorMsg] = useState("")
+  // v9.6.2 : bannière « l'app Desktop Freebuff tient la session » — avertit AVANT d'écrire
+  // (le CLI ne peut pas répondre ; l'envoi gelait muet). Relançable d'un clic.
+  const [desktopConflict, setDesktopConflict] = useState(false)
+  const desktopCheckBusy = useRef(false)
   const [chatLines, setChatLines] = useState<string[]>([])
   const [userLines, setUserLines] = useState<boolean[]>([])
   const [sessionBar, setSessionBar] = useState("")
@@ -147,8 +151,21 @@ export default function FreebuffAgentPage(props: { onHome: () => void; onError: 
               setIsError(true)
               break
             case "freebuff.pty.exit":
-              setErrorMsg(`Freebuff s'est terminé (code ${ev.data.code}). Utilise « Redémarrer la session ».`)
-              setIsError(true)
+              // v9.6.2 : un exit silencieux (code 0) juste après une saisie est le symptôme
+              // du conflit de session (l'app Desktop tient le compte). On vérifie et on
+              // nomme la cause au lieu d'afficher un générique « relancez » qui n'explique rien.
+              void api.freebuffDesktopRunning().then((running) => {
+                if (running && !disposed) {
+                  setDesktopConflict(true)
+                  setErrorMsg("")
+                  setIsError(false)
+                } else if (!disposed) {
+                  setErrorMsg(`Freebuff s'est terminé (code ${ev.data.code}). Utilise « Redémarrer la session ».`)
+                  setIsError(true)
+                }
+              }).catch(() => {
+                if (!disposed) { setErrorMsg(`Freebuff s'est terminé (code ${ev.data.code}). Utilise « Redémarrer la session ».`); setIsError(true) }
+              })
               break
           }
         })
@@ -158,6 +175,9 @@ export default function FreebuffAgentPage(props: { onHome: () => void; onError: 
         // réelles de l'émulateur (v9.4.0) et les options du pont agents (v9.5.0).
         const dims = ptyDims(term)
         await api.freebuffCliLaunch("launch", dims.cols, dims.rows)
+        // v9.6.2 : après le lancement (ou la reprise), on vérifie l'app Desktop — la
+        // bannière prévient AVANT le premier message (le gel muet n'a plus lieu d'être).
+        void api.freebuffDesktopRunning().then((running) => { if (!disposed) setDesktopConflict(running) }).catch(() => undefined)
       } catch (e) {
         if (!disposed) {
           setErrorMsg(e instanceof Error ? e.message : String(e))
@@ -250,6 +270,31 @@ export default function FreebuffAgentPage(props: { onHome: () => void; onError: 
             </button>
           </span>
         </div>
+
+        {/* v9.6.2 : bannière de conflit de session — l'app Desktop Freebuff tient le compte,
+            le terminal intégré ne peut pas répondre. Message + action, jamais de gel muet. */}
+        {desktopConflict && (
+          <div className="freebuff-conflict" role="alert">
+            <div className="freebuff-conflict-text">
+              <strong>Ta session Freebuff est déjà ouverte dans l'app Freebuff Desktop.</strong>
+              <span>Une seule session par compte : le terminal intégré ne peut pas répondre tant que l'app tourne. Ferme-la, puis relance ici — ou continue ta conversation là-bas.</span>
+            </div>
+            <button
+              className="button secondary"
+              type="button"
+              disabled={desktopCheckBusy.current}
+              onClick={() => {
+                desktopCheckBusy.current = true
+                void api.freebuffDesktopRunning().then((running) => {
+                  setDesktopConflict(running)
+                  if (!running) { setIsError(false); setErrorMsg(""); void api.freebuffCliLaunch("launch").catch(() => undefined) }
+                }).catch(() => undefined).finally(() => { desktopCheckBusy.current = false })
+              }}
+            >
+              <Icon name="restore" size={14} />J'ai fermé l'app — Relancer
+            </button>
+          </div>
+        )}
 
         {sessionBar && (
           <div className="freebuff-sessionbar" role="status" aria-label="Session Freebuff">

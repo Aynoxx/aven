@@ -863,6 +863,14 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
 .freebuff-sessionbar { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: 0 0 8px; padding: 7px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel-soft); color: var(--muted); font-size: var(--font-size-xs); }
 .freebuff-sessionbar-item { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
 
+/* v9.6.2 : bannière de conflit de session (app Desktop Freebuff ouverte) — explicite
+   et actionnable, à la place du gel muet. */
+.freebuff-conflict { display: flex; gap: 12px; align-items: center; justify-content: space-between; margin: 0 0 10px; padding: 12px 14px; border: 1px solid var(--warning-border, var(--accent-border)); border-radius: 12px; background: var(--panel-soft); }
+.freebuff-conflict-text { display: grid; gap: 3px; font-size: var(--font-size-sm); }
+.freebuff-conflict-text strong { color: var(--accent); }
+.freebuff-conflict-text span { color: var(--muted); }
+.freebuff-conflict .button { white-space: nowrap; }
+
 /* Scène : la conversation et l'émulateur occupent la même place — l'émulateur caché
    garde de VRAIES dimensions (le fit sur 1px cassait le TUI, cf. fix v9.6.0).
    v9.6.1 : visibility:hidden (et plus opacity:0) — un émulateur plein cadre en

@@ -574,6 +574,22 @@ function registerIpc() {
   }
   // npm est-il utilisable dans l'environnement de l'app ? (garde v9.1.4 : une fenêtre
   // d'installation doit échouer avec un message clair, jamais avec une erreur Windows brute.)
+  // v9.6.2 : l'app DESKTOP Freebuff (@codebufffreebuff-desktop) tient la session du
+  // compte (une seule session autorisée) — le CLI embarqué d'Aven affiche son TUI mais
+  // le PREMIER message le fait taire puis exité (gel ressenti). Détectée par le chemin
+  // complet (comme isFreebuffProcessRunning) pour proposer un message clair + relance.
+  async function isFreebuffDesktopRunning(): Promise<boolean> {
+    try {
+      const { execFile } = await import("node:child_process")
+      const out = await new Promise<string>((resolve, reject) => {
+        execFile("powershell", ["-NoProfile", "-Command", `Get-CimInstance Win32_Process -Filter "name='freebuff.exe'" | Where-Object { $_.ExecutablePath -like '*codebufffreebuff-desktop*' } | Select-Object -First 1 -ExpandProperty ProcessId`], { timeout: 10_000 }, (err, stdout) => (err ? reject(err) : resolve(String(stdout ?? ""))))
+      })
+      return out.split(/\r?\n/).some((l) => /^\d+$/.test(l.trim()))
+    } catch {
+      return false
+    }
+  }
+
   async function checkNpm(): Promise<boolean> {
     try {
       const { execFile } = await import("node:child_process")
@@ -612,6 +628,12 @@ function registerIpc() {
     // « install » restent des fenêtres externes : actions courtes, non composables avec
     // une session longue (se connecter installe/écrit ailleurs, pas avec le TUI ouvert).
     if (action === "launch") {
+      // v9.6.2 : garde amont — si l'app Desktop Freebuff tient la session, on n'ouvre même
+      // pas un TUI condamné : l'utilisateur voit un refus clair au lancement (et la page
+      // affiche de toute façon la bannière de conflit une fois ouverte).
+      if (await isFreebuffDesktopRunning()) {
+        throw new Error("L'app Freebuff Desktop est ouverte : elle tient la session du compte (une seule session autorisée). Ferme-la, puis relance le terminal intégré — ou continue ta conversation dans l'app Desktop.")
+      }
       try {
         await loadPtyModule(app.isPackaged, __dirname)
       } catch (err) {
@@ -663,6 +685,9 @@ function registerIpc() {
   ipcMain.handle("freebuff:pty:signal", (_e, signal: "SIGINT") => { signalFreebuffPty(signal) })
   ipcMain.handle("freebuff:pty:restart", () => { restartFreebuffPty() })
   ipcMain.handle("freebuff:pty:active", () => isFreebuffPtyActive())
+  // v9.6.2 : l'app Desktop Freebuff tourne-t-elle ? (elle tient la session du compte —
+  // le terminal intégré ne peut alors pas répondre ; la page affiche une bannière claire.)
+  ipcMain.handle("freebuff:desktop:running", () => isFreebuffDesktopRunning())
 
   // (v9.2.0 : les canaux WS freebuffBridge:start/stop ont disparu avec le pont — le PTY
   // transite désormais par IPC directs, sans serveur WebSocket local.)

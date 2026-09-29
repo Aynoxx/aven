@@ -74,6 +74,19 @@ assert.match(transcript, /model\\s\+to\\s\+change/, "filtre des barres d'état T
 assert.match(page, /buildTranscript\(raw\)/, "la page Freebuff délègue au module")
 assert.match(page, /isUserLine/, "les lignes utilisateur sont marquées")
 
+// J. v9.6.2 : conflit de session avec l'app Desktop Freebuff — détection + bannière.
+const mainTs = read("electron/main.ts")
+assert.match(mainTs, /isFreebuffDesktopRunning/, "détection de l'app Desktop Freebuff attendue")
+assert.match(mainTs, /codebufffreebuff-desktop/, "filtrage par chemin complet (comme isFreebuffProcessRunning)")
+assert.match(mainTs, /freebuff:desktop:running/, "canal IPC de détection attendu")
+assert.match(mainTs, /L'app Freebuff Desktop est ouverte/, "refus clair au lancement si l'app Desktop tient la session")
+const page922 = read("web/src/FreebuffAgentPage.tsx")
+assert.match(page922, /freebuffDesktopRunning/, "la page interroge la détection")
+assert.match(page922, /freebuff-conflict/, "bannière de conflit rendue")
+assert.match(page922, /déjà ouverte dans l'app Freebuff Desktop/, "message explicite attendu")
+const css922 = read("web/src/App.css")
+assert.match(css922, /\.freebuff-conflict/, "CSS de la bannière attendu")
+
 // I. Page « Tâches » : agent principal + 4 modes.
 assert.match(app, /tasks-principal-card/, "carte de l'agent principal (orchestrateur)")
 assert.match(app, /agent principal/, "l'orchestrateur est présenté comme agent principal")

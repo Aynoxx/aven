@@ -1,4 +1,4 @@
-# Aven v9.6.1
+# Aven v9.6.2
 
 > ## Avant de modifier ce projet (IA ou humain)
 > Lis **`AGENTS.md`** puis **`RULES.md`** : ils fixent les règles universelles de
@@ -32,6 +32,16 @@ subagents) et **4 modes** — Code, Analyse, Recherche, et **Tâche complexe** (
 l'orchestrateur pour les demandes multi-domaines). L'ancien tableau « qui fait quoi »
 est masqué et le renommage d'agents quitte la page (il reste via le CLI) ; Freebuff
 reste accessible par la pastille du hub et la carte « Projet ».
+> **v9.6.2 — Le gel avait une cause racine : le conflit de session** : le diagnostic
+(processus) a montré le CLI embarqué **s'exiter silencieusement** au premier message
+quand l'**app Freebuff Desktop** tient la session du compte (une seule session
+autorisée). Aven ne peut pas contourner le serveur, mais ne laisse plus jamais dans
+le flou : ① **détection** de l'app Desktop par chemin WMI (`isFreebuffDesktopRunning`,
+canal `freebuff:desktop:running`) ; ② **bannière explicite** dans la page Freebuff
+(« Ta session est déjà ouverte dans l'app Freebuff Desktop ») avec bouton « J'ai fermé
+l'app — Relancer » (re-détection + relance) ; ③ **refus clair au lancement** si l'app
+Desktop tourne, au lieu d'ouvrir un TUI condamné ; ④ sur exit silencieux du CLI,
+le message nomme la cause au lieu du générique « s'est terminé ».
 > **v9.6.1 — Plus de gel à l'envoi d'un message** : le terminal Freebuff restait
 réactif à l'affichage mais se figeait dès qu'une réponse arrivait — quatre causes
 cumulées, toutes corrigées : ① l'émulateur caché plein cadre en `opacity:0` était

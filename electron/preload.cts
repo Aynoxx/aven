@@ -73,6 +73,8 @@ contextBridge.exposeInMainWorld("opencode", {
   freebuffPtySignal: (signal: "SIGINT") => call("freebuff:pty:signal", signal),
   freebuffPtyRestart: () => call("freebuff:pty:restart"),
   freebuffPtyActive: () => call("freebuff:pty:active"),
+  // v9.6.2 : l'app Desktop Freebuff tourne-t-elle ? (elle tient la session du compte.)
+  freebuffDesktopRunning: () => call("freebuff:desktop:running"),
   onEvent: (cb: (ev: { type: string; data: Record<string, unknown> }) => void) => {
     const listener = (_e: unknown, ev: { type: string; data: Record<string, unknown> }) => cb(ev)
     ipcRenderer.on("opencode:event", listener)

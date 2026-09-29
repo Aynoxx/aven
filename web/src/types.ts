@@ -162,6 +162,9 @@ export type OpenCodeApi = {
   freebuffPtySignal: (signal: "SIGINT") => Promise<void>
   freebuffPtyRestart: () => Promise<void>
   freebuffPtyActive: () => Promise<boolean>
+  // v9.6.2 : l'app Desktop Freebuff tourne-t-elle ? (elle tient la session du compte —
+  // le terminal intégré ne peut alors pas répondre : bannière + message explicite.)
+  freebuffDesktopRunning: () => Promise<boolean>
   onEvent: (cb: (ev: { type: string; data: Record<string, any> }) => void) => () => void
 }
 
