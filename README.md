@@ -1,4 +1,4 @@
-# Aven v9.6.2
+# Aven v9.7.0
 
 > ## Avant de modifier ce projet (IA ou humain)
 > Lis **`AGENTS.md`** puis **`RULES.md`** : ils fixent les règles universelles de
@@ -32,6 +32,17 @@ subagents) et **4 modes** — Code, Analyse, Recherche, et **Tâche complexe** (
 l'orchestrateur pour les demandes multi-domaines). L'ancien tableau « qui fait quoi »
 est masqué et le renommage d'agents quitte la page (il reste via le CLI) ; Freebuff
 reste accessible par la pastille du hub et la carte « Projet ».
+> **v9.7.0 — Motion design natif (zéro dépendance)** : l'interface prend vie avec les
+API modernes du Chromium embarqué : ① **transitions de vue** (View Transitions API)
+lors des navigations hub → Tâches / Freebuff / Accueil — la carte « Projet » du hub
+**devient** la page Freebuff (shared element) ; ② **tokens de motion** partagés
+(`--dur-fast/med/slow`, courbes `--ease-out`/`--ease-spring` Fluent) ; ③
+**chorégraphie d'entrée** en cascade des cartes du hub et des modes de la page
+Tâches (décalage 45 ms par carte) ; ④ **micro-interactions** : enfoncement au press,
+élévation au survol des cartes, respiration de la pastille de présence, skeleton
+shimmer pendant le chargement des agents ; ⑤ tout est **coupé sous
+`prefers-reduced-motion`**, n'anime que `transform`/`opacity` (composités GPU — le
+conteneur xterm n'est jamais touché, leçon du gel v9.6.1), et le helper est testé.
 > **v9.6.2 — Le gel avait une cause racine : le conflit de session** : le diagnostic
 (processus) a montré le CLI embarqué **s'exiter silencieusement** au premier message
 quand l'**app Freebuff Desktop** tient la session du compte (une seule session

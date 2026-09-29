@@ -28,6 +28,16 @@
   --density-gap: 14px;
   --density-pad: 16px;
   --shadow: 0 18px 60px rgba(20, 24, 38, .08);
+  /* v9.7.0 : tokens de MOTION — durées et courbes partagées par toute l'interface.
+     --ease-out : « decelerate » Fluent (entrée d'élément) ; --ease-spring : léger
+     dépassement (emphase) ; --dur-fast pour micro-interactions, --dur-med pour
+     transitions de vue. La chorégraphie (cascades) décale par --stagger-i. */
+  --dur-fast: 120ms;
+  --dur-med: 240ms;
+  --dur-slow: 380ms;
+  --ease-out: cubic-bezier(.22, 1, .36, 1);
+  --ease-spring: cubic-bezier(.34, 1.56, .64, 1);
+  --stagger-i: 0;
 }
 
 :root[data-theme="dark"] {
@@ -902,3 +912,52 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
 
 /* Le tableau v9.4.0 « qui fait quoi » disparaît : les modes PORTENT l'orientation. */
 .assistants-map { display: none; }
+
+/* ── v9.7.0 : MOTION DESIGN — transitions de vue, chorégraphie, micro-interactions ──
+   Règles du projet : N'animer que transform/opacity (composités GPU) — jamais de
+   width/height/top/left ; aucun JAMAIS sur le conteneur xterm (refit PTY) ; tout est
+   coupé sous prefers-reduced-motion. */
+
+/* Shared element : la carte source (dataset posé par withViewTransition(name)) garde
+   son identité visuelle pendant le changement de vue — elle DEVIEND la page cible. */
+[data-vt-source="project"] .hub-card-project { view-transition-name: hub-target; }
+[data-vt-source="tasks"] .hub-card-agents { view-transition-name: hub-target; }
+[data-vt-source="project"] .freebuff-agent-page,
+[data-vt-source="tasks"] .agents-page { view-transition-name: hub-target-page; }
+
+::view-transition-old(hub-target),
+::view-transition-new(hub-target) { animation-duration: var(--dur-med); animation-timing-function: var(--ease-out); }
+::view-transition-old(root) { animation-duration: var(--dur-fast); }
+::view-transition-new(root) { animation-duration: var(--dur-med); animation-timing-function: var(--ease-out); }
+
+/* Entrée des pages (sans shared element concerné) : léger fondu + montée. */
+@keyframes page-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.agents-page { animation: page-in var(--dur-med) var(--ease-out) both; }
+
+/* Chorégraphie d'entrée : les cartes du hub et les modes apparaissent en cascade
+   (décalage par --stagger-i posé en inline style). Transform/opacity uniquement. */
+@keyframes card-in { from { opacity: 0; transform: translateY(14px) scale(.97); } to { opacity: 1; transform: none; } }
+.hub-card { animation: card-in var(--dur-slow) var(--ease-out) both; animation-delay: calc(var(--stagger-i, 0) * 45ms); }
+.tasks-mode-card, .tasks-principal-card { animation: card-in var(--dur-slow) var(--ease-out) both; animation-delay: calc(var(--stagger-i, 0) * 45ms); }
+
+/* Micro-interactions : press enfoncé, hover qui soulève (translateZ nul = GPU). */
+.hub-card:active, .tasks-mode-card:active, .tasks-principal-card:active { transform: scale(.98); transition: transform var(--dur-fast) var(--ease-out); }
+.button:active { transform: translateY(1px) scale(.99); transition: transform var(--dur-fast) var(--ease-out); }
+.agent-card, .tasks-mode-card { transition: box-shadow var(--dur-med) var(--ease-out), border-color var(--dur-med) var(--ease-out); }
+.tasks-mode-card:hover { border-color: var(--accent-border); box-shadow: 0 8px 24px rgba(20, 24, 38, .08); }
+
+/* Pastille de présence Freebuff : respiration discrète quand la session est active. */
+@keyframes presence-breathe { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+.agent-presence-dot.online { animation: presence-breathe 2.4s ease-in-out infinite; }
+
+/* Skeleton shimmer pendant le chargement des agents (page Tâches). */
+@keyframes shimmer { from { background-position: -200% 0; } to { background-position: 200% 0; } }
+.hint[aria-busy="true"] { background: linear-gradient(90deg, var(--panel-soft) 25%, var(--accent-soft) 50%, var(--panel-soft) 75%); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; border-radius: 8px; }
+
+/* Accessibilité : TOUT le motion s'arrête si l'OS le demande. */
+@media (prefers-reduced-motion: reduce) {
+  .hub-card, .tasks-mode-card, .tasks-principal-card, .agents-page { animation: none; }
+  .agent-presence-dot.online { animation: none; }
+  .hint[aria-busy="true"] { animation: none; }
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+}

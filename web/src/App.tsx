@@ -20,6 +20,8 @@ import { buildPrompt, selectionWithin } from "./selection-actions"
 // La logique (bouclage, index) vit dans le module pur arrow-navigation.ts, testé.
 import { nextArrowIndex, type ArrowKey } from "./arrow-navigation"
 import { groupChatsByAgent } from "./chat-groups"
+// v9.7.0 : transitions de vue natives (View Transitions API, Chromium embarqué).
+import { withViewTransition } from "./view-transitions"
 import { Icon, type IconName } from "./icons"
 import "./App.css"
 
@@ -851,7 +853,7 @@ export default function App() {
     requestAnimationFrame(() => textareaRef.current?.focus())
   }
 
-  const openAgentsPage = () => {
+  const openAgentsPage = () => withViewTransition(() => {
     setShowHome(false)
     setShowSettings(false)
     setShowNotes(false)
@@ -859,11 +861,11 @@ export default function App() {
     setShowProjectPicker(false)
     setShowFreebuffAgent(false)
     setShowAgentsPage(true)
-  }
+  })
 
   // v9.5.0 : la page agent Freebuff se navigue comme la page Agents — une seule vue
   // à la fois, « Accueil » dans la barre de fenêtre pour en sortir.
-  const openFreebuffAgent = () => {
+  const openFreebuffAgent = () => withViewTransition(() => {
     setShowHome(false)
     setShowSettings(false)
     setShowNotes(false)
@@ -871,10 +873,10 @@ export default function App() {
     setShowProjectPicker(false)
     setShowAgentsPage(false)
     setShowFreebuffAgent(true)
-  }
+  })
 
   // v9.1.0 : retour accueil depuis la barre de fenêtre — ferme les panneaux ouverts.
-  const goHome = () => {
+  const goHome = () => withViewTransition(() => {
     setShowAgentsPage(false)
     setShowSettings(false)
     setShowNotes(false)
@@ -882,7 +884,7 @@ export default function App() {
     setShowProjectPicker(false)
     setShowFreebuffAgent(false)
     setShowHome(true)
-  }
+  })
 
   const openConfiguration = (focus?: "workspaces") => {
     setShowAgentsPage(false)
@@ -1036,8 +1038,8 @@ export default function App() {
                 <div className="hub-orbit hub-orbit-core" aria-hidden="true" />
                 <div className="hub-crosshair" aria-hidden="true"><span /><span /></div>
 
-                {nav.map((item) => (
-                  <button key={item.key} className={`hub-card hub-card-${item.key}`} onClick={item.action} aria-label={`${item.label} — ${item.hint}`} type="button">
+                {nav.map((item, i) => (
+                  <button key={item.key} className={`hub-card hub-card-${item.key}`} style={{ "--stagger-i": i } as React.CSSProperties} onClick={item.action} aria-label={`${item.label} — ${item.hint}`} type="button">
                     <span className="hub-card-icon"><HubIcon kind={item.kind} /></span>
                     <span className="hub-card-copy"><strong>{item.label}</strong><small>{item.hint}</small></span>
                   </button>
@@ -1409,12 +1411,12 @@ export default function App() {
               </article>
             </div>
             <div className="tasks-modes">
-              {MODES.map((m) => {
+              {MODES.map((m, i) => {
                 const a = agents.find((x) => x.id === m.id)
                 const group = a ? groupChatsByAgent(chats, [a.id])[0] : undefined
                 const lastChat = group?.chats[0]
                 return (
-                  <article key={m.id} className={`tasks-mode-card ${a ? "" : "tasks-card-off"}`}>
+                  <article key={m.id} style={{ "--stagger-i": i + 1 } as React.CSSProperties} className={`tasks-mode-card ${a ? "" : "tasks-card-off"}`}>
                     <div className="agent-card-icon"><Icon name={m.icon} size={20} /></div>
                     <div className="agent-card-body">
                       <span className="agent-card-id">{m.id}</span>
