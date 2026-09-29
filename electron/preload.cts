@@ -24,7 +24,6 @@ contextBridge.exposeInMainWorld("opencode", {
   chats: (agent: string, includeArchived?: boolean) => call("chats:list", agent, includeArchived),
   createChat: (agent: string) => call("chats:create", agent),
   renameChat: (id: string, title: string) => call("chats:rename", id, title),
-  renameAgent: (id: string, name: string) => call("agents:rename", id, name),
   deleteChat: (id: string) => call("chats:delete", id),
   archiveChat: (id: string, archived: boolean) => call("chats:archive", id, archived),
   exportChat: (id: string) => call("chats:export", id),

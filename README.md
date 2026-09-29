@@ -1,4 +1,4 @@
-# Aven v9.7.0
+# Aven v9.7.1
 
 > ## Avant de modifier ce projet (IA ou humain)
 > Lis **`AGENTS.md`** puis **`RULES.md`** : ils fixent les règles universelles de
@@ -43,6 +43,23 @@ Tâches (décalage 45 ms par carte) ; ④ **micro-interactions** : enfoncement a
 shimmer pendant le chargement des agents ; ⑤ tout est **coupé sous
 `prefers-reduced-motion`**, n'anime que `transform`/`opacity` (composités GPU — le
 conteneur xterm n'est jamais touché, leçon du gel v9.6.1), et le helper est testé.
+> **v9.7.1 — Le shared element devient réel + purge du code mort** : l'audit v9.7.0
+avait révélé que le morph carte→page était annoncé mais **jamais branché** — c'est
+fait : la carte « Projet » pose désormais `data-vt-source="project"` au clic (idem
+« Tâches »), le CSS fait porter le même `view-transition-name` à la carte source ET
+à la page cible (vrai morph), et l'attribut est retiré après la transition (avec un
+timeout de 2 s — une fenêtre en arrière-plan peut geler l'animation et laisser un
+nom orphelin, constaté au smoke CDP). **Purge** : canal `agents:rename` supprimé de
+bout en bout (preload/types/operations/main — 0 appel UI depuis v9.6.0 ; les noms
+personnalisés enregistrés restent lus), `agent-names.ts` allégé, tombstones retirés.
+**Note découverte au smoke** : Windows « effets réduits » (`prefers-reduced-motion`)
+désactive tout le motion par conception — c'est la garde d'accessibilité voulue,
+prouvée active et respectée. Le protocole de migration native est aussi disponible :
+[MIGRATION-WINUI.md](MIGRATION-WINUI.md).
+> **→ Version native Windows (protocole)** : la feuille de route de migration vers
+**WinUI 3 + C# (.NET 8)** — moteur OpenCode en sidecar Node inchangé, pont JSON-RPC,
+9 phases avec critères d'acceptation mesurables, Electron en production jusqu'à la
+bascule — est détaillée dans [MIGRATION-WINUI.md](MIGRATION-WINUI.md).
 > **v9.6.2 — Le gel avait une cause racine : le conflit de session** : le diagnostic
 (processus) a montré le CLI embarqué **s'exiter silencieusement** au premier message
 quand l'**app Freebuff Desktop** tient la session du compte (une seule session

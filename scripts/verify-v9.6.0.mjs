@@ -30,7 +30,8 @@ assert.ok(!app.includes('aria-label="Gérer les espaces" title="Gérer les espac
 assert.match(app, /openConfiguration\("workspaces"\)/, "la route vocale mène aux Réglages → Configuration")
 
 // B. La carte Projet ouvre l'agent Freebuff (label et icône conservés).
-assert.match(app, /key: "project", label: "Projet", kind: "project", hint: "Agent central \(Freebuff\)", action: openFreebuffAgent/, "carte Projet → openFreebuffAgent")
+// v9.7.1 : la carte passe source="project" (shared element carte→page), même destination.
+assert.match(app, /key: "project", label: "Projet", kind: "project", hint: "Agent central \(Freebuff\)", action: \(\) => openFreebuffAgent\("project"\)/, "carte Projet → openFreebuffAgent(project)")
 assert.ok(!app.includes('action: () => selectAgent("projet") },'), "l'ancien selectAgent projet a disparu du hub")
 
 // C. Fix du TUI : plancher de dimensions testé + émulateur superposé (vraies dimensions).
@@ -86,6 +87,23 @@ assert.match(page922, /freebuff-conflict/, "bannière de conflit rendue")
 assert.match(page922, /déjà ouverte dans l'app Freebuff Desktop/, "message explicite attendu")
 const css922 = read("web/src/App.css")
 assert.match(css922, /\.freebuff-conflict/, "CSS de la bannière attendu")
+
+// K. v9.7.1 : shared element réellement branché (l'audit v9.7.0 l'a trouvé mort).
+assert.match(app, /openFreebuffAgent = \(source\?: "project"\) => withViewTransition/, "la page Freebuff accepte une source (morph carte→page)")
+assert.match(app, /openAgentsPage = \(source\?: "tasks"\) => withViewTransition/, "la page Tâches accepte une source")
+assert.match(app, /openFreebuffAgent\("project"\)/, "la carte Projet passe sa source")
+assert.match(app, /openAgentsPage\("tasks"\)/, "la carte Tâches passe sa source")
+assert.match(css, /\[data-vt-source="project"\] \.freebuff-agent-page \{ view-transition-name: hub-target; \}/, "CSS : carte et page partagent le même view-transition-name")
+const vt921 = read("web/src/view-transitions.ts")
+assert.match(vt921, /finished\.finally/, "la source est retirée après finished (pas de nom orphelin)")
+assert.ok(!vt921.includes("transitionNameSelector"), "helper : fonction morte supprimée")
+// Canal mort retiré (0 caller UI depuis v9.6.0).
+const preload921 = read("electron/preload.cts")
+const types921 = read("web/src/types.ts")
+const operations921 = read("electron/operations.ts")
+assert.ok(!preload921.includes("renameAgent"), "preload : canal renameAgent supprimé")
+assert.ok(!types921.includes("renameAgent"), "types : renameAgent supprimé")
+assert.ok(!operations921.includes("async renameAgent"), "operations : renameAgent supprimé (les noms enregistrés restent lus)")
 
 // I. Page « Tâches » : agent principal + 4 modes.
 assert.match(app, /tasks-principal-card/, "carte de l'agent principal (orchestrateur)")

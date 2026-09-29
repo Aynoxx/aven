@@ -12,30 +12,32 @@ type DocumentVT = Document & {
 // Le callback de mise à jour est SYNCHRONE côté React 18 (les setState batchés hors
 // d'actu se vident au microtask suivant) : on double requestAnimationFrame pour garantir
 // que le nouveau rendu est peint AVANT que la capture ::new ne se fasse.
-export function withViewTransition(update: () => void, name?: string): void {
+// v9.7.1 : `source` pose data-vt-source AVANT la capture (le CSS sélectionne la carte
+// source et la page cible par ce nom — morph carte→page) et le retire APRÈS la fin de
+// la transition (sinon deux vues portent le même view-transition-name ensuite).
+export function withViewTransition(update: () => void, source?: string): void {
   // Node (tests) n'a pas de DOM : le typeof-garde rend le fallback le chemin par défaut.
   const doc = (typeof document !== "undefined" ? document : undefined) as DocumentVT | undefined
   if (!doc || typeof doc.startViewTransition !== "function" || prefersReducedMotion()) {
     update()
     return
   }
-  if (name) setTransitionName(name)
-  doc.startViewTransition(() => new Promise<void>((resolve) => {
+  const setSource = (v: string | null) => {
+    if (v) doc.documentElement.dataset.vtSource = v
+    else delete doc.documentElement.dataset.vtSource
+  }
+  setSource(source ?? null)
+  // v9.7.1 : le retrait NE DÉPEND PAS seulement de `finished` — une fenêtre en
+  // arrière-plan peut geler l'animation et laisser l'attribut orphelin indéfiniment
+  // (constaté au smoke CDP). Filet : timeout de 2 s (durée > au morph le plus long).
+  const transition = doc.startViewTransition(() => new Promise<void>((resolve) => {
     update()
     requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
   }))
-}
-
-// Shared element : donne le view-transition-name à la carte source juste avant la
-// capture, et le retire après (sinon deux éléments porteraient le même nom en permanence).
-export function setTransitionName(name: string | null): void {
-  document.documentElement.dataset.vtSource = name ?? ""
-}
-
-// Le CSS ne peut pas interroger dataset depuis l'attribut sélecteur dynamiquement :
-// ce helper construit le sélecteur d'attribut utilisé par App.css.
-export function transitionNameSelector(): string {
-  return "[data-vt-source]"
+  let done = false
+  const clear = () => { if (!done) { done = true; setSource(null) } }
+  const safety = setTimeout(clear, 2000)
+  void transition.finished.finally(() => { clearTimeout(safety); clear() })
 }
 
 export function prefersReducedMotion(): boolean {

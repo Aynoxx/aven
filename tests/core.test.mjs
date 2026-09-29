@@ -15,7 +15,6 @@ import {
 import { mergeNewModels, prunePaidModels, syncTrackedFiles } from "../electron/workspace-sync.ts"
 import { writeTextAtomic, writeJsonAtomic, writeJsonAtomicPretty } from "../electron/atomic-file.ts"
 import { isArchived, listArchived, setArchived } from "../electron/archive.ts"
-import { loadNames, setName } from "../electron/agent-names.ts"
 import { emptyLive, applyEvent } from "../web/src/stream.ts"
 
 // ── model-ref ────────────────────────────────────────────────────────────────
@@ -184,7 +183,7 @@ test("écritures atomiques : pas de fichier temporaire résiduel", () => {
   }
 })
 
-// ── archive & agent-names (fichiers dans l'espace de travail) ───────────────
+// ── archive (fichiers dans l'espace de travail) ─────────────────────────────
 test("archive : set / is / list / unset", () => {
   const ws = mkdtempSync(path.join(tmpdir(), "aven-archive-"))
   try {
@@ -194,18 +193,6 @@ test("archive : set / is / list / unset", () => {
     assert.deepEqual([...listArchived(ws)], ["s1"])
     setArchived(ws, "s1", false)
     assert.equal(isArchived(ws, "s1"), false)
-  } finally {
-    rmSync(ws, { recursive: true, force: true })
-  }
-})
-
-test("agent-names : nom vide = retour au nom d'origine", () => {
-  const ws = mkdtempSync(path.join(tmpdir(), "aven-names-"))
-  try {
-    setName(ws, "code", "Mon Codeur")
-    assert.equal(loadNames(ws).code, "Mon Codeur")
-    setName(ws, "code", "")
-    assert.equal(loadNames(ws).code, undefined)
   } finally {
     rmSync(ws, { recursive: true, force: true })
   }

@@ -1,4 +1,6 @@
-import { loadNames, setName } from "./agent-names.js"
+// v9.7.1 : seul setName a disparu (renommage sorti de l'UI en v9.6.0) — les noms
+// personnalisés déjà enregistrés (.opencode-app/agent-names.json) restent lus/affichés.
+import { loadNames } from "./agent-names.js"
 import type { Router } from "./router.js"
 import type { Task } from "./priorities.js"
 import { parseRef, refOf } from "./model-ref.js"
@@ -101,14 +103,6 @@ export function makeOps(current: () => Bridge, router: () => Router | null = () 
   return {
     async agents() {
       return listAgents(current())
-    },
-
-    /** Renomme l'AFFICHAGE d'un agent (nom vide = nom d'origine). L'identifiant ne change pas. */
-    async renameAgent(id: string, name: string) {
-      if (!isTab(id)) throw new Error(`Agent inconnu : ${id}`)
-      const b = current()
-      setName(b.workspace, id, String(name ?? ""))
-      return listAgents(b)
     },
 
     /** Renomme une conversation. */

@@ -1,12 +1,10 @@
-import { mkdirSync, readFileSync } from "node:fs"
+import { readFileSync } from "node:fs"
 import path from "node:path"
-import { writeJsonAtomicPretty } from "./atomic-file.js"
 
-// Noms AFFICHÉS des agents (onglets). Sans dépendance à Electron : testable avec Node seul.
-// Seul le nom affiché change : l'identifiant (code, recherche, analyse), le fichier .opencode/agents/*.md,
-// le routage des modèles et model-priorities.json restent inchangés.
-export const MAX_AGENT_NAME = 30
-
+// Noms AFFICHÉS des agents (onglets), persistés dans l'espace de travail. Sans dépendance
+// à Electron : testable avec Node seul. v9.7.1 : setName a disparu (le renommage d'agents
+// a quitté l'UI en v9.6.0) — les noms déjà enregistrés restent lus et affichés, et le
+// fichier existant n'est jamais supprimé (un ancien build peut encore écrire dedans).
 const file = (workspace: string) => path.join(workspace, ".opencode-app", "agent-names.json")
 
 export function loadNames(workspace: string): Record<string, string> {
@@ -16,14 +14,4 @@ export function loadNames(workspace: string): Record<string, string> {
   } catch {
     return {}
   }
-}
-
-/** Nom vide = retour au nom d'origine. */
-export function setName(workspace: string, id: string, name: string) {
-  const names = loadNames(workspace)
-  const clean = name.trim().slice(0, MAX_AGENT_NAME)
-  if (clean) names[id] = clean
-  else delete names[id]
-  mkdirSync(path.dirname(file(workspace)), { recursive: true })
-  writeJsonAtomicPretty(file(workspace), names)
 }

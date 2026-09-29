@@ -728,7 +728,7 @@ function registerIpc() {
 
   ipcMain.handle("chats:create", (_e, agent: string) => ops.createChat(agent))
   ipcMain.handle("chats:rename", (_e, id: string, title: string) => ops.renameChat(id, title))
-  ipcMain.handle("agents:rename", (_e, id: string, name: string) => ops.renameAgent(id, name))
+  // (v9.7.1 : canal agents:rename retiré avec le renommage d'agents, sorti de l'UI en v9.6.0)
   ipcMain.handle("chats:delete", (_e, id: string) => ops.deleteChat(id))
   ipcMain.handle("chats:archive", (_e, id: string, archived: boolean) => ops.archiveChat(id, archived))
   // v9.4.0 : sélecteur de modèle interactif — la main de l'utilisateur sur le routeur.

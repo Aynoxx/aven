@@ -918,15 +918,18 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
    width/height/top/left ; aucun JAMAIS sur le conteneur xterm (refit PTY) ; tout est
    coupé sous prefers-reduced-motion. */
 
-/* Shared element : la carte source (dataset posé par withViewTransition(name)) garde
-   son identité visuelle pendant le changement de vue — elle DEVIEND la page cible. */
-[data-vt-source="project"] .hub-card-project { view-transition-name: hub-target; }
-[data-vt-source="tasks"] .hub-card-agents { view-transition-name: hub-target; }
-[data-vt-source="project"] .freebuff-agent-page,
-[data-vt-source="tasks"] .agents-page { view-transition-name: hub-target-page; }
+/* Shared element v9.7.1 : la carte source ET la page cible portent le MÊME
+   view-transition-name pendant la transition (data-vt-source est posé avant capture
+   par withViewTransition et retiré après finished) — le navigateur interroge les deux
+   snapshots et morph la carte EN page. Sans l'attribut (retour Accueil, reduced-motion),
+   c'est le fondu root par défaut qui joue. */
+[data-vt-source="project"] .hub-card-project,
+[data-vt-source="project"] .freebuff-agent-page { view-transition-name: hub-target; }
+[data-vt-source="tasks"] .hub-card-agents,
+[data-vt-source="tasks"] .agents-page { view-transition-name: hub-target; }
 
 ::view-transition-old(hub-target),
-::view-transition-new(hub-target) { animation-duration: var(--dur-med); animation-timing-function: var(--ease-out); }
+::view-transition-new(hub-target) { animation-duration: var(--dur-med); animation-timing-function: var(--ease-out); height: 100%; }
 ::view-transition-old(root) { animation-duration: var(--dur-fast); }
 ::view-transition-new(root) { animation-duration: var(--dur-med); animation-timing-function: var(--ease-out); }
 

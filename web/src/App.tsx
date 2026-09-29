@@ -64,7 +64,6 @@ export default function App() {
   const [loadedFor, setLoadedFor] = useState("")
   const [renamingChat, setRenamingChat] = useState<string | null>(null)
   const [chatValue, setChatValue] = useState("")
-// (v9.6.0 : le renommage d'agents a quitté la page Tâches — il reste dans le CLI)
 
   const renameCancelled = useRef(false)
   const renameBusy = useRef(false)
@@ -764,7 +763,6 @@ export default function App() {
     }
   }
 
-// (v9.6.0 : commitAgentRename retiré avec le renommage de la page Tâches)
   const agentName = (id: string) => agents.find((a) => a.id === id)?.name ?? id
 
   // (v9.3.0 : les statistiques ont quitté le hub pour l'onglet « Usage » des Réglages —
@@ -853,7 +851,8 @@ export default function App() {
     requestAnimationFrame(() => textareaRef.current?.focus())
   }
 
-  const openAgentsPage = () => withViewTransition(() => {
+  // v9.7.1 : `source` (depuis les cartes du hub) déclenche le shared element carte→page.
+  const openAgentsPage = (source?: "tasks") => withViewTransition(() => {
     setShowHome(false)
     setShowSettings(false)
     setShowNotes(false)
@@ -861,11 +860,11 @@ export default function App() {
     setShowProjectPicker(false)
     setShowFreebuffAgent(false)
     setShowAgentsPage(true)
-  })
+  }, source)
 
   // v9.5.0 : la page agent Freebuff se navigue comme la page Agents — une seule vue
   // à la fois, « Accueil » dans la barre de fenêtre pour en sortir.
-  const openFreebuffAgent = () => withViewTransition(() => {
+  const openFreebuffAgent = (source?: "project") => withViewTransition(() => {
     setShowHome(false)
     setShowSettings(false)
     setShowNotes(false)
@@ -873,10 +872,10 @@ export default function App() {
     setShowProjectPicker(false)
     setShowAgentsPage(false)
     setShowFreebuffAgent(true)
-  })
+  }, source)
 
   // v9.1.0 : retour accueil depuis la barre de fenêtre — ferme les panneaux ouverts.
-  const goHome = () => withViewTransition(() => {
+  const goHome = () => withViewTransition(() => { // v9.7.1 : sans source = fondu root
     setShowAgentsPage(false)
     setShowSettings(false)
     setShowNotes(false)
@@ -902,8 +901,8 @@ export default function App() {
       // v9.1.0 : « projet » est à part — carte dédiée d'orchestrateur, hors sélecteur d'agents.
       // v9.6.0 : la carte Projet OUVRE L'AGENT FREEBUFF (l'orchestrateur utilisateur devient
       // l'agent externe gratuit) — le nom « Projet » reste le repère de la porte principale.
-      { key: "project", label: "Projet", kind: "project", hint: "Agent central (Freebuff)", action: openFreebuffAgent },
-      { key: "agents", label: "Tâches", kind: "agent", hint: "Spécialistes par tâche", action: openAgentsPage },
+      { key: "project", label: "Projet", kind: "project", hint: "Agent central (Freebuff)", action: () => openFreebuffAgent("project") },
+      { key: "agents", label: "Tâches", kind: "agent", hint: "Spécialistes par tâche", action: () => openAgentsPage("tasks") },
       // v9.4.0 : Freebuff quitte le cercle — il vit dans la page Assistants (avec les agents), la pastille reste un raccourci.
       // v9.3.0 : Fichiers et Notes = le CONTENU de l'espace — vues intégrées (l'Explorateur
       // Windows reste disponible d'un clic dans la vue Fichiers).

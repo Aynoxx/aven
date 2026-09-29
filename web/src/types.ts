@@ -114,7 +114,6 @@ export type OpenCodeApi = {
   createChat: (agent: string) => Promise<Chat>
   deleteChat: (id: string) => Promise<void>
   renameChat: (id: string, title: string) => Promise<{ id: string; title: string }>
-  renameAgent: (id: string, name: string) => Promise<Agent[]>
   archiveChat: (id: string, archived: boolean) => Promise<void>
   // v9.4.0 : sélecteur de modèle interactif (ref absent = retour au « Auto » du routeur).
   setChatModel: (id: string, ref?: string) => Promise<Chat>
