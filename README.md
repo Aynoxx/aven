@@ -1,4 +1,4 @@
-# Aven v9.7.1
+# Aven v9.7.2
 
 > ## Avant de modifier ce projet (IA ou humain)
 > Lis **`AGENTS.md`** puis **`RULES.md`** : ils fixent les règles universelles de
@@ -43,6 +43,18 @@ Tâches (décalage 45 ms par carte) ; ④ **micro-interactions** : enfoncement a
 shimmer pendant le chargement des agents ; ⑤ tout est **coupé sous
 `prefers-reduced-motion`**, n'anime que `transform`/`opacity` (composités GPU — le
 conteneur xterm n'est jamais touché, leçon du gel v9.6.1), et le helper est testé.
+> **v9.7.2 — Vérification en app réelle : le refus de session devient une bannière**
+: boucle « ouvrir, vérifier, corriger » exécutée via CDP sur l'app lancée. Trouvé et
+corrigé : quand le lancement de Freebuff est **refusé** (app Freebuff Desktop ouverte),
+l'utilisateur voyait l'erreur brute « Error invoking remote method… » sans bannière
+actionnable — désormais le refus est reconnu, la **bannière de conflit s'affiche**
+(avec son bouton « J'ai fermé l'app — Relancer ») et le statut cesse de rester bloqué
+sur « démarre… » (il passe à « Session refusée — voir la bannière »). Le reste de la
+boucle est au vert : navigation hub→Tâches→Freebuff→Accueil, 4 modes, composeur et
+chips, bascule Vue terminal (25 lignes xterm rendues), pastille hub, **zéro erreur
+console** ; le motion est prouvé sous émulation (transitions déclenchées, source
+posée pendant et retirée après) et se coupe correctement quand Windows réduit les
+effets.
 > **v9.7.1 — Le shared element devient réel + purge du code mort** : l'audit v9.7.0
 avait révélé que le morph carte→page était annoncé mais **jamais branché** — c'est
 fait : la carte « Projet » pose désormais `data-vt-source="project"` au clic (idem

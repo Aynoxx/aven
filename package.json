@@ -1,6 +1,6 @@
 {
   "name": "aven",
-  "version": "9.7.1",
+  "version": "9.7.2",
   "private": true,
   "type": "module",
   "main": "dist-electron/main.js",

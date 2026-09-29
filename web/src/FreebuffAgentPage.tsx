@@ -179,8 +179,20 @@ export default function FreebuffAgentPage(props: { onHome: () => void; onError: 
         // bannière prévient AVANT le premier message (le gel muet n'a plus lieu d'être).
         void api.freebuffDesktopRunning().then((running) => { if (!disposed) setDesktopConflict(running) }).catch(() => undefined)
       } catch (e) {
-        if (!disposed) {
-          setErrorMsg(e instanceof Error ? e.message : String(e))
+        if (disposed) return
+        // v9.7.1 : un refus au lancement (app Desktop ouverte, CLI absent, session
+        // prise) est un conflit de session, pas un crash — bannière actionnable avec
+        // bouton Relancer au lieu de l'erreur brute « Error invoking remote method… ».
+        const raw = e instanceof Error ? e.message : String(e)
+        const msg = raw.replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/, "")
+        if (/app Freebuff Desktop est ouverte/i.test(msg)) {
+          setDesktopConflict(true)
+          setIsError(false)
+          setErrorMsg("")
+          // La session n'existe pas : pas de « démarre… » qui reste bloqué.
+          setPresence({ label: "Session refusée — voir la bannière", online: false })
+        } else {
+          setErrorMsg(msg)
           setIsError(true)
         }
       }
