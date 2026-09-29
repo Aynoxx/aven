@@ -1,4 +1,4 @@
-# Aven v9.6.0
+# Aven v9.6.1
 
 > ## Avant de modifier ce projet (IA ou humain)
 > Lis **`AGENTS.md`** puis **`RULES.md`** : ils fixent les règles universelles de
@@ -32,6 +32,17 @@ subagents) et **4 modes** — Code, Analyse, Recherche, et **Tâche complexe** (
 l'orchestrateur pour les demandes multi-domaines). L'ancien tableau « qui fait quoi »
 est masqué et le renommage d'agents quitte la page (il reste via le CLI) ; Freebuff
 reste accessible par la pastille du hub et la carte « Projet ».
+> **v9.6.1 — Plus de gel à l'envoi d'un message** : le terminal Freebuff restait
+réactif à l'affichage mais se figeait dès qu'une réponse arrivait — quatre causes
+cumulées, toutes corrigées : ① l'émulateur caché plein cadre en `opacity:0` était
+quand même PEINT à chaque rafraîchissement du TUI → `visibility:hidden` (dimensions
+conservées, peinture supprimée) ; ② les centaines de petits chunks ConPTY partaient
+chacun en IPC individuel → coalescing 30 ms/8 Ko côté main (débit divisé par ~50) ;
+③ le filtrage du transcript lançait ~26 regex par ligne sur 400 lignes à chaque frame
+→ fast-path sans-lettres + plafond de rendu à 120 lignes ; ④ le scan du buffer
+continuait en Vue terminal où il ne sert à rien → suspendu ; `aria-live="polite"`
+retiré du transcript (recalcul d'arbre d'accessibilité à chaque frame). Un test de
+cout borné (5 000 lignes < 200 ms) garde la régression à distance.
 > **v9.5.1 — L'agent Freebuff devient une page pleine** : la vue quitte son dialogue
 recouvrant — elle se navigue comme la page Agents (une seule vue à la fois, bouton
 « Accueil », Échap revient à l'accueil, session maintenue en quittant). Le hub ou

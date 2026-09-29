@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { buildTranscript, isSessionBar, isNoise, isUserLine, trimBorders, isDecorationOnly } from "../web/src/freebuff-transcript.ts"
+import { buildTranscript, isSessionBar, isNoise, isUserLine, trimBorders, isDecorationOnly, hasSpeech } from "../web/src/freebuff-transcript.ts"
 
 // Cas réels observés dans le TUI Freebuff (screenshots utilisateur, v9.6.0).
 
@@ -74,5 +74,23 @@ const rawUser = ["❯ Corrige le bug puis explique", "Voici le correctif appliqu
 const { lines: lu } = buildTranscript(rawUser)
 assert.equal(lu[0].user, true)
 assert.equal(lu[1].user, false)
+
+// ── Fast-path v9.6.1 : équivalence + coût borné ──────────────────────────────
+// Lignes sans lettre ni chiffre : ignorées avant même les regex (aucun changement
+// observable — elles ne matchaient ni session, ni bruit, ni discours).
+assert.ok(!hasSpeech("│ ─── ═══ │"))
+assert.ok(!hasSpeech("───"))
+assert.ok(hasSpeech("40/40 Freebucks remaining"))
+assert.ok(hasSpeech("Salut !"))
+const before = buildTranscript(["│ ────── │", "│ ──── │", "│ texte visible │"])
+assert.deepEqual(before.lines.map((l) => l.text), ["texte visible"])
+
+// Coût borné : 5 000 lignes de décoration filtrées en < 200 ms (garde anti-freeze
+// v9.6.1 — le buffer de 400 lignes est rescanné à chaque frame de streaming).
+const bulk = Array.from({ length: 5000 }, (_, i) => (i % 7 === 0 ? "│ texte du TUI │" : "│ ──────────── │"))
+const t0 = process.hrtime.bigint()
+buildTranscript(bulk)
+const ms = Number(process.hrtime.bigint() - t0) / 1e6
+assert.ok(ms < 200, `buildTranscript trop lent : ${ms.toFixed(1)} ms pour 5000 lignes`)
 
 console.log("freebuff-transcript: OK")

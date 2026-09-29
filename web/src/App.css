@@ -864,9 +864,13 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
 .freebuff-sessionbar-item { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
 
 /* Scène : la conversation et l'émulateur occupent la même place — l'émulateur caché
-   garde de VRAIES dimensions (le fit sur 1px cassait le TUI, cf. fix v9.6.0). */
+   garde de VRAIES dimensions (le fit sur 1px cassait le TUI, cf. fix v9.6.0).
+   v9.6.1 : visibility:hidden (et plus opacity:0) — un émulateur plein cadre en
+   opacity:0 est quand même PEINT à chaque rafraîchissement du TUI et gèle l'interface
+   pendant les réponses ; visibility:hidden supprime la peinture en gardant les
+   dimensions (fit() et ptyDims() continuent de renvoyer la vraie géométrie). */
 .agent-stage { position: relative; }
-.agent-stage .agent-term-hidden { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; pointer-events: none; border: 0; }
+.agent-stage .agent-term-hidden { position: absolute; inset: 0; width: 100%; height: 100%; visibility: hidden; pointer-events: none; border: 0; }
 
 /* ── v9.6.0 : page « Tâches » — agent principal + modes ───────────────────────── */
 

@@ -73,6 +73,14 @@ export function isUserLine(line: string): boolean {
   return /^\s*(?:vous|tu|moi)\s*[:>]/i.test(line)
 }
 
+// Fast-path v9.6.1 : ~95 % des lignes du TUI sont des bordures/décoration (une lettre
+// au milieu au plus). Un test Unicode ultra-bon marché évite de lancer les ~26 regex
+// de session/bruit sur chacune — le filtrage d'une réponse qui stream reste O(n) léger.
+const LETTER_RE = /[\p{L}\p{N}]/u
+export function hasSpeech(line: string): boolean {
+  return LETTER_RE.test(line)
+}
+
 export type TranscriptLine = { text: string; user: boolean }
 
 // Transforme les lignes brutes du TUI en conversation : bordures rognées, session
@@ -84,6 +92,9 @@ export function buildTranscript(rawLines: string[]): { lines: TranscriptLine[]; 
   for (const raw of rawLines) {
     const trimmed = trimBorders(raw)
     if (!trimmed || isDecorationOnly(trimmed)) continue
+    // Fast-path : sans lettre ni chiffre, la ligne ne peut être ni session, ni bruit,
+    // ni discours (les motifs de pub contiennent tous des lettres) — un seul test.
+    if (!hasSpeech(trimmed)) continue
     if (isSessionBar(trimmed)) {
       const score = sessionBarScore(trimmed)
       if (score > sessionScore) { sessionBar = trimmed.trim(); sessionScore = score }

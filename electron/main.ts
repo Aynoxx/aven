@@ -409,6 +409,22 @@ function createTray() {
   }
 }
 
+// v9.6.1 : coalescing des chunks du PTY Freebuff — ConPTY émet des centaines de petits
+// chunks pendant une réponse ; chacun partait en IPC individuel et l'interface gelait.
+// Un lot toutes les PTY_BATCH_FLUSH_MS (ou 8 Ko accumulés) divise le débit d'événements
+// par ~50 sans latence perceptible ; les événements d'état (status/exit/error) vident
+// TOUJOURS le lot d'abord (ordre préservé : données avant changement d'état).
+const PTY_BATCH_FLUSH_MS = 30
+const PTY_BATCH_MAX_CHARS = 8 * 1024
+const ptyBatch: { chunk: string; timer: NodeJS.Timeout | null } = { chunk: "", timer: null }
+function flushPtyBatch() {
+  if (ptyBatch.timer) { clearTimeout(ptyBatch.timer); ptyBatch.timer = null }
+  if (!ptyBatch.chunk) return
+  const data = ptyBatch.chunk
+  ptyBatch.chunk = ""
+  win?.webContents.send("opencode:event", { type: "freebuff.pty.data", data: { chunk: data } })
+}
+
 function registerIpc() {
   ipcMain.handle("window:minimize", () => { win?.minimize(); return true })
   ipcMain.handle("window:toggleMaximize", () => { if (win?.isMaximized()) win.unmaximize(); else win?.maximize(); return true })
@@ -611,10 +627,19 @@ function registerIpc() {
         trustAgents: existsSync(path.join(requireWorkspace(), ".agents", "aven-code.ts")),
         resume: loadPrefs().freebuffResume === true,
         handlers: {
-          onData: (chunk) => win?.webContents.send("opencode:event", { type: "freebuff.pty.data", data: { chunk } }),
-          onStatus: (state) => win?.webContents.send("opencode:event", { type: "freebuff.pty.status", data: { state } }),
-          onExit: (code, signal) => win?.webContents.send("opencode:event", { type: "freebuff.pty.exit", data: { code, signal } }),
-          onError: (message) => win?.webContents.send("opencode:event", { type: "freebuff.pty.error", data: { message } }),
+          // v9.6.1 : coalescing des chunks — ConPTY émet des centaines de petits chunks
+          // pendant une réponse et CHACUN partait en IPC individuel (tempête d'événements,
+          // interface gelée). Lot de 30 ms / 8 Ko : latence invisible, débit divisé par ~50.
+          onData: (chunk) => {
+            ptyBatch.chunk += chunk
+            if (ptyBatch.timer === null) {
+              ptyBatch.timer = setTimeout(flushPtyBatch, PTY_BATCH_FLUSH_MS)
+            }
+            if (ptyBatch.chunk.length >= PTY_BATCH_MAX_CHARS) flushPtyBatch()
+          },
+          onStatus: (state) => { flushPtyBatch(); win?.webContents.send("opencode:event", { type: "freebuff.pty.status", data: { state } }) },
+          onExit: (code, signal) => { flushPtyBatch(); win?.webContents.send("opencode:event", { type: "freebuff.pty.exit", data: { code, signal } }) },
+          onError: (message) => { flushPtyBatch(); win?.webContents.send("opencode:event", { type: "freebuff.pty.error", data: { message } }) },
         },
       })
       if (replay) win?.webContents.send("opencode:event", { type: "freebuff.pty.replay", data: { buffer: replay } })

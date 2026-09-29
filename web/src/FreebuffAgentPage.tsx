@@ -52,6 +52,10 @@ export default function FreebuffAgentPage(props: { onHome: () => void; onError: 
   const [resume, setResume] = useState(false)
   const [draft, setDraft] = useState("")
   const renderTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // v9.6.1 : miroir de showRaw pour le callback — en Vue terminal, le scan du buffer
+  // (transcript) est inutile : l'écran montre déjà le TUI brut.
+  const showRawRef = useRef(false)
+  showRawRef.current = showRaw
 
   // Transcript « conversation » : dérivé du buffer xterm (source unique de vérité),
   // coalescé pour ne pas rescanner à chaque octet.
@@ -60,9 +64,14 @@ export default function FreebuffAgentPage(props: { onHome: () => void; onError: 
     renderTimer.current = setTimeout(() => {
       const term = termRef.current
       if (!term) return
+      // v9.6.1 : Vue terminal = transcript suspendu (l'écran montre déjà le TUI brut).
+      if (showRawRef.current) return
       const buf = term.buffer.active
       const raw: string[] = []
-      const max = 400
+      // v9.6.1 : plafond de RENDU (et plus seulement de scan) — 400 lignes re-diffées
+      // à chaque frame de streaming figeaient l'interface ; 120 suffisent largement
+      // pour une conversation (le buffer xterm garde TOUT, la Vue terminal est intacte).
+      const max = 120
       for (let i = Math.max(0, buf.length - max); i < buf.length; i++) {
         const line = buf.getLine(i)
         if (!line) continue
@@ -255,8 +264,11 @@ export default function FreebuffAgentPage(props: { onHome: () => void; onError: 
         {/* Vue conversation : transcript dérivé du buffer, sans spinner ni bordures.
             L'émulateur reste monté (métriques fiables) mais invisible par défaut. */}
         <div className="agent-stage">
+        {/* v9.6.1 : plus d'aria-live sur le transcript — chaque frame de streaming
+            déclenchait un recalcul complet de l'arbre d'accessibilité (gel ressenti).
+            Le composeur reste focalisable, le scroll suit le bas comme avant. */}
         {!showRaw && (
-          <div className="agent-chat" ref={chatRef} aria-live="polite" aria-label="Conversation avec l'agent Freebuff">
+          <div className="agent-chat" ref={chatRef} aria-label="Conversation avec l'agent Freebuff">
             {chatLines.length === 0 && (
               <p className="hint agent-chat-empty">
                 {presence.online ? "Dis bonjour à Freebuff, ou choisis un prompt rapide ci-dessous." : "L'agent démarre…"}
