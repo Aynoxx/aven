@@ -20,8 +20,9 @@ public class EngineConversationTests : IDisposable
     {
         _double = Path.Combine(Path.GetTempPath(), $"aven-host-double-{Guid.NewGuid():N}.mjs");
         File.WriteAllText(_double, """
-            // Double honnête du host : JSON-RPC ligne sur stdio, réponses après les requêtes.
-            const rl = require("node:readline").createInterface({ input: process.stdin });
+            // Double honnête du host : JSON-RPC ligne sur stdio, réponses après les requêtes (ESM pur).
+            import readline from "node:readline";
+            const rl = readline.createInterface({ input: process.stdin });
             rl.on("line", (line) => {
               if (!line.trim()) return;
               const msg = JSON.parse(line);

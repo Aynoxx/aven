@@ -35,6 +35,9 @@ public sealed class EngineClient : IAsyncDisposable
     /// <summary>Le host tourne-t-il ?</summary>
     public bool IsRunning => _process is { HasExited: false };
 
+    /// <summary>Dernière ligne de sortie d'erreur du host (diagnostic d'échec de démarrage).</summary>
+    public string? LastErrorLine { get; private set; }
+
     /// <summary>Démarre le host (idempotent) et renvoie la connexion JSON-RPC.</summary>
     public JsonRpcConnection Start()
     {
@@ -59,10 +62,17 @@ public sealed class EngineClient : IAsyncDisposable
             _connection = new JsonRpcConnection(_process.StandardOutput, _process.StandardInput);
             _connection.NotificationReceived += OnNotification;
             _connection.Start();
-            _ = Task.Run(() =>
+            _ = Task.Run(async () =>
             {
-                var err = _process.StandardError.ReadLine(); // ligne d'en-tête du host (log)
-                if (err is not null) Debug.WriteLine(err);
+                try
+                {
+                    while (await _process.StandardError.ReadLineAsync() is { } err)
+                    {
+                        LastErrorLine = err;
+                        Debug.WriteLine(err);
+                    }
+                }
+                catch { /* le process meurt avec nous */ }
             });
             return _connection;
         }
@@ -77,6 +87,9 @@ public sealed class EngineClient : IAsyncDisposable
     /// <summary>Appel au host : "ping", "initialize", "session.list"… (proxy SDK).</summary>
     public Task<JsonNode?> CallAsync(string method, object? parameters = null, CancellationToken cancellationToken = default)
         => Start().CallAsync(method, parameters, cancellationToken);
+
+    /// <summary>Démarre si nécessaire et renvoie la connexion (usage avancé/tests).</summary>
+    public JsonRpcConnection Connection => Start();
 
     public async ValueTask DisposeAsync()
     {
