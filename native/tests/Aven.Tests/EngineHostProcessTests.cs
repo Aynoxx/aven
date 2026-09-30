@@ -30,7 +30,7 @@ public class EngineHostProcessTests
             // `npm run build:electron`. Le build CI l'exécute avant les tests C#.
             return; // TODO phase 1 : rendre obligatoire quand CI le garantit
         }
-        using var client = new EngineClient(bundle, nodeExecPath: "node");
+        await using var client = new EngineClient(bundle, nodeExecPath: "node");
         using var annulé = new CancellationTokenSource(TimeSpan.FromSeconds(15));
 
         var ping = await client.CallAsync("ping", null, annulé.Token);
