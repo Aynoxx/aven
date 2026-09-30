@@ -30,7 +30,12 @@ dans CI après `npm run build:electron`).
 
 Le job Electron (`ci.yml`) continue de tourner en parallèle, inchangé.
 
-## En local
+## En local — tout se prouve SANS GitHub
 
-Compiler nécessite le SDK .NET 8 (Windows) : `dotnet build native/src/Aven.Native/Aven.Native.csproj -c Release -p:Platform=x64`.
-Les assets PNG du manifeste sont régénérables via `node scripts/gen-native-assets.mjs`.
+    npm run test:native
+
+Installe le SDK .NET 8 dans `tools/dotnet-sdk` au premier lancement (gitignoré,
+sans droits admin), puis enchaîne : **10 tests xUnit** du pont + **build MSIX**
+de la coquille dans `native/.tmp-msix/` (installable via le `Install.ps1`
+généré). `--no-msix` pour les seuls tests. Les assets PNG du manifeste sont
+régénérables via `node scripts/gen-native-assets.mjs`.

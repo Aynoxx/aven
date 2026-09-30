@@ -5,3 +5,4 @@ AppPackages/
 artifacts/
 *.user
 *.suo
+.tmp-msix/
