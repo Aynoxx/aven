@@ -50,6 +50,10 @@ public sealed partial class MainWindow : Window
     private Aven.Bridge.ConversationClient? _client;
     private Aven.Bridge.ChatViewModel? _chat;
     private bool _chatOuvert;
+    private bool _filesOuvert, _notesOuvert;
+    private string _filesRelative = "";
+    private Aven.Bridge.Note? _noteOuverte;
+    private string? _noteNouvelleTags;
     private bool _dialogOuvert;
     private string _modelLabel = "Auto";
     private readonly Queue<int> _fpsHistorique = new();
@@ -102,6 +106,8 @@ public sealed partial class MainWindow : Window
     {
         if (sender is not Button carte || carte.Tag is not string index) return;
         if (index == "0") { OuvrirChat(); return; } // carte Projet = conversation réelle (phase 3)
+        if (index == "2") { OuvrirFichiers(); return; } // carte Fichiers (phase 4)
+        if (index == "3") { OuvrirNotes(); return; } // carte Notes (phase 4)
         var cible = Cibles[int.Parse(index)];
         PageTitle.Text = cible.Titre;
         PageHint.Text = cible.Hint;
@@ -114,10 +120,12 @@ public sealed partial class MainWindow : Window
         // DEVENT l'en-tête de la page — le même effet que View Transitions côté web.
         PageView.Visibility = Visibility.Visible;
         HubView.Visibility = Visibility.Collapsed;
-        // Le chat n'est visible que sur la carte Projet.
+        // Une seule vue à la fois : tout est masqué, Ouvrir* rallume le sien.
         _chatOuvert = false;
         ChatScroll.Visibility = Visibility.Collapsed;
         ComposerBar.Visibility = Visibility.Collapsed;
+        FilesScroll.Visibility = Visibility.Collapsed;
+        NotesScroll.Visibility = Visibility.Collapsed;
         PageView.UpdateLayout();
         var animation = ConnectedAnimationService.GetForCurrentView().PrepareToAnimate("hub-card", source);
         animation.TryStart(PageTitle, new UIElement[] { PageHint });
@@ -244,6 +252,236 @@ public sealed partial class MainWindow : Window
     }
 
     private void OnStop(object sender, RoutedEventArgs e) => ArrêterTour();
+
+    // ── Vue Fichiers (phase 4) — FilesService cloisonné par safeResolve ───────
+
+    private static string Espace() => Directory.Exists("C:/Users/Liam/Downloads/Aven")
+        ? "C:/Users/Liam/Downloads/Aven" : AppContext.BaseDirectory;
+
+    private void OuvrirFichiers()
+    {
+        if (!_filesOuvert) { _filesOuvert = true; }
+        PageTitle.Text = "Fichiers";
+        PageHint.Text = "Explorateur de l'espace (lecture seule)";
+        FilesScroll.Visibility = Visibility.Visible;
+        ListerFichiers(_filesRelative);
+    }
+
+    private void ListerFichiers(string relatif)
+    {
+        try
+        {
+            _filesRelative = relatif;
+            var entrées = Aven.Bridge.FilesService.List(Espace(), relatif);
+            FilesList.Children.Clear();
+            FilesPreview.Visibility = Visibility.Collapsed;
+            FilesUp.Visibility = relatif.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+
+            // Fil d'ariane cliquable (parité files-crumbs).
+            FilesCrumbs.Children.Clear();
+            var crumbs = Aven.Bridge.FilesService.Breadcrumb(relatif);
+            for (var i = 0; i < crumbs.Count; i++)
+            {
+                if (i > 0) FilesCrumbs.Children.Add(new TextBlock { Text = "\u203A", VerticalAlignment = VerticalAlignment.Center, Foreground = BrushDe("AvenMutedBrush") });
+                var c = crumbs[i];
+                var bouton = new Button
+                {
+                    Content = c.Label,
+                    Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+                    BorderThickness = new Thickness(0),
+                    Padding = new Thickness(6, 2, 6, 2),
+                    Foreground = BrushDe("AvenTextBrush"),
+                };
+                var chemin = c.Path;
+                bouton.Click += (_, _) => ListerFichiers(chemin);
+                FilesCrumbs.Children.Add(bouton);
+            }
+
+            foreach (var entrée in entrées)
+            {
+                var rangée = new Button
+                {
+                    Content = entrée.Kind == "dir" ? "\uD83D\uDCC1  " + entrée.Name : "\u25A4  " + entrée.Name + (entrée.Size > 0 ? "   (" + TailleHumaine(entrée.Size) + ")" : ""),
+                    HorizontalAlignment = HorizontalAlignment.Stretch,
+                    HorizontalContentAlignment = HorizontalAlignment.Left,
+                    MinHeight = 34,
+                    Background = BrushDe("AvenPanelBrush"),
+                    BorderBrush = BrushDe("AvenBorderBrush"),
+                    BorderThickness = new Thickness(1),
+                    CornerRadius = new CornerRadius(8),
+                    Foreground = BrushDe("AvenTextBrush"),
+                };
+                var kind = entrée.Kind;
+                var chemin = entrée.Path;
+                rangée.Click += (_, _) =>
+                {
+                    if (kind == "dir") ListerFichiers(chemin);
+                    else AperçuFichier(chemin);
+                };
+                FilesList.Children.Add(rangée);
+            }
+            if (entrées.Count == 0) FilesList.Children.Add(new TextBlock { Text = "Dossier vide.", Foreground = BrushDe("AvenMutedBrush") });
+        }
+        catch (Exception erreur)
+        {
+            FilesList.Children.Clear();
+            FilesList.Children.Add(new TextBlock { Text = erreur.Message, Foreground = BrushDe("AvenDangerBrush") });
+        }
+    }
+
+    private void AperçuFichier(string chemin)
+    {
+        try
+        {
+            var fichier = Aven.Bridge.FilesService.Read(Espace(), chemin);
+            FilesPreviewPath.Text = "APER\u00C7U \u00B7 " + fichier.Path;
+            FilesPreviewMeta.Text = TailleHumaine(fichier.Size) + (fichier.Truncated ? " \u00B7 aper\u00E7u tronqu\u00E9 (512 Kio)" : "");
+            FilesPreviewContent.Text = fichier.Content;
+            FilesPreview.Visibility = Visibility.Visible;
+        }
+        catch (Exception erreur)
+        {
+            FilesPreview.Visibility = Visibility.Visible;
+            FilesPreviewPath.Text = "";
+            FilesPreviewMeta.Text = "";
+            FilesPreviewContent.Text = erreur.Message;
+        }
+    }
+
+    private static string TailleHumaine(long octets) => octets < 1024 ? $"{octets} o"
+        : octets < 1024 * 1024 ? $"{octets / 1024.0:0.0} Kio" : $"{octets / (1024.0 * 1024.0):0.0} Mio";
+
+    private void OnFilesUp(object sender, RoutedEventArgs e)
+    {
+        var segments = _filesRelative.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        ListerFichiers(string.Join("/", segments.Take(segments.Length - 1)));
+    }
+
+    // ── Vue Notes (phase 4) — NotesService, même format disque que l'Electron ──
+
+    private void OuvrirNotes()
+    {
+        if (!_notesOuvert) { _notesOuvert = true; }
+        PageTitle.Text = "Notes";
+        PageHint.Text = "De vrais fichiers Markdown sur ton PC, \u00E9tiquetables par agent.";
+        NotesScroll.Visibility = Visibility.Visible;
+        NotesDirHint.Text = Aven.Bridge.NotesService.Dir(Espace());
+        ListerNotes();
+    }
+
+    private void ListerNotes()
+    {
+        try
+        {
+            var query = NotesQuery.Text.Trim().ToLowerInvariant();
+            var pins = Aven.Bridge.NotesService.LoadPinned(Espace());
+            var notes = Aven.Bridge.NotesService.List(Espace())
+                .Where(n => query.Length == 0 || n.Title.ToLowerInvariant().Contains(query) || n.Markdown.ToLowerInvariant().Contains(query))
+                .OrderByDescending(n => pins.Contains(n.Id)) // épinglées d'abord (parité visible)
+                .ThenByDescending(n => n.Updated);
+            NotesList.Children.Clear();
+            foreach (var note in notes)
+            {
+                var rangée = new Button
+                {
+                    Content = (pins.Contains(note.Id) ? "\uD83D\uDCCC " : "") + note.Title + "   " + note.Id,
+                    HorizontalAlignment = HorizontalAlignment.Stretch,
+                    HorizontalContentAlignment = HorizontalAlignment.Left,
+                    MinHeight = 36,
+                    Background = BrushDe("AvenPanelBrush"),
+                    BorderBrush = BrushDe("AvenBorderBrush"),
+                    BorderThickness = new Thickness(1),
+                    CornerRadius = new CornerRadius(8),
+                    Foreground = BrushDe("AvenTextBrush"),
+                };
+                var id = note.Id;
+                rangée.Click += (_, _) => OuvrirNote(id);
+                NotesList.Children.Add(rangée);
+            }
+            if (!NotesList.Children.OfType<Button>().Any())
+                NotesList.Children.Add(new TextBlock { Text = query.Length > 0 ? "Aucune note ne correspond." : "Aucune note : cr\u00E9e la premi\u00E8re avec \u00AB + Nouvelle \u00BB.", Foreground = BrushDe("AvenMutedBrush") });
+        }
+        catch (Exception erreur)
+        {
+            NotesList.Children.Clear();
+            NotesList.Children.Add(new TextBlock { Text = erreur.Message, Foreground = BrushDe("AvenDangerBrush") });
+        }
+    }
+
+    private void OnNotesQuery(object sender, TextChangedEventArgs e) { if (_notesOuvert) ListerNotes(); }
+
+    private void OuvrirNote(string id)
+    {
+        try
+        {
+            var note = Aven.Bridge.NotesService.Get(Espace(), id);
+            _noteOuverte = note;
+            NoteEditor.Visibility = Visibility.Collapsed;
+            NotePreview.Visibility = Visibility.Visible;
+            NotePreviewTitre.Text = note.Title;
+            NotePinButton.Content = Aven.Bridge.NotesService.LoadPinned(Espace()).Contains(id) ? "D\u00E9tacher" : "\u00C9pingler";
+            NoteMeta.Text = note.Markdown.Split(new[] { ' ', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).Length + " mots \u00B7 " + TailleHumaine(note.Markdown.Length);
+            NotePreviewBody.Children.Clear();
+            RemplirMarkdown(NotePreviewBody, note.Markdown, BrushDe("AvenTextBrush"));
+        }
+        catch (Exception erreur)
+        {
+            PageHint.Text = erreur.Message;
+        }
+    }
+
+    private void OnNotePin(object sender, RoutedEventArgs e)
+    {
+        if (_noteOuverte is not { } note) return;
+        try
+        {
+            var pins = Aven.Bridge.NotesService.TogglePin(Espace(), note.Id);
+            NotePinButton.Content = pins.Contains(note.Id) ? "D\u00E9tacher" : "\u00C9pingler";
+            ListerNotes();
+        }
+        catch (Exception erreur) { PageHint.Text = erreur.Message; }
+    }
+
+    private void OnNoteEdit(object sender, RoutedEventArgs e)
+    {
+        if (_noteOuverte is not { } note) return;
+        NoteEditorTitre.Text = "\u00C9DITION";
+        NoteTitleBox.Text = note.Title;
+        NoteBodyBox.Text = note.Markdown;
+        NotePreview.Visibility = Visibility.Collapsed;
+        NoteEditor.Visibility = Visibility.Visible;
+    }
+
+    private void OnNoteNew(object sender, RoutedEventArgs e)
+    {
+        NoteEditorTitre.Text = "NOUVELLE NOTE";
+        NoteTitleBox.Text = "";
+        NoteBodyBox.Text = "";
+        _noteNouvelleTags = null;
+        NotePreview.Visibility = Visibility.Collapsed;
+        NoteEditor.Visibility = Visibility.Visible;
+    }
+
+    private async void OnNoteSave(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var id = _noteOuverte is { } ouverte && NoteEditorTitre.Text == "\u00C9DITION" ? ouverte.Id : "";
+            var note = await Task.Run(() => Aven.Bridge.NotesService.Save(Espace(), id, NoteTitleBox.Text, NoteBodyBox.Text));
+            _noteOuverte = note;
+            if (_noteNouvelleTags is { } tag) { Aven.Bridge.NotesService.SetTags(Espace(), note.Id, new[] { tag }); _noteNouvelleTags = null; }
+            NoteEditor.Visibility = Visibility.Collapsed;
+            ListerNotes();
+            OuvrirNote(note.Id);
+        }
+        catch (Exception erreur) { PageHint.Text = erreur.Message; }
+    }
+
+    private void OnNoteCancel(object sender, RoutedEventArgs e)
+    {
+        NoteEditor.Visibility = Visibility.Collapsed;
+        if (_noteOuverte is { } note) OuvrirNote(note.Id);
+    }
 
     private async void ArrêterTour()
     {

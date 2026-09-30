@@ -107,6 +107,70 @@
                 <ScrollViewer x:Name="ChatScroll" Grid.Row="1" Visibility="Collapsed">
                     <StackPanel x:Name="ChatRows" MaxWidth="860" Spacing="10" Margin="20,12,20,16" />
                 </ScrollViewer>
+                <ScrollViewer x:Name="FilesScroll" Grid.Row="1" Visibility="Collapsed">
+                    <StackPanel MaxWidth="980" Spacing="12" Margin="20,12,20,16">
+                        <StackPanel x:Name="FilesCrumbs" Orientation="Horizontal" Spacing="4" />
+                        <Button x:Name="FilesUp" Content="&#8592; Dossier parent" Click="OnFilesUp"
+                                Visibility="Collapsed" HorizontalAlignment="Left" MinHeight="32"
+                                Background="{ThemeResource AvenPanelSoftBrush}" BorderThickness="0" />
+                        <StackPanel x:Name="FilesList" Spacing="4" />
+                        <StackPanel x:Name="FilesPreview" Spacing="6" Visibility="Collapsed">
+                            <TextBlock x:Name="FilesPreviewPath" FontSize="11" Foreground="{ThemeResource AvenMutedBrush}" />
+                            <TextBlock x:Name="FilesPreviewMeta" FontSize="11" Foreground="{ThemeResource AvenMutedBrush}" />
+                            <Border Background="{ThemeResource AvenPanelBrush}" CornerRadius="10" Padding="12"
+                                    BorderBrush="{ThemeResource AvenBorderBrush}" BorderThickness="1">
+                                <TextBlock x:Name="FilesPreviewContent" FontFamily="Consolas" FontSize="12" TextWrapping="Wrap"
+                                           Foreground="{ThemeResource AvenTextBrush}" />
+                            </Border>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+                <ScrollViewer x:Name="NotesScroll" Grid.Row="1" Visibility="Collapsed">
+                    <StackPanel MaxWidth="980" Spacing="12" Margin="20,12,20,16">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="NotesQuery" Grid.Column="0" PlaceholderText="Rechercher..." MinHeight="34"
+                                     Background="{ThemeResource AvenPanelBrush}" BorderBrush="{ThemeResource AvenBorderBrush}"
+                                     TextChanged="OnNotesQuery" />
+                            <Button x:Name="NoteNewButton" Grid.Column="1" Content="+ Nouvelle" Click="OnNoteNew" MinHeight="34"
+                                    Margin="8,0,0,0" Padding="12,4" Background="{ThemeResource AvenAccentBrush}" Foreground="White" />
+                        </Grid>
+                        <TextBlock x:Name="NotesDirHint" FontSize="11" Foreground="{ThemeResource AvenMutedBrush}" />
+                        <StackPanel x:Name="NotesList" Spacing="4" />
+                        <StackPanel x:Name="NoteEditor" Visibility="Collapsed" Spacing="8">
+                            <TextBlock x:Name="NoteEditorTitre" Text="NOUVELLE NOTE" FontSize="11" Foreground="{ThemeResource AvenMutedBrush}" />
+                            <TextBox x:Name="NoteTitleBox" PlaceholderText="Titre de la note..." MinHeight="34"
+                                     Background="{ThemeResource AvenPanelBrush}" BorderBrush="{ThemeResource AvenBorderBrush}" />
+                            <TextBox x:Name="NoteBodyBox" AcceptsReturn="True" Height="220" TextWrapping="Wrap"
+                                     PlaceholderText="# Titre..." FontFamily="Consolas"
+                                     Background="{ThemeResource AvenPanelBrush}" BorderBrush="{ThemeResource AvenBorderBrush}"
+                                     ScrollViewer.VerticalScrollBarVisibility="Auto" />
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button Content="Enregistrer" Click="OnNoteSave" MinHeight="34" Padding="12,4"
+                                        Background="{ThemeResource AvenAccentBrush}" Foreground="White" />
+                                <Button Content="Annuler" Click="OnNoteCancel" MinHeight="34" Padding="12,4"
+                                        Background="{ThemeResource AvenPanelSoftBrush}" />
+                            </StackPanel>
+                        </StackPanel>
+                        <StackPanel x:Name="NotePreview" Visibility="Collapsed" Spacing="6">
+                            <TextBlock x:Name="NotePreviewTitre" FontSize="16" FontWeight="SemiBold" Foreground="{ThemeResource AvenTextBrush}" />
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <Button x:Name="NotePinButton" Click="OnNotePin" MinHeight="30" Padding="10,2"
+                                        Background="Transparent" BorderThickness="0" Foreground="{ThemeResource AvenTextBrush}" />
+                                <Button Content="Modifier" Click="OnNoteEdit" MinHeight="30" Padding="10,2"
+                                        Background="Transparent" BorderThickness="0" Foreground="{ThemeResource AvenTextBrush}" />
+                                <TextBlock x:Name="NoteMeta" FontSize="11" VerticalAlignment="Center" Foreground="{ThemeResource AvenMutedBrush}" />
+                            </StackPanel>
+                            <Border Background="{ThemeResource AvenPanelBrush}" CornerRadius="10" Padding="12"
+                                    BorderBrush="{ThemeResource AvenBorderBrush}" BorderThickness="1">
+                                <StackPanel x:Name="NotePreviewBody" Spacing="4" />
+                            </Border>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
                 <Grid x:Name="ComposerBar" Grid.Row="2" Visibility="Collapsed">
                     <Border Background="{ThemeResource AvenPanelBrush}" BorderBrush="{ThemeResource AvenBorderBrush}"
                             BorderThickness="1" CornerRadius="16" Padding="10,6" Margin="20,0,20,14">

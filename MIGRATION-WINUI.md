@@ -170,9 +170,17 @@ les réponses aux captures de référence faites sur l'app Electron.
   reset journalier + agrégations pures identiques à aggregateStats) et
   `SettingsService.cs` (prefs.json COMPACT atomique — parité writeJsonAtomic, à la
   différence du meta des notes en variante Pretty —, défauts stricts !==false /
-  ===true). 66/66 xUnit, MSIX vert. Reste en phase 4 : l'UI native Notes/Fichiers
-  (explorateur TreeView + GridView) et l'épreuve « deux apps ouvertes sur le même
-  espace » en conditions réelles.
+  ===true).
+- **État (phase 4 close)** : les vues natives Fichiers et Notes sont branchées aux
+  cartes du hub — Fichiers : fil d'ariane cliquable, listing dossier parent inclus,
+  aperçu texte borné avec méta ; Notes : liste filtrable/recherchable avec épinglage,
+  éditeur titre+corps (création/édition), aperçu Markdown via le parseur testé,
+  compteur de mots. L'épreuve « deux apps ouvertes sur le même espace sans
+  corruption » est automatisée (`TwoAppsConcurrencyTests`) : C# et le vrai Node
+  (process séparés, format Electron exact) écrivent SIMULTANÉMENT 20 notes et le
+  même méta — toutes les notes sont ensuite lisibles par les deux moteurs, le JSON
+  méta est valide (la dernière écriture gagne, jamais un état mixte), aucun
+  temporaire résiduel. 67/67 xUnit, MSIX vert, 128/128 Electron, verify OK.
 
 ### Phase 5 — Terminal Freebuff natif (1 à 2 semaines)
 
