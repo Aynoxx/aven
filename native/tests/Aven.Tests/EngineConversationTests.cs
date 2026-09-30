@@ -75,12 +75,12 @@ public class EngineConversationTests
         Assert.Equal(2, messages!.AsArray().Count);
         Assert.Equal("Bonjour le monde", messages[1]!["text"]!.GetValue<string>());
 
-        // 5. Les requêtes parties sur le fil portent les bonnes méthodes
-        // (séparation par lignes quel que soit le saut de ligne du writer).
-        var lignes = envoyé.ToString().Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-        Assert.Contains(lignes, (l) => l.Contains("\"session.create\""));
-        Assert.Contains(lignes, (l) => l.Contains("\"session.prompt\""));
-        Assert.Contains(lignes, (l) => l.Contains("\"message.list\""));
+        // 5. La requête envoyée sur le fil porte la bonne méthode (le routage
+        // par id et la validité JSON-RPC sont déjà prouvés par les étapes 1-4).
+        var fil = envoyé.ToString();
+        Assert.Contains("\"session.create\"", fil);
+        Assert.Contains("\"session.prompt\"", fil);
+        Assert.Contains("\"message.list\"", fil);
     }
 
     [Fact]
