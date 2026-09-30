@@ -26,6 +26,10 @@ public sealed class JsonRpcConnection : IAsyncDisposable
     private readonly TextWriter _writer;
     private readonly object _writeLock = new();
     private readonly ConcurrentDictionary<string, TaskCompletionSource<JsonNode?>> _pending = new();
+    // Réponses arrivées avant l'enregistrement de leur appel (course entre la boucle
+    // de lecture — démarrée par un premier appel — et l'enregistrement d'un appel
+    // concurrent) : conservées puis délivrées quand l'appel s'enregistre.
+    private readonly ConcurrentDictionary<string, JsonObject> _early = new();
     private readonly CancellationTokenSource _cts = new();
     private int _nextId;
     private Task? _readLoop;
@@ -56,6 +60,8 @@ public sealed class JsonRpcConnection : IAsyncDisposable
         _pending[id] = tcs;
         try
         {
+            // La réponse est peut-être déjà arrivée (course avec le lecteur).
+            if (_early.TryRemove(id, out var early)) { DeliverResponse(early, tcs); return await tcs.Task.WaitAsync(cancellationToken).ConfigureAwait(false); }
             Start();
             var request = new JsonObject
             {
@@ -120,9 +126,11 @@ public sealed class JsonRpcConnection : IAsyncDisposable
 
     private void DispatchResponse(JsonNode id, JsonObject message)
     {
-        // Les ids sont monotones : une réponse sans appel enregistré est obsolète,
-        // on l'ignore (le flux continue).
-        if (_pending.TryRemove(id.ToJsonString(), out var pending)) DeliverResponse(message, pending);
+        // Soit l'appel est déjà enregistré (délivrance directe), soit la réponse
+        // a devancé l'enregistrement (course de démarrage) → tampon _early.
+        var key = id.ToJsonString();
+        if (_pending.TryRemove(key, out var pending)) DeliverResponse(message, pending);
+        else _early[key] = message;
     }
 
     private static void DeliverResponse(JsonObject message, TaskCompletionSource<JsonNode?> pending)
