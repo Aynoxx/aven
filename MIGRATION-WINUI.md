@@ -192,35 +192,60 @@ les réponses aux captures de référence faites sur l'app Electron.
 - Barre de session + filtrage transcript : **port 1:1 de « freebuff-transcript.ts »**
   en C# (module pur) — **les mêmes cas de tests** que
   « tests/freebuff-transcript.test.mjs », réécrits en xUnit.
-- **État (transcript + machine à états faits)** : `FreebuffTranscript.cs` porte le
-  filtrage ligne à ligne (bordures, décoration, session avec priorité quota>streak,
-  pubs, prompt utilisateur, fast-path Unicode v9.6.1) — mêmes cas de tests en xUnit,
-  y compris la garde anti-freeze (5000 lignes < 200 ms). Piège de port : la classe
-  de caractères `─-╿` est une PLAGE Unicode (U+2500-U+257F) — échapper le tiret en
-  C# la casse (├/┬ sortaient du filtrage). `FreebuffTerminal.cs` porte la machine à
-  états de freebuff-pty.ts (singleton, scrollback 256 Ko, grâce de boot ARMÉE par
-  timer — pas une mesure d'horloge, sinon les délais de test la court-circuitent —
-  backoff 1/2/4 s avec re-spawn d'un NOUVEAU process, coalescing 30 ms/8 Ko avec
-  vidange d'états avant le changement d'état, plancher dims 80×24, transport
-  ConPTY injectable pour les tests). `AtomicFile.cs` mutualise l'écriture atomique
-  avec RETENTATIVES (Windows refuse le rename sous contention — même l'épreuve
-  deux apps l'a prouvé) + repli copie, et sert notes/stats/prefs. 124/124 xUnit.
+- **État (transcript + machine à états + ConPTY réel faits)** : `FreebuffTranscript.cs`
+  porte le filtrage ligne à ligne (bordures, décoration, session avec priorité
+  quota>streak, pubs, prompt utilisateur, fast-path Unicode v9.6.1) — mêmes cas de
+  tests en xUnit, y compris la garde anti-freeze (5000 lignes < 200 ms). Piège de
+  port : la classe de caractères `─-╿` est une PLAGE Unicode (U+2500-U+257F) —
+  échapper le tiret en C# la casse (├/┬ sortaient du filtrage). `FreebuffTerminal.cs`
+  porte la machine à états de freebuff-pty.ts (singleton, scrollback 256 Ko, grâce
+  de boot ARMÉE par timer — pas une mesure d'horloge, sinon les délais de test la
+  court-circuitent — backoff 1/2/4 s avec re-spawn d'un NOUVEAU process, coalescing
+  30 ms/8 Ko avec vidange d'états avant le changement d'état, plancher dims 80×24,
+  transport injectable pour les tests). `AtomicFile.cs` mutualise l'écriture
+  atomique avec RETENTATIVES (Windows refuse le rename sous contention — même
+  l'épreuve deux apps l'a prouvé) + repli copie, et sert notes/stats/prefs.
+- **Décision ConPTY (consignée)** : le P/Invoke `CreatePseudoConsole` direct
+  (`ConPtyTransport.cs`) s'initialisait (`?9001h` reçu, exit propre) mais le process
+  enfant restait ATTACHÉ à la console du parent — sortie visible sur la console de
+  test, jamais dans les pipes, avec un code pourtant fidèle à l'exemple officiel
+  (prouvé par une sonde jetable : chunks horodatés, exit code 0, dispose propre).
+  CAUSE NON TROUVÉE (piste : l'hôte de test n'a pas de console allouée). ABANDON du P/Invoke au profit de
+  `NodePtyTransport.cs` : un MICRO-HOST Node (`electron/pty-host.ts`, bundle esbuild
+  `dist-electron/aven-pty-host.mjs`) qui pilote le MÊME conpty.node prébuildé que
+  l'Electron (`@lydell/node-pty`) via des lignes JSON sur stdio (data/exit/ready +
+  start/write/resize/kill ; garde anti-orphelin : stdin fermé → exit). Zéro
+divergence TUI par construction. TESTS D'INTÉGRATION réels : echo, cmd interactif
+  (écriture dans le PTY → l'écho répond), resize/kill idempotents, pilote
+  `FreebuffTerminal` sur le vrai transport — `AVEN_PTY_COMMAND` remplace `freebuff`
+  (le CLI réel a un quota mono-session : jamais de test automatisé contre lui).
+  Orphelins Node : tuer le testhost peut laisser le micro-host vivant —
+  `Get-Process node | Stop-Process` avant une suite, sinon les runs suivants
+  HANGENT (piège de débogage).
 - **Acceptation** : session visible, quota « 40/40 Freebucks » dans la barre, pubs
   filtrées, bannière de conflit d'app Desktop fonctionnelle, TUI non gelé à l'envoi.
+  La vue existe (transcript filtré TextBlock + barre de session + bannière WMI +
+  replay) ; la validation visuelle TUI vivant passe par `scripts/launch-native.ps1`.
 
 ### Phase 6 — Dictée + voix (1 semaine)
 
 - DictationService : capture WinRT MediaCapture / WASAPI → POST Groq (mêmes endpoints,
   mêmes formats), éclaircissement dicté porté (voice-intent).
-- **État (pipeline voix porté)** : `VoiceIntent.cs` porte `voice-intent.ts` ET le
-  pipeline `voice.ts` (liste fermée anti-hallucination, prompt verrouillé, filet
-  déterministe v9.1.3 — commandes courantes sans réseau, JAMAIS une demande de
-  contenu —, anti-injection structurelle, reformage et classification en PARALLÈLE
-  avec dégradation indépendante, filet prioritaire sur un « chat » mal classé).
-  HTTP injecté (`IVoiceHttp`, JSON + multipart Whisper) : les mêmes cas que
-  `voice-intent.test.mjs` passent en xUnit sans réseau. 159/159. Reste en phase 6 :
-  capture audio WinRT (MediaCapture/WASAPI), push-to-talk Ctrl+Maj+V
-  (RegisterHotKey), annonceur System.Speech, et l'acceptation « tests WAV fixes ».
+- **État (pipeline + capture + annonceur faits)** : `VoiceIntent.cs` porte
+  `voice-intent.ts` ET le pipeline `voice.ts` (liste fermée anti-hallucination,
+  prompt verrouillé, filet déterministe v9.1.3, anti-injection structurelle,
+  reformage et classification en PARALLÈLE avec dégradation indépendante, filet
+  prioritaire sur un « chat » mal classé) — HTTP injecté (`IVoiceHttp`), mêmes cas
+  que `voice-intent.test.mjs` en xUnit. `VoiceRuntime.cs` (fenêtre) : MediaCapture
+  (mp3/44.1 kHz), push-to-talk Ctrl+Maj+V via KeyboardAccelerator (le hotkey OS
+  global RegisterHotKey reste optionnel), intentions d'app exécutées (ouvrir
+  notes/settings/terminal). `GroqHttp.cs` : HttpClient réel (multipart Whisper +
+  chat temperature 0). `Announcer.cs` (pur, coalescence/mute parité announcer.ts,
+  voix INJECTABLE) branché aux événements moteur, voix SAPI via PowerShell
+  (parité speakWithSapi) — coalescence INTRINSÈQUEMENT course au test : attendre
+  un ÉTAT (nb de phrases dites), jamais un délai fixe ; le mute, lui, est sûr car
+  vérifié AU RÉVEIL de la vidange. Reste en phase 6 : l'acceptation « tests WAV
+  fixes » (fichiers audio de référence sur les vraies machines).
 - Push-to-talk Ctrl+Maj+V global (RegisterHotKey), annonceur System.Speech.
 - **Acceptation** : dictée push-to-talk et annonceur conformes à l'actuel (tests WAV fixes).
 
@@ -283,6 +308,17 @@ constantes partagées C# et des clés de ressource XAML : le rythme v9.7.0 est c
 4. **Nommage** : « Aven 10.0 (native) » vs continuité 9.x — critère : clarté pour les
    utilisateurs pendant la double publication.
 5. **Freebuff CLI** : il reste un sidecar Node tel quel — seul son hôte change (acté).
+6. **WASDK 1.7 (évalué 30/09/2026)** : montée de 1.6.250602001 → **1.7.260224002**
+   (dernière stable 1.7) testée LOCALEMENT : build MSIX x64 de l'app complète
+   (2 pages x:Class + Theme.xaml mergé) 0 erreur, 170/170 xUnit, `npm run
+   test:native` vert — le crash pass1 de phase 2 n'existe PAS en 1.7 (il n'a
+   d'ailleurs jamais existé qu'en obj périmé). 1.7 ADOPTÉ dans Aven.Native.csproj ;
+   retour arrière trivial (réécrire la version + rm -rf obj bin) si un jour
+   nécessaire. Rappel de la leçon phase 2 : tout crash pass1 « mystérieux » doit
+   d'abord déclencher un rebuild CLEAN (rm -rf obj bin) avant toute bissection.
+7. **Lancement natif** : `scripts/launch-native.ps1` (build si besoin + lance
+   Aven.Native.exe + garantit le bundle PTY) — validation visuelle de la coquille
+   (Mica, hub, chat, vues, terminal) hors MSIX déployé.
 
 ---
 

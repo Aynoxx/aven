@@ -24,6 +24,9 @@
                 <Ellipse Width="9" Height="9" Fill="{ThemeResource AvenSuccessBrush}" />
                 <TextBlock Text="En ligne" FontSize="12" VerticalAlignment="Center"
                            Foreground="{ThemeResource AvenMutedBrush}" />
+                <Button x:Name="FreebuffButton" Content="Terminal Freebuff" Click="OnFreebuff" FontSize="12" MinHeight="30"
+                        Background="Transparent" BorderThickness="0" Padding="10,4" Margin="8,0,0,0"
+                        Foreground="{ThemeResource AvenAccentBrush}" />
                 <Button x:Name="SettingsButton" Content="Param&#232;tres" FontSize="12" MinHeight="30"
                         Background="Transparent" BorderThickness="0" Padding="10,4"
                         Foreground="{ThemeResource AvenTextBrush}" Click="OnSettings" />
@@ -171,6 +174,41 @@
                         </StackPanel>
                     </StackPanel>
                 </ScrollViewer>
+                <Grid x:Name="TerminalView" Grid.Row="1" Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Border Grid.Row="0" Background="{ThemeResource AvenPanelSoftBrush}" CornerRadius="10"
+                            Padding="10,6" Margin="20,12,20,4" HorizontalAlignment="Left">
+                        <TextBlock x:Name="TerminalSessionBar" Text="Session en cours..." FontSize="12"
+                                   Foreground="{ThemeResource AvenTextBrush}" />
+                    </Border>
+                    <Border Grid.Row="0" Background="{ThemeResource AvenDangerBrush}" CornerRadius="10"
+                            Padding="10,6" Margin="20,12,20,4" Visibility="Collapsed" x:Name="TerminalBanni&#232;re"
+                            HorizontalAlignment="Right">
+                        <TextBlock Text="App Desktop Freebuff d&#233;tect&#233;e : elle tient la session." FontSize="12" Foreground="White" />
+                    </Border>
+                    <ScrollViewer x:Name="TerminalScroll" Grid.Row="1" Margin="20,4,20,4">
+                        <StackPanel x:Name="TerminalTranscript" MaxWidth="860" Spacing="3" />
+                    </ScrollViewer>
+                    <Grid Grid.Row="2" Margin="20,4,20,14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="TerminalInput" Grid.Column="0" MinHeight="34" PlaceholderText="Message au CLI Freebuff... (Entr&#233;e pour envoyer)"
+                                 KeyDown="OnTerminalKey" Background="{ThemeResource AvenPanelBrush}"
+                                 BorderBrush="{ThemeResource AvenBorderBrush}" />
+                        <Button x:Name="TerminalStop" Grid.Column="1" Content="&#9632; Arr&#234;ter" Click="OnTerminalStop" MinHeight="34"
+                                Padding="10,4" Margin="8,0,0,0" Foreground="{ThemeResource AvenDangerBrush}"
+                                Background="{ThemeResource AvenPanelSoftBrush}" />
+                        <Button x:Name="TerminalRestart" Grid.Column="2" Content="Relancer" Click="OnTerminalRestart" MinHeight="34"
+                                Padding="10,4" Margin="8,0,0,0" Background="{ThemeResource AvenPanelSoftBrush}" />
+                    </Grid>
+                </Grid>
                 <Grid x:Name="ComposerBar" Grid.Row="2" Visibility="Collapsed">
                     <Border Background="{ThemeResource AvenPanelBrush}" BorderBrush="{ThemeResource AvenBorderBrush}"
                             BorderThickness="1" CornerRadius="16" Padding="10,6" Margin="20,0,20,14">

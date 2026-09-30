@@ -144,3 +144,10 @@ internal static class Jsonx
     public static long? N(JsonNode? node) =>
         node is JsonValue v && v.TryGetValue<double>(out var d) && d > 0 ? (long)d : null;
 }
+
+/// <summary>Lectures JSON tolérantes exposées aux assemblages consommateurs (fenêtre, tests).</summary>
+public static class JsonAide
+{
+    /// <summary>Texte d'une clé d'un objet JSON (null si absent ou non textuel).</summary>
+    public static string? Texte(JsonNode? node, string clé) => Jsonx.S(Jsonx.At(node, clé));
+}

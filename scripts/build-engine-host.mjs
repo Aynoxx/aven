@@ -4,8 +4,14 @@
 import { build } from "esbuild"
 
 await build({
-  entryPoints: ["electron/engine-host.ts"],
-  outfile: "dist-electron/aven-engine-host.mjs",
+  entryPoints: [
+    { in: "electron/engine-host.ts", out: "aven-engine-host" },
+    { in: "electron/pty-host.ts", out: "aven-pty-host" },
+  ],
+  outdir: "dist-electron",
+  // Extension .mjs obligatoire : Node exécute un .js comme CommonJS et l'ESM
+  // (import/export) du bundle serait rejeté (piège phase 1).
+  outExtension: { ".js": ".mjs" },
   bundle: true,
   platform: "node",
   format: "esm",

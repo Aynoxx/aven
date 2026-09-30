@@ -1,3 +1,4 @@
+using System.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -43,6 +44,12 @@ public sealed partial class MainWindow : Window
 
         PositionHubCards();
         CascaderEntreeDuHub();
+
+        // Push-to-talk global de la fenêtre : Ctrl+Maj+V (parité v8.8.0 ; le hotkey OS
+        // global demandera le focus fenêtre, l'accélérateur couvre l'usage principal).
+        var ptt = new KeyboardAccelerator { Modifiers = Windows.System.VirtualKeyModifiers.Control | Windows.System.VirtualKeyModifiers.Shift, Key = Windows.System.VirtualKey.V };
+        ptt.Invoked += (_, args) => { SurPushToTalk(); args.Handled = true; };
+        TitleBar.KeyboardAccelerators.Add(ptt);
     }
 
     // ── Chat (phase 3) : moteur + client + VM, ouverts depuis la carte Projet ──
@@ -55,6 +62,16 @@ public sealed partial class MainWindow : Window
     private Aven.Bridge.Note? _noteOuverte;
     private string? _noteNouvelleTags;
     private bool _dialogOuvert;
+
+    // ── Terminal Freebuff (phase 5) : machine à états testée + ConPTY réel ────
+    private Aven.Bridge.FreebuffTerminal? _terminal;
+    private readonly StringBuilder _tamponBrut = new();
+    private readonly List<string> _lignesBrutes = [];
+
+    // ── Voix (phase 6) : pipeline testé + capture micro + annonceur ──────────
+    private Aven.Bridge.VoicePipeline? _voixPipeline;
+    private VoiceRuntime? _voix;
+    private Aven.Bridge.Announcer? _annonceur;
     private string _modelLabel = "Auto";
     private readonly Queue<int> _fpsHistorique = new();
     private int _fpsCompteur;
@@ -481,6 +498,174 @@ public sealed partial class MainWindow : Window
     {
         NoteEditor.Visibility = Visibility.Collapsed;
         if (_noteOuverte is { } note) OuvrirNote(note.Id);
+    }
+
+    // ── Terminal Freebuff (phase 5) ──────────────────────────────────────
+
+    private void OnFreebuff(object sender, RoutedEventArgs e) => OuvrirTerminal();
+
+    private void MasquerVues()
+    {
+        ChatScroll.Visibility = Visibility.Collapsed;
+        ComposerBar.Visibility = Visibility.Collapsed;
+        FilesScroll.Visibility = Visibility.Collapsed;
+        NotesScroll.Visibility = Visibility.Collapsed;
+        TerminalView.Visibility = Visibility.Collapsed;
+    }
+
+    private void OuvrirTerminal()
+    {
+        MasquerVues();
+        PageTitle.Text = "Terminal Freebuff";
+        PageHint.Text = "Le CLI gratuit, dans Aven";
+        TerminalView.Visibility = Visibility.Visible;
+        TerminalInput.Focus(FocusState.Programmatic);
+
+        if (_terminal is not null) return;
+        _terminal = new Aven.Bridge.FreebuffTerminal();
+        var replay = _terminal.Start(
+            () => Aven.Bridge.NodePtyTransport.Démarrer(Espace(), Aven.Bridge.FreebuffTerminal.DefaultCols, Aven.Bridge.FreebuffTerminal.DefaultRows),
+            new Aven.Bridge.TerminalHandlers(
+                OnData: chunk => DispatcherQueue.TryEnqueue(() => DonnéesTerminal(chunk)),
+                OnStatus: état => DispatcherQueue.TryEnqueue(() =>
+                    PageHint.Text = état switch
+                    {
+                        Aven.Bridge.TerminalState.Starting => "Démarrage du CLI...",
+                        Aven.Bridge.TerminalState.Restarting => "Relance automatique...",
+                        _ => "Session active",
+                    }),
+                OnExit: (code, _) => DispatcherQueue.TryEnqueue(() =>
+                    TerminalSessionBar.Text = $"Session terminée (code {code}) — Relancer pour une nouvelle"),
+                OnError: message => DispatcherQueue.TryEnqueue(() =>
+                    TerminalSessionBar.Text = message)),
+            cols: 120, rows: 30); // dims par défaut (l'émulateur ajustera via Resize)
+        if (replay.Length > 0) DonnéesTerminal(replay); // reprise de session : replay du scrollback
+        _ = VérifierConflitDesktop();
+    }
+
+    private async Task VérifierConflitDesktop()
+    {
+        try
+        {
+            var sortie = await ExécuterPowerShell(
+                "Get-CimInstance Win32_Process -Filter \"name='freebuff.exe'\" | Where-Object { $_.ExecutablePath -like '*codebufffreebuff-desktop*' } | Select-Object -First 1 -ExpandProperty ProcessId");
+            var conflit = sortie.Split('\n').Any(l => System.Text.RegularExpressions.Regex.IsMatch(l.Trim(), "^\\d+$"));
+            TerminalBannière.Visibility = conflit ? Visibility.Visible : Visibility.Collapsed;
+        }
+        catch { /* détection best effort (parité isFreebuffDesktopRunning) */ }
+    }
+
+    private static async Task<string> ExécuterPowerShell(string commande)
+    {
+        using var proc = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = "powershell",
+            Arguments = $"-NoProfile -Command \"{commande}\"",
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        }) ?? throw new InvalidOperationException("powershell introuvable");
+        var sortie = await proc.StandardOutput.ReadToEndAsync().ConfigureAwait(false);
+        proc.WaitForExit(10000);
+        return sortie;
+    }
+
+    /// <summary>Morceau coalescé : buffer → lignes → transcript filtré → vue.</summary>
+    private void DonnéesTerminal(string morceau)
+    {
+        _tamponBrut.Append(morceau);
+        var texte = _tamponBrut.ToString();
+        var lignes = texte.Replace("\r\n", "\n").Split('\n');
+        _tamponBrut.Clear();
+        _tamponBrut.Append(lignes[^1]); // dernière ligne gardée (peut-être incomplète)
+        _lignesBrutes.AddRange(lignes[..^1]);
+        if (_lignesBrutes.Count > 400) _lignesBrutes.RemoveRange(0, _lignesBrutes.Count - 400); // parité buffer 400
+
+        var transcript = Aven.Bridge.FreebuffTranscript.Build(_lignesBrutes);
+        TerminalTranscript.Children.Clear();
+        foreach (var ligne in transcript.Lines.TakeLast(60))
+        {
+            TerminalTranscript.Children.Add(new TextBlock
+            {
+                Text = (ligne.User ? "❯ " : "") + ligne.Text,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = ligne.User ? BrushDe("AvenAccentBrush") : BrushDe("AvenTextBrush"),
+                FontSize = 13,
+            });
+        }
+        if (transcript.SessionBar.Length > 0) TerminalSessionBar.Text = transcript.SessionBar;
+        TerminalScroll.UpdateLayout();
+        TerminalScroll.ChangeView(null, TerminalScroll.ScrollableHeight, zoomFactor: 1f, disableAnimation: true);
+    }
+
+    private void OnTerminalKey(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs ev)
+    {
+        if (ev.Key != Windows.System.VirtualKey.Enter || TerminalInput.Text.Length == 0) return;
+        ev.Handled = true;
+        // Le TUI lit une LIGNE : texte + Entrée (parité xterm onData).
+        _terminal?.Write(TerminalInput.Text + "\r");
+        TerminalInput.Text = "";
+    }
+
+    private void OnTerminalStop(object sender, RoutedEventArgs e) => _terminal?.SignalInt(); // Ctrl+C
+
+    private void OnTerminalRestart(object sender, RoutedEventArgs e)
+    {
+        _terminal?.Restart();
+        _lignesBrutes.Clear();
+        TerminalTranscript.Children.Clear();
+        TerminalSessionBar.Text = "Session en cours...";
+    }
+
+    // ── Voix (phase 6) : dictée push-to-talk via le pipeline testé ────────
+
+    private void InitialiserVoix()
+    {
+        if (_voix is not null) return;
+        _voixPipeline = new Aven.Bridge.VoicePipeline(new GroqHttp());
+        _voix = new VoiceRuntime(_voixPipeline);
+        // Annonceur : voix Windows SAPI via PowerShell (parité speakWithSapi de main.ts).
+        _annonceur = new Aven.Bridge.Announcer(speak: texte => Task.Run(async () =>
+        {
+            var sûr = texte.Replace("'", "''");
+            await ExécuterPowerShell(
+                $"Add-Type -AssemblyName System.Speech; (New-Object System.Speech.Synthesis.SpeechSynthesizer).Speak('{sûr}')");
+        }), settleMs: 250);
+        _engine!.EventReceived += ev =>
+        {
+            var données = new Dictionary<string, string>();
+            if (Aven.Bridge.JsonAide.Texte(ev.Data, "text") is { } t) données["text"] = t;
+            if (Aven.Bridge.JsonAide.Texte(ev.Data, "action") is { } a) données["action"] = a;
+            if (Aven.Bridge.JsonAide.Texte(ev.Data, "errorMessage") is { } m) données["errorMessage"] = m;
+            _annonceur.Handle(ev.Type, données);
+        };
+    }
+
+    /// <summary>Push-to-talk Ctrl+Maj+V : démarre/arrête la dictée, exécute les intentions d'app.</summary>
+    private async void SurPushToTalk()
+    {
+        InitialiserVoix();
+        try
+        {
+            await _voix!.BasculerDictée(résultat => DispatcherQueue.TryEnqueue(() =>
+            {
+                if (résultat.Intent is { Kind: "app", Action: not null } intention)
+                {
+                    switch (intention.Action)
+                    {
+                        case "open-notes": OuvrirNotes(); break;
+                        case "open-settings": OnSettings(this, new RoutedEventArgs()); break;
+                        case "open-freebuff": OuvrirTerminal(); break;
+                    }
+                }
+                else if (résultat.Intent is { Kind: "agent" })
+                    PageHint.Text = "Dictée pour l'agent " + (résultat.Intent.Target ?? "courant") + " : " + (résultat.Cleaned ?? résultat.Raw);
+                else
+                    PageHint.Text = "Dictée : " + (résultat.Cleaned ?? résultat.Raw);
+            }));
+            PageHint.Text = _voix.EnCours ? "🎙 Dictée en cours... (Ctrl+Maj+V pour arrêter)" : "Dictée terminée";
+        }
+        catch (Exception erreur) { PageHint.Text = "Micro indisponible : " + erreur.Message; }
     }
 
     private async void ArrêterTour()
