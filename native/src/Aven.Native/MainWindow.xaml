@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="Aven.Native.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Aven">
+
+    <Grid>
+        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8">
+            <TextBlock Text="Aven — socle natif" FontSize="28" FontWeight="SemiBold"
+                       HorizontalAlignment="Center" />
+            <TextBlock Text="Phase 0 · coquille WinUI 3 (.NET 8) — le moteur OpenCode reste en sidecar"
+                       Foreground="Gray" HorizontalAlignment="Center" />
+        </StackPanel>
+    </Grid>
+</Window>

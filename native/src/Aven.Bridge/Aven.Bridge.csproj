@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Aven.Bridge — pont JSON-RPC 2.0 (stdio) vers le moteur Aven.Engine (sidecar Node).
+       Aucune dépendance : System.Text.Json est embarqué dans .NET 8. Phase 0 du
+       protocole MIGRATION-WINUI.md ; le host Node arrive en phase 1. -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Aven.Bridge</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+</Project>
