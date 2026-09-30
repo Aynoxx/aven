@@ -50,6 +50,11 @@ public sealed partial class MainWindow : Window
     private Aven.Bridge.ConversationClient? _client;
     private Aven.Bridge.ChatViewModel? _chat;
     private bool _chatOuvert;
+    private bool _dialogOuvert;
+    private string _modelLabel = "Auto";
+    private readonly Queue<int> _fpsHistorique = new();
+    private int _fpsCompteur;
+    private DateTimeOffset _fpsFenêtre;
 
     private void PositionHubCards()
     {
@@ -192,6 +197,10 @@ public sealed partial class MainWindow : Window
         };
         TitleBar.KeyboardAccelerators.Add(échap);
 
+        // Mesure brute pour l'acceptation « 60 fps » : frames comptées pendant les
+        // tours (fenêtres d'une seconde, 30 s glissantes affichées dans le hint).
+        Microsoft.UI.Xaml.Media.CompositionTarget.Rendering += SurFrame;
+
         // Live → lignes : les événements du moteur arrivent sur le thread de lecture,
         // la réconciliation d'arbre doit passer par l'interface.
         _client.LiveChanged += _ => DispatcherQueue.TryEnqueue(SynchroniserChat);
@@ -257,6 +266,10 @@ public sealed partial class MainWindow : Window
         {
             if (ChatRows.Children[i] is Border bordure && bordure.Tag is Aven.Bridge.ChatRow ligne) RemplirBulle(bordure, ligne);
         }
+
+        // Dialogs bloquants (un seul à la fois) : autorisation puis question.
+        if (chat.Live.Asks.Count > 0) ReconsidérerAutorisations();
+        else if (chat.Live.Forms.Count > 0) ReconsidérerQuestions();
 
         // État du tour : Arrêter visible quand busy, Envoyer désactivé (parité v9.7).
         var busy = chat.Live.Busy;
@@ -327,12 +340,10 @@ public sealed partial class MainWindow : Window
         bordure.BorderBrush = BrushDe("AvenBorderBrush");
         if (ligne.Text.Length > 0)
         {
-            pile.Children.Add(new TextBlock
-            {
-                Text = ligne.Text,
-                TextWrapping = TextWrapping.Wrap,
-                Foreground = ligne.IsUser ? new SolidColorBrush(Microsoft.UI.Colors.White) : BrushDe("AvenTextBrush"),
-            });
+            // Markdown-lite (parseur pur testé) : titres, gras, italique, code —
+            // le contenu reste toujours du texte, rien n'est exécutable ni navigable.
+            RemplirMarkdown(pile, ligne.Text,
+                ligne.IsUser ? new SolidColorBrush(Microsoft.UI.Colors.White) : BrushDe("AvenTextBrush"));
         }
         if (ligne.Meta is { } méta)
             pile.Children.Add(new TextBlock { Text = méta, FontSize = 11, Foreground = BrushDe("AvenMutedBrush") });
@@ -349,5 +360,183 @@ public sealed partial class MainWindow : Window
             if (ligne.Answer is { } réponse)
                 pile.Children.Add(new TextBlock { Text = réponse, FontSize = 12, Foreground = BrushDe("AvenMutedBrush") });
         }
+    }
+
+    /// <summary>Rendu du Markdown-lite : blocs de code (Consolas) + lignes stylées.</summary>
+    private static void RemplirMarkdown(StackPanel pile, string texte, Brush couleur)
+    {
+        foreach (var bloc in Aven.Bridge.MarkdownLite.Parse(texte))
+        {
+            switch (bloc)
+            {
+                case Aven.Bridge.MdCodeBlock code:
+                    var encadré = new Border
+                    {
+                        Background = Application.Current.Resources["AvenPanelSoftBrush"] as Brush,
+                        CornerRadius = new CornerRadius(8),
+                        Padding = new Thickness(8, 6, 8, 6),
+                    };
+                    var monospace = new TextBlock
+                    {
+                        FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas"),
+                        FontSize = 12,
+                        TextWrapping = TextWrapping.Wrap,
+                        Foreground = couleur,
+                    };
+                    monospace.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run
+                    {
+                        Text = (code.Language.Length > 0 ? "[" + code.Language + "]\n" : "") + string.Join("\n", code.Lines),
+                    });
+                    encadré.Child = monospace;
+                    pile.Children.Add(encadré);
+                    break;
+
+                case Aven.Bridge.MdLine ligne:
+                    var blocTexte = new TextBlock
+                    {
+                        TextWrapping = TextWrapping.Wrap,
+                        Foreground = couleur,
+                        FontSize = ligne.HeadingLevel > 0 ? 15 : 13,
+                        FontWeight = ligne.HeadingLevel > 0 ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal,
+                    };
+                    foreach (var segment in ligne.Segments)
+                    {
+                        var run = new Microsoft.UI.Xaml.Documents.Run { Text = segment.Text };
+                        if (segment.Bold) run.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
+                        if (segment.Italic) run.FontStyle = Windows.UI.Text.FontStyle.Italic;
+                        blocTexte.Inlines.Add(run);
+                    }
+                    pile.Children.Add(blocTexte);
+                    break;
+            }
+        }
+    }
+
+    private void SurFrame(object? sender, object e)
+    {
+        if (_chat?.Live.Busy != true) return;
+        _fpsCompteur++;
+        var maintenant = DateTimeOffset.UtcNow;
+        if (_fpsFenêtre == default) _fpsFenêtre = maintenant;
+        if ((maintenant - _fpsFenêtre).TotalSeconds < 1) return;
+        _fpsHistorique.Enqueue(_fpsCompteur);
+        if (_fpsHistorique.Count > 30) _fpsHistorique.Dequeue();
+        var min = _fpsHistorique.Min();
+        var max = _fpsHistorique.Max();
+        PageHint.Text = $"Streaming — {_fpsCompteur} fps (fenêtre : {min}–{max} fps / {_fpsHistorique.Count} s)";
+        _fpsCompteur = 0;
+        _fpsFenêtre = maintenant;
+    }
+
+    /// <summary>Sélecteur de modèles (parité v9.4.0) : « Auto » + chaîne du routeur.</summary>
+    private async void OnModelMenu(object sender, RoutedEventArgs e)
+    {
+        if (_client is null || _chat is null) return;
+        var flyout = new MenuFlyout();
+        var auto = new MenuFlyoutItem { Text = _modelLabel == "Auto" ? "Auto ✓" : "Auto" };
+        auto.Click += (_, _) => _ = ÉpinglerModèle(null);
+        flyout.Items.Add(auto);
+        flyout.Items.Add(new MenuFlyoutSeparator());
+        try
+        {
+            var chain = await _client.ChainForAsync("projet");
+            if (chain is System.Text.Json.Nodes.JsonArray liste)
+            {
+                foreach (var item in liste)
+                {
+                    if (item?["ref"]?.GetValue<string>() is not { } reference) continue;
+                    var label = item["label"]?.GetValue<string>() ?? reference;
+                    var entrée = new MenuFlyoutItem { Text = _modelLabel == reference ? label + " ✓" : label };
+                    var refCapturé = reference;
+                    entrée.Click += (_, _) => _ = ÉpinglerModèle(refCapturé);
+                    flyout.Items.Add(entrée);
+                }
+            }
+            flyout.ShowAt(ModelButton);
+        }
+        catch (Exception erreur)
+        {
+            PageHint.Text = "Chaîne de modèles indisponible : " + erreur.Message;
+        }
+    }
+
+    private async Task ÉpinglerModèle(string? reference)
+    {
+        if (_client is null || _chat is null) return;
+        try
+        {
+            var résultat = await _client.SetChatModelAsync(_chat.ChatId, reference);
+            _modelLabel = reference is null ? "Auto" : résultat.Model;
+            ModelButton.Content = _modelLabel + " \u25BE";
+            PageHint.Text = "Modèle : " + _modelLabel;
+        }
+        catch (Exception erreur)
+        {
+            PageHint.Text = "Changement impossible : " + erreur.Message;
+        }
+    }
+
+    /// <summary>Autorisation d'outil en ContentDialog (parité FormDialog, décision v9.4).</summary>
+    private async void ReconsidérerAutorisations()
+    {
+        if (_dialogOuvert || _client is null || _chat is null) return;
+        var demande = _chat.Live.Asks.FirstOrDefault();
+        if (demande is null) return;
+        _dialogOuvert = true;
+        try
+        {
+            var dialog = new ContentDialog
+            {
+                XamlRoot = ChatScroll.XamlRoot,
+                Title = "Autorisation demandée",
+                Content = (demande.Message ?? "L'agent demande " + demande.Action)
+                    + (demande.Resources.Count > 0 ? "\n" + string.Join(", ", demande.Resources) : ""),
+                PrimaryButtonText = "Toujours",
+                SecondaryButtonText = "Une fois",
+                CloseButtonText = "Refuser",
+                DefaultButton = ContentDialogButton.Secondary,
+            };
+            var décision = await dialog.ShowAsync();
+            var réponse = décision switch
+            {
+                ContentDialogResult.Primary => "always",
+                ContentDialogResult.Secondary => "once",
+                _ => "reject",
+            };
+            await _client.ReplyPermissionAsync(demande.SessionId, demande.Id, réponse);
+        }
+        catch { /* dialog fermé avec la fenêtre */ }
+        finally { _dialogOuvert = false; }
+    }
+
+    /// <summary>Question de l'agent (outil « question ») en ContentDialog — parité FormDialog.</summary>
+    private async void ReconsidérerQuestions()
+    {
+        if (_dialogOuvert || _client is null || _chat is null) return;
+        var question = _chat.Live.Forms.FirstOrDefault();
+        if (question is null) return;
+        _dialogOuvert = true;
+        try
+        {
+            var champ = new TextBox { PlaceholderText = "Ta réponse" };
+            var dialog = new ContentDialog
+            {
+                XamlRoot = ChatScroll.XamlRoot,
+                Title = question.Raw?["title"]?.GetValue<string>() ?? "L'agent a une question",
+                Content = champ,
+                PrimaryButtonText = "Répondre",
+                CloseButtonText = "Annuler",
+                DefaultButton = ContentDialogButton.Primary,
+            };
+            var résultat = await dialog.ShowAsync();
+            if (résultat == ContentDialogResult.Primary && champ.Text.Trim().Length > 0)
+            {
+                // La clé attendue est celle du premier champ du formulaire (parité web).
+                var clé = question.Raw?["fields"] is System.Text.Json.Nodes.JsonArray champs
+                    && champs.Count > 0 && champs[0]?["key"]?.GetValue<string>() is { } k ? k : "answer";
+                await _client.ReplyFormAsync(_chat.ChatId, question.Id, new Dictionary<string, object> { [clé] = champ.Text.Trim() });
+            }
+        }
+        finally { _dialogOuvert = false; }
     }
 }

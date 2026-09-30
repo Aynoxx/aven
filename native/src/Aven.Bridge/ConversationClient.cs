@@ -125,6 +125,29 @@ public sealed class ConversationClient(EngineClient engine)
         await engine.CallAsync("session.prompt", new { sessionID = sessionId, text = clean }, cancellation).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Change le modèle d'une conversation (parité setChatModel, v9.4.0) : ref explicite
+    /// = épinglage manuel, ref nul = retour à « Auto » (meilleur modèle du routeur).
+    /// </summary>
+    public async Task<(string Id, string? Agent, string Model)> SetChatModelAsync(
+        string sessionId, string? reference, CancellationToken cancellation = default)
+    {
+        if (string.IsNullOrEmpty(reference))
+        {
+            var auto = await engine.CallAsync("router.pick", new { agent = "projet" }, cancellation).ConfigureAwait(false)
+                ?? throw new InvalidOperationException("Aucun modèle disponible : impossible de revenir en « Auto ».");
+            reference = Jsonx.S(auto) ?? throw new InvalidOperationException("router.pick sans référence.");
+        }
+        var (provider, id) = ModelRef.Parse(reference);
+        await engine.CallAsync("session.switchModel", new
+        {
+            sessionID = sessionId,
+            model = new { providerID = provider, id },
+        }, cancellation).ConfigureAwait(false);
+        var fresh = await engine.CallAsync("session.get", new { sessionID = sessionId }, cancellation).ConfigureAwait(false);
+        return (Jsonx.S(fresh?["id"]) ?? sessionId, Jsonx.S(fresh?["agent"]), ModelRef.Of(fresh?["model"]) ?? reference);
+    }
+
     /// <summary>Arrête le tour en cours (Échap côté interface) — best effort (parité interrupt).</summary>
     public async Task InterruptAsync(string sessionId, CancellationToken cancellation = default)
     {

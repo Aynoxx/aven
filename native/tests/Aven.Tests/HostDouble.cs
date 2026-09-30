@@ -31,7 +31,7 @@ public sealed class HostDouble : IDisposable
 
             function newSession(agent) {
               const id = "s" + (++nextId);
-              const s = { id, agent, title: "Nouvelle conversation", messages: [], interrupted: false, permission: null, answers: null };
+              const s = { id, agent, title: "Nouvelle conversation", model: { providerID: "free", id: "big-pickle" }, messages: [], interrupted: false, permission: null, answers: null };
               sessions.set(id, s);
               return s;
             }
@@ -73,7 +73,7 @@ public sealed class HostDouble : IDisposable
                 if (m === "session.get") {
                   const s = sessions.get(p.sessionID);
                   if (!s) throw new Error("session inconnue");
-                  return { id: s.id, title: s.title, agent: s.agent, model: { providerID: "free", id: "big-pickle" } };
+                  return { id: s.id, title: s.title, agent: s.agent, model: s.model ?? { providerID: "free", id: "big-pickle" } };
                 }
                 if (m === "session.update") { const s = sessions.get(p.sessionID); if (s) s.title = p.title; return { ok: true }; }
                 if (m === "session.list") {
@@ -132,6 +132,12 @@ public sealed class HostDouble : IDisposable
                   return { backend: "opencode" };
                 }
                 if (m === "session.interrupt") { const s = sessions.get(p.sessionID); if (s) s.interrupted = true; return { ok: true }; }
+                if (m === "session.switchModel") {
+                  const s = sessions.get(p.sessionID);
+                  if (!s) throw new Error("session inconnue");
+                  s.model = p.model;
+                  return { ok: true };
+                }
                 if (m === "permission.reply") { const s = sessions.get(p.sessionID); if (s) s.permission = p.decision; return { ok: true }; }
                 if (m === "session.form.reply") { const s = sessions.get(p.sessionID); if (s) s.answers = p.answer; return { ok: true }; }
                 if (m === "session.form.cancel") return { ok: true };

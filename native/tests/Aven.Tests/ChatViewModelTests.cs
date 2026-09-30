@@ -99,6 +99,22 @@ public class ChatViewModelTests : IClassFixture<HostDouble>
     }
 
     [Fact]
+    public async Task Le_modele_peut_etre_epingle_puis_revenu_en_auto()
+    {
+        await using var engine = new EngineClient(_double.Path, nodeExecPath: "node");
+        var client = new ConversationClient(engine);
+        using var annulé = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var chat = await client.CreateChatAsync("projet", "C:\\ws", annulé.Token);
+
+        // Épinglage manuel (parité setChatModel v9.4.0)...
+        var épinglé = await client.SetChatModelAsync(chat.Id, "free/autre", annulé.Token);
+        Assert.Equal("free/autre", épinglé.Model);
+        // ...puis retour « Auto » = meilleur modèle du routeur.
+        var auto = await client.SetChatModelAsync(chat.Id, null, annulé.Token);
+        Assert.Equal("free/big-pickle", auto.Model);
+    }
+
+    [Fact]
     public void FollowBottom_est_armé_par_défaut_et_désarmable()
     {
         // Parité du bouton « Dernier message » : l'UI pose FollowBottom=false quand

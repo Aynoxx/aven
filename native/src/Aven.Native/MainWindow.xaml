@@ -115,6 +115,7 @@
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <TextBox x:Name="Composer" Grid.Column="0" MinHeight="38" MaxHeight="140"
                                      TextWrapping="Wrap" AcceptsReturn="True" ScrollViewer.VerticalScrollBarVisibility="Auto"
@@ -130,6 +131,11 @@
                                     Margin="8,0,0,0" VerticalAlignment="Bottom" Content="Envoyer &#8594;"
                                     Background="{ThemeResource AvenAccentBrush}"
                                     Foreground="White" />
+                            <Button x:Name="ModelButton" Grid.Column="3" Click="OnModelMenu" MinHeight="34"
+                                    Padding="10,4" VerticalAlignment="Bottom" Content="Auto &#9662;"
+                                    Background="Transparent" BorderThickness="0"
+                                    Foreground="{ThemeResource AvenMutedBrush}"
+                                    AutomationProperties.Name="Choisir le mod&#232;le de la conversation" />
                         </Grid>
                     </Border>
                 </Grid>

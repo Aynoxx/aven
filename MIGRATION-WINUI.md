@@ -133,9 +133,17 @@ les réponses aux captures de référence faites sur l'app Electron.
   état busy reflété (Arrêter visible, Envoyer désactivé), host = bundle de phase 1.
   `ChatViewModel` est pur (sans WinUI, marshal optionnel) et testé en xUnit : les
   deltas patchent la MÊME bulle, autorisations/questions deviennent des lignes,
-  Arrêt en plein stream gardé. 27/27 xUnit, MSIX vert. Reste pour la phase :
-  sélecteur de modèles (MenuFlyout depuis router.chainFor), ContentDialog
-  dédiés (autorisations, questions), rendu Markdown des bulles, mesure 60 fps.
+  Arrêt en plein stream gardé.
+- **État (phase 3 close)** : sélecteur de modèles en MenuFlyout (« Auto » + chaîne du
+  routeur, épinglage via `SetChatModelAsync` → session.switchModel, coche sur
+  l'actif, badge du bouton) ; autorisations d'outils et questions de l'agent en
+  ContentDialog (une seule boîte à la fois, décisions once/always/reject parité
+  v9.4) ; rendu Markdown-lite (`MarkdownLite.Parse` pur et testé : titres, gras,
+  italique, `code`, blocs ``` — HTML et liens restent du TEXTE littéral, aucune
+  exécution, parité de la politique RichMarkdown) ; mesure fps : fenêtres d'une
+  seconde pendant les tours, min–max glissants sur 30 s affichés dans le hint.
+  Preuves : 33/33 xUnit, MSIX vert, 128/128 Electron, verify OK. Reste hors code :
+  la lecture humaine des captures côte à côte (thème) pendant l'utilisation réelle.
 
 ### Phase 4 — Services natifs (2 semaines)
 
