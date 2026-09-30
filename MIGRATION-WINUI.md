@@ -288,6 +288,22 @@ divergence TUI par construction. TESTS D'INTÉGRATION réels : echo, cmd interac
 
 - La WinUI devient « Aven » ; l'Electron devient « Aven Classic » (maintenance).
 - Suppression du dossier Electron après 2 versions natives stables.
+- **Checklist de bascule (à cocher quand tout est vert)** :
+  1. Acceptations humaines faites : TUI vivant dans la fenêtre native (session,
+     quota, pubs filtrées, pas de gel à l'envoi) + tests WAV fixes de la voix.
+  2. Deux releases natives consécutives sans régression bloquante connue.
+  3. Le README bascule : « Aven v10 (native) » en tête, la section Electron
+     devient « Aven Classic (v9.x, maintenance) » — AUCUN renommage de fichiers
+     ni de scripts avant ce point (les users v9.x ne doivent rien voir bouger).
+  4. Publication en parallèle : `npm run package:win` (Classic) et
+     `scripts/package-native.ps1` (v10) ; les deux installateurs cohabitent
+     (identités MSIX séparées de l'exe NSIS).
+  5. Gel des features Classic (correctifs de sécurité/bugs majeurs uniquement).
+  6. Après 2 versions natives stables : suppression du dossier Electron
+     (main/renderer/preload, workflows ci.yml, bundle engine-host — le host PTY
+     reste, il est consommé par le natif) et retrait du protocole.
+  - **État** : phases 0-7 faites et poussées ; la bascule attend les acceptations
+    humaines (1) et deux releases stables (2).
 
 ---
 

@@ -1,5 +1,22 @@
 # Aven v9.7.2
 
+> ## Aven natif (v10.0, WinUI 3) — la suite
+> Une version **native Windows** d'Aven est en construction dans [`native/`](native/)
+> (protocole complet : [`MIGRATION-WINUI.md`](MIGRATION-WINUI.md)). Même moteur
+> (OpenCode en sidecar, même bundle), même format disque, UI Windows native
+> (Mica, hub, chat, terminal Freebuff, dictée vocale) :
+>
+> ```powershell
+> node scripts/install-dotnet-sdk.mjs   # SDK .NET 8 local, sans droits admin (une fois)
+> npm run test:native                   # 170 tests xUnit + build MSIX
+> powershell -NoProfile -File scripts/launch-native.ps1        # lancer l'app native
+> powershell -NoProfile -File scripts/package-native.ps1       # MSIX signé + zip portable
+> ```
+>
+> État : phases 0-7 faites (socle, moteur, coquille, chat, services, terminal,
+> voix, packaging) ; l'Electron reste la version principale jusqu'à la bascule
+> (phase 8 du protocole).
+
 > ## Avant de modifier ce projet (IA ou humain)
 > Lis **`AGENTS.md`** puis **`RULES.md`** : ils fixent les règles universelles de
 > cohérence — typographie par tokens CSS, classes de boutons, bibliothèque d'icônes,
@@ -223,7 +240,7 @@ Interface React (web/)  ──IPC──►  Electron main (electron/)  ──HTT
    window.opencode.*               opencode-bridge.ts + operations.ts            mot de passe aléatoire, port libre
 ```
 
-## Installer et lancer (Windows)
+## Installer et lancer (Windows) — Aven v9.x (Electron)
 
 **Le plus simple : double-clique `demarrer.bat`** (il lance `npm install` — quelques secondes si rien n'a changé — puis l'app en mode développement). `construire.bat` fait la même chose puis produit les `.exe`. Pour mettre à jour le projet, copie les nouveaux fichiers **par-dessus** l'ancien dossier sans supprimer `node_modules`.
 
