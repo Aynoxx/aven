@@ -75,8 +75,9 @@ public class EngineConversationTests
         Assert.Equal(2, messages!.AsArray().Count);
         Assert.Equal("Bonjour le monde", messages[1]!["text"]!.GetValue<string>());
 
-        // 5. Les requêtes parties sur le fil portent les bonnes méthodes.
-        var lignes = envoyé.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        // 5. Les requêtes parties sur le fil portent les bonnes méthodes
+        // (séparation par lignes quel que soit le saut de ligne du writer).
+        var lignes = envoyé.ToString().Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
         Assert.Contains(lignes, (l) => l.Contains("\"session.create\""));
         Assert.Contains(lignes, (l) => l.Contains("\"session.prompt\""));
         Assert.Contains(lignes, (l) => l.Contains("\"message.list\""));
