@@ -153,6 +153,18 @@ les réponses aux captures de référence faites sur l'app Electron.
 - SettingsService : notifications, apparence (sidebar, ordre des agents), freebuffResume.
 - **Acceptation** : tests de parité §1 au vert ; deux apps ouvertes sur le même
   workspace sans corruption.
+- **État (NotesService fait)** : `NotesService.cs` porte fidèlement `electron/notes.ts`
+  ET `electron/notes-meta.ts` — MÊME FORMAT DISQUE, avec les deux conventions de
+  dossiers coexistantes reproduites telles quelles (notes dans `.opencodeapp/notes`
+  sans tiret, méta dans `.opencode-app/notes-meta.json` avec tiret). Sémantique
+  conservée : titre dérivé du premier `# `, id dérivé du titre (accents retirés,
+  `º` → tiret) avec suffixes -2/-3…, refus de traversée de chemin, quotas (20 pins,
+  6 tags), JSON méta indenté **\n only** (byte-parité : `WriteIndented` d'System.Text
+  .Json émet `Environment.NewLine`, à normaliser sous Windows) et UTF-8 sans BOM.
+  Preuve : lecture/écriture croisées RÉELLES avec le vrai Node dans les tests xUnit
+  (`NotesInteropNodeTests` — le Node relit ce que C# a écrit, le C# relit ce que
+  Node écrit). 44/44 xUnit. Reste en phase 4 : FilesService (safeResolve),
+  StatsService, SettingsService, puis l'UI Notes/Fichiers native.
 
 ### Phase 5 — Terminal Freebuff natif (1 à 2 semaines)
 
