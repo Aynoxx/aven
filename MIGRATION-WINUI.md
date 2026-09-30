@@ -212,6 +212,15 @@ les réponses aux captures de référence faites sur l'app Electron.
 
 - DictationService : capture WinRT MediaCapture / WASAPI → POST Groq (mêmes endpoints,
   mêmes formats), éclaircissement dicté porté (voice-intent).
+- **État (pipeline voix porté)** : `VoiceIntent.cs` porte `voice-intent.ts` ET le
+  pipeline `voice.ts` (liste fermée anti-hallucination, prompt verrouillé, filet
+  déterministe v9.1.3 — commandes courantes sans réseau, JAMAIS une demande de
+  contenu —, anti-injection structurelle, reformage et classification en PARALLÈLE
+  avec dégradation indépendante, filet prioritaire sur un « chat » mal classé).
+  HTTP injecté (`IVoiceHttp`, JSON + multipart Whisper) : les mêmes cas que
+  `voice-intent.test.mjs` passent en xUnit sans réseau. 159/159. Reste en phase 6 :
+  capture audio WinRT (MediaCapture/WASAPI), push-to-talk Ctrl+Maj+V
+  (RegisterHotKey), annonceur System.Speech, et l'acceptation « tests WAV fixes ».
 - Push-to-talk Ctrl+Maj+V global (RegisterHotKey), annonceur System.Speech.
 - **Acceptation** : dictée push-to-talk et annonceur conformes à l'actuel (tests WAV fixes).
 
