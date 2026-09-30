@@ -6,3 +6,5 @@ artifacts/
 *.user
 *.suo
 .tmp-msix/
+.out/
+.cert-thumbprint

@@ -255,6 +255,34 @@ divergence TUI par construction. TESTS D'INTÉGRATION réels : echo, cmd interac
   v10.0 (native) en parallèle, retours utilisateurs.
 - **Acceptation** : installation propre sur Windows 10/11 vierges ; release signée ;
   télémétrie de crash en place.
+- **État (pack + signature + CI faits)** :
+  - **Self-contained runtime .NET** (`SelfContained=true` dans Aven.Native.csproj) :
+    `WindowsAppSDKSelfContained` ne couvre que le WASDK — sans ce fix, l'app
+    refusait de démarrer sur toute machine sans le framework .NET 8 partagé exact
+    (constaté en smoke test local : « You must install or update .NET »). Avec le
+    fix, l'exécutable tourne partout, y compris le portable.
+  - **scripts/package-native.ps1** : certificat CodeSigningCert auto-géré (racine
+    CN=Aven, aligné sur le Publisher du manifeste, persisté par empreinte dans
+    `native/.cert-thumbprint` — JAMAIS commité), export .cer + import
+    TrustedPeople (CurrentUser) = flux sideload silencieux, MSIX signé, verdict
+    signtool honnête (exit 0 = ancré ; « not trusted root » = signé self-signed,
+    flux DEV ; autre = échec dur — Get-AuthenticodeSignature est INCAPABLE de lire
+    un MSIX, UnknownError systématique), zip portable (layout RID `win-x64\` car
+    le runtime .NET embarqué vit dans le sous-dossier, + dist-electron hosts +
+    @lydell/node-pty embarqué). Pièges consignés : .ps1 en ASCII strict (ANSI
+    sinon), `2>&1` + `$ErrorActionPreference=Stop` transforme stderr natif en
+    erreur terminante (relâcher localement).
+  - **Smoke tests réels** : app du layout dev ET du portable vivantes (pid,
+    fenêtre « Aven », ~150 Mo, kill propre). Portable x64 v10.0.0.0 = 67 Mo.
+  - **Télémétrie de crash locale** : App.xaml.cs journalise
+    AppDomain.UnhandledException dans %LOCALAPPDATA%\Aven\crash.log.
+  - **Version 10.0.0.0** (identité de la bascule, phase 8).
+  - **.github/workflows/release-native.yml** : workflow_dispatch, matrice
+    x86/x64/ARM64, signature via secrets AVEN_PFX_B64/AVEN_PFX_PASSWORD (optionnelle
+    — sans secret, MSIX non signé), zip portable + MSIX en artefacts.
+  - **Reste** : l'acceptation « Windows 10/11 vierges » est une épreuve matérielle
+    (VM ou machine réelle) — les artefacts et la procédure TrustedPeople sont prêts ;
+    la double publication v9.x/v10.0 se déclenche au moment de la bascule (phase 8).
 
 ### Phase 8 — Bascule
 
