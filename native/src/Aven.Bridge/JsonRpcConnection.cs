@@ -33,6 +33,9 @@ public sealed class JsonRpcConnection : IAsyncDisposable
     private readonly CancellationTokenSource _cts = new();
     private int _nextId;
     private Task? _readLoop;
+    // Exception terminale du flux (EOF, erreur de lecture) : les appels postérieurs
+    // à la mort du lecteur échouent immédiatement au lieu de pendre.
+    private volatile Exception? _terminal;
 
     /// <summary>Notification push du moteur (params JSON), ex. opencode:event.</summary>
     public event Action<JsonNode?>? NotificationReceived;
@@ -60,6 +63,8 @@ public sealed class JsonRpcConnection : IAsyncDisposable
         _pending[id] = tcs;
         try
         {
+            // Flux déjà mort (EOF, erreur de lecture) : échec immédiat, pas de pendule.
+            if (_terminal is { } dead) throw dead;
             // La réponse est peut-être déjà arrivée (course avec le lecteur).
             if (_early.TryRemove(id, out var early)) { DeliverResponse(early, tcs); return await tcs.Task.WaitAsync(cancellationToken).ConfigureAwait(false); }
             Start();
@@ -118,10 +123,13 @@ public sealed class JsonRpcConnection : IAsyncDisposable
         catch (OperationCanceledException) { return; }
         catch (Exception error)
         {
+            _terminal = error;
             FailAllPending(error);
             return;
         }
-        FailAllPending(new IOException("Aven.Engine : flux d'entrée fermé."));
+        var eof = new IOException("Aven.Engine : flux d'entrée fermé.");
+        _terminal = eof;
+        FailAllPending(eof);
     }
 
     private void DispatchResponse(JsonNode id, JsonObject message)
