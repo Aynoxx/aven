@@ -2,16 +2,19 @@ import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, Notification
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-import { makeOps } from "./operations.js"
-import { addDiscoveredFreeModels, loadTable } from "./priorities.js"
-import { EXPECTED_VERSION } from "./opencode-bridge.js"
+// v9.8.0 (phase 1 du protocole MIGRATION-WINUI.md) : le moteur vit dans aven-engine-host.mjs.
+import { EngineClient, sdkProxy, type EngineEvent } from "./engine-client.js"
+import { makeOps, type BridgeHost } from "./operations.js"
+import type { Bridge } from "./opencode-bridge.js"
+import { aggregateStats, countDictation, readDictationStats } from "./stats.js"
+import { loadTable, type Task } from "./priorities.js"
+import { loadNames } from "./agent-names.js"
+import { listArchived } from "./archive.js"
 import { buildLaunchCommand, freebuffBusyMessage, freebuffMissingMessage, parseVersionOutput, unsupportedPlatform } from "./freebuff-cli.js"
+import { resolveOpenCodeBin } from "./opencode-bridge.js"
 // v9.2.0 : PTY du CLI freebuff embarqué (protocole freebuff-pty) — session persistante :
 // fermer la vue ne tue pas le process, la réouverture rejoue le scrollback.
 import { startFreebuffPty, writeFreebuffPty, resizeFreebuffPty, signalFreebuffPty, restartFreebuffPty, stopFreebuffPty, isFreebuffPtyActive, freebuffPtyPid, loadPtyModule, DEFAULT_PTY_COLS, DEFAULT_PTY_ROWS } from "./freebuff-pty.js"
-import { Router } from "./router.js"
-import { relayEvents, startOpenCode, TABS, type Bridge } from "./opencode-bridge.js"
-import { aggregateStats, countDictation, readDictationStats } from "./stats.js"
 import { probeOpenRouterKey, PROVIDERS } from "./providers.js"
 import { loadKeys, saveKey, seedWorkspace } from "./settings.js"
 import { buildAgentsDir, readTemplateAgents } from "./agents-bridge.js"
@@ -79,37 +82,11 @@ function readUpdatesConfigured(): boolean {
 
 const updatesConfigured = readUpdatesConfigured()
 
-/**
- * Répare les sessions héritées : créées par une version antérieure, elles peuvent porter
- * un modèle hors catalogue (ex. le faux secours « openrouter/openrouter/free », retiré).
- * Au premier message, beforeSend() les rebasculera de toute façon vers le meilleur modèle
- * de leur agent ; ici on ne fait qu'aligner le champ affiché pour ne pas montrer un modèle
- * qui ne peut plus fonctionner. Best effort, jamais bloquant, limité aux dernières sessions.
- */
-async function repairLegacySessions(r: Router, client: Bridge["client"], workspaceDir: string) {
-  try {
-    const page = await client.session.list({ directory: workspaceDir, order: "desc", limit: 50 })
-    for (const s of page.data) {
-      const ref = s.model ? `${s.model.providerID}/${s.model.id}` : undefined
-      if (!ref || r.assignments()[String(s.agent)]?.some((m) => m.ref === ref)) continue
-      const want = r.pick(String(s.agent) as Parameters<Router["pick"]>[0])
-      if (want && want !== ref) {
-        await client.session.switchModel({ sessionID: s.id, model: { providerID: want.split("/")[0], id: want.slice(want.indexOf("/") + 1) } }).catch(() => undefined)
-      }
-    }
-  } catch (err) {
-    console.warn("[sessions] réparation des sessions héritées impossible :", err instanceof Error ? err.message : String(err))
-  }
-}
-
 let win: BrowserWindow | null = null
 let tray: Tray | null = null
 let isQuitting = false
-let bridge: Bridge | null = null
-let relay: AbortController | null = null
 let workspace = ""
 let templateDir = ""
-let router: Router | null = null
 let state: AppState = { status: "starting", keys: {}, providers: providersLite, updatesConfigured }
 let bootQueue: Promise<void> = Promise.resolve()
 let bootGeneration = 0
@@ -117,13 +94,86 @@ let shutdownPromise: Promise<void> | null = null
 // v9.2.0 : le PTY est un singleton dans freebuff-pty.ts (mono-session : deux CLI
 // simultanés déclencheraient le « takeover » du serveur Freebuff).
 
-const ops = makeOps(
-  () => {
-    if (!bridge) throw new Error("OpenCode n'est pas prêt.")
-    return bridge
+// ── v9.8.0 : client du host du moteur (aven-engine-host.mjs, JSON-RPC stdio) ──
+// Aven.Native WinUI consommera le MÊME host — main.ts n'importe plus jamais le
+// SDK directement : un seul client du moteur, structurellement.
+let engineState: Record<string, unknown> = {}
+let engineChains: Record<string, { ref: string; label: string }[]> = {}
+const engine = new EngineClient({
+  hostPath: path.join(__dirname, "aven-engine-host.mjs"),
+  runAsNode: true, // le binaire Electron exécute le host en Node pur
+  onEvent: (ev: EngineEvent) => {
+    win?.webContents.send("opencode:event", ev)
+    announcer.handle(ev)
+    notifyFromEvent(ev)
   },
-  () => router,
-)
+  onHostExit: (code) => trace(`host du moteur arrêté (code ${code ?? "?"})`),
+  onHostError: (err) => trace(`host du moteur : ${err.message}`),
+})
+const sdk = sdkProxy(() => engine) as unknown as Bridge["client"]
+// Le BridgeHost d'operations.ts : le SDK devient un proxy du host ; les modules
+// locaux (noms d'agents, archives) restent fournis par l'app, comme avant.
+const engineBridge = {
+  client: sdk,
+  get workspace() {
+    return workspace
+  },
+  loadNames: (ws: string) => loadNames(ws),
+  archived: (ws: string) => listArchived(ws),
+  get chains() {
+    return engineChains
+  },
+  get router() {
+    return {
+      pick: (agent: string) => engineChains[agent as Task]?.[0]?.ref,
+      beforeSend: async (sessionID: string, text: string) => {
+        await engine.call("router.beforeSend", { sessionID, text })
+      },
+      forget: (sessionID: string) => {
+        void engine.call("router.forget", { sessionID }).catch(() => undefined)
+      },
+    }
+  },
+} as unknown as Bridge
+
+/** Arrête le host (le moteur meurt avec lui). Sérialisé. */
+let engineShutdownPromise: Promise<void> | null = null
+async function engineShutdown(): Promise<void> {
+  if (!engineShutdownPromise) {
+    engineShutdownPromise = engine.stop().then(() => {
+      engineState = {}
+      engineChains = {}
+    })
+  }
+  await engineShutdownPromise
+  engineShutdownPromise = null
+}
+
+/** Démarre (ou redémarre) le host puis initialise la session moteur. */
+async function engineBoot(workspaceDir: string, env: Record<string, string>, flags: Record<string, boolean>, openRouterUsable: boolean, keyWarnings: Record<string, string>) {
+  await engineShutdown()
+  engine.start()
+  const bin = resolveOpenCodeBin()
+  engineState = await engine.call("initialize", {
+    workspace: workspaceDir,
+    env,
+    prioritiesPath: path.join(workspaceDir, "model-priorities.json"),
+    templatePrioritiesPath: path.join(templateDir, "model-priorities.json"),
+    excludeProvider: openRouterUsable ? undefined : "openrouter",
+    binPath: bin.command,
+    binShell: bin.shell,
+  })
+  engineChains = (engineState.assignments ?? {}) as typeof engineChains
+  // Clés enregistrées sans modèle actif détecté (contrôle côté host, ex-main.ts).
+  const active = new Set((engineState.activeProviders ?? []) as string[])
+  for (const p of PROVIDERS) {
+    if (p.openCodeEnv === false) continue
+    if (flags[p.id] && !keyWarnings[p.id] && !active.has(p.id)) {
+      keyWarnings[p.id] = "Clé enregistrée, mais aucun modèle actif détecté pour ce fournisseur — vérifie qu'elle est valide."
+    }
+  }
+  if (engineState.noFreeModels === true) console.warn("[models] Aucun modèle gratuit utilisable n'a été découvert par OpenCode.")
+}
 
 // Annonceur vocal (v8.7.9) : événements OpenCode → courtes phrases parlées (SAPI Windows).
 // isMuted signale si l'utilisateur a tapé/clické récemment côté renderer (voir announcer:activity).
@@ -154,6 +204,27 @@ function trace(line: string) {
   if (diagLog.length > 30) diagLog.shift()
 }
 trace("démarrage du process principal")
+
+// v9.6.1 : coalescing des chunks du PTY Freebuff — ConPTY émet des centaines de petits
+// chunks pendant une réponse ; chacun partait en IPC individuel et l'interface gelait.
+// Un lot toutes les PTY_BATCH_FLUSH_MS (ou 8 Ko accumulés) divise le débit d'événements
+// par ~50 sans latence perceptible ; les événements d'état (status/exit/error) vident
+// TOUJOURS le lot d'abord (ordre préservé : données avant changement d'état). Le PTY
+// vit toujours dans main.ts (phase 1 déplace uniquement le MOTEUR conversationnel).
+const PTY_BATCH_FLUSH_MS = 30
+const PTY_BATCH_MAX_CHARS = 8 * 1024
+const ptyBatch: { chunk: string; timer: NodeJS.Timeout | null } = { chunk: "", timer: null }
+function flushPtyBatch() {
+  if (ptyBatch.timer) { clearTimeout(ptyBatch.timer); ptyBatch.timer = null }
+  if (!ptyBatch.chunk) return
+  const data = ptyBatch.chunk
+  ptyBatch.chunk = ""
+  win?.webContents.send("opencode:event", { type: "freebuff.pty.data", data: { chunk: data } })
+}
+
+// v9.8.0 : toutes les opérations conversationnelles (chats, messages, formulaires,
+// permissions, export) vivent dans operations.ts — nourri par le BridgeHost ci-dessus.
+const ops = makeOps(() => engineBridge as unknown as BridgeHost)
 
 /** Voix Windows via PowerShell SAPI : gratuite, hors ligne, déjà installée. */
 async function speakWithSapi(text: string): Promise<void> {
@@ -224,57 +295,11 @@ async function bootImpl(requestedWorkspace: string, generation: number) {
       updatesConfigured,
       agentsBridge: agentsBridgeWritten,
     }
-    await shutdown()
+    await engineBoot(requestedWorkspace, env, flags, openRouterUsable, keyWarnings)
     if (generation !== bootGeneration) return
     workspace = requestedWorkspace
-    bridge = await startOpenCode({ workspace: requestedWorkspace, env })
-    if (generation !== bootGeneration) {
-      await shutdown()
-      return
-    }
 
-    const { data } = await bridge.client.model.list({ location: { directory: requestedWorkspace } })
-    const available = new Set(
-      data
-        .filter((m) => {
-          const model = m as typeof m & { enabled?: boolean; disabled?: boolean; status?: string }
-          if (model.providerID === "openrouter" && !openRouterUsable) return false
-          return model.enabled !== false && model.disabled !== true && model.status !== "deprecated"
-        })
-        .map((m) => `${m.providerID}/${m.modelID}`),
-    )
-    const loaded = loadTable(path.join(requestedWorkspace, "model-priorities.json"), path.join(templateDir, "model-priorities.json"))
-    const discovered = data.map((m) => {
-      const model = m as typeof m & { name?: string; enabled?: boolean; disabled?: boolean; status?: string }
-      return { ref: `${model.providerID}/${model.modelID}`, label: model.name }
-    }).filter((m) => available.has(m.ref))
-    const catalog = addDiscoveredFreeModels(loaded.table, discovered)
-    const notify = (sessionID: string, model: string, text: string) =>
-      win?.webContents.send("opencode:event", { type: "router.notice", data: { sessionID, model, text } })
-    const r = new Router({ client: bridge.client, table: catalog.table, notify }, available)
-    router = r
-    if (catalog.added.length) console.info(`[models] modèles gratuits découverts dynamiquement : ${catalog.added.join(", ")}`)
-    const missingFree = Object.values(r.chains).every((chain) => chain.length === 0)
-    if (missingFree) console.warn("[models] Aucun modèle gratuit utilisable n'a été découvert par OpenCode.")
-    for (const p of PROVIDERS) {
-      if (p.openCodeEnv === false) continue
-      if (flags[p.id] && !keyWarnings[p.id] && !data.some((m) => { const model = m as typeof m & { enabled?: boolean; disabled?: boolean; status?: string }; return model.providerID === p.id && model.enabled !== false && model.disabled !== true && model.status !== "deprecated" })) {
-        keyWarnings[p.id] = "Clé enregistrée, mais aucun modèle actif détecté pour ce fournisseur — vérifie qu'elle est valide."
-      }
-    }
 
-    relay = new AbortController()
-    void repairLegacySessions(r, bridge.client, requestedWorkspace)
-    void relayEvents(
-      bridge.client,
-      (ev) => {
-        r.onEvent(ev)
-        win?.webContents.send("opencode:event", ev)
-        announcer.handle(ev)
-        notifyFromEvent(ev)
-      },
-      relay.signal,
-    )
     if (generation !== bootGeneration) {
       await shutdown()
       return
@@ -282,18 +307,14 @@ async function bootImpl(requestedWorkspace: string, generation: number) {
     state = {
       ...state,
       status: "ready",
-      version: bridge.version,
-      cli: bridge.binSource,
-      assignments: r.assignments(),
-      warning: loaded.warning,
+      version: String(engineState.version ?? ""),
+      cli: String(engineState.binSource ?? ""),
+      assignments: engineState.assignments as AppState["assignments"],
+      warning: engineState.warning as string | undefined,
       keyWarnings,
-      // Un écart de version n'est plus un simple console.warn : client et CLI doivent être
-      // à la même version exacte (voir README), sinon le protocole peut diverger en silence.
-      versionWarning: bridge.version !== EXPECTED_VERSION
-        ? `OpenCode ${bridge.version} ≠ version attendue ${EXPECTED_VERSION} : mets à jour les paquets @opencode/client ET @opencode/cli à la même version.`
-        : undefined,
+      versionWarning: (engineState.versionWarning as string | undefined) ?? state.versionWarning,
     }
-    console.log(`[app] OpenCode ${bridge.version} prêt (CLI ${bridge.binSource}) — clés : ${Object.keys(env).length} — dossier : ${requestedWorkspace}`)
+    console.log(`[app] OpenCode ${String(engineState.version ?? "?")} prêt (host aven-engine-host.mjs) — clés : ${Object.keys(env).length} — dossier : ${requestedWorkspace}`)
   } catch (err) {
     if (generation !== bootGeneration) return
     console.error(err)
@@ -337,18 +358,7 @@ function boot() {
 }
 
 async function shutdown() {
-  if (shutdownPromise) return shutdownPromise
-  shutdownPromise = (async () => {
-    relay?.abort()
-    relay = null
-    router = null
-    const b = bridge
-    bridge = null
-    await b?.stop()
-  })().finally(() => {
-    shutdownPromise = null
-  })
-  return shutdownPromise
+  await engineShutdown()
 }
 
 function createWindow() {
@@ -409,27 +419,16 @@ function createTray() {
   }
 }
 
-// v9.6.1 : coalescing des chunks du PTY Freebuff — ConPTY émet des centaines de petits
-// chunks pendant une réponse ; chacun partait en IPC individuel et l'interface gelait.
-// Un lot toutes les PTY_BATCH_FLUSH_MS (ou 8 Ko accumulés) divise le débit d'événements
-// par ~50 sans latence perceptible ; les événements d'état (status/exit/error) vident
-// TOUJOURS le lot d'abord (ordre préservé : données avant changement d'état).
-const PTY_BATCH_FLUSH_MS = 30
-const PTY_BATCH_MAX_CHARS = 8 * 1024
-const ptyBatch: { chunk: string; timer: NodeJS.Timeout | null } = { chunk: "", timer: null }
-function flushPtyBatch() {
-  if (ptyBatch.timer) { clearTimeout(ptyBatch.timer); ptyBatch.timer = null }
-  if (!ptyBatch.chunk) return
-  const data = ptyBatch.chunk
-  ptyBatch.chunk = ""
-  win?.webContents.send("opencode:event", { type: "freebuff.pty.data", data: { chunk: data } })
-}
-
 function registerIpc() {
   ipcMain.handle("window:minimize", () => { win?.minimize(); return true })
   ipcMain.handle("window:toggleMaximize", () => { if (win?.isMaximized()) win.unmaximize(); else win?.maximize(); return true })
   ipcMain.handle("window:close", () => { win?.close(); return true })
-  ipcMain.handle("app:state", () => state)
+  // v9.8.0 : les champs portés par le host (assignments, versionWarning) complètent l'état local.
+  ipcMain.handle("app:state", () => ({
+    ...state,
+    assignments: state.assignments ?? (engineState.assignments as AppState["assignments"]),
+    versionWarning: (engineState.versionWarning as string | undefined) ?? state.versionWarning,
+  }))
   ipcMain.handle("app:openWorkspace", () => shell.openPath(requireWorkspace()))
 
   // v9.1.5 : sans espace de travail, tout ce qui lit workspace doit échouer avec un
@@ -649,9 +648,6 @@ function registerIpc() {
         trustAgents: existsSync(path.join(requireWorkspace(), ".agents", "aven-code.ts")),
         resume: loadPrefs().freebuffResume === true,
         handlers: {
-          // v9.6.1 : coalescing des chunks — ConPTY émet des centaines de petits chunks
-          // pendant une réponse et CHACUN partait en IPC individuel (tempête d'événements,
-          // interface gelée). Lot de 30 ms / 8 Ko : latence invisible, débit divisé par ~50.
           onData: (chunk) => {
             ptyBatch.chunk += chunk
             if (ptyBatch.timer === null) {
@@ -755,7 +751,7 @@ function registerIpc() {
     const chats = await ops.chats(undefined, true).catch(() => [])
     const modelCounters: Record<string, number> = {}
     for (const c of chats) if (c.model) modelCounters[c.model] = (modelCounters[c.model] ?? 0) + 1
-    return aggregateStats({ chats, dictations: readDictationStats(requireWorkspace()), modelCounters }, [...TABS])
+    return aggregateStats({ chats, dictations: readDictationStats(requireWorkspace()), modelCounters }, ["projet", "code", "recherche", "analyse"])
   })
   ipcMain.handle("chats:export", async (_e, id: string) => {
     if (!win) return null

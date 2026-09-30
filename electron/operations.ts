@@ -1,11 +1,11 @@
-// v9.7.1 : seul setName a disparu (renommage sorti de l'UI en v9.6.0) — les noms
-// personnalisés déjà enregistrés (.opencode-app/agent-names.json) restent lus/affichés.
-import { loadNames } from "./agent-names.js"
-import type { Router } from "./router.js"
 import type { Task } from "./priorities.js"
 import { parseRef, refOf } from "./model-ref.js"
-import { TABS, type Bridge } from "./opencode-bridge.js"
-import { isArchived, listArchived, setArchived } from "./archive.js"
+// v9.8.0 (phase 1 du protocole MIGRATION-WINUI.md) : le client OpenCode est un proxy
+// du host (aven-engine-host.mjs, JSON-RPC stdio) — formes et retours inchangés. Les
+// noms personnalisés d'agents restent lus (loadNames via le bridge) ; le renommage
+// est sorti de l'UI depuis v9.6.0.
+import { TABS, type OpenCodeClient } from "./opencode-bridge.js"
+import { isArchived, setArchived } from "./archive.js"
 
 export type ChatMsg = {
   id: string
@@ -62,7 +62,7 @@ async function mapConcurrent<T, R>(items: T[], concurrency: number, fn: (item: T
   return out
 }
 
-async function messagesOf(b: Bridge, sessionID: string, child = false): Promise<ChatMsg[]> {
+async function messagesOf(b: BridgeHost, sessionID: string, child = false): Promise<ChatMsg[]> {
   const page = await b.client.message.list({ sessionID, order: "asc", limit: 200 })
   const out: ChatMsg[] = []
   for (const m of page.data as any[]) {
@@ -85,9 +85,9 @@ async function messagesOf(b: Bridge, sessionID: string, child = false): Promise<
   return out
 }
 
-async function listAgents(b: Bridge) {
+async function listAgents(b: BridgeHost) {
   const { data } = await b.client.agent.list({ location: { directory: b.workspace } })
-  const names = loadNames(b.workspace)
+  const names = b.loadNames(b.workspace)
   return data
     .filter((a) => a.mode !== "subagent" && !a.hidden && isTab(a.id))
     .map((a) => ({ id: a.id, name: names[a.id] ?? a.name, defaultName: a.name, description: a.description ?? "" }))
@@ -99,24 +99,38 @@ export const MAX_TITLE = 120
 // v9.1.6 : le 3ᵉ paramètre `notify` (avis du repli Freebuff→OpenCode) a disparu avec
 // le chemin SDK ; les avis de routage passent par le Router (sonde notify déjà branchée).
 /** Toutes les opérations exposées à l'interface. Sans Electron : testable avec Node seul. */
-export function makeOps(current: () => Bridge, router: () => Router | null = () => null) {
+export type BridgeHost = {
+  client: OpenCodeClient
+  workspace: string
+  loadNames: (workspace: string) => Record<string, string>
+  archived: (workspace: string) => Iterable<string>
+  chains: Record<Task, { ref: string; label: string }[]>
+  router: {
+    pick: (agent: Task) => string | undefined
+    beforeSend: (sessionID: string, text: string) => Promise<void>
+    forget: (sessionID: string) => void
+  }
+}
+
+/** Toutes les opérations exposées à l'interface. Sans Electron : testable avec Node seul. */
+export function makeOps(current: () => BridgeHost) {
+  const b = current()
   return {
     async agents() {
-      return listAgents(current())
+      return listAgents(b)
     },
 
     /** Renomme une conversation. */
     async renameChat(id: string, title: string) {
       const clean = String(title ?? "").trim().slice(0, MAX_TITLE)
       if (!clean) throw new Error("Le titre ne peut pas être vide.")
-      await current().client.session.update({ sessionID: id, title: clean })
+      await b.client.session.update({ sessionID: id, title: clean })
       return { id, title: clean }
     },
 
     async chats(agent?: string, includeArchived = false) {
-      const b = current()
       const page = await b.client.session.list({ directory: b.workspace, order: "desc", limit: 100 })
-      const archived = listArchived(b.workspace)
+      const archived = new Set(b.archived(b.workspace))
       return page.data
         .filter((s) => !s.parentID && (!agent || s.agent === agent) && (includeArchived || !archived.has(s.id)))
         .map((s) => ({
@@ -130,9 +144,8 @@ export function makeOps(current: () => Bridge, router: () => Router | null = () 
     },
 
     async createChat(agent: string) {
-      const b = current()
       if (!isTab(agent)) throw new Error(`Agent inconnu : ${agent}`)
-      const model = router()?.pick(agent as Task)
+      const model = b.router.pick(agent as Task)
       if (!model) {
         throw new Error(`Aucun modèle disponible pour l’agent « ${agent} ». Vérifie les fournisseurs actifs et la table de priorités.`)
       }
@@ -162,13 +175,12 @@ export function makeOps(current: () => Bridge, router: () => Router | null = () 
      * ce que l'utilisateur revienne sur « Auto » (nouveau switchModel).
      */
     async setChatModel(id: string, ref?: string) {
-      const b = current()
       if (ref) {
         await b.client.session.switchModel({ sessionID: id, model: parseRef(ref) })
       } else {
         // « Auto » : on réaligne la session sur le meilleur modèle disponible selon
         // le Router (sa logique : chaîne de priorité + cooldowns + quotas).
-        const auto = router()?.pick("projet")
+        const auto = b.router.pick("projet")
         if (!auto) throw new Error("Aucun modèle disponible : impossible de revenir en « Auto ».")
         await b.client.session.switchModel({ sessionID: id, model: parseRef(auto) })
       }
@@ -178,28 +190,26 @@ export function makeOps(current: () => Bridge, router: () => Router | null = () 
 
     /** (v9.4.0) Chaîne de priorité d'un agent, pour le sélecteur de modèles de l'interface. */
     chainFor(agent: string): { ref: string; label: string }[] {
-      const chains = router()?.chains
-      return (chains?.[agent as Task] ?? []).map((c) => ({ ref: c.ref, label: c.label }))
+      const chains = b.chains
+      return (chains[agent as Task] ?? []).map((c) => ({ ref: c.ref, label: c.label }))
     },
 
     async deleteChat(id: string) {
-      const b = current()
-      router()?.forget(id)
+      b.router.forget(id)
       await b.client.session.interrupt({ sessionID: id }).catch(() => undefined)
       await b.client.session.remove({ sessionID: id })
       setArchived(b.workspace, id, false) // nettoie l'entrée d'archive si elle existait
     },
 
     async archiveChat(id: string, archived: boolean) {
-      setArchived(current().workspace, id, archived)
+      setArchived(b.workspace, id, archived)
     },
 
     isArchived(id: string) {
-      return isArchived(current().workspace, id)
+      return isArchived(b.workspace, id)
     },
 
     async messages(id: string): Promise<ChatMsg[]> {
-      const b = current()
       // Les deux requêtes sont indépendantes : lancer la lecture du transcript principal et la
       // liste des enfants en parallèle réduit nettement le temps d'ouverture des longs chats.
       const [main, page] = await Promise.all([
@@ -226,7 +236,6 @@ export function makeOps(current: () => Bridge, router: () => Router | null = () 
     async send(id: string, text: string): Promise<{ backend: "opencode" }> {
       const clean = text.trim()
       if (!clean) throw new Error("Message vide")
-      const b = current()
 
       // Titre automatique au 1er message, SEULEMENT si le titre est encore celui par défaut (un renommage manuel n'est jamais écrasé).
       try {
@@ -238,32 +247,31 @@ export function makeOps(current: () => Bridge, router: () => Router | null = () 
       } catch (err) {
         console.error("[titre auto]", err) // jamais bloquant pour l’envoi du message
       }
-      await router()?.beforeSend(id, clean) // bascule éventuelle vers le meilleur modèle non saturé
+      await b.router.beforeSend(id, clean) // bascule éventuelle vers le meilleur modèle non saturé
       await b.client.session.prompt({ sessionID: id, text: clean })
       return { backend: "opencode" as const }
     },
 
     async interrupt(id: string) {
-      await current().client.session.interrupt({ sessionID: id }).catch(() => undefined)
+      await b.client.session.interrupt({ sessionID: id }).catch(() => undefined)
     },
 
     // Réponse à une question de l'agent (outil `question`) : answer = { [clé du champ]: valeur }
     async formReply(sessionID: string, formID: string, answer: Record<string, string | number | boolean | string[]>) {
-      await current().client.session.form.reply({ sessionID, formID, answer })
+      await b.client.session.form.reply({ sessionID, formID, answer })
     },
 
     async formCancel(sessionID: string, formID: string) {
-      await current().client.session.form.cancel({ sessionID, formID })
+      await b.client.session.form.cancel({ sessionID, formID })
     },
 
     // sessionID = celui de la DEMANDE (peut être une session de sous-agent)
     async reply(sessionID: string, requestID: string, decision: "once" | "always" | "reject") {
-      await current().client.permission.reply({ sessionID, requestID, decision })
+      await b.client.permission.reply({ sessionID, requestID, decision })
     },
 
     /** Transcript Markdown d'une conversation (pour export). */
     async exportMarkdown(id: string): Promise<{ title: string; markdown: string }> {
-      const b = current()
       const sessions = await b.client.session.list({ directory: b.workspace, order: "desc", limit: 100 })
       const session = sessions.data.find((s) => s.id === id)
       const title = session?.title ?? "Conversation"

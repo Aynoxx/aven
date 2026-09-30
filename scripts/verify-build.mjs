@@ -41,6 +41,15 @@ for (const src of sources) {
   }
 }
 
+// 1bis. v9.8.0 : le host du moteur est un bundle esbuild (pas tsc) — fraîcheur dédiée.
+const hostSrc = path.join(srcDir, "engine-host.ts")
+const hostOut = path.join(outDir, "aven-engine-host.mjs")
+if (!existsSync(hostOut)) {
+  problems.push("engine-host.ts : bundle aven-engine-host.mjs introuvable → npm run build:electron")
+} else if (statSync(hostOut).mtimeMs < statSync(hostSrc).mtimeMs - 1000) {
+  problems.push("engine-host.ts plus récent que aven-engine-host.mjs → npm run build:electron")
+}
+
 // 2. Sondes de contenu : marqueurs du code v8.7.9 courant dans le build compilé.
 const probes = [
   { file: "main.js", marker: "notes:list", why: "page Notes conservée" },

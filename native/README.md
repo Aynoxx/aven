@@ -9,11 +9,15 @@ de production — ce dossier n'a aucun effet sur elle.
 | Projet | Rôle | Phase |
 |---|---|---|
 | `src/Aven.Native` | Coquille WinUI 3 (fenêtre vide, packagée MSIX) | 0 → évolue en phases 2-6 |
-| `src/Aven.Bridge` | Pont JSON-RPC 2.0 stdio vers le moteur sidecar — **implémenté et testé** (routage par id, notifications push, erreurs typées, tolérance aux lignes corrompues) | 0 → complété en phase 1 |
-| `tests/Aven.Tests` | xUnit : contrat du pont | 0 → s'étofte à chaque phase |
+| `src/Aven.Bridge` | Pont JSON-RPC 2.0 stdio : `JsonRpcConnection` (socle) + `EngineClient` (spawn du host, push d'événements) — **testés** | 1 → complété en phase 4 |
+| `tests/Aven.Tests` | xUnit : contrat du pont + **conversation complète** (create → send → events → messages) + test du vrai bundle `aven-engine-host.mjs` | 1 → s'étofte à chaque phase |
 
-`aven-engine-host.mjs` (le host Node du sidecar) sera extrait de `electron/main.ts`
-en phase 1 — il n'existe volontairement pas encore.
+L'acceptation de la **phase 1** est en place : `aven-engine-host.mjs` (extrait de
+`electron/main.ts`, bundlé esbuild via `npm run build:electron`) pilote le moteur
+et l'Electron lui-même lui parle désormais par JSON-RPC — le même host que
+consommera Aven.Native. Les tests C# rejouent le protocole (scénario factice
+fidèle) et exercent le vrai bundle quand `dist-electron/` est présent (le fait
+dans CI après `npm run build:electron`).
 
 ## CI
 
