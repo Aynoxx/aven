@@ -47,16 +47,20 @@ public sealed class ConversationClient(EngineClient engine)
     private ConversationLive _live = ConversationLive.Empty;
     public ConversationLive Live => _live;
 
+    private Action<EngineEvent>? _abonnement;
+
     private static string TitreDepuis(string text)
     {
         var clean = string.Join(" ", text.Trim().Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries));
         return clean.Length > TitreMax ? clean[..(TitreMax - 1)] + "…" : clean;
     }
 
-    /// <summary>Abonne la réduction d'événements : child = la session d'un sous-agent (parité App.tsx).</summary>
+    /// <summary>Abonne la réduction d'événements : child = la session d'un sous-agent (parité App.tsx).
+    /// Réabonne proprement (désabonne l'ancien handler) si la conversation change.</summary>
     public void Subscribe(string chatId)
     {
-        engine.EventReceived += ev =>
+        if (_abonnement is { } ancien) engine.EventReceived -= ancien;
+        _abonnement = ev =>
         {
             var sid = Jsonx.S(Jsonx.At(ev.Data, "sessionID"));
             if (sid is null) return;
@@ -64,6 +68,7 @@ public sealed class ConversationClient(EngineClient engine)
             Interlocked.Exchange(ref _live, live);
             LiveChanged?.Invoke(live);
         };
+        engine.EventReceived += _abonnement;
     }
 
     // ── Conversations ─────────────────────────────────────────────────────────

@@ -121,17 +121,21 @@ les réponses aux captures de référence faites sur l'app Electron.
   FormDialog (autorisations) en ContentDialog.
 - **Acceptation** : conversation réelle à 60 fps mesurés pendant le stream ; raccourcis
   et dialogs conformes.
-- **État (socle conversation, fait)** : la couche données/opérations est portée et
-  prouvée en headless — `ConversationModels.cs` (état Live immuable + réducteur,
-  port ligne à ligne de `web/src/stream.ts` : deltas append incrémental, sémantique
-  child, autorisations, questions) et `ConversationClient.cs` (port de
-  `electron/operations.ts` : createChat avec modèle épinglé, send avec titre auto +
-  beforeSend, Arrêt, form.reply/cancel, permission.reply, transcripts sous-agents
-  parallèles triés). Acceptation headless verte : 2 tests E2E bout-en-bout contre un
-  double honnête stateful (multi-tours, autorisation, question, sous-agent rattaché,
-  Arrêt en plein tour). Reste : la vue chat WinUI (composeur Entrée/Maj+Entrée,
-  ItemsRepeater + rendu Markdown, autoscroll « Dernier message », sélecteur
-  MenuFlyout depuis router.chainFor, FormDialog en ContentDialog) et la mesure 60 fps.
+- **État (socle conversation + vue chat, fait)** : la couche données/opérations est
+  portée et prouvée en headless — `ConversationModels.cs` (état Live immuable +
+  réducteur, port ligne à ligne de `web/src/stream.ts`) et `ConversationClient.cs`
+  (port de `electron/operations.ts`), avec 2 tests E2E contre un double honnête
+  stateful. La vue chat WinUI est en place dans MainWindow (carte Projet) :
+  composeur Entrée/Maj+Entrée, bulles reconstruites depuis `ChatViewModel`
+  (diff incrémental — patch INPC de la bulle existante, insertion des nouvelles,
+  aucune reconstruction de liste), autoscroll « follow bottom » (ViewChanged ±40 px,
+  parité « Dernier message »), bouton Arrêter + raccourci Échap (KeyboardAccelerator),
+  état busy reflété (Arrêter visible, Envoyer désactivé), host = bundle de phase 1.
+  `ChatViewModel` est pur (sans WinUI, marshal optionnel) et testé en xUnit : les
+  deltas patchent la MÊME bulle, autorisations/questions deviennent des lignes,
+  Arrêt en plein stream gardé. 27/27 xUnit, MSIX vert. Reste pour la phase :
+  sélecteur de modèles (MenuFlyout depuis router.chainFor), ContentDialog
+  dédiés (autorisations, questions), rendu Markdown des bulles, mesure 60 fps.
 
 ### Phase 4 — Services natifs (2 semaines)
 

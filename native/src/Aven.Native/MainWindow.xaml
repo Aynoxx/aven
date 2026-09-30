@@ -99,8 +99,42 @@
 
             <!-- PAGE CIBLE : socle de phase 2 (les vues r&#233;elles arrivent en phases 3-6) -->
             <Grid x:Name="PageView" Visibility="Collapsed">
-                <ScrollViewer>
-                    <StackPanel MaxWidth="900" Spacing="14" Margin="32,24,32,42">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <ScrollViewer x:Name="ChatScroll" Grid.Row="1" Visibility="Collapsed">
+                    <StackPanel x:Name="ChatRows" MaxWidth="860" Spacing="10" Margin="20,12,20,16" />
+                </ScrollViewer>
+                <Grid x:Name="ComposerBar" Grid.Row="2" Visibility="Collapsed">
+                    <Border Background="{ThemeResource AvenPanelBrush}" BorderBrush="{ThemeResource AvenBorderBrush}"
+                            BorderThickness="1" CornerRadius="16" Padding="10,6" Margin="20,0,20,14">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="Composer" Grid.Column="0" MinHeight="38" MaxHeight="140"
+                                     TextWrapping="Wrap" AcceptsReturn="True" ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                     PlaceholderText="Message... (Entree pour envoyer, Maj+Entree = retour ligne)"
+                                     Background="Transparent" BorderThickness="0" KeyDown="OnComposerKey" />
+                            <Button x:Name="StopButton" Grid.Column="1" Click="OnStop" MinHeight="34" MinWidth="34"
+                                    Margin="8,0,0,0" Visibility="Collapsed" VerticalAlignment="Bottom"
+                                    Content="&#9632;" Padding="8,4"
+                                    Background="{ThemeResource AvenPanelSoftBrush}"
+                                    Foreground="{ThemeResource AvenDangerBrush}"
+                                    AutomationProperties.Name="Arr&#234;ter le tour en cours (&#201;chap)" />
+                            <Button x:Name="SendButton" Grid.Column="2" Click="OnSend" MinHeight="34" Padding="14,4"
+                                    Margin="8,0,0,0" VerticalAlignment="Bottom" Content="Envoyer &#8594;"
+                                    Background="{ThemeResource AvenAccentBrush}"
+                                    Foreground="White" />
+                        </Grid>
+                    </Border>
+                </Grid>
+                <ScrollViewer Grid.Row="0">
+                    <StackPanel MaxWidth="900" Spacing="14" Margin="32,24,32,42" Grid.Row="0">
                         <TextBlock x:Name="PageTitle" Text="" FontSize="28" FontWeight="SemiBold"
                                    Foreground="{ThemeResource AvenTextBrush}" />
                         <TextBlock x:Name="PageHint" Text="" FontSize="13" TextWrapping="Wrap"
