@@ -1,16 +1,123 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Window
     x:Class="Aven.Native.MainWindow"
+    Title="Aven"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="Aven">
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
 
     <Grid>
-        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8">
-            <TextBlock Text="Aven — socle natif" FontSize="28" FontWeight="SemiBold"
-                       HorizontalAlignment="Center" />
-            <TextBlock Text="Phase 0 · coquille WinUI 3 (.NET 8) — le moteur OpenCode reste en sidecar"
-                       Foreground="Gray" HorizontalAlignment="Center" />
-        </StackPanel>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="48" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- &#9472;&#9472; Title bar custom (parit&#233; v9.7 : En ligne / Param&#232;tres / Accueil) &#9472;&#9472; -->
+        <Grid Grid.Row="0" x:Name="TitleBar" Height="48" Background="Transparent">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="14,0,0,0">
+                <Ellipse Width="9" Height="9" Fill="{ThemeResource AvenSuccessBrush}" />
+                <TextBlock Text="En ligne" FontSize="12" VerticalAlignment="Center"
+                           Foreground="{ThemeResource AvenMutedBrush}" />
+                <Button x:Name="SettingsButton" Content="Param&#232;tres" FontSize="12" MinHeight="30"
+                        Background="Transparent" BorderThickness="0" Padding="10,4"
+                        Foreground="{ThemeResource AvenTextBrush}" Click="OnSettings" />
+                <Button x:Name="HomeButton" Content="&#8592; Accueil" FontSize="12" MinHeight="30"
+                        Background="Transparent" BorderThickness="0" Padding="10,4"
+                        Foreground="{ThemeResource AvenTextBrush}" Click="OnHome" />
+            </StackPanel>
+        </Grid>
+
+        <!-- &#9472;&#9472; Contenu : hub ou page cible (navigation anim&#233;e) &#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472; -->
+        <Grid Grid.Row="1">
+            <!-- HUB : 4 cartes &#224; 90&#176; autour du centre (parit&#233; .home-hub) -->
+            <Grid x:Name="HubView" Visibility="Visible">
+                <Grid.Resources>
+                    <Style TargetType="Button" x:Key="HubCardStyle">
+                        <Setter Property="Width" Value="150" />
+                        <Setter Property="Height" Value="112" />
+                        <Setter Property="CornerRadius" Value="22" />
+                        <Setter Property="Background" Value="{ThemeResource AvenPanelBrush}" />
+                        <Setter Property="BorderBrush" Value="{ThemeResource AvenBorderStrongBrush}" />
+                        <Setter Property="BorderThickness" Value="1" />
+                    </Style>
+                </Grid.Resources>
+                <Ellipse Width="540" Height="540" Stroke="{ThemeResource AvenAccentBorderBrush}"
+                         StrokeThickness="1" Opacity="0.35" />
+                <TextBlock x:Name="HubTitle" Text="Aven" FontSize="30" FontWeight="SemiBold"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                           Foreground="{ThemeResource AvenTextBrush}" />
+                <TextBlock Text="Moteur OpenCode &#183; sidecar aven-engine-host.mjs" FontSize="12"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,44,0,0"
+                           Foreground="{ThemeResource AvenMutedBrush}" />
+                <Button x:Name="CardProject" Style="{StaticResource HubCardStyle}"
+                        Tag="0" Click="OnHubCard" AutomationProperties.Name="Projet &#8212; agent central (Freebuff)">
+                    <StackPanel Spacing="6" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <TextBlock Text="&#9670;" FontSize="24" Foreground="{ThemeResource AvenAccentBrush}" HorizontalAlignment="Center" />
+                        <TextBlock Text="Projet" FontWeight="SemiBold" HorizontalAlignment="Center"
+                                   Foreground="{ThemeResource AvenTextBrush}" />
+                        <TextBlock Text="Agent central (Freebuff)" FontSize="10" TextWrapping="Wrap" TextAlignment="Center"
+                                   Foreground="{ThemeResource AvenMutedBrush}" />
+                    </StackPanel>
+                </Button>
+                <Button x:Name="CardTasks" Style="{StaticResource HubCardStyle}"
+                        Tag="1" Click="OnHubCard" AutomationProperties.Name="T&#226;ches &#8212; sp&#233;cialistes par t&#226;che">
+                    <StackPanel Spacing="6" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <TextBlock Text="&#8984;" FontSize="24" Foreground="{ThemeResource AvenAccentBrush}" HorizontalAlignment="Center" />
+                        <TextBlock Text="T&#226;ches" FontWeight="SemiBold" HorizontalAlignment="Center"
+                                   Foreground="{ThemeResource AvenTextBrush}" />
+                        <TextBlock Text="Sp&#233;cialistes par t&#226;che" FontSize="10" TextWrapping="Wrap" TextAlignment="Center"
+                                   Foreground="{ThemeResource AvenMutedBrush}" />
+                    </StackPanel>
+                </Button>
+                <Button x:Name="CardFiles" Style="{StaticResource HubCardStyle}"
+                        Tag="2" Click="OnHubCard" AutomationProperties.Name="Fichiers &#8212; explorer l'espace">
+                    <StackPanel Spacing="6" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <TextBlock Text="&#9636;" FontSize="24" Foreground="{ThemeResource AvenAccentBrush}" HorizontalAlignment="Center" />
+                        <TextBlock Text="Fichiers" FontWeight="SemiBold" HorizontalAlignment="Center"
+                                   Foreground="{ThemeResource AvenTextBrush}" />
+                        <TextBlock Text="Explorer l'espace" FontSize="10" TextWrapping="Wrap" TextAlignment="Center"
+                                   Foreground="{ThemeResource AvenMutedBrush}" />
+                    </StackPanel>
+                </Button>
+                <Button x:Name="CardNotes" Style="{StaticResource HubCardStyle}"
+                        Tag="3" Click="OnHubCard" AutomationProperties.Name="Notes &#8212; Markdown par agent">
+                    <StackPanel Spacing="6" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <TextBlock Text="&#9998;" FontSize="24" Foreground="{ThemeResource AvenAccentBrush}" HorizontalAlignment="Center" />
+                        <TextBlock Text="Notes" FontWeight="SemiBold" HorizontalAlignment="Center"
+                                   Foreground="{ThemeResource AvenTextBrush}" />
+                        <TextBlock Text="Notes Markdown par agent" FontSize="10" TextWrapping="Wrap" TextAlignment="Center"
+                                   Foreground="{ThemeResource AvenMutedBrush}" />
+                    </StackPanel>
+                </Button>
+            </Grid>
+
+            <!-- PAGE CIBLE : socle de phase 2 (les vues r&#233;elles arrivent en phases 3-6) -->
+            <Grid x:Name="PageView" Visibility="Collapsed">
+                <ScrollViewer>
+                    <StackPanel MaxWidth="900" Spacing="14" Margin="32,24,32,42">
+                        <TextBlock x:Name="PageTitle" Text="" FontSize="28" FontWeight="SemiBold"
+                                   Foreground="{ThemeResource AvenTextBrush}" />
+                        <TextBlock x:Name="PageHint" Text="" FontSize="13" TextWrapping="Wrap"
+                                   Foreground="{ThemeResource AvenMutedBrush}" />
+                        <Border CornerRadius="18" Background="{ThemeResource AvenPanelBrush}"
+                                BorderBrush="{ThemeResource AvenBorderBrush}" BorderThickness="1"
+                                Padding="18">
+                            <TextBlock Text="Cette vue arrive en phases 3-6 du protocole MIGRATION-WINUI.md &#8212; la coquille, la navigation et le th&#232;me sont en place."
+                                       TextWrapping="Wrap" FontSize="13"
+                                       Foreground="{ThemeResource AvenMutedBrush}" />
+                        </Border>
+                        <Button Content="&#8592; Retour au hub" Click="OnHome" MinHeight="36" Padding="14,6"
+                                Background="{ThemeResource AvenPanelSoftBrush}"
+                                Foreground="{ThemeResource AvenTextBrush}" />
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+        </Grid>
     </Grid>
 </Window>

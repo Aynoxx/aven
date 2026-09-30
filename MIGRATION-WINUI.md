@@ -217,3 +217,29 @@ constantes partagées C# et des clés de ressource XAML : le rythme v9.7.0 est c
 > **ET** la suite de tests C# au vert — les deux mondes sont validés en permanence.
 > La parité est la loi : tant que la phase N n'a pas ses critères d'acceptation verts,
 > on ne commence pas la phase N+1.
+
+---
+
+## Pièges outillage (leçons de phase 2)
+
+- **XamlCompiler net472 (WASDK 1.6) crash silencieusement (exit 1, zéro output) sur
+  un attribut XAML invalide** : la cause du blocage de plusieurs jours était
+  `<Border Spacing="8">` — **Border n'a pas de propriété Spacing** (ça appartient à
+  StackPanel). Aucun message d'erreur : il faut bissecter le XAML élément par élément.
+  Toute erreur XAML suspecte = suspecter d'abord un attribut inexistant sur son type.
+- **Le glob `**\*.xaml` du SDK ramasse TOUS les .xaml du dossier projet** : ne jamais
+  créer de fichiers .xaml temporaires dans `native/src/Aven.Native/` (fichiers de test
+  → `native/.bisect/` hors projet, supprimés ensuite).
+- **Passer les `-p:Propriété=...` APRÈS `--` dans un script npm** (`npm run test:native --
+  -p:Platform=x64`), sinon npm les mange.
+- **MSBuild a besoin de l'environnement VS** : hors shell « Developer PowerShell »,
+  `VCToolsInstallDir`/`VCInstallDir` ne sont pas résolus (input.json : `VCInstallDir:
+  null`). Les poser à la main (`VCToolsInstallDir=...VC\\Tools\\MSVC\\14.44...\\`)
+  suffit — le XamlCompiler n'en tire que `vcmeta.dll`.
+- **XAML 100 % ASCII par sécurité** : tout non-ASCII en **entité numérique XML**
+  (`é` → `&#233;`, `←` → `&#8592;`) — rendu identique, aucun risque de lecture ANSI
+  par l'outil net472. Généré par script Node (le repo est CRLF, pas d'ancres
+  multi-lignes fiables).
+- **Une seule page x:Class par assemblage pour l'instant** : ShellView est fusionné
+  dans MainWindow (Window racine, code-behind unique). À re-tester avec WASDK 1.7
+  avant d'introduire des vues séparées en phase 3.
