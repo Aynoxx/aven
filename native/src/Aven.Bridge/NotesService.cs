@@ -221,14 +221,8 @@ public static class NotesService
             foreach (var (id_, liste) in tags) table[id_] = new JsonArray(liste.Select(t => (JsonNode)t).ToArray());
             objet["tags"] = table;
         }
-        // Écriture ATOMIQUE indentée (parité writeJsonAtomicPretty) : temp puis remplacement.
-        // Byte-parité : \n seulement (WriteIndented d'System.Text.Json émet Environment.NewLine
-        // sous Windows) et UTF-8 sans BOM — JSON.parse côté Node lit l'octet-pour-octet.
-        var cible = MetaFile(workspace);
-        Directory.CreateDirectory(Path.GetDirectoryName(cible)!);
-        var temp = cible + ".tmp-" + Guid.NewGuid().ToString("N");
-        var json = objet.ToJsonString(new JsonSerializerOptions { WriteIndented = true }).Replace("\r\n", "\n");
-        File.WriteAllText(temp, json, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-        File.Move(temp, cible, overwrite: true);
+        // Écriture ATOMIQUE indentée (parité writeJsonAtomicPretty) via le helper partagé
+        // AtomicFile : retentatives + repli copie, UTF-8 sans BOM, \n seulement.
+        AtomicFile.WriteJsonPretty(MetaFile(workspace), objet);
     }
 }

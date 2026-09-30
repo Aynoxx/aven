@@ -192,6 +192,19 @@ les réponses aux captures de référence faites sur l'app Electron.
 - Barre de session + filtrage transcript : **port 1:1 de « freebuff-transcript.ts »**
   en C# (module pur) — **les mêmes cas de tests** que
   « tests/freebuff-transcript.test.mjs », réécrits en xUnit.
+- **État (transcript + machine à états faits)** : `FreebuffTranscript.cs` porte le
+  filtrage ligne à ligne (bordures, décoration, session avec priorité quota>streak,
+  pubs, prompt utilisateur, fast-path Unicode v9.6.1) — mêmes cas de tests en xUnit,
+  y compris la garde anti-freeze (5000 lignes < 200 ms). Piège de port : la classe
+  de caractères `─-╿` est une PLAGE Unicode (U+2500-U+257F) — échapper le tiret en
+  C# la casse (├/┬ sortaient du filtrage). `FreebuffTerminal.cs` porte la machine à
+  états de freebuff-pty.ts (singleton, scrollback 256 Ko, grâce de boot ARMÉE par
+  timer — pas une mesure d'horloge, sinon les délais de test la court-circuitent —
+  backoff 1/2/4 s avec re-spawn d'un NOUVEAU process, coalescing 30 ms/8 Ko avec
+  vidange d'états avant le changement d'état, plancher dims 80×24, transport
+  ConPTY injectable pour les tests). `AtomicFile.cs` mutualise l'écriture atomique
+  avec RETENTATIVES (Windows refuse le rename sous contention — même l'épreuve
+  deux apps l'a prouvé) + repli copie, et sert notes/stats/prefs. 124/124 xUnit.
 - **Acceptation** : session visible, quota « 40/40 Freebucks » dans la barre, pubs
   filtrées, bannière de conflit d'app Desktop fonctionnelle, TUI non gelé à l'envoi.
 

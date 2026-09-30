@@ -62,19 +62,14 @@ public static class StatsService
 
     private static void WriteStats(string workspace, DictationStats stats)
     {
-        // Byte-parité : \n seulement, UTF-8 sans BOM (même discipline que notes-meta).
+        // Parité writeJsonAtomicPretty via le helper partagé (indenté \n, sans BOM).
         var objet = new JsonObject
         {
             ["total"] = stats.Total,
             ["day"] = stats.Day,
             ["dayCount"] = stats.DayCount,
         };
-        var cible = Fichier(workspace);
-        Directory.CreateDirectory(Path.GetDirectoryName(cible)!);
-        var temp = cible + ".tmp-" + Guid.NewGuid().ToString("N");
-        var json = objet.ToJsonString(new JsonSerializerOptions { WriteIndented = true }).Replace("\r\n", "\n");
-        File.WriteAllText(temp, json, new System.Text.UTF8Encoding(false));
-        File.Move(temp, cible, overwrite: true);
+        AtomicFile.WriteJsonPretty(Fichier(workspace), objet);
     }
 
     // ── Agrégations pures (parité aggregateStats — testées sans disque) ───────

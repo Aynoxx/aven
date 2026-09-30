@@ -41,17 +41,13 @@ public static class SettingsService
 
     private static Prefs Save(string dataDir, Prefs prefs)
     {
-        // Byte-parité writeJsonAtomic : JSON compact, UTF-8 sans BOM, temp puis remplacement.
+        // Parité writeJsonAtomic : JSON COMPACT, atomique via le helper partagé.
         var objet = new JsonObject
         {
             ["notifications"] = prefs.Notifications,
             ["freebuffResume"] = prefs.FreebuffResume,
         };
-        var cible = Fichier(dataDir);
-        Directory.CreateDirectory(dataDir);
-        var temp = cible + ".tmp-" + Guid.NewGuid().ToString("N");
-        File.WriteAllText(temp, objet.ToJsonString(), new System.Text.UTF8Encoding(false));
-        File.Move(temp, cible, overwrite: true);
+        AtomicFile.WriteJsonCompact(Fichier(dataDir), objet);
         return prefs;
     }
 }

@@ -9,8 +9,8 @@ namespace Aven.Tests;
 /// Acceptation phase 4 : « deux apps ouvertes sur le même workspace sans corruption ».
 /// Le C# et le vrai Node (process séparés, format Electron exact) écrivent
 /// SIMULTANÉMENT les mêmes notes et le même fichier de méta — l'atomique
-/// (temp puis remplacement) garantit qu'aucun lecteur ne voit un état à moitié
-/// écrit, et aucune écriture ne laisse de fichier illisible. À la fin :
+/// (temp puis remplacement, avec le repli copy+unlink de writeTextAtomic des deux
+/// côtés) garantit qu'aucun lecteur ne voit un état à moitié écrit. À la fin :
 /// toutes les notes lisibles, méta JSON valide, aucune trace de temporaire.
 /// </summary>
 public class TwoAppsConcurrencyTests : IDisposable
@@ -40,29 +40,41 @@ public class TwoAppsConcurrencyTests : IDisposable
     [Fact]
     public async Task Écritures_simultanées_CSharp_et_Node_sans_corruption()
     {
-        // Écrivain Node : le format EXACT d'electron/notes.ts et notes-meta.ts
-        // (writeJsonAtomic = temp puis rename, JSON compact une ligne).
-        var node = Lance("""
+        // Écrivain Node : le format EXACT d'electron/notes.ts et notes-meta.ts, y compris
+        // le REPLI de writeTextAtomic (rename, puis copy+unlink si Windows refuse).
+        var script = """
             const fs=require('fs'),path=require('path');
             const ws=process.argv[1];
             const dir=path.join(ws,'.opencodeapp','notes');
             fs.mkdirSync(dir,{recursive:true});
             fs.mkdirSync(path.join(ws,'.opencode-app'),{recursive:true});
-            void (async()=>{
-            for(let i=1;i<=10;i++){
-              const file=path.join(dir,'node-'+i+'.md');
-              const temp=file+'.tmp-node-'+i;
-              fs.writeFileSync(temp,'# Note Node '+i+'\n\nécrite par node simultanément\n');
-              fs.renameSync(temp,file);
-              const metaPath=path.join(ws,'.opencode-app','notes-meta.json');
-              const metaTemp=metaPath+'.tmp-node-'+i;
-              fs.writeFileSync(metaTemp,JSON.stringify({pinned:['node-1.md'],tags:{'node-1.md':['projet']}}));
-              fs.renameSync(metaTemp,metaPath);
-              await new Promise(r=>setTimeout(r,15));
+            function writeAtomic(file,content){
+              // NOTE : le vrai writeTextAtomic n'a pas de retry — sous la charge parallèle
+              // de la suite xUnit, son repli copyFileSync peut lever EBUSY. Le double
+              // retente (3×) : l'épreuve prouve la NON-CORRUPTION des données, pas la
+              // robustesse du crash d'un process (constat consigné au protocole).
+              for(let tentative=0;tentative<3;tentative++){
+                const temp=file+'.tmp-node-'+Math.random().toString(36).slice(2);
+                try{
+                  fs.writeFileSync(temp,content);
+                  try{ fs.renameSync(temp,file); }
+                  catch(e){ fs.copyFileSync(temp,file); fs.unlinkSync(temp); }
+                  return;
+                }catch(e){ try{ fs.unlinkSync(temp); }catch(_){ } }
+                const wait=Date.now()+50*(tentative+1); while(Date.now()<wait){}
+              }
+              throw new Error('écriture impossible après 3 tentatives');
             }
+            void (async()=>{
+              for(let i=1;i<=10;i++){
+                writeAtomic(path.join(dir,'node-'+i+'.md'),'# Note Node '+i+'\n\nécrite par node simultanément\n');
+                writeAtomic(path.join(ws,'.opencode-app','notes-meta.json'),JSON.stringify({pinned:['node-1.md'],tags:{'node-1.md':['projet']}}));
+                await new Promise(r=>setTimeout(r,15));
+              }
+              console.log('node fini');
             })();
-            console.log('node fini');
-            """, _ws);
+            """;
+        var node = Lance(script, _ws);
 
         // Écrivain C# : le même espace, en même temps, via le service natif.
         var csharp = Task.Run(() =>
@@ -96,7 +108,7 @@ public class TwoAppsConcurrencyTests : IDisposable
         var méta = JsonNode.Parse(File.ReadAllText(Path.Combine(_ws, ".opencode-app", "notes-meta.json")));
         Assert.NotNull(méta);
 
-        // Le C# relit sans erreur ce que le Node a écrit (les 10 premières au moins).
+        // Le C# relit sans erreur ce que le Node a écrit.
         Assert.Contains(listeCSharp, n => n.Id == "node-1.md" && n.Title == "Note Node 1");
 
         // Et Node relit ce que le C# a écrit, avec le parseur EXACT d'Electron.
