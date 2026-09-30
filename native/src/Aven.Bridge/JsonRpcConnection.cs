@@ -63,10 +63,12 @@ public sealed class JsonRpcConnection : IAsyncDisposable
         _pending[id] = tcs;
         try
         {
-            // Flux déjà mort (EOF, erreur de lecture) : échec immédiat, pas de pendule.
-            if (_terminal is { } dead) throw dead;
-            // La réponse est peut-être déjà arrivée (course avec le lecteur).
+            // La réponse est peut-être déjà arrivée (course avec le lecteur) — vérifiée
+            // AVANT l'état terminal : l'EOF peut survenir alors que notre réponse attend
+            // déjà dans le tampon (appels concurrents, flux préchargé).
             if (_early.TryRemove(id, out var early)) { DeliverResponse(early, tcs); return await tcs.Task.WaitAsync(cancellationToken).ConfigureAwait(false); }
+            // Flux mort sans réponse pour nous : échec immédiat, pas de pendule.
+            if (_terminal is { } dead) throw dead;
             Start();
             var request = new JsonObject
             {
