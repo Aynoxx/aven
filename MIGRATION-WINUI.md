@@ -163,8 +163,16 @@ les réponses aux captures de référence faites sur l'app Electron.
   .Json émet `Environment.NewLine`, à normaliser sous Windows) et UTF-8 sans BOM.
   Preuve : lecture/écriture croisées RÉELLES avec le vrai Node dans les tests xUnit
   (`NotesInteropNodeTests` — le Node relit ce que C# a écrit, le C# relit ce que
-  Node écrit). 44/44 xUnit. Reste en phase 4 : FilesService (safeResolve),
-  StatsService, SettingsService, puis l'UI Notes/Fichiers native.
+  Node écrit). Les quatre services sont maintenant portés : `FilesService.cs`
+  (safeResolve ligne à ligne — absolus, lecteur, « .. » refusés, path.relative fait
+  main ; listing sans racines cachées, lecture bornée 512 Kio anti-binaire, fil
+  d'ariane), `StatsService.cs` (compteur de dictées `.opencode-app/stats.json` avec
+  reset journalier + agrégations pures identiques à aggregateStats) et
+  `SettingsService.cs` (prefs.json COMPACT atomique — parité writeJsonAtomic, à la
+  différence du meta des notes en variante Pretty —, défauts stricts !==false /
+  ===true). 66/66 xUnit, MSIX vert. Reste en phase 4 : l'UI native Notes/Fichiers
+  (explorateur TreeView + GridView) et l'épreuve « deux apps ouvertes sur le même
+  espace » en conditions réelles.
 
 ### Phase 5 — Terminal Freebuff natif (1 à 2 semaines)
 
