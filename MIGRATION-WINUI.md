@@ -121,6 +121,17 @@ les réponses aux captures de référence faites sur l'app Electron.
   FormDialog (autorisations) en ContentDialog.
 - **Acceptation** : conversation réelle à 60 fps mesurés pendant le stream ; raccourcis
   et dialogs conformes.
+- **État (socle conversation, fait)** : la couche données/opérations est portée et
+  prouvée en headless — `ConversationModels.cs` (état Live immuable + réducteur,
+  port ligne à ligne de `web/src/stream.ts` : deltas append incrémental, sémantique
+  child, autorisations, questions) et `ConversationClient.cs` (port de
+  `electron/operations.ts` : createChat avec modèle épinglé, send avec titre auto +
+  beforeSend, Arrêt, form.reply/cancel, permission.reply, transcripts sous-agents
+  parallèles triés). Acceptation headless verte : 2 tests E2E bout-en-bout contre un
+  double honnête stateful (multi-tours, autorisation, question, sous-agent rattaché,
+  Arrêt en plein tour). Reste : la vue chat WinUI (composeur Entrée/Maj+Entrée,
+  ItemsRepeater + rendu Markdown, autoscroll « Dernier message », sélecteur
+  MenuFlyout depuis router.chainFor, FormDialog en ContentDialog) et la mesure 60 fps.
 
 ### Phase 4 — Services natifs (2 semaines)
 
