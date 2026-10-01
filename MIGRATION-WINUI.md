@@ -248,6 +248,21 @@ divergence TUI par construction. TESTS D'INTÉGRATION réels : echo, cmd interac
   (`nodejs/node.exe dist-electron/aven-pty-host.mjs` → ready + chunk VT + exit 0).
   Le MSIX, lui, n'embarque pas node (paquet store-friendly) : il reste dépendant du
   PATH — à réévaluer si un jour l'écran VT doit marcher out-of-the-box en sideload.
+- **RELEASE 10.0.0 (01/10/2026)** : artefacts ×3 arch, MSIX signés 10.0.0.0 (cert
+  dev CN=Aven, verdict signtool honnête) + portables autonomes (node arch-correct,
+  xterm vendu, e_sqlite3 vérifiés dans chaque layout). Hashes SHA256 :
+  MSIX x64 ca345dfc…991cb · x86 bd29c20d…71a6d · arm64 4ce0f360…3b8df ;
+  zip x64 63249aba…1445 · x86 b80da146…e65f · arm64 1e1e6b41…8e62 (SHA256 complets
+  dans le message du tag v10.0.0). PIÈGES nouveaux : RID explicite obligatoire
+  (NETSDK1032 sinon : RID inféré = hôte) ; sous-dossier RID du portable est
+  win-<arch> (hardcoder win-x64 désaligne nodejs/ et l'exe) ; node-pty-win32-x86
+  N'EXISTE PAS (npm 404) → le portable x86 embarque le node+pty x64 (l'app 32-bit
+  spawne des enfants 64-bit ; seuls les Windows 32-bit purs sont exclus) ; node
+  par arch via cache/téléchargement nodejs.org (-NodeVersion, TLS 1.2 imposé).
+  Preuves : smoke PTY vivants dans les layouts x64 ET x86 (ready + chunk VT +
+  SMOKE-<arch>-OK) ; PE vérifiés (app i386/ARM64, node x86-64/ARM64) ; paquet
+  node-pty-win32-arm64@1.1.0 embarqué. ARM64 : non exécuté (pas de machine cible)
+  — épreuve matérielle = acceptation humaine, artefacts prêts.
 - **Acceptation** : session visible, quota « 40/40 Freebucks » dans la barre, pubs
   filtrées, bannière de conflit d'app Desktop fonctionnelle, TUI non gelé à l'envoi.
   La vue existe (transcript filtré TextBlock + barre de session + bannière WMI +

@@ -15,10 +15,13 @@
 param(
     [string[]]$Archs = @("x64"),
     [switch]$NoPortable,
-    [string]$NodeExe = ""
+    [string]$NodeExe = "",
+    [string]$NodeVersion = "v22.14.0"
 )
 
 $ErrorActionPreference = "Stop"
+# nodejs.org exige TLS 1.2 (PowerShell 5.1 ne le négocie pas toujours seul).
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $racine = Split-Path -Parent $PSScriptRoot
 $sdk = Join-Path $racine "tools\dotnet-sdk"
 $env:DOTNET_ROOT = $sdk
@@ -29,6 +32,75 @@ $manifest = [xml](Get-Content $manifestPath)
 $publisher = $manifest.Package.Identity.Publisher
 $version = $manifest.Package.Identity.Version
 Write-Host "Publisher du manifeste : $publisher (version $version)"
+
+# --- Node par architecture (autonomie du portable) -------------------------
+# Machine cible d'un PE (0x8664=x64, 0x014c=x86, 0xaa64=ARM64) : lecture directe
+# de l'en-tete sans charger le fichier (e_lfanew a 0x3C, machine a +4).
+function Get-PEMachine {
+    param([string]$Path)
+    $flux = [System.IO.File]::OpenRead($Path)
+    try {
+        $tete = New-Object byte[] 4096
+        [void]$flux.Read($tete, 0, 4096)
+        $eLfanew = [BitConverter]::ToInt32($tete, 0x3C)
+        if ($eLfanew -le 0 -or ($eLfanew + 6) -gt $flux.Length) { return 0 }
+        $pe = New-Object byte[] 4096
+        $flux.Position = $eLfanew
+        [void]$flux.Read($pe, 0, 4096)
+        return [BitConverter]::ToUInt16($pe, 4)
+    } finally { $flux.Dispose() }
+}
+
+# node.exe de L'architecture demandee : -NodeExe explicite > node systeme si son
+# PE matche > cache local > telechargement officiel nodejs.org (exe direct x86/x64,
+# zip pour ARM64). Jamais de node d'une autre arch dans un portable.
+function Resolve-NodeArchitecture {
+    param([string]$arch)
+    $machineAttendue = @{ "x64" = 0x8664; "x86" = 0x014c; "arm64" = 0xaa64 }[$arch]
+
+    if ($NodeExe -ne "" -and (Test-Path $NodeExe)) { return $NodeExe }
+
+    # x86 : le paquet ConPTY node-pty-win32-x86 N'EXISTE PAS (npm 404, constat
+    # 01/10/2026) - un portable x86 embarque donc le node X64 (l'app 32-bit peut
+    # spawner des enfants 64-bit ; seuls les Windows 32-bit purs sont exclus).
+    if ($arch -eq "x86") { return (Resolve-NodeArchitecture -arch "x64") }
+
+    $systeme = (Get-Command node -ErrorAction SilentlyContinue).Source
+    if ($systeme -and (Test-Path $systeme) -and ((Get-PEMachine $systeme) -eq $machineAttendue)) {
+        return $systeme
+    }
+
+    $cacheDir = Join-Path $racine "native\.out\node-cache\node-$NodeVersion-win-$arch"
+    $cacheExe = Join-Path $cacheDir "node.exe"
+    if (Test-Path $cacheExe) { return $cacheExe }
+    New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null
+    $client = New-Object System.Net.WebClient
+    try {
+        if ($arch -ne "arm64") {
+            $url = "https://nodejs.org/dist/$NodeVersion/win-$arch/node.exe"
+            Write-Host "  Telechargement $url ..."
+            $client.DownloadFile($url, $cacheExe)
+        } else {
+            $url = "https://nodejs.org/dist/$NodeVersion/node-$NodeVersion-win-arm64.zip"
+            $zipCache = Join-Path $cacheDir "node.zip"
+            Write-Host "  Telechargement $url ..."
+            $client.DownloadFile($url, $zipCache)
+            Expand-Archive -Path $zipCache -DestinationPath $cacheDir -Force
+            $extrait = Get-ChildItem $cacheDir -Recurse -Filter node.exe | Select-Object -First 1 -ExpandProperty FullName
+            if (-not $extrait) { throw "node.exe absent du zip ARM64." }
+            Copy-Item $extrait $cacheExe -Force
+            Remove-Item $zipCache -Force
+        }
+    } catch {
+        Write-Host "  Telechargement node $arch en echec : $($_.Exception.Message)"
+        return ""
+    }
+    if ((Test-Path $cacheExe) -and ((Get-PEMachine $cacheExe) -ne $machineAttendue)) {
+        Write-Host "  node telecharge : mauvaise architecture (PE non $arch)."
+        return ""
+    }
+    return $cacheExe
+}
 
 # --- 1. Certificat (cree une fois, aligne sur le Publisher) ---
 $stampFile = Join-Path $racine "native\.cert-thumbprint"
@@ -75,16 +147,20 @@ foreach ($arch in $Archs) {
     $bin = Join-Path $racine "native\src\Aven.Native\bin\$arch\Release\net8.0-windows10.0.19041.0"
     # Avec SelfContained, le runtime .NET embarque vit dans le sous-dossier RID
     # (win-x64\...) : c'est LUI le layout d'execution complet a embarquer.
-    if (Test-Path (Join-Path $bin "win-x64\Aven.Native.exe")) { $bin = Join-Path $bin "win-x64" }
+    # Sous-dossier RID du runtime self-contained (PIÈGE 01/10/2026 : hardcoder
+    # win-x64 laisse x86/ARM64 à un niveau de trop - nodejs/ et l'exe désalignés).
+    if (Test-Path (Join-Path $bin "win-$arch\Aven.Native.exe")) { $bin = Join-Path $bin "win-$arch" }
     if (-not (Test-Path (Join-Path $bin "Aven.Native.exe"))) {
         Write-Host "Build $arch..."
-        dotnet build native/src/Aven.Native/Aven.Native.csproj -c Release -p:Platform=$arch --nologo
+        # RID explicite : sans lui le RID inféré est celui de la machine hôte
+        # (win-x64) et x86/ARM64 échouent en NETSDK1032 (PIÈGE, 01/10/2026).
+        dotnet build native/src/Aven.Native/Aven.Native.csproj -c Release -p:Platform=$arch -p:RuntimeIdentifier=win-$arch --nologo
         if ($LASTEXITCODE -ne 0) { throw "Build $arch en echec." }
     }
 
     # --- 2. MSIX signe ---
     $pkgDir = Join-Path $outRoot "$arch"
-    dotnet build native/src/Aven.Native/Aven.Native.csproj -c Release -p:Platform=$arch --nologo `
+    dotnet build native/src/Aven.Native/Aven.Native.csproj -c Release -p:Platform=$arch -p:RuntimeIdentifier=win-$arch --nologo `
         -p:GenerateAppxPackageOnBuild=true -p:UapAppxPackageBuildMode=SideloadOnly -p:AppxBundle=Never `
         -p:AppxPackageSigningEnabled=true -p:PackageCertificateThumbprint=$thumbprint `
         -p:AppxPackageDir="$pkgDir\"
@@ -127,7 +203,10 @@ foreach ($arch in $Archs) {
         # Le micro-host PTY charge @lydell/node-pty relativement a dist-electron/..
         # (meme logique que ptyModulePath) : embarquer le paquet + son binaire de
         # plateforme - sinon le terminal ne demarre que sur une machine de dev.
-        $ptyPkgs = @("node-pty", "node-pty-win32-$arch")
+        # x86 : node-pty-win32-x86 n'existe pas (npm 404) - le portable x86
+        # embarque le paquet x64 (cohérent avec le fallback node x64).
+        $archPty = $arch; if ($archPty -eq "x86") { $archPty = "x64" }
+        $ptyPkgs = @("node-pty", "node-pty-win32-$archPty")
         foreach ($pkg in $ptyPkgs) {
             $src = Join-Path $racine "node_modules\@lydell\$pkg"
             if (Test-Path $src) {
@@ -138,19 +217,18 @@ foreach ($arch in $Archs) {
                 Write-Host "  AVERTISSEMENT : $pkg absent (npm install d'abord) - PTY incomplet."
             }
         }
-        # Node embarque (autonomie terminal) : le transport resout node.exe
-        # adjacent (portable\nodejs\node.exe) AVANT le PATH - sans Node installe
-        # sur la machine cible, le terminal marche quand meme.
-        $nodeSrc = $NodeExe
-        if ($nodeSrc -eq "") { $nodeSrc = (Get-Command node -ErrorAction SilentlyContinue).Source }
+        # Node embarque (autonomie terminal), PAR ARCHITECTURE : le transport
+        # resout node.exe adjacent (portable\nodejs\node.exe) avant le PATH.
+        $nodeSrc = Resolve-NodeArchitecture -arch $arch
         if ($nodeSrc -and (Test-Path $nodeSrc)) {
             $nodeDir = Join-Path $portable "nodejs"
             New-Item -ItemType Directory -Path $nodeDir -Force | Out-Null
             Copy-Item $nodeSrc (Join-Path $nodeDir "node.exe") -Force
             $nodeMo = [math]::Round((Get-Item (Join-Path $nodeDir "node.exe")).Length / 1MB)
-            Write-Host "  Node embarque : nodejs\node.exe ($nodeMo Mo)"
+            $archReelle = @{ 0x8664 = "x64"; 0x014c = "x86"; 0xaa64 = "arm64" }[(Get-PEMachine $nodeSrc)]
+            Write-Host "  Node embarque : nodejs\node.exe ($nodeMo Mo, PE $archReelle)"
         } else {
-            Write-Host "  AVERTISSEMENT : node.exe introuvable (param -NodeExe ou PATH) - le terminal exigera Node sur la machine cible."
+            Write-Host "  AVERTISSEMENT : node.exe $arch indisponible - le terminal exigera Node sur la machine cible."
         }
         $zip = Join-Path $outRoot "Aven-native-$arch-$version.zip"
         Compress-Archive -Path "$portable\*" -DestinationPath $zip -Force

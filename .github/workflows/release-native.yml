@@ -61,7 +61,7 @@ jobs:
         shell: pwsh
         run: |
           $args = @("build", "native/src/Aven.Native/Aven.Native.csproj", "-c", "Release",
-            "-p:Platform=${{ matrix.arch }}", "--nologo",
+            "-p:Platform=${{ matrix.arch }}", "-p:RuntimeIdentifier=win-${{ matrix.arch }}", "--nologo",
             "-p:GenerateAppxPackageOnBuild=true", "-p:UapAppxPackageBuildMode=SideloadOnly",
             "-p:AppxBundle=Never", "-p:AppxPackageDir=native/.out/${{ matrix.arch }}/")
           if ("${{ steps.cert.outputs.signed }}" -eq "true") {
@@ -86,7 +86,9 @@ jobs:
           Copy-Item "$bin/*" $portable -Recurse -Force
           Copy-Item "dist-electron/aven-engine-host.mjs" "$portable/dist-electron/"
           Copy-Item "dist-electron/aven-pty-host.mjs" "$portable/dist-electron/"
-          foreach ($pkg in @("node-pty", "node-pty-win32-$arch")) {
+          # x86 : node-pty-win32-x86 n'existe pas -> le portable x86 embarque le paquet x64.
+          $archPty = $arch; if ($archPty -eq "x86") { $archPty = "x64" }
+          foreach ($pkg in @("node-pty", "node-pty-win32-$archPty")) {
             $src = "node_modules/@lydell/$pkg"
             if (Test-Path $src) {
               $dst = "$portable/node_modules/@lydell/$pkg"
@@ -94,15 +96,48 @@ jobs:
               Copy-Item $src $dst -Recurse -Force
             }
           }
-          # Node embarque (autonomie terminal) : le transport resout node.exe
-          # adjacent (nodejs/node.exe) avant le PATH.
+          # Node embarque (autonomie terminal), PAR ARCHITECTURE : le node du
+          # runner est x64 - pour x86/ARM64 on telecharge l'exe officiel matchant.
+          $machineAttendue = @{ "x64" = 0x8664; "x86" = 0x014c; "arm64" = 0xaa64 }[$arch]
           $nodeExe = (Get-Command node -ErrorAction SilentlyContinue).Source
+          function Get-PEMachineCI([string]$p) {
+            $fs = [System.IO.File]::OpenRead($p)
+            try {
+              $tete = New-Object byte[] 4096; [void]$fs.Read($tete, 0, 4096)
+              $off = [BitConverter]::ToInt32($tete, 0x3C)
+              $pe = New-Object byte[] 4096; $fs.Position = $off; [void]$fs.Read($pe, 0, 4096)
+              return [BitConverter]::ToUInt16($pe, 4)
+            } finally { $fs.Dispose() }
+          }
+          if ($nodeExe -and (Test-Path $nodeExe) -and ((Get-PEMachineCI $nodeExe) -ne $machineAttendue)) { $nodeExe = "" }
+          # x86 : node-pty-win32-x86 n'existe pas (npm 404) -> fallback node x64.
+          if (-not $nodeExe -and $arch -eq "x86") {
+            $nodeExe = (Get-Command node -ErrorAction SilentlyContinue).Source
+          }
+          if (-not $nodeExe) {
+            $cacheDir = "native/.out/node-cache/node-v22.14.0-win-$arch"
+            $cacheExe = "$cacheDir/node.exe"
+            if (Test-Path $cacheExe) { $nodeExe = $cacheExe }
+            else {
+              New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null
+              try {
+                [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+                $wc = New-Object System.Net.WebClient
+                if ($arch -ne "arm64") { $wc.DownloadFile("https://nodejs.org/dist/v22.14.0/win-$arch/node.exe", $cacheExe) }
+                else {
+                  $wc.DownloadFile("https://nodejs.org/dist/v22.14.0/node-v22.14.0-win-arm64.zip", "$cacheDir/node.zip")
+                  Expand-Archive -Path "$cacheDir/node.zip" -DestinationPath $cacheDir -Force
+                  $extrait = Get-ChildItem $cacheDir -Recurse -Filter node.exe | Select-Object -First 1 -ExpandProperty FullName
+                  Copy-Item $extrait $cacheExe -Force
+                }
+                $nodeExe = $cacheExe
+              } catch { Write-Host "::warning::node $arch indisponible - le portable exigera Node" }
+            }
+          }
           if ($nodeExe -and (Test-Path $nodeExe)) {
             New-Item -ItemType Directory -Path "$portable/nodejs" -Force | Out-Null
             Copy-Item $nodeExe "$portable/nodejs/node.exe" -Force
-            Write-Host "Node embarque : $nodeExe"
-          } else {
-            Write-Host "::warning::node.exe introuvable - le portable exigera Node sur la machine cible"
+            Write-Host "Node embarque ($arch) : $nodeExe"
           }
           $ver = (Get-Item "$bin/Aven.Native.dll").VersionInfo.ProductVersion
           if (-not $ver) { $ver = "${{ inputs.version }}" }
