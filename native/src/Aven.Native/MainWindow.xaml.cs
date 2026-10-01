@@ -157,7 +157,7 @@ public sealed partial class MainWindow : Window
         _chatOuvert = false;
         ChatScroll.Visibility = Visibility.Collapsed;
         ComposerBar.Visibility = Visibility.Collapsed;
-        FilesScroll.Visibility = Visibility.Collapsed;
+        FilesView.Visibility = Visibility.Collapsed;
         NotesScroll.Visibility = Visibility.Collapsed;
         SettingsPanel.Visibility = Visibility.Collapsed;
         PageView.UpdateLayout();
@@ -312,8 +312,56 @@ public sealed partial class MainWindow : Window
         SettingsPanel.Visibility = Visibility.Collapsed;
         PageTitle.Text = "Fichiers";
         PageHint.Text = "Explorateur de l'espace (lecture seule)";
-        FilesScroll.Visibility = Visibility.Visible;
+        FilesView.Visibility = Visibility.Visible;
+        ReconstruireArbreFichiers(); // arbre frais à chaque ouverture (lecture seule, sans état caché)
         ListerFichiers(_filesRelative);
+    }
+
+    /// <summary>Arbre gauche (spec phase 4 « TreeView + GridView ») : un niveau chargé,
+    /// l'expansion charge les enfants LAZY (même FilesService.List → safeResolve).
+    /// TreeViewNode n'a ni Tag ni HasChildren settable : le chemin vit dans le
+    /// dictionnaire d'instance et le chevron vient d'un nœud FANTÔME (pattern WinUI).</summary>
+    private readonly Dictionary<TreeViewNode, string> _nœudsChemins = new();
+    private const string NœudFantôme = "\u2026";
+
+    private void ReconstruireArbreFichiers()
+    {
+        _nœudsChemins.Clear();
+        FilesTree.RootNodes.Clear();
+        try
+        {
+            foreach (var nœud in Aven.Bridge.FilesTree.Construire(Espace()))
+                FilesTree.RootNodes.Add(NœudArbre(nœud));
+        }
+        catch { /* pas d'espace : l'arbre reste vide, la liste à droite affiche l'erreur */ }
+    }
+
+    private TreeViewNode NœudArbre(Aven.Bridge.FileTreeNode nœud)
+    {
+        var t = new TreeViewNode { Content = nœud.Nom };
+        _nœudsChemins[t] = nœud.Relatif;
+        if (nœud.EstDossier) t.Children.Add(new TreeViewNode { Content = NœudFantôme }); // chevron
+        return t;
+    }
+
+    private void OnFilesTreeExpanding(TreeView sender, TreeViewExpandingEventArgs args)
+    {
+        if (args.Node is not { } nœud || !_nœudsChemins.TryGetValue(nœud, out var relatif)) return;
+        // Fantôme présent = enfants jamais chargés ; sinon le sous-arbre est déjà là.
+        if (nœud.Children.Count != 1 || nœud.Children[0].Content as string != NœudFantôme) return;
+        nœud.Children.Clear();
+        try
+        {
+            foreach (var enfant in Aven.Bridge.FilesTree.Construire(Espace(), relatif))
+                nœud.Children.Add(NœudArbre(enfant));
+        }
+        catch { /* dossier disparu : reste vide */ }
+    }
+
+    private void OnFilesTreeInvoked(TreeView sender, TreeViewItemInvokedEventArgs args)
+    {
+        if (args.InvokedItem is TreeViewNode nœud && _nœudsChemins.TryGetValue(nœud, out var relatif))
+            ListerFichiers(relatif);
     }
 
     private void ListerFichiers(string relatif)
@@ -541,7 +589,7 @@ public sealed partial class MainWindow : Window
     {
         ChatScroll.Visibility = Visibility.Collapsed;
         ComposerBar.Visibility = Visibility.Collapsed;
-        FilesScroll.Visibility = Visibility.Collapsed;
+        FilesView.Visibility = Visibility.Collapsed;
         NotesScroll.Visibility = Visibility.Collapsed;
         TerminalView.Visibility = Visibility.Collapsed;
         SettingsPanel.Visibility = Visibility.Collapsed;

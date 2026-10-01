@@ -110,24 +110,36 @@
                 <ScrollViewer x:Name="ChatScroll" Grid.Row="1" Visibility="Collapsed">
                     <StackPanel x:Name="ChatRows" MaxWidth="860" Spacing="10" Margin="20,12,20,16" />
                 </ScrollViewer>
-                <ScrollViewer x:Name="FilesScroll" Grid.Row="1" Visibility="Collapsed">
-                    <StackPanel MaxWidth="980" Spacing="12" Margin="20,12,20,16">
-                        <StackPanel x:Name="FilesCrumbs" Orientation="Horizontal" Spacing="4" />
-                        <Button x:Name="FilesUp" Content="&#8592; Dossier parent" Click="OnFilesUp"
-                                Visibility="Collapsed" HorizontalAlignment="Left" MinHeight="32"
-                                Background="{ThemeResource AvenPanelSoftBrush}" BorderThickness="0" />
-                        <StackPanel x:Name="FilesList" Spacing="4" />
-                        <StackPanel x:Name="FilesPreview" Spacing="6" Visibility="Collapsed">
-                            <TextBlock x:Name="FilesPreviewPath" FontSize="11" Foreground="{ThemeResource AvenMutedBrush}" />
-                            <TextBlock x:Name="FilesPreviewMeta" FontSize="11" Foreground="{ThemeResource AvenMutedBrush}" />
-                            <Border Background="{ThemeResource AvenPanelBrush}" CornerRadius="10" Padding="12"
-                                    BorderBrush="{ThemeResource AvenBorderBrush}" BorderThickness="1">
-                                <TextBlock x:Name="FilesPreviewContent" FontFamily="Consolas" FontSize="12" TextWrapping="Wrap"
-                                           Foreground="{ThemeResource AvenTextBrush}" />
-                            </Border>
+                <!-- Vue Fichiers : ARBRE &#224; gauche (spec phase 4 « TreeView + GridView »,
+                     lazy &#224; l'expansion) + fil d'ariane/liste/aper&#231;u &#224; droite. -->
+                <Grid x:Name="FilesView" Grid.Row="1" Visibility="Collapsed">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="240" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TreeView x:Name="FilesTree" Grid.Column="0" Margin="20,12,8,16"
+                              SelectionMode="Single" Expanding="OnFilesTreeExpanding" ItemInvoked="OnFilesTreeInvoked"
+                              BorderBrush="{ThemeResource AvenBorderBrush}" BorderThickness="1"
+                              CornerRadius="12" Background="{ThemeResource AvenPanelBrush}" />
+                    <ScrollViewer Grid.Column="1">
+                        <StackPanel MaxWidth="980" Spacing="12" Margin="8,12,20,16">
+                            <StackPanel x:Name="FilesCrumbs" Orientation="Horizontal" Spacing="4" />
+                            <Button x:Name="FilesUp" Content="&#8592; Dossier parent" Click="OnFilesUp"
+                                    Visibility="Collapsed" HorizontalAlignment="Left" MinHeight="32"
+                                    Background="{ThemeResource AvenPanelSoftBrush}" BorderThickness="0" />
+                            <StackPanel x:Name="FilesList" Spacing="4" />
+                            <StackPanel x:Name="FilesPreview" Spacing="6" Visibility="Collapsed">
+                                <TextBlock x:Name="FilesPreviewPath" FontSize="11" Foreground="{ThemeResource AvenMutedBrush}" />
+                                <TextBlock x:Name="FilesPreviewMeta" FontSize="11" Foreground="{ThemeResource AvenMutedBrush}" />
+                                <Border Background="{ThemeResource AvenPanelBrush}" CornerRadius="10" Padding="12"
+                                        BorderBrush="{ThemeResource AvenBorderBrush}" BorderThickness="1">
+                                    <TextBlock x:Name="FilesPreviewContent" FontFamily="Consolas" FontSize="12" TextWrapping="Wrap"
+                                               Foreground="{ThemeResource AvenTextBrush}" />
+                                </Border>
+                            </StackPanel>
                         </StackPanel>
-                    </StackPanel>
-                </ScrollViewer>
+                    </ScrollViewer>
+                </Grid>
                 <ScrollViewer x:Name="NotesScroll" Grid.Row="1" Visibility="Collapsed">
                     <StackPanel MaxWidth="980" Spacing="12" Margin="20,12,20,16">
                         <Grid>
