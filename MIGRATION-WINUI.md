@@ -348,8 +348,16 @@ constantes partagées C# et des clés de ressource XAML : le rythme v9.7.0 est c
 
 1. **Contrôle terminal** : maison (Composition) vs lib existante — critère : rendu VT
    complet + performances au scrollback.
-2. **Markdown** : CommunityToolkit Labs vs moteur maison — critère : parité du rendu
-   actuel (blocs de code, listes, tableaux).
+2. **Markdown** : **MarkdownLite (maison) RETENU et étendu (01/10/2026)** —
+   CommunityToolkit refusé : divergerait du rendu web (liens ACTIFS, syntaxe
+   extra, thèmes propres) alors que la règle est la parité de RichMarkdown, et
+   ajoute Markdig + Highlight.js (lourdeur, risque XamlCompiler pass1) pour un
+   gain nul. MarkdownLite couvre maintenant TOUT le vrai rendu web : titres,
+   gras/italique/`code`, blocs ```, listes - / * (imbriquées × 2 espaces),
+   listes 1. , tableaux GFM (header gras sur fond panel-soft, colonnes égales),
+   et liens [label](url) AFFICHÉS inertes (Hyperlink SANS NavigateUri — parité
+   du span mdlink : le label se voit, l'URL ne s'ouvre jamais). HTML toujours
+   littéral. 9 tests xUnit (dont liens inerts + tableau + puces imbriquées).
 3. **Stats** : **SQLite ADOPTÉ (01/10/2026)** — `Microsoft.Data.Sqlite` 8 dans Aven.Bridge, base `workspace/.opencode-app/stats.db` (WAL + busy_timeout 5 s, deux apps simultanées). Le critère « getStats sur 1 an » est IMPOSSIBLE en JSON : stats.json ne porte qu'un compteur (total/day/dayCount), aucun historique — SQLite agrège les lignes journalières en une requête (test : History(365) < 500 ms). stats.json RESTE écrit à chaque incrément (byte-parité, export de compatibilité Classic : le vrai Node le relit en test) ; le JSON préexistant est importé UNE fois au premier accès (marqueur migrated). Panneau Paramètres : compteur total / aujourd'hui / 7 jours + version.
 4. **Nommage** : **« Aven 10.0 (native) » RETENU (01/10/2026)** — la version majeure
    marque le changement de moteur (Electron → WinUI 3), ce que la continuité 9.x

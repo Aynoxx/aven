@@ -819,7 +819,9 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    /// <summary>Rendu du Markdown-lite : blocs de code (Consolas) + lignes stylées.</summary>
+    /// <summary>Rendu du Markdown-lite (parité RichMarkdown web) : blocs de code,
+    /// titres, listes à puces/numérotées, tableaux GFM, liens inertes (label visible,
+    /// jamais navigable — span mdlink côté web).</summary>
     private static void RemplirMarkdown(StackPanel pile, string texte, Brush couleur)
     {
         foreach (var bloc in Aven.Bridge.MarkdownLite.Parse(texte))
@@ -848,6 +850,36 @@ public sealed partial class MainWindow : Window
                     pile.Children.Add(encadré);
                     break;
 
+                case Aven.Bridge.MdBullet puce:
+                    var lignePuce = new TextBlock
+                    {
+                        TextWrapping = TextWrapping.Wrap,
+                        Foreground = couleur,
+                        FontSize = 13,
+                        Margin = new Thickness(14 + 14 * puce.Niveau, 0, 0, 0),
+                    };
+                    lignePuce.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run { Text = "\u2022  " });
+                    AjouterSegments(lignePuce, puce.Segments, couleur);
+                    pile.Children.Add(lignePuce);
+                    break;
+
+                case Aven.Bridge.MdOrdered énum:
+                    var ligneNum = new TextBlock
+                    {
+                        TextWrapping = TextWrapping.Wrap,
+                        Foreground = couleur,
+                        FontSize = 13,
+                        Margin = new Thickness(14, 0, 0, 0),
+                    };
+                    ligneNum.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run { Text = énum.Num + ".  " });
+                    AjouterSegments(ligneNum, énum.Segments, couleur);
+                    pile.Children.Add(ligneNum);
+                    break;
+
+                case Aven.Bridge.MdTable table:
+                    pile.Children.Add(TableauDe(table, couleur));
+                    break;
+
                 case Aven.Bridge.MdLine ligne:
                     var blocTexte = new TextBlock
                     {
@@ -856,16 +888,68 @@ public sealed partial class MainWindow : Window
                         FontSize = ligne.HeadingLevel > 0 ? 15 : 13,
                         FontWeight = ligne.HeadingLevel > 0 ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal,
                     };
-                    foreach (var segment in ligne.Segments)
-                    {
-                        var run = new Microsoft.UI.Xaml.Documents.Run { Text = segment.Text };
-                        if (segment.Bold) run.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
-                        if (segment.Italic) run.FontStyle = Windows.UI.Text.FontStyle.Italic;
-                        blocTexte.Inlines.Add(run);
-                    }
+                    AjouterSegments(blocTexte, ligne.Segments, couleur);
                     pile.Children.Add(blocTexte);
                     break;
             }
+        }
+    }
+
+    /// <summary>Segments → inlines : gras/italique/code, liens AFFICHÉS en Hyperlink
+    /// SANS NavigateUri (aucun clic ne navigue — parité sécurité RichMarkdown).</summary>
+    private static void AjouterSegments(TextBlock bloc, IReadOnlyList<Aven.Bridge.MdSegment> segments, Brush couleur)
+    {
+        foreach (var segment in segments)
+        {
+            if (segment.Link is not null)
+            {
+                var lien = new Microsoft.UI.Xaml.Documents.Hyperlink(); // PAS de NavigateUri : inert
+                lien.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run { Text = segment.Text });
+                if (Application.Current.Resources["AvenAccentBrush"] is Brush accent) lien.Foreground = accent;
+                bloc.Inlines.Add(lien);
+                continue;
+            }
+            var run = new Microsoft.UI.Xaml.Documents.Run { Text = segment.Text };
+            if (segment.Bold) run.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
+            if (segment.Italic) run.FontStyle = Windows.UI.Text.FontStyle.Italic;
+            if (segment.Code) run.FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas");
+            bloc.Inlines.Add(run);
+        }
+    }
+
+    /// <summary>Tableau GFM minimal : header en gras sur fond panel-soft, colonnes égales.</summary>
+    private static Grid TableauDe(Aven.Bridge.MdTable table, Brush couleur)
+    {
+        var grille = new Grid { Margin = new Thickness(0, 2, 0, 2) };
+        var colonnes = Math.Max(table.Header.Count, 1);
+        for (var c = 0; c < colonnes; c++)
+            grille.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        AjouterLigneTableau(grille, table.Header, 0, header: true, couleur);
+        for (var r = 0; r < table.Rows.Count; r++)
+            AjouterLigneTableau(grille, table.Rows[r], r + 1, header: false, couleur);
+        return grille;
+    }
+
+    private static void AjouterLigneTableau(Grid grille, IReadOnlyList<IReadOnlyList<Aven.Bridge.MdSegment>> cellules, int ligne, bool header, Brush couleur)
+    {
+        for (var c = 0; c < grille.ColumnDefinitions.Count; c++)
+        {
+            var cellule = new TextBlock
+            {
+                TextWrapping = TextWrapping.Wrap,
+                FontSize = 12,
+                Foreground = couleur,
+            };
+            if (header) cellule.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
+            if (c < cellules.Count) AjouterSegments(cellule, cellules[c], couleur);
+            var cadre = new Border
+            {
+                Child = cellule,
+                Padding = new Thickness(8, 4, 8, 4),
+            };
+            if (header) cadre.Background = Application.Current.Resources["AvenPanelSoftBrush"] as Brush;
+            Grid.SetColumn(cadre, c);
+            grille.Children.Add(cadre);
         }
     }
 
