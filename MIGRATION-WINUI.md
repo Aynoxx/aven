@@ -210,7 +210,23 @@ les réponses aux captures de référence faites sur l'app Electron.
   enfant restait ATTACHÉ à la console du parent — sortie visible sur la console de
   test, jamais dans les pipes, avec un code pourtant fidèle à l'exemple officiel
   (prouvé par une sonde jetable : chunks horodatés, exit code 0, dispose propre).
-  CAUSE NON TROUVÉE (piste : l'hôte de test n'a pas de console allouée). ABANDON du P/Invoke au profit de
+  CAUSE RÉSOLUE (01/10/2026, bissect exhaustive post-protocole) : le parent MANAGÉ
+  est le poison. Un enfant ConPTY lancé depuis un process qui charge le runtime
+  .NET (net8.0-windows, .NET Framework 4.8, transcription EXACTE du sample
+  Microsoft en C#) meurt en 0xC0000142 (STATUS_DLL_INIT_FAILED) à l'init de sa
+  console, tandis que le MÊME code exécuté par un parent natif (python/ctypes,
+  node-pty/conpty.node, Windows Terminal) réussit. Toutes les parités testées et
+  éliminées : named pipes vs anonymes, STARTF_USESTDHANDLES, bloc d'environnement,
+  bInheritHandles FALSE/TRUE, chemin complet de cmd.exe, SECURITY_ATTRIBUTES NULL,
+  zero-init de la liste d'attributs, CRT statique /MT, thread principal vs
+  secondaire — seuls comptent le RUNTIME du parent (natif OK, managé KO) et la
+  STRUCTURE STARTUPINFO exacte (les structs approximatives échouent côté données).
+  Conséquence : un hôte PTY natif minimaliste reste POSSIBLE (exe C pur, cl.exe
+  BuildTools), mais le prototype natif a reproduit le même 0xC0000142 que les
+  parents managés (cause résiduelle non élucidée : la sonde python gagnante
+  diffère encore de l'exe compilé sur un point non identifié) — pivot abandonné
+  faute de preuve, le micro-hôte Node RESTE la décision (il est natif côté
+  conpty.node et prouvé par 192 tests verts + app). ABANDON du P/Invoke au profit de
   `NodePtyTransport.cs` : un MICRO-HOST Node (`electron/pty-host.ts`, bundle esbuild
   `dist-electron/aven-pty-host.mjs`) qui pilote le MÊME conpty.node prébuildé que
   l'Electron (`@lydell/node-pty`) via des lignes JSON sur stdio (data/exit/ready +
