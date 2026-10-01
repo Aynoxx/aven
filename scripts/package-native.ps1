@@ -85,10 +85,13 @@ function Resolve-NodeArchitecture {
             $zipCache = Join-Path $cacheDir "node.zip"
             Write-Host "  Telechargement $url ..."
             $client.DownloadFile($url, $zipCache)
-            Expand-Archive -Path $zipCache -DestinationPath $cacheDir -Force
-            $extrait = Get-ChildItem $cacheDir -Recurse -Filter node.exe | Select-Object -First 1 -ExpandProperty FullName
+            # Extraction CIBLEE (pas le dossier entier : ~80 Mo de docs/npm inutiles).
+            $tmp = Join-Path $cacheDir "__extraction"
+            Expand-Archive -Path $zipCache -DestinationPath $tmp -Force
+            $extrait = Get-ChildItem $tmp -Recurse -Filter node.exe | Select-Object -First 1 -ExpandProperty FullName
             if (-not $extrait) { throw "node.exe absent du zip ARM64." }
             Copy-Item $extrait $cacheExe -Force
+            Remove-Item $tmp -Recurse -Force
             Remove-Item $zipCache -Force
         }
     } catch {
@@ -196,7 +199,9 @@ foreach ($arch in $Archs) {
         if (Test-Path $portable) { Remove-Item $portable -Recurse -Force }
         New-Item -ItemType Directory -Path $portable | Out-Null
         # Layout d'execution complet (self-contained .NET + WASDK) + hotes sidecar.
-        Copy-Item "$bin\*" $portable -Recurse -Force
+        # PDB/appxrecipe exclus : symboles de dev inutiles sur une machine cible
+        # (gagne ~25 Mo par portable, sans impact d'execution).
+        Copy-Item "$bin\*" $portable -Recurse -Force -Exclude *.pdb,*.appxrecipe
         New-Item -ItemType Directory -Path (Join-Path $portable "dist-electron") -Force | Out-Null
         Copy-Item (Join-Path $racine "dist-electron\aven-engine-host.mjs") (Join-Path $portable "dist-electron\")
         Copy-Item $ptyHost (Join-Path $portable "dist-electron\")
@@ -217,6 +222,9 @@ foreach ($arch in $Archs) {
                 Write-Host "  AVERTISSEMENT : $pkg absent (npm install d'abord) - PTY incomplet."
             }
         }
+        # Purge symboles de dev du layout AVANT zip (Copy-Item -Exclude ne descend
+        # pas dans les sous-dossiers ; ~36 Mo de PDB par portable, inutiles au runtime).
+        Get-ChildItem $portable -Recurse -Include *.pdb,*.appxrecipe | Remove-Item -Force
         # Node embarque (autonomie terminal), PAR ARCHITECTURE : le transport
         # resout node.exe adjacent (portable\nodejs\node.exe) avant le PATH.
         $nodeSrc = Resolve-NodeArchitecture -arch $arch

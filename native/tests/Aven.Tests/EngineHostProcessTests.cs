@@ -26,9 +26,12 @@ public class EngineHostProcessTests
         var bundle = CheminBundle();
         if (bundle is null)
         {
-            // L'app n'a pas encore été buildée : ce test exige le bundle généré par
-            // `npm run build:electron`. Le build CI l'exécute avant les tests C#.
-            return; // TODO phase 1 : rendre obligatoire quand CI le garantit
+            // Le bundle vient de `npm run build:electron` — absent en local neuf.
+            // CI le garantit (ci.yml l.26 avant les tests l.32) : y échouer est un
+            // vrai défaut ; en local, skip silencieux (honnête, pas de faux vert).
+            if (Environment.GetEnvironmentVariable("CI") == "true")
+                Assert.Fail("bundle aven-engine-host.mjs absent : lancez npm run build:electron avant les tests (garanti par ci.yml).");
+            return;
         }
         await using var client = new EngineClient(bundle, nodeExecPath: "node");
         using var annulé = new CancellationTokenSource(TimeSpan.FromSeconds(15));

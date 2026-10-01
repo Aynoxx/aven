@@ -80,7 +80,6 @@ public sealed class Announcer
     private readonly Queue<AnnouncePhrase> _file = new();
     private readonly SemaphoreSlim _drain = new(1, 1);
     private long _mutedJusquà;
-    private bool _activé = true;
 
     public Announcer(Func<string, Task> speak, Func<bool>? isMuted = null, Func<long>? now = null, int settleMs = 0)
     {
@@ -90,7 +89,7 @@ public sealed class Announcer
         _settleMs = settleMs;
     }
 
-    public bool Activé { get; private set; } = true;
+    public bool Activé { get; private set; } = true; // unique source de vérité (l'ancien champ _activé était mort — CS0414)
 
     public void SetEnabled(bool on)
     {

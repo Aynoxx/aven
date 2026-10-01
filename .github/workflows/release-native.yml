@@ -84,6 +84,9 @@ jobs:
           $portable = "native/.out/portable-$arch"
           New-Item -ItemType Directory -Path "$portable/dist-electron" -Force | Out-Null
           Copy-Item "$bin/*" $portable -Recurse -Force
+          # Purge symboles de dev AVANT zip (Copy-Item -Exclude ne descend pas dans
+          # les sous-dossiers ; PDB node-pty ~36 Mo par portable, inutiles au runtime).
+          Get-ChildItem $portable -Recurse -Include *.pdb,*.appxrecipe | Remove-Item -Force
           Copy-Item "dist-electron/aven-engine-host.mjs" "$portable/dist-electron/"
           Copy-Item "dist-electron/aven-pty-host.mjs" "$portable/dist-electron/"
           # x86 : node-pty-win32-x86 n'existe pas -> le portable x86 embarque le paquet x64.
