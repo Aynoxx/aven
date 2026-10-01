@@ -89,8 +89,30 @@ public sealed class NodePtyTransport : Aven.Bridge.ITerminalTransport, IDisposab
             if (string.IsNullOrEmpty(hostPath))
                 throw new FileNotFoundException("aven-pty-host.mjs introuvable (bundle phase 1 manquant).");
         }
-        var t = new NodePtyTransport(nodeExecPath ?? "node", hostPath, espace, cols, rows);
+        var t = new NodePtyTransport(nodeExecPath is not null ? nodeExecPath : RésoudreNode(), hostPath, espace, cols, rows);
         return t;
+    }
+
+    /// <summary>
+    /// Résout l'exécutable Node qui hébergera le micro-host (autonomie du portable :
+    /// le terminal doit marcher SANS Node installé sur la machine cible) :
+    /// 1. paramètre explicite (tests/diag) ;
+    /// 2. variable d'environnement AVEN_PTY_NODE_EXE (preuves/smoke sans node système) ;
+    /// 3. node.exe ADJACENT à l'exécutable app (layout portable : nodejs/node.exe
+    ///    à côté de Aven.Native.exe, copié par package-native.ps1) ;
+    /// 4. "node" brut : résolution par le PATH (poste de dev, comportement historique).
+    /// </summary>
+    public static string RésoudreNode(string? explicite = null)
+    {
+        if (!string.IsNullOrWhiteSpace(explicite) && File.Exists(explicite)) return explicite;
+
+        var env = Environment.GetEnvironmentVariable("AVEN_PTY_NODE_EXE");
+        if (!string.IsNullOrWhiteSpace(env) && File.Exists(env)) return env;
+
+        var adjacent = Path.Combine(AppContext.BaseDirectory, "nodejs", "node.exe");
+        if (File.Exists(adjacent)) return adjacent;
+
+        return "node"; // PATH (piqué par où le trouvera Process.Start)
     }
 
     private void Envoyer(JsonObject message)

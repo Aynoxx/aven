@@ -14,7 +14,8 @@
 #   powershell -NoProfile -File scripts/package-native.ps1 -NoPortable     # MSIX seul
 param(
     [string[]]$Archs = @("x64"),
-    [switch]$NoPortable
+    [switch]$NoPortable,
+    [string]$NodeExe = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -136,6 +137,20 @@ foreach ($arch in $Archs) {
             } else {
                 Write-Host "  AVERTISSEMENT : $pkg absent (npm install d'abord) - PTY incomplet."
             }
+        }
+        # Node embarque (autonomie terminal) : le transport resout node.exe
+        # adjacent (portable\nodejs\node.exe) AVANT le PATH - sans Node installe
+        # sur la machine cible, le terminal marche quand meme.
+        $nodeSrc = $NodeExe
+        if ($nodeSrc -eq "") { $nodeSrc = (Get-Command node -ErrorAction SilentlyContinue).Source }
+        if ($nodeSrc -and (Test-Path $nodeSrc)) {
+            $nodeDir = Join-Path $portable "nodejs"
+            New-Item -ItemType Directory -Path $nodeDir -Force | Out-Null
+            Copy-Item $nodeSrc (Join-Path $nodeDir "node.exe") -Force
+            $nodeMo = [math]::Round((Get-Item (Join-Path $nodeDir "node.exe")).Length / 1MB)
+            Write-Host "  Node embarque : nodejs\node.exe ($nodeMo Mo)"
+        } else {
+            Write-Host "  AVERTISSEMENT : node.exe introuvable (param -NodeExe ou PATH) - le terminal exigera Node sur la machine cible."
         }
         $zip = Join-Path $outRoot "Aven-native-$arch-$version.zip"
         Compress-Archive -Path "$portable\*" -DestinationPath $zip -Force

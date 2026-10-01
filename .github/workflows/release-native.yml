@@ -94,6 +94,16 @@ jobs:
               Copy-Item $src $dst -Recurse -Force
             }
           }
+          # Node embarque (autonomie terminal) : le transport resout node.exe
+          # adjacent (nodejs/node.exe) avant le PATH.
+          $nodeExe = (Get-Command node -ErrorAction SilentlyContinue).Source
+          if ($nodeExe -and (Test-Path $nodeExe)) {
+            New-Item -ItemType Directory -Path "$portable/nodejs" -Force | Out-Null
+            Copy-Item $nodeExe "$portable/nodejs/node.exe" -Force
+            Write-Host "Node embarque : $nodeExe"
+          } else {
+            Write-Host "::warning::node.exe introuvable - le portable exigera Node sur la machine cible"
+          }
           $ver = (Get-Item "$bin/Aven.Native.dll").VersionInfo.ProductVersion
           if (-not $ver) { $ver = "${{ inputs.version }}" }
           Compress-Archive -Path "$portable/*" -DestinationPath "native/.out/Aven-native-$arch-$ver.zip" -Force

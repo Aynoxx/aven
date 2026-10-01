@@ -238,6 +238,16 @@ divergence TUI par construction. TESTS D'INTÉGRATION réels : echo, cmd interac
   Orphelins Node : tuer le testhost peut laisser le micro-host vivant —
   `Get-Process node | Stop-Process` avant une suite, sinon les runs suivants
   HANGENT (piège de débogage).
+- **Autonomie du portable (01/10/2026)** : `NodePtyTransport.RésoudreNode` résout
+  node.exe dans l'ordre paramètre > env `AVEN_PTY_NODE_EXE` > ADJACENT
+  (`<app>/nodejs/node.exe`, le layout portable) > PATH (dev). `package-native.ps1`
+  (param `-NodeExe`) et le workflow CI copient node.exe vers `portable/nodejs/` —
+  zip 105 Mo (node 99 Mo non compressé), le terminal marche SANS Node installé.
+  Preuves : 6 tests du résolveur (198 xUnit verts) ; `Echo_one_shot` réel avec node
+  ABSENT du PATH + env var posée ; session PTY vivante DANS le layout portable
+  (`nodejs/node.exe dist-electron/aven-pty-host.mjs` → ready + chunk VT + exit 0).
+  Le MSIX, lui, n'embarque pas node (paquet store-friendly) : il reste dépendant du
+  PATH — à réévaluer si un jour l'écran VT doit marcher out-of-the-box en sideload.
 - **Acceptation** : session visible, quota « 40/40 Freebucks » dans la barre, pubs
   filtrées, bannière de conflit d'app Desktop fonctionnelle, TUI non gelé à l'envoi.
   La vue existe (transcript filtré TextBlock + barre de session + bannière WMI +
