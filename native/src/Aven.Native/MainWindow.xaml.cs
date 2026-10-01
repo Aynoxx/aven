@@ -17,6 +17,9 @@ namespace Aven.Native;
 /// </summary>
 public sealed partial class MainWindow : Window
 {
+    /// <summary>Version affichée (cohérence manifeste 10.0.0.0 — test en xUnit, décision §5.4).</summary>
+    public const string AppVersion = "10.0.0.0";
+
     // Positions polaires du hub (parité .hub-card-project/agents/files/notes : 0°/90°/180°/270°).
     private const double Rayon = 250;
     private static readonly (double AngleDeg, string Titre, string Hint)[] Cibles =
@@ -143,6 +146,7 @@ public sealed partial class MainWindow : Window
         ComposerBar.Visibility = Visibility.Collapsed;
         FilesScroll.Visibility = Visibility.Collapsed;
         NotesScroll.Visibility = Visibility.Collapsed;
+        SettingsPanel.Visibility = Visibility.Collapsed;
         PageView.UpdateLayout();
         var animation = ConnectedAnimationService.GetForCurrentView().PrepareToAnimate("hub-card", source);
         animation.TryStart(PageTitle, new UIElement[] { PageHint });
@@ -159,8 +163,21 @@ public sealed partial class MainWindow : Window
     private void OnSettings(object sender, RoutedEventArgs e)
     {
         PageTitle.Text = "Paramètres";
-        PageHint.Text = "Les réglages (clés, espaces, usage) arrivent en phase 4 (SettingsService).";
+        PageHint.Text = "Usage local de l'app — les clés API et espaces restent dans l'Electron Classic pour l'instant.";
         OuvrirPageDepuis(HomeButton);
+        SettingsPanel.Visibility = Visibility.Visible;
+        SettingsVersion.Text = "Aven " + AppVersion + " — natif WinUI 3 (WASDK 1.7)";
+        try
+        {
+            // Stats SQLite (décision §5.3) : compteur + fenêtre 7 jours en une requête.
+            var stats = Aven.Bridge.StatsSqlite.ReadDictationStats(Espace());
+            var semaine = Aven.Bridge.StatsSqlite.History(Espace(), 7).Sum(h => h.Count);
+            SettingsDictations.Text = $"Dictées : {stats.Total} au total · {stats.DayCount} aujourd'hui · {semaine} sur 7 jours.";
+        }
+        catch (Exception erreur)
+        {
+            SettingsDictations.Text = "Stats indisponibles : " + erreur.Message;
+        }
     }
 
     // ── Chat réel (phase 3) — voir ChatViewModel (Aven.Bridge), testé sans WinUI ──
@@ -172,6 +189,7 @@ public sealed partial class MainWindow : Window
             _chatOuvert = true;
             DémarrerChat();
         }
+        SettingsPanel.Visibility = Visibility.Collapsed;
         PageTitle.Text = "Projet";
         PageHint.Text = "Conversation avec l'agent central (Freebuff)";
         ChatScroll.Visibility = Visibility.Visible;
@@ -278,6 +296,7 @@ public sealed partial class MainWindow : Window
     private void OuvrirFichiers()
     {
         if (!_filesOuvert) { _filesOuvert = true; }
+        SettingsPanel.Visibility = Visibility.Collapsed;
         PageTitle.Text = "Fichiers";
         PageHint.Text = "Explorateur de l'espace (lecture seule)";
         FilesScroll.Visibility = Visibility.Visible;
@@ -379,6 +398,7 @@ public sealed partial class MainWindow : Window
     private void OuvrirNotes()
     {
         if (!_notesOuvert) { _notesOuvert = true; }
+        SettingsPanel.Visibility = Visibility.Collapsed;
         PageTitle.Text = "Notes";
         PageHint.Text = "De vrais fichiers Markdown sur ton PC, \u00E9tiquetables par agent.";
         NotesScroll.Visibility = Visibility.Visible;
@@ -511,6 +531,7 @@ public sealed partial class MainWindow : Window
         FilesScroll.Visibility = Visibility.Collapsed;
         NotesScroll.Visibility = Visibility.Collapsed;
         TerminalView.Visibility = Visibility.Collapsed;
+        SettingsPanel.Visibility = Visibility.Collapsed;
     }
 
     private void OuvrirTerminal()

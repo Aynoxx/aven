@@ -347,8 +347,7 @@ constantes partagées C# et des clés de ressource XAML : le rythme v9.7.0 est c
    complet + performances au scrollback.
 2. **Markdown** : CommunityToolkit Labs vs moteur maison — critère : parité du rendu
    actuel (blocs de code, listes, tableaux).
-3. **Stats** : SQLite (recommandé) vs JSON — critère : performances getStats sur 1 an
-   d'historique.
+3. **Stats** : **SQLite ADOPTÉ (01/10/2026)** — `Microsoft.Data.Sqlite` 8 dans Aven.Bridge, base `workspace/.opencode-app/stats.db` (WAL + busy_timeout 5 s, deux apps simultanées). Le critère « getStats sur 1 an » est IMPOSSIBLE en JSON : stats.json ne porte qu'un compteur (total/day/dayCount), aucun historique — SQLite agrège les lignes journalières en une requête (test : History(365) < 500 ms). stats.json RESTE écrit à chaque incrément (byte-parité, export de compatibilité Classic : le vrai Node le relit en test) ; le JSON préexistant est importé UNE fois au premier accès (marqueur migrated). Panneau Paramètres : compteur total / aujourd'hui / 7 jours + version.
 4. **Nommage** : « Aven 10.0 (native) » vs continuité 9.x — critère : clarté pour les
    utilisateurs pendant la double publication.
 5. **Freebuff CLI** : il reste un sidecar Node tel quel — seul son hôte change (acté).

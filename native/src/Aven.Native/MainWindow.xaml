@@ -254,6 +254,19 @@
                                        TextWrapping="Wrap" FontSize="13"
                                        Foreground="{ThemeResource AvenMutedBrush}" />
                         </Border>
+                        <!-- Panneau Param&#232;tres (usage local) : version + stats dict&#233;es (SQLite,
+                             d&#233;cision &#167;5.3) &#8212; masqu&#233; par d&#233;faut, visible par OnSettings seul. -->
+                        <StackPanel x:Name="SettingsPanel" Visibility="Collapsed" Spacing="10">
+                            <Border CornerRadius="18" Background="{ThemeResource AvenPanelBrush}"
+                                    BorderBrush="{ThemeResource AvenBorderBrush}" BorderThickness="1" Padding="18">
+                                <StackPanel Spacing="6">
+                                    <TextBlock x:Name="SettingsVersion" FontSize="16" FontWeight="SemiBold"
+                                               Foreground="{ThemeResource AvenTextBrush}" />
+                                    <TextBlock x:Name="SettingsDictations" FontSize="13" TextWrapping="Wrap"
+                                               Foreground="{ThemeResource AvenMutedBrush}" />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
                         <Button Content="&#8592; Retour au hub" Click="OnHome" MinHeight="36" Padding="14,6"
                                 Background="{ThemeResource AvenPanelSoftBrush}"
                                 Foreground="{ThemeResource AvenTextBrush}" />

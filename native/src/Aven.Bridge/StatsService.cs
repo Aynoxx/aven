@@ -60,7 +60,9 @@ public static class StatsService
 
     public static DictationStats ReadDictationStats(string workspace) => ReadStats(workspace);
 
-    private static void WriteStats(string workspace, DictationStats stats)
+    /// <summary>Écrit l'export JSON (public : StatsSqlite l'utilise après CHAQUE incrément
+    /// SQLite — export de compatibilité Classic, même format byte-parité).</summary>
+    public static void WriteStats(string workspace, DictationStats stats)
     {
         // Parité writeJsonAtomicPretty via le helper partagé (indenté \n, sans BOM).
         var objet = new JsonObject

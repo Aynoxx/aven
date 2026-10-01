@@ -1,8 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!-- Aven.Bridge — pont JSON-RPC 2.0 (stdio) vers le moteur Aven.Engine (sidecar Node).
-       Aucune dépendance : System.Text.Json est embarqué dans .NET 8. Phase 0 du
-       protocole MIGRATION-WINUI.md ; le host Node arrive en phase 1. -->
+       Phase 0 du protocole MIGRATION-WINUI.md ; le host Node arrive en phase 1. -->
 
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
@@ -11,5 +10,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
+
+  <!-- Stockage des stats (décision §5.3 du protocole) : historique journalier en
+       SQLite — le JSON de compatibilité Classic ne porte aucun historique. -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.11" />
+  </ItemGroup>
 
 </Project>
