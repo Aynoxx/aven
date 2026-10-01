@@ -351,8 +351,12 @@ constantes partagées C# et des clés de ressource XAML : le rythme v9.7.0 est c
 2. **Markdown** : CommunityToolkit Labs vs moteur maison — critère : parité du rendu
    actuel (blocs de code, listes, tableaux).
 3. **Stats** : **SQLite ADOPTÉ (01/10/2026)** — `Microsoft.Data.Sqlite` 8 dans Aven.Bridge, base `workspace/.opencode-app/stats.db` (WAL + busy_timeout 5 s, deux apps simultanées). Le critère « getStats sur 1 an » est IMPOSSIBLE en JSON : stats.json ne porte qu'un compteur (total/day/dayCount), aucun historique — SQLite agrège les lignes journalières en une requête (test : History(365) < 500 ms). stats.json RESTE écrit à chaque incrément (byte-parité, export de compatibilité Classic : le vrai Node le relit en test) ; le JSON préexistant est importé UNE fois au premier accès (marqueur migrated). Panneau Paramètres : compteur total / aujourd'hui / 7 jours + version.
-4. **Nommage** : « Aven 10.0 (native) » vs continuité 9.x — critère : clarté pour les
-   utilisateurs pendant la double publication.
+4. **Nommage** : **« Aven 10.0 (native) » RETENU (01/10/2026)** — la version majeure
+   marque le changement de moteur (Electron → WinUI 3), ce que la continuité 9.x
+   n'aurait pas dit ; pendant la double publication le README bilingue affiche
+   « Aven Classic (v9.x) » / « Aven natif (v10.0) », la fenêtre Paramètres montre
+   « Aven 10.0.0.0 — natif WinUI 3 (WASDK 1.7) » (MainWindow.AppVersion), et un
+   test xUnit garantit manifeste (Version="10.0.0.0") + README alignés.
 5. **Freebuff CLI** : il reste un sidecar Node tel quel — seul son hôte change (acté).
 6. **WASDK 1.7 (évalué 30/09/2026)** : montée de 1.6.250602001 → **1.7.260224002**
    (dernière stable 1.7) testée LOCALEMENT : build MSIX x64 de l'app complète
