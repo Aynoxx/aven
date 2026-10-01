@@ -202,22 +202,30 @@
                             HorizontalAlignment="Right">
                         <TextBlock Text="App Desktop Freebuff d&#233;tect&#233;e : elle tient la session." FontSize="12" Foreground="White" />
                     </Border>
-                    <ScrollViewer x:Name="TerminalScroll" Grid.Row="1" Margin="20,4,20,4">
-                        <StackPanel x:Name="TerminalTranscript" MaxWidth="860" Spacing="3" />
-                    </ScrollViewer>
+                    <!-- &#201;cran VT (WebView2 + xterm.js, ajout&#233; en code) SUPERPOS&#201; au transcript
+                         TextBlock : le toggle choisit. D&#233;faut = &#233;cran (parit&#233; vue terminal web). -->
+                    <Grid x:Name="TerminalH&#244;te" Grid.Row="1" Margin="20,4,20,4">
+                        <ScrollViewer x:Name="TerminalScroll">
+                            <StackPanel x:Name="TerminalTranscript" MaxWidth="860" Spacing="3" />
+                        </ScrollViewer>
+                    </Grid>
                     <Grid Grid.Row="2" Margin="20,4,20,14">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <TextBox x:Name="TerminalInput" Grid.Column="0" MinHeight="34" PlaceholderText="Message au CLI Freebuff... (Entr&#233;e pour envoyer)"
                                  KeyDown="OnTerminalKey" Background="{ThemeResource AvenPanelBrush}"
                                  BorderBrush="{ThemeResource AvenBorderBrush}" />
-                        <Button x:Name="TerminalStop" Grid.Column="1" Content="&#9632; Arr&#234;ter" Click="OnTerminalStop" MinHeight="34"
+                        <ToggleButton x:Name="Terminal&#201;cranToggle" Grid.Column="1" Content="&#201;cran VT" MinHeight="34" Padding="10,4"
+                                      Margin="8,0,0,0" IsChecked="True" Checked="OnTerminalMode" Unchecked="OnTerminalMode"
+                                      AutomationProperties.Name="Basculer entre l'&#233;cran VT (TUI complet) et le transcript filtr&#233;" />
+                        <Button x:Name="TerminalStop" Grid.Column="2" Content="&#9632; Arr&#234;ter" Click="OnTerminalStop" MinHeight="34"
                                 Padding="10,4" Margin="8,0,0,0" Foreground="{ThemeResource AvenDangerBrush}"
                                 Background="{ThemeResource AvenPanelSoftBrush}" />
-                        <Button x:Name="TerminalRestart" Grid.Column="2" Content="Relancer" Click="OnTerminalRestart" MinHeight="34"
+                        <Button x:Name="TerminalRestart" Grid.Column="3" Content="Relancer" Click="OnTerminalRestart" MinHeight="34"
                                 Padding="10,4" Margin="8,0,0,0" Background="{ThemeResource AvenPanelSoftBrush}" />
                     </Grid>
                 </Grid>

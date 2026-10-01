@@ -83,6 +83,11 @@ public sealed partial class MainWindow : Window
     private readonly StringBuilder _tamponBrut = new();
     private readonly List<string> _lignesBrutes = [];
 
+    // ── Écran VT (décision §5.1) : WebView2 + xterm.js (même rendu que le web) ─
+    private TerminalWebView? _écran; // créé paresseusement, réutilisé entre sessions
+    private bool _écranActif = true; // défaut : TUI complet (parité vue terminal web)
+    private (int Cols, int Rows) _dims = (Aven.Bridge.FreebuffTerminal.DefaultCols, Aven.Bridge.FreebuffTerminal.DefaultRows);
+
     // ── Voix (phase 6) : pipeline testé + capture micro + annonceur ──────────
     private Aven.Bridge.GlobalHotKey? _hotkey; // raccourci OS global Ctrl+Maj+V (décision phase 6)
     private Aven.Bridge.VoicePipeline? _voixPipeline;
@@ -602,6 +607,7 @@ public sealed partial class MainWindow : Window
         PageHint.Text = "Le CLI gratuit, dans Aven";
         TerminalView.Visibility = Visibility.Visible;
         TerminalInput.Focus(FocusState.Programmatic);
+        if (_écranActif) AssurerÉcran(); // l'émulateur suit (le TUI se redessine aux prochains chunks)
 
         if (_terminal is not null) return;
         _terminal = new Aven.Bridge.FreebuffTerminal();
@@ -620,7 +626,7 @@ public sealed partial class MainWindow : Window
                     TerminalSessionBar.Text = $"Session terminée (code {code}) — Relancer pour une nouvelle"),
                 OnError: message => DispatcherQueue.TryEnqueue(() =>
                     TerminalSessionBar.Text = message)),
-            cols: 120, rows: 30); // dims par défaut (l'émulateur ajustera via Resize)
+            cols: _dims.Cols, rows: _dims.Rows); // dims par défaut (l'émulateur ajustera via event Taille)
         if (replay.Length > 0) DonnéesTerminal(replay); // reprise de session : replay du scrollback
         _ = VérifierConflitDesktop();
     }
@@ -655,6 +661,7 @@ public sealed partial class MainWindow : Window
     /// <summary>Morceau coalescé : buffer → lignes → transcript filtré → vue.</summary>
     private void DonnéesTerminal(string morceau)
     {
+        if (_écranActif) _écran?.Write(morceau); // chunk VT brut → émulateur (parité vue web)
         _tamponBrut.Append(morceau);
         var texte = _tamponBrut.ToString();
         var lignes = texte.Replace("\r\n", "\n").Split('\n');
@@ -682,6 +689,7 @@ public sealed partial class MainWindow : Window
 
     private void OnTerminalKey(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs ev)
     {
+        if (_écranActif) return; // le TUI capte le clavier via xterm (onData), pas le TextBox
         if (ev.Key != Windows.System.VirtualKey.Enter || TerminalInput.Text.Length == 0) return;
         ev.Handled = true;
         // Le TUI lit une LIGNE : texte + Entrée (parité xterm onData).
@@ -689,15 +697,77 @@ public sealed partial class MainWindow : Window
         TerminalInput.Text = "";
     }
 
-    private void OnTerminalStop(object sender, RoutedEventArgs e) => _terminal?.SignalInt(); // Ctrl+C
+    private void OnTerminalStop(object sender, RoutedEventArgs e)
+    {
+        if (_écranActif) { _terminal?.SignalInt(); return; } // « Arrêter » → Ctrl+C sur la ligne active du TUI
+        _terminal?.SignalInt(); // Ctrl+C
+    }
 
     private void OnTerminalRestart(object sender, RoutedEventArgs e)
     {
         _terminal?.Restart();
+        _écran?.Réinitialiser(); // écran net : le nouveau TUI se redessine de zéro
         _lignesBrutes.Clear();
         TerminalTranscript.Children.Clear();
         TerminalSessionBar.Text = "Session en cours...";
     }
+
+    // ── Écran VT (décision §5.1) : WebView2 + xterm.js 5.5.0 ───────────────
+
+    /// <summary>Crée (une fois) et initialise l'émulateur embarqué ; retombe sur le
+    /// transcript TextBlock si le runtime WebView2 manque (jamais d'écran noir).</summary>
+    private async void AssurerÉcran()
+    {
+        TerminalÉcranToggle.IsChecked = _écranActif;
+        TerminalHôte.Visibility = Visibility.Visible;
+        if (_écran is null)
+        {
+            var v = new TerminalWebView();
+            v.Data += frappe => DispatcherQueue.TryEnqueue(() => _terminal?.Write(frappe));
+            v.Taille += (cols, rows) =>
+            {
+                _dims = Aven.Bridge.FreebuffTerminal.ClampDims(cols, rows);
+                _terminal?.Resize(_dims.Cols, _dims.Rows);
+            };
+            v.Prêt += () => DispatcherQueue.TryEnqueue(() =>
+            {
+                v.Write("\x1b[2J\x1b[H"); // écran net au montage : le TUI va se redessiner
+                _terminal?.Resize(_dims.Cols, _dims.Rows);
+            });
+            TerminalHôte.Children.Insert(0, v); // sous le transcript (un seul visible)
+            _écran = v;
+        }
+        TerminalScroll.Visibility = _écranActif ? Visibility.Collapsed : Visibility.Visible;
+        _écran.Visibility = _écranActif ? Visibility.Visible : Visibility.Collapsed;
+        try
+        {
+            await _écran.InitialiserAsync(CouleurFond(), CouleurTexte(), "#8B5CF6");
+        }
+        catch
+        {
+            // Runtime WebView2 absent (rare sur Win10 1803+) : transcript filtré, jamais d'écran noir.
+            _écranActif = false;
+            TerminalScroll.Visibility = Visibility.Visible;
+            _écran.Visibility = Visibility.Collapsed;
+            TerminalÉcranToggle.IsChecked = false;
+            TerminalÉcranToggle.IsEnabled = false;
+            TerminalSessionBar.Text = "Écran VT indisponible (runtime WebView2) — transcript filtré";
+        }
+    }
+
+    private void OnTerminalMode(object sender, RoutedEventArgs e)
+    {
+        _écranActif = TerminalÉcranToggle.IsChecked == true;
+        if (_écranActif) { AssurerÉcran(); return; }
+        if (_écran is not null) _écran.Visibility = Visibility.Collapsed;
+        TerminalScroll.Visibility = Visibility.Visible;
+    }
+
+    private static string CouleurFond() =>
+        Application.Current.RequestedTheme == ApplicationTheme.Dark ? "#12151D" : "#FFFFFF";
+
+    private static string CouleurTexte() =>
+        Application.Current.RequestedTheme == ApplicationTheme.Dark ? "#E7E9F2" : "#171923";
 
     // ── Voix (phase 6) : dictée push-to-talk via le pipeline testé ────────
 

@@ -346,8 +346,18 @@ constantes partagées C# et des clés de ressource XAML : le rythme v9.7.0 est c
 
 ## 5. Décisions ouvertes (à trancher en phase 0-1)
 
-1. **Contrôle terminal** : maison (Composition) vs lib existante — critère : rendu VT
-   complet + performances au scrollback.
+1. **Contrôle terminal** : **WebView2 + xterm.js 5.5.0 RETENU (01/10/2026)** — même
+   moteur de rendu VT que la vue terminal web (parité totale : séquences VT, couleurs,
+   scrollback 4000). L'émulateur embarque dans la vue terminal existante (un ToggleButton
+   « Écran VT » bascule écran complet / transcript filtré TextBlock, défaut = écran) ;
+   chunks PTY BRUTS → write(), frappes xterm onData → PTY, addon-fit → cols/rows →
+   `FreebuffTerminal.Resize` (ClampDims conservé). Fichiers vendus localement
+   (`scripts/vendor-xterm.mjs` → `Assets/terminal/vendor/`, aucun CDN) servis via nom
+   d'hôte virtuel `aven.terminal` — fonctionne packagé ET unpackaged. Si le runtime
+   WebView2 manque : repli automatique sur le transcript filtré (jamais d'écran noir).
+   P/Invoke CreatePseudoConsole déjà abandonné en phase 5 pour le micro-host Node ;
+   le rendu maison Composition/TextBlock n'aurait pas atteint la parité VT du web.
+   4 tests protocole JSON (TerminalWebMessagesTests) + 192 xUnit verts + MSIX buildé.
 2. **Markdown** : **MarkdownLite (maison) RETENU et étendu (01/10/2026)** —
    CommunityToolkit refusé : divergerait du rendu web (liens ACTIFS, syntaxe
    extra, thèmes propres) alors que la règle est la parité de RichMarkdown, et
