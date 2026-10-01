@@ -238,7 +238,10 @@ divergence TUI par construction. TESTS D'INTÉGRATION réels : echo, cmd interac
   prioritaire sur un « chat » mal classé) — HTTP injecté (`IVoiceHttp`), mêmes cas
   que `voice-intent.test.mjs` en xUnit. `VoiceRuntime.cs` (fenêtre) : MediaCapture
   (mp3/44.1 kHz), push-to-talk Ctrl+Maj+V via KeyboardAccelerator (le hotkey OS
-  global RegisterHotKey reste optionnel), intentions d'app exécutées (ouvrir
+  global RegisterHotKey est ACTÉ 01/10/2026 — GlobalHotKey.cs : fenêtre message-only du
+  thread UI (aucun sous-classement de la fenêtre principale), WM_HOTKEY routé par
+  (hwnd,id), MOD_NOREPEAT, accélérateur XAML local en repli si le raccourci est
+  déjà pris ; dispatch réel via pompe + conflit OS testés en xUnit), intentions d'app exécutées (ouvrir
   notes/settings/terminal). `GroqHttp.cs` : HttpClient réel (multipart Whisper +
   chat temperature 0). `Announcer.cs` (pur, coalescence/mute parité announcer.ts,
   voix INJECTABLE) branché aux événements moteur, voix SAPI via PowerShell

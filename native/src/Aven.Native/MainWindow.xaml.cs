@@ -48,11 +48,23 @@ public sealed partial class MainWindow : Window
         PositionHubCards();
         CascaderEntreeDuHub();
 
-        // Push-to-talk global de la fenêtre : Ctrl+Maj+V (parité v8.8.0 ; le hotkey OS
-        // global demandera le focus fenêtre, l'accélérateur couvre l'usage principal).
+        // Push-to-talk de la fenêtre : Ctrl+Maj+V (parité v8.8.0). Le hotkey OS
+        // GLOBAL (option phase 6 actée) est enregistré juste dessous ; l'accélérateur
+        // local reste en repli si le raccourci est déjà pris par un autre process.
         var ptt = new KeyboardAccelerator { Modifiers = Windows.System.VirtualKeyModifiers.Control | Windows.System.VirtualKeyModifiers.Shift, Key = Windows.System.VirtualKey.V };
         ptt.Invoked += (_, args) => { SurPushToTalk(); args.Handled = true; };
         TitleBar.KeyboardAccelerators.Add(ptt);
+
+        // Raccourci OS GLOBAL : la dictée marche fenêtre Aven inactive. La fenêtre
+        // porteuse est une message-only window du thread UI (pompe WinUI) — aucun
+        // sous-classement de cette fenêtre. MOD_NOREPEAT : un appui maintenu ne
+        // re-déclenche pas (comportement toggle push-to-talk).
+        _hotkey = new Aven.Bridge.GlobalHotKey();
+        _hotkey.Pressé += () => DispatcherQueue.TryEnqueue(SurPushToTalk);
+        if (!_hotkey.Start(Aven.Bridge.GlobalHotKey.ModControl | Aven.Bridge.GlobalHotKey.ModShift
+                           | Aven.Bridge.GlobalHotKey.ModNoRepeat, (uint)'V'))
+            System.Diagnostics.Debug.WriteLine("Ctrl+Maj+V global déjà pris : l'accélérateur local reste actif.");
+        Closed += (_, _) => _hotkey.Dispose();
     }
 
     // ── Chat (phase 3) : moteur + client + VM, ouverts depuis la carte Projet ──
@@ -72,6 +84,7 @@ public sealed partial class MainWindow : Window
     private readonly List<string> _lignesBrutes = [];
 
     // ── Voix (phase 6) : pipeline testé + capture micro + annonceur ──────────
+    private Aven.Bridge.GlobalHotKey? _hotkey; // raccourci OS global Ctrl+Maj+V (décision phase 6)
     private Aven.Bridge.VoicePipeline? _voixPipeline;
     private VoiceRuntime? _voix;
     private Aven.Bridge.Announcer? _annonceur;
