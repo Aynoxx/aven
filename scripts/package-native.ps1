@@ -20,7 +20,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-# nodejs.org exige TLS 1.2 (PowerShell 5.1 ne le négocie pas toujours seul).
+# nodejs.org exige TLS 1.2 (PowerShell 5.1 ne le negocie pas toujours seul).
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $racine = Split-Path -Parent $PSScriptRoot
 $sdk = Join-Path $racine "tools\dotnet-sdk"
@@ -150,13 +150,13 @@ foreach ($arch in $Archs) {
     $bin = Join-Path $racine "native\src\Aven.Native\bin\$arch\Release\net8.0-windows10.0.19041.0"
     # Avec SelfContained, le runtime .NET embarque vit dans le sous-dossier RID
     # (win-x64\...) : c'est LUI le layout d'execution complet a embarquer.
-    # Sous-dossier RID du runtime self-contained (PIÈGE 01/10/2026 : hardcoder
-    # win-x64 laisse x86/ARM64 à un niveau de trop - nodejs/ et l'exe désalignés).
+    # Sous-dossier RID du runtime self-contained (PIEGE 01/10/2026 : hardcoder
+    # win-x64 laisse x86/ARM64 a un niveau de trop - nodejs/ et l'exe desalignes).
     if (Test-Path (Join-Path $bin "win-$arch\Aven.Native.exe")) { $bin = Join-Path $bin "win-$arch" }
     if (-not (Test-Path (Join-Path $bin "Aven.Native.exe"))) {
         Write-Host "Build $arch..."
-        # RID explicite : sans lui le RID inféré est celui de la machine hôte
-        # (win-x64) et x86/ARM64 échouent en NETSDK1032 (PIÈGE, 01/10/2026).
+        # RID explicite : sans lui le RID infere est celui de la machine hote
+        # (win-x64) et x86/ARM64 echouent en NETSDK1032 (PIEGE, 01/10/2026).
         dotnet build native/src/Aven.Native/Aven.Native.csproj -c Release -p:Platform=$arch -p:RuntimeIdentifier=win-$arch --nologo
         if ($LASTEXITCODE -ne 0) { throw "Build $arch en echec." }
     }
@@ -173,9 +173,9 @@ foreach ($arch in $Archs) {
     Write-Host ("  MSIX signe : " + $msix.FullName)
 
     # --- 3. Verification : signtool reconnait une signature primaire intacte.
-    # Exit 0 = signe ET chaîne ancrée ; "not trusted by the trust provider" = signe
-    # (self-signed : racine non ancrée, flux DEV attendu - l'INSTALL de sideload
-    # dépend de TrustedPeople, pas de ce verdict) ; toute autre erreur = échec dur.
+    # Exit 0 = signe ET chaine ancee ; "not trusted by the trust provider" = signe
+    # (self-signed : racine non ancee, flux DEV attendu - l'INSTALL de sideload
+    # depend de TrustedPeople, pas de ce verdict) ; toute autre erreur = echec dur.
     # ErrorActionPreference=Stop + 2>&1 : PowerShell 5.1 transforme la 1re ligne
     # stderr native en erreur terminante - on relache localement (classique).
     $ErrorActionPreference = "Continue"
@@ -185,7 +185,7 @@ foreach ($arch in $Archs) {
     if ($code -eq 0) {
         Write-Host "  signtool verify : OK (signature valide et ancree)"
     } elseif ($verif -match "not trusted by the trust provider") {
-        Write-Host "  signtool verify : SIGNE (self-signed - racine non ancrée, attendu en dev)"
+        Write-Host "  signtool verify : SIGNE (self-signed - racine non ancee, attendu en dev)"
     } else {
         Write-Host $verif
         throw "signtool verify en echec dur pour $arch (code $code)."
@@ -209,7 +209,7 @@ foreach ($arch in $Archs) {
         # (meme logique que ptyModulePath) : embarquer le paquet + son binaire de
         # plateforme - sinon le terminal ne demarre que sur une machine de dev.
         # x86 : node-pty-win32-x86 n'existe pas (npm 404) - le portable x86
-        # embarque le paquet x64 (cohérent avec le fallback node x64).
+        # embarque le paquet x64 (coherent avec le fallback node x64).
         $archPty = $arch; if ($archPty -eq "x86") { $archPty = "x64" }
         $ptyPkgs = @("node-pty", "node-pty-win32-$archPty")
         foreach ($pkg in $ptyPkgs) {

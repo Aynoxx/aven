@@ -25,7 +25,7 @@ public sealed partial class MainWindow : Window
     private static readonly (double AngleDeg, string Titre, string Hint)[] Cibles =
     {
         (0, "Projet — Agent Freebuff", "Le terminal Freebuff embarqué arrive en phase 5 (ConPTY natif)."),
-        (90, "Tâches — Spécialistes", "Le sélecteur de modes (code, analyse, recherche) arrive en phase 3."),
+        (90, "Tâches — Spécialistes", "Les spécialistes tournent dans Aven Classic pour l'instant."),
         (180, "Fichiers", "L'explorateur intégré de l'espace arrive en phase 4 (FilesService)."),
         (270, "Notes", "Les notes Markdown par agent arrivent en phase 4 (NotesService)."),
     };
@@ -35,7 +35,21 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
 
         Title = "Aven";
-        AppWindow.Resize(new SizeInt32(1200, 800));
+        // Taille par défaut 1200×800 CLAMPÉE à la zone de travail : sur ce poste
+        // (1366×768, taskbar → 720 utiles) la fenêtre débordait sous l'écran et
+        // coupait la carte Fichiers du hub — les 4 cartes doivent rester
+        // entièrement visibles et cliquables.
+        var zone = Microsoft.UI.Windowing.DisplayArea.GetFromWindowId(AppWindow.Id, Microsoft.UI.Windowing.DisplayAreaFallback.Nearest).WorkArea;
+        var largeur = zone.Width > 0 ? Math.Min(1200, zone.Width) : 1200;
+        var hauteur = zone.Height > 0 ? Math.Min(800, zone.Height) : 800;
+        AppWindow.Resize(new SizeInt32(largeur, hauteur));
+        if (zone.Width > 0 && zone.Height > 0)
+        {
+            var pos = AppWindow.Position;
+            AppWindow.Move(new PointInt32(
+                Math.Min(Math.Max(pos.X, zone.X), zone.X + zone.Width - largeur),
+                Math.Min(Math.Max(pos.Y, zone.Y), zone.Y + zone.Height - hauteur)));
+        }
 
         if (Microsoft.UI.Composition.SystemBackdrops.MicaController.IsSupported())
         {
@@ -100,6 +114,11 @@ public sealed partial class MainWindow : Window
 
     private void PositionHubCards()
     {
+        // Le hub entier est centré dans sa cellule : sinon la grille (et son
+        // Ellipse 540×540 à taille explicite) reste calée en haut-gauche et les
+        // cartes ne reposent plus sur l'anneau. Parité croix .home-hub web.
+        HubView.HorizontalAlignment = HorizontalAlignment.Center;
+        HubView.VerticalAlignment = VerticalAlignment.Center;
         Placer(CardProject, Cibles[0].AngleDeg);
         Placer(CardTasks, Cibles[1].AngleDeg);
         Placer(CardFiles, Cibles[2].AngleDeg);
@@ -108,6 +127,11 @@ public sealed partial class MainWindow : Window
 
     private static void Placer(Button carte, double angleDeg)
     {
+        // Centre la carte dans sa cellule AVANT la translation polaire : avec une
+        // taille explicite (150×112) WinUI la pose en haut-gauche et la translation
+        // part du coin — Notes (angle 270 → X = −250) sortait hors écran, inclicable.
+        carte.HorizontalAlignment = HorizontalAlignment.Center;
+        carte.VerticalAlignment = VerticalAlignment.Center;
         var rad = angleDeg * Math.PI / 180;
         // TranslateX/Y relatifs au centre (cartes centrées via Alignment + render transform).
         carte.RenderTransform = new TranslateTransform
@@ -143,28 +167,29 @@ public sealed partial class MainWindow : Window
     private void OnHubCard(object sender, RoutedEventArgs e)
     {
         if (sender is not Button carte || carte.Tag is not string index) return;
-        if (index == "0") { OuvrirChat(); return; } // carte Projet = conversation réelle (phase 3)
-        if (index == "2") { OuvrirFichiers(); return; } // carte Fichiers (phase 4)
-        if (index == "3") { OuvrirNotes(); return; } // carte Notes (phase 4)
+        if (index == "0") { OuvrirChat(carte); return; } // carte Projet = conversation réelle (phase 3)
+        if (index == "2") { OuvrirFichiers(carte); return; } // carte Fichiers (phase 4)
+        if (index == "3") { OuvrirNotes(carte); return; } // carte Notes (phase 4)
         var cible = Cibles[int.Parse(index)];
         PageTitle.Text = cible.Titre;
         PageHint.Text = cible.Hint;
         OuvrirPageDepuis(carte);
     }
 
-    private void OuvrirPageDepuis(Button source)
+    /// <summary>Flip hub → page : TOUTES les vues vivent dans PageView, donc chaque
+    /// Ouvrir* DOIT passer d'abord par ici — sans ce flip la vue s'allume dans une
+    /// page invisible (bug « presque aucun bouton n'est utilisable sauf Accueil »).
+    /// Masque aussi toutes les vues (une seule visible à la fois).</summary>
+    private void OuvrirPageDepuis(UIElement? source)
     {
-        // Connected Animation (parité du shared element v9.7.0) : la carte du hub
-        // DEVENT l'en-tête de la page — le même effet que View Transitions côté web.
         PageView.Visibility = Visibility.Visible;
         HubView.Visibility = Visibility.Collapsed;
-        // Une seule vue à la fois : tout est masqué, Ouvrir* rallume le sien.
-        _chatOuvert = false;
-        ChatScroll.Visibility = Visibility.Collapsed;
-        ComposerBar.Visibility = Visibility.Collapsed;
-        FilesView.Visibility = Visibility.Collapsed;
-        NotesScroll.Visibility = Visibility.Collapsed;
-        SettingsPanel.Visibility = Visibility.Collapsed;
+        MasquerVues();
+        // Connected Animation (parité du shared element v9.7.0) : la source
+        // (carte du hub, bouton Terminal/Paramètres) DEVIENT l'en-tête de la page.
+        // JAMAIS de reset de _chatOuvert ici : revenir au hub puis re-ouvrir
+        // Projet ne doit pas re-spawner le moteur (orphelins node).
+        if (source is null) return; // relance depuis la voix : pas d'animation
         PageView.UpdateLayout();
         var animation = ConnectedAnimationService.GetForCurrentView().PrepareToAnimate("hub-card", source);
         animation.TryStart(PageTitle, new UIElement[] { PageHint });
@@ -200,16 +225,16 @@ public sealed partial class MainWindow : Window
 
     // ── Chat réel (phase 3) — voir ChatViewModel (Aven.Bridge), testé sans WinUI ──
 
-    private void OuvrirChat()
+    private void OuvrirChat(UIElement? source = null)
     {
-        if (!_chatOuvert)
+        PageTitle.Text = "Projet";
+        PageHint.Text = "Conversation avec l'agent central (Freebuff)";
+        OuvrirPageDepuis(source); // flip hub → page AVANT d'allumer la vue
+        if (!_chatOuvert) // garde unique : une 2e ouverture sans 2e process node
         {
             _chatOuvert = true;
             DémarrerChat();
         }
-        SettingsPanel.Visibility = Visibility.Collapsed;
-        PageTitle.Text = "Projet";
-        PageHint.Text = "Conversation avec l'agent central (Freebuff)";
         ChatScroll.Visibility = Visibility.Visible;
         ComposerBar.Visibility = Visibility.Visible;
         Composer.Focus(FocusState.Programmatic);
@@ -220,7 +245,9 @@ public sealed partial class MainWindow : Window
         // Le host est le bundle de phase 1 (dist-electron/aven-engine-host.mjs) : le
         // même moteur que l'app Electron — aucune logique moteur dupliquée.
         var host = ChercherHost();
-        _engine = new Aven.Bridge.EngineClient(host);
+        // Node embarqué du portable (nodejs/node.exe via RésoudreNode) : sans ça
+        // EngineClient spawn « node » via PATH et le chat meurt dans le portable.
+        _engine = new Aven.Bridge.EngineClient(host, Aven.Bridge.NodePtyTransport.RésoudreNode());
         _client = new Aven.Bridge.ConversationClient(_engine);
         _chat = new Aven.Bridge.ChatViewModel(_client, AppContext.BaseDirectory,
             marshal: action => DispatcherQueue.TryEnqueue(() => action()));
@@ -311,12 +338,12 @@ public sealed partial class MainWindow : Window
     private static string Espace() => Directory.Exists("C:/Users/Liam/Downloads/Aven")
         ? "C:/Users/Liam/Downloads/Aven" : AppContext.BaseDirectory;
 
-    private void OuvrirFichiers()
+    private void OuvrirFichiers(UIElement? source = null)
     {
-        if (!_filesOuvert) { _filesOuvert = true; }
-        SettingsPanel.Visibility = Visibility.Collapsed;
         PageTitle.Text = "Fichiers";
         PageHint.Text = "Explorateur de l'espace (lecture seule)";
+        OuvrirPageDepuis(source); // flip hub → page AVANT d'allumer la vue
+        if (!_filesOuvert) { _filesOuvert = true; }
         FilesView.Visibility = Visibility.Visible;
         ReconstruireArbreFichiers(); // arbre frais à chaque ouverture (lecture seule, sans état caché)
         ListerFichiers(_filesRelative);
@@ -461,12 +488,12 @@ public sealed partial class MainWindow : Window
 
     // ── Vue Notes (phase 4) — NotesService, même format disque que l'Electron ──
 
-    private void OuvrirNotes()
+    private void OuvrirNotes(UIElement? source = null)
     {
-        if (!_notesOuvert) { _notesOuvert = true; }
-        SettingsPanel.Visibility = Visibility.Collapsed;
         PageTitle.Text = "Notes";
         PageHint.Text = "De vrais fichiers Markdown sur ton PC, \u00E9tiquetables par agent.";
+        OuvrirPageDepuis(source); // flip hub → page AVANT d'allumer la vue
+        if (!_notesOuvert) { _notesOuvert = true; }
         NotesScroll.Visibility = Visibility.Visible;
         NotesDirHint.Text = Aven.Bridge.NotesService.Dir(Espace());
         ListerNotes();
@@ -588,7 +615,7 @@ public sealed partial class MainWindow : Window
 
     // ── Terminal Freebuff (phase 5) ──────────────────────────────────────
 
-    private void OnFreebuff(object sender, RoutedEventArgs e) => OuvrirTerminal();
+    private void OnFreebuff(object sender, RoutedEventArgs e) => OuvrirTerminal(FreebuffButton);
 
     private void MasquerVues()
     {
@@ -600,11 +627,11 @@ public sealed partial class MainWindow : Window
         SettingsPanel.Visibility = Visibility.Collapsed;
     }
 
-    private void OuvrirTerminal()
+    private void OuvrirTerminal(UIElement? source = null)
     {
-        MasquerVues();
         PageTitle.Text = "Terminal Freebuff";
         PageHint.Text = "Le CLI gratuit, dans Aven";
+        OuvrirPageDepuis(source); // flip hub → page + masque les autres vues
         TerminalView.Visibility = Visibility.Visible;
         TerminalInput.Focus(FocusState.Programmatic);
         if (_écranActif) AssurerÉcran(); // l'émulateur suit (le TUI se redessine aux prochains chunks)

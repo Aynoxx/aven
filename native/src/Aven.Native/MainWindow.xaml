@@ -108,7 +108,7 @@
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
                 <ScrollViewer x:Name="ChatScroll" Grid.Row="1" Visibility="Collapsed">
-                    <StackPanel x:Name="ChatRows" MaxWidth="860" Spacing="10" Margin="20,12,20,16" />
+                    <StackPanel x:Name="ChatRows" MaxWidth="860" Spacing="10" Margin="20,12,20,16" HorizontalAlignment="Left" />
                 </ScrollViewer>
                 <!-- Vue Fichiers : ARBRE &#224; gauche (spec phase 4 « TreeView + GridView »,
                      lazy &#224; l'expansion) + fil d'ariane/liste/aper&#231;u &#224; droite. -->
@@ -122,7 +122,7 @@
                               BorderBrush="{ThemeResource AvenBorderBrush}" BorderThickness="1"
                               CornerRadius="12" Background="{ThemeResource AvenPanelBrush}" />
                     <ScrollViewer Grid.Column="1">
-                        <StackPanel MaxWidth="980" Spacing="12" Margin="8,12,20,16">
+                        <StackPanel MaxWidth="980" Spacing="12" Margin="8,12,20,16" HorizontalAlignment="Left">
                             <StackPanel x:Name="FilesCrumbs" Orientation="Horizontal" Spacing="4" />
                             <Button x:Name="FilesUp" Content="&#8592; Dossier parent" Click="OnFilesUp"
                                     Visibility="Collapsed" HorizontalAlignment="Left" MinHeight="32"
@@ -141,7 +141,7 @@
                     </ScrollViewer>
                 </Grid>
                 <ScrollViewer x:Name="NotesScroll" Grid.Row="1" Visibility="Collapsed">
-                    <StackPanel MaxWidth="980" Spacing="12" Margin="20,12,20,16">
+                    <StackPanel MaxWidth="980" Spacing="12" Margin="20,12,20,16" HorizontalAlignment="Left">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
@@ -206,7 +206,7 @@
                          TextBlock : le toggle choisit. D&#233;faut = &#233;cran (parit&#233; vue terminal web). -->
                     <Grid x:Name="TerminalH&#244;te" Grid.Row="1" Margin="20,4,20,4">
                         <ScrollViewer x:Name="TerminalScroll">
-                            <StackPanel x:Name="TerminalTranscript" MaxWidth="860" Spacing="3" />
+                            <StackPanel x:Name="TerminalTranscript" MaxWidth="860" Spacing="3" HorizontalAlignment="Left" />
                         </ScrollViewer>
                     </Grid>
                     <Grid Grid.Row="2" Margin="20,4,20,14">
@@ -262,7 +262,7 @@
                     </Border>
                 </Grid>
                 <ScrollViewer Grid.Row="0">
-                    <StackPanel MaxWidth="900" Spacing="14" Margin="32,24,32,42" Grid.Row="0">
+                    <StackPanel MaxWidth="900" Spacing="14" Margin="32,24,32,42" Grid.Row="0" HorizontalAlignment="Left">
                         <TextBlock x:Name="PageTitle" Text="" FontSize="28" FontWeight="SemiBold"
                                    Foreground="{ThemeResource AvenTextBrush}" />
                         <TextBlock x:Name="PageHint" Text="" FontSize="13" TextWrapping="Wrap"
