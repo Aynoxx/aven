@@ -11,6 +11,8 @@
 > npm run test:native                   # 170 tests xUnit + build MSIX
 > powershell -NoProfile -File scripts/launch-native.ps1        # lancer l'app native
 > powershell -NoProfile -File scripts/package-native.ps1       # MSIX signé + zip portable
+> powershell -NoProfile -File scripts/package-native.ps1 -Smoke # idem + smoke UIA de chaque zip
+> npm run smoke:native                                          # smoke UIA seul (zip x64 récent)
 > ```
 >
 > État : phases 0-7 faites (socle, moteur, coquille, chat, services, terminal,

@@ -12,9 +12,13 @@
 #   powershell -NoProfile -File scripts/package-native.ps1                 # x64
 #   powershell -NoProfile -File scripts/package-native.ps1 -Archs arm64    # ARM64
 #   powershell -NoProfile -File scripts/package-native.ps1 -NoPortable     # MSIX seul
+#   powershell -NoProfile -File scripts/package-native.ps1 -Smoke          # zip PUIS smoke UIA
+# (-Smoke lance scripts/smoke-native.ps1 sur chaque zip produit : le packaging
+#  d'une release ne se termine plus qu'avec un SMOKE_OK.)
 param(
     [string[]]$Archs = @("x64"),
     [switch]$NoPortable,
+    [switch]$Smoke,
     [string]$NodeExe = "",
     [string]$NodeVersion = "v22.14.0"
 )
@@ -143,6 +147,7 @@ $signtool = Get-ChildItem (Join-Path $env:USERPROFILE ".nuget\packages\microsoft
 if (-not $signtool) { throw "signtool introuvable (microsoft.windows.sdk.buildtools)." }
 
 $outRoot = Join-Path $racine "native\.out"
+$zips = @() # zips produits, cibles du smoke optionnel -Smoke
 foreach ($arch in $Archs) {
     $arch = $arch.ToLowerInvariant()
     Write-Host ""
@@ -242,6 +247,24 @@ foreach ($arch in $Archs) {
         Compress-Archive -Path "$portable\*" -DestinationPath $zip -Force
         $mo = [math]::Round((Get-Item $zip).Length / 1MB)
         Write-Host "  Portable : $zip ($mo Mo)"
+        $zips += $zip
+    }
+}
+
+# --- 5. Smoke UIA (-Smoke) : chaque zip sortant repasse le parcours complet ---
+# Extraction dans un scratch + hub/notes/chat/terminal/parametres via COM UIA.
+# L'echec du smoke ABORT le packaging (throw) : pas de release sans SMOKE_OK.
+if ($Smoke) {
+    if ($zips.Count -eq 0) {
+        throw "-Smoke demande mais aucun zip portable produit (-NoPortable ?)."
+    }
+    foreach ($cible in $zips) {
+        Write-Host ""
+        Write-Host "=== Smoke UIA portable : $cible ==="
+        & (Join-Path $PSScriptRoot "smoke-native.ps1") -Zip $cible
+        if ($LASTEXITCODE -ne 0) {
+            throw "Smoke UIA en echec pour $cible (code $LASTEXITCODE)."
+        }
     }
 }
 

@@ -316,8 +316,23 @@ divergence TUI par construction. TESTS D'INTÉGRATION réels : echo, cmd interac
     @lydell/node-pty embarqué). Pièges consignés : .ps1 en ASCII strict (ANSI
     sinon), `2>&1` + `$ErrorActionPreference=Stop` transforme stderr natif en
     erreur terminante (relâcher localement).
-  - **Smoke tests réels** : app du layout dev ET du portable vivantes (pid,
-    fenêtre « Aven », ~150 Mo, kill propre). Portable x64 v10.0.0.0 = 67 Mo.
+  - **Suite de smoke UIA réutilisable** (`scripts/smoke-native.ps1`, aussi
+    `npm run smoke:native`) : le parcours de release pour CHAQUE zip portable —
+    extraction dans un scratch `native/.out/smoke-<stamp>`, pilotage en COM
+    UI Automation (`UIAutomationClient`, sans WinAppDriver), 6 verrous :
+    hub (4 cartes cliquables) → Notes (`+ Nouvelle` ouvre l'éditeur, `Annuler`
+    le ferme) → retour hub → garde chat (1 seul spawn node moteur à la 1re
+    ouverture, AUCUN re-spawn à la 2e — régression `_chatOuvert` historique) →
+    terminal (spawn node PTY descendant du PID) → Paramètres (version).
+    Verdict `SMOKE_OK` (exit 0) ou `SMOKE_KO - etape [...] : raison` (exit 1)
+    + dump UIA complet `native/.out/smoke-uia.txt`. Purge stricte : app + SEULES
+    node descendants du PID lancé (jamais ceux des autres sessions), scratch
+    supprimé sauf échec. `scripts/package-native.ps1 -Smoke` la lance sur chaque
+    zip produit et annule le packaging en cas d'échec. Pièges UIA : match en
+    prefixe (`-like "nom*"`, l'égalité stricte échoue sur les entités XAML),
+    variable locale jamais homonyme d'un paramètre.
+  - **Anciens smoke tests réels** : app du layout dev ET du portable vivantes
+    (pid, fenêtre « Aven », kill propre).
   - **Télémétrie de crash locale** : App.xaml.cs journalise
     AppDomain.UnhandledException dans %LOCALAPPDATA%\Aven\crash.log.
   - **Version 10.0.0.0** (identité de la bascule, phase 8).
