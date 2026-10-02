@@ -8,6 +8,11 @@
 import { startOpenCode, relayEvents, EXPECTED_VERSION, type AppEvent, type Bridge } from "./opencode-bridge.js"
 import { Router } from "./router.js"
 import { addDiscoveredFreeModels, loadTable, type Task } from "./priorities.js"
+// v10.0.0 (parité native, jalon espaces) : le seed d'espace et le pont d'agents
+// vivent DANS le host — l'Electron (main.ts) et l'app WinUI appellent le MÊME code
+// depuis deux process différents : une seule implémentation, zéro divergence.
+import { seedWorkspace } from "./workspace-seed.js"
+import { buildAgentsDir, readTemplateAgents } from "./agents-bridge.js"
 import { join } from "node:path"
 import { createInterface } from "node:readline"
 
@@ -168,6 +173,24 @@ const serverMethods: Record<string, (params: any) => Promise<unknown> | unknown>
   shutdown: async () => {
     await shutdown()
     return { stopped: true }
+  },
+  // v10.0.0 (parité native) : préparation d'un espace de travail AVANT initialize —
+  // même seed que le boot Electron (settings.ts → workspace-seed.ts), sans moteur.
+  "workspace.seed": (p: { workspace?: string; templateDir?: string }) => {
+    if (!p?.workspace || !p?.templateDir) throw new Error("workspace et templateDir requis")
+    return seedWorkspace(p.workspace, p.templateDir)
+  },
+  // v10.0.0 (parité native) : pont catalogue d'agents (.agents/ + mcp.json des notes)
+  // — best effort côté client (l'Electron l'ignorait déjà en cas d'échec).
+  "agents.bridge": (p: { workspace?: string; templateDir?: string }) => {
+    if (!p?.workspace || !p?.templateDir) throw new Error("workspace et templateDir requis")
+    return {
+      written: buildAgentsDir(
+        p.workspace,
+        readTemplateAgents(p.templateDir),
+        join(p.templateDir, "aven-mcp-server.mjs"),
+      ),
+    }
   },
   ...routerMethods,
   // Proxy générique vers le SDK : "session.list" → client.session.list(params).

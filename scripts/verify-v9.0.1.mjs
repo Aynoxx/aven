@@ -9,6 +9,10 @@ const read = (p) => readFileSync(path.join(root, p), "utf8")
 
 const pkg = JSON.parse(read("package.json"))
 const settings = read("electron/settings.ts")
+// v10.0.0 (parité native) : le seed a été extrait de settings.ts (couplé à Electron)
+// vers workspace-seed.ts — module pur bundlé dans le host moteur. Les assertions
+// de découverte dynamique suivent le code ; settings.ts garde la ré-exportation.
+const seed = read("electron/workspace-seed.ts")
 const readme = read("README.md")
 
 // ── Version ──
@@ -16,13 +20,14 @@ const [vMaj, vMin, vPatch] = pkg.version.split(".").map(Number)
 assert.ok(vMaj * 10000 + vMin * 100 + vPatch >= 90001, `version trop ancienne : ${pkg.version}`)
 
 // ── Fix principal : les agents sont découverts dans le gabarit, plus de liste statique ──
-assert.match(settings, /export function trackedAgentFiles/)
-assert.match(settings, /readdirSync\(agentsDir\)/)
-assert.match(settings, /\.endsWith\("\.md"\)/)
-assert.match(settings, /trackedAgentFiles\(templateDir\)/)
-assert.ok(!/\[\s*path\.join\(".opencode", "agents", "code\.md"\)/.test(settings),
+assert.match(settings, /from "\.\/workspace-seed\.js"/, "settings.ts doit ré-exporter le seed historique")
+assert.match(seed, /export function trackedAgentFiles/)
+assert.match(seed, /readdirSync\(agentsDir\)/)
+assert.match(seed, /\.endsWith\("\.md"\)/)
+assert.match(seed, /trackedAgentFiles\(templateDir\)/)
+assert.ok(!/\[\s*path\.join\(".opencode", "agents", "code\.md"\)/.test(seed),
   "la liste statique TRACKED liste encore les agents en dur : la synchro dynamique doit la remplacer")
-assert.ok(!/"projet\.md"/.test(settings), "« projet.md » ne doit pas revenir en dur dans settings.ts")
+assert.ok(!/"projet\.md"/.test(seed), "« projet.md » ne doit pas revenir en dur dans workspace-seed.ts")
 
 // Le nouvel agent est bien livré dans le gabarit de l'app.
 assert.ok(existsSync(path.join(root, ".opencode", "agents", "projet.md")), "projet.md absent du gabarit")

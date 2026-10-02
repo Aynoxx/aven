@@ -18,8 +18,9 @@ public partial class App : Application
         {
             try
             {
-                var dossier = System.IO.Path.Combine(
-                    System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "Aven");
+                // Même emplacement que le reste des données natives (AVEN_DATA_DIR
+                // inclus) : un scratch de smoke isole aussi le journal de crash.
+                var dossier = Aven.Bridge.AppData.Dir();
                 System.IO.Directory.CreateDirectory(dossier);
                 System.IO.File.AppendAllText(
                     System.IO.Path.Combine(dossier, "crash.log"),

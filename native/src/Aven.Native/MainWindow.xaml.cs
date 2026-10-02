@@ -79,13 +79,20 @@ public sealed partial class MainWindow : Window
                            | Aven.Bridge.GlobalHotKey.ModNoRepeat, (uint)'V'))
             System.Diagnostics.Debug.WriteLine("Ctrl+Maj+V global déjà pris : l'accélérateur local reste actif.");
         Closed += (_, _) => _hotkey.Dispose();
+
+        // Socle parité v10.0.0 : registre d'espaces (import du Classic à la 1re
+        // exécution) puis boot du moteur au lancement — l'Electron fait pareil : le
+        // chat est prêt dès le hub, l'état poll app:state est reflété en direct.
+        _boot.StateChanged += état => DispatcherQueue.TryEnqueue(() => MajÉtat(état));
+        Closed += (_, _) => { _ = _boot.DisposeAsync(); };
+        _ = DémarrerApplicationAsync();
     }
 
-    // ── Chat (phase 3) : moteur + client + VM, ouverts depuis la carte Projet ──
-    private Aven.Bridge.EngineClient? _engine;
-    private Aven.Bridge.ConversationClient? _client;
+    // ── Chat (phase 3) : VM locale ; le moteur/client appartiennent au BootService ──
     private Aven.Bridge.ChatViewModel? _chat;
-    private bool _chatOuvert;
+    private bool _chatOuvert;   // conversation créée (jamais de 2e création)
+    private bool _chatEnCours;  // création en vol (anti double-clic)
+    private bool _chatBranche;  // abonnements UI posés UNE seule fois
     private bool _filesOuvert, _notesOuvert;
     private string _filesRelative = "";
     private Aven.Bridge.Note? _noteOuverte;
@@ -101,6 +108,11 @@ public sealed partial class MainWindow : Window
     private TerminalWebView? _écran; // créé paresseusement, réutilisé entre sessions
     private bool _écranActif = true; // défaut : TUI complet (parité vue terminal web)
     private (int Cols, int Rows) _dims = (Aven.Bridge.FreebuffTerminal.DefaultCols, Aven.Bridge.FreebuffTerminal.DefaultRows);
+
+    // ── Socle parité v10.0.0 : registre d'espaces + clés + boot moteur ──────────
+    private readonly Aven.Bridge.BootService _boot = new();
+    private string? _espace;                       // espace actif (registre)
+    private Aven.Bridge.EngineClient? _engineAnnoncé;
 
     // ── Voix (phase 6) : pipeline testé + capture micro + annonceur ──────────
     private Aven.Bridge.GlobalHotKey? _hotkey; // raccourci OS global Ctrl+Maj+V (décision phase 6)
@@ -185,6 +197,7 @@ public sealed partial class MainWindow : Window
         PageView.Visibility = Visibility.Visible;
         HubView.Visibility = Visibility.Collapsed;
         MasquerVues();
+        RafraîchirBannières(); // les bannières d'état ne vivent que hors hub (parité)
         // Connected Animation (parité du shared element v9.7.0) : la source
         // (carte du hub, bouton Terminal/Paramètres) DEVIENT l'en-tête de la page.
         // JAMAIS de reset de _chatOuvert ici : revenir au hub puis re-ouvrir
@@ -201,12 +214,13 @@ public sealed partial class MainWindow : Window
         HubView.Visibility = Visibility.Visible;
         PageView.Visibility = Visibility.Collapsed;
         CascaderEntreeDuHub();
+        RafraîchirBannières(); // le hub n'affiche que sa pastille d'état
     }
 
     private void OnSettings(object sender, RoutedEventArgs e)
     {
         PageTitle.Text = "Paramètres";
-        PageHint.Text = "Usage local de l'app — les clés API et espaces restent dans l'Electron Classic pour l'instant.";
+        PageHint.Text = "Version, espace actif et statistiques locales — clés et réglages complets arrivent avec le panneau Configuration.";
         OuvrirPageDepuis(HomeButton);
         SettingsPanel.Visibility = Visibility.Visible;
         SettingsVersion.Text = "Aven " + AppVersion + " — natif WinUI 3 (WASDK 1.7)";
@@ -223,6 +237,160 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    // ── Socle parité v10.0.0 : démarrage, registre d'espaces, bannières ──────────
+
+    /// <summary>Registre (import du Classic à la première exécution) puis, si un
+    /// espace est déjà choisi, boot du moteur — sinon écran de choix (parité v9.1.5 :
+    /// aucun espace n'est imposé, le moteur ne démarre jamais sur un dossier vide).</summary>
+    private async Task DémarrerApplicationAsync()
+    {
+        try
+        {
+            _boot.ListerEspaces(); // import initial du registre Electron (une fois)
+            var actif = _boot.ActiveWorkspace();
+            if (actif is null)
+            {
+                _boot.PublierBesoinEspace();
+                AfficherChoixEspace(true);
+                return;
+            }
+            _espace = actif.Path;
+            AfficherChoixEspace(false);
+            await _boot.BootAsync(actif.Path);
+        }
+        catch (Exception erreur)
+        {
+            // Jamais de crash au démarrage : l'état d'erreur vit dans les bannières.
+            System.Diagnostics.Debug.WriteLine("boot : " + erreur.Message);
+        }
+    }
+
+    /// <summary>Reflet de l'état moteur dans la fenêtre : pastille d'état, nom de
+    /// l'espace, bannières, annonceur branché dès que le host est prêt.</summary>
+    private void MajÉtat(Aven.Bridge.AppModelState état)
+    {
+        var enLigne = état.Status == "ready";
+        StatusBarre.Text = enLigne ? "En ligne" : état.Status == "error" ? "Indisponible" : "Démarrage";
+        StatusDot.Fill = BrushDe(enLigne ? "AvenSuccessBrush"
+            : état.Status == "error" ? "AvenDangerBrush" : "AvenWarningBrush");
+        HubWorkspace.Text = NomEspace(état.Workspace ?? _espace);
+        if (état.Status == "error")
+            StatusBannerText.Text = "Aven n'a pas démarré. " + (état.Error ?? "");
+        else if (état.Status == "starting")
+            StatusBannerText.Text = "Démarrage d'Aven…";
+        if (état.Status == "ready" && _boot.Engine is { } moteur)
+            BrancherAnnonceur(moteur); // parité : les événements sont annoncés/relayés dès le boot
+        RafraîchirBannières();
+    }
+
+    private static string NomEspace(string? chemin)
+    {
+        if (string.IsNullOrWhiteSpace(chemin)) return "Espace de travail";
+        var propre = chemin.TrimEnd('\\', '/');
+        var nom = Path.GetFileName(propre);
+        return nom.Length > 0 ? nom : propre;
+    }
+
+    /// <summary>Bannières d'état visibles UNIQUEMENT hors hub (le hub n'affiche que
+    /// sa pastille) — appelé à chaque navigation et à chaque changement d'état.</summary>
+    private void RafraîchirBannières()
+    {
+        var état = _boot.State;
+        var horsHub = PageView.Visibility == Visibility.Visible && ChoixEspace.Visibility != Visibility.Visible;
+        var étatVisible = horsHub && !état.NeedsWorkspace &&
+            (état.Status == "error" || (état.Status == "starting" && _espace is not null));
+        StatusBanner.Visibility = étatVisible ? Visibility.Visible : Visibility.Collapsed;
+        var sansClé = horsHub && état.Status == "ready" && !état.Keys.Values.Any(v => v);
+        NoKeyBanner.Visibility = sansClé ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    // ── Écran de choix d'espace (parité v9.1.5) ──────────────────────────────
+
+    private void AfficherChoixEspace(bool afficher)
+    {
+        ChoixEspace.Visibility = afficher ? Visibility.Visible : Visibility.Collapsed;
+        if (!afficher) return;
+        ChoixErreur.Text = "";
+        ChoixEspaceListe.Children.Clear();
+        foreach (var espace in _boot.ListerEspaces())
+        {
+            var chemin = espace.Path;
+            var bouton = new Button
+            {
+                Content = espace.Name + "  -  " + espace.Path,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = HorizontalAlignment.Left,
+                MinHeight = 40,
+                Background = BrushDe("AvenPanelBrush"),
+                BorderBrush = BrushDe("AvenBorderBrush"),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(10),
+                Foreground = BrushDe("AvenTextBrush"),
+            };
+            bouton.Click += (_, _) => ActiverEspace(chemin);
+            ChoixEspaceListe.Children.Add(bouton);
+        }
+    }
+
+    private async void ActiverEspace(string chemin)
+    {
+        try
+        {
+            Aven.Bridge.WorkspacesService.SetActive(Aven.Bridge.AppData.Dir(), chemin);
+            _espace = chemin;
+            AfficherChoixEspace(false);
+            await _boot.BootAsync(chemin);
+        }
+        catch (Exception erreur) { ChoixErreur.Text = erreur.Message; }
+    }
+
+    private async void OnChoixCreer(object sender, RoutedEventArgs e) => await ChoisirEspaceAsync(creer: true);
+
+    private async void OnChoixOuvrir(object sender, RoutedEventArgs e) => await ChoisirEspaceAsync(creer: false);
+
+    /// <summary>Sélecteur Windows de dossier (parité workspace:createNew / addExisting) :
+    /// annulation = aucun changement ; création = validation du nom + anti-doublon.</summary>
+    private async Task ChoisirEspaceAsync(bool creer)
+    {
+        try
+        {
+            var chemin = await ChoisirDossierAsync(creer
+                ? "Nouvel espace de travail — choisis ou crée son dossier"
+                : "Choisir un dossier de travail");
+            if (chemin is null) return; // annulé : aucun changement (parité v9.0.0)
+            var dataDir = Aven.Bridge.AppData.Dir();
+            var propre = Path.GetFullPath(chemin);
+            var nom = Path.GetFileName(propre.TrimEnd('\\', '/'));
+            if (creer)
+            {
+                Aven.Bridge.WorkspacesService.ValidateName(nom);
+                if (Aven.Bridge.WorkspacesService.List(dataDir).Any(w => Path.GetFullPath(w.Path) == propre))
+                    throw new InvalidOperationException("Ce dossier fait déjà partie des espaces de travail connus.");
+            }
+            Aven.Bridge.WorkspacesService.Register(dataDir, propre, nom);
+            Aven.Bridge.WorkspacesService.SetActive(dataDir, propre);
+            _espace = propre;
+            AfficherChoixEspace(false);
+            await _boot.BootAsync(propre);
+        }
+        catch (Exception erreur) { ChoixErreur.Text = erreur.Message; }
+    }
+
+    private async Task<string?> ChoisirDossierAsync(string _titre)
+    {
+        // FolderPicker de ce TFM n'expose pas Title (CS0117) : le libellé vit dans
+        // l'écran ChoixEspace, le sélecteur garde son chemin par défaut (Bureau).
+        var picker = new Windows.Storage.Pickers.FolderPicker
+        {
+            SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.Desktop,
+        };
+        picker.FileTypeFilter.Add("*"); // requis par FolderPicker (aucun filtre réel)
+        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
+        var dossier = await picker.PickSingleFolderAsync();
+        return dossier?.Path;
+    }
+
     // ── Chat réel (phase 3) — voir ChatViewModel (Aven.Bridge), testé sans WinUI ──
 
     private void OuvrirChat(UIElement? source = null)
@@ -230,9 +398,12 @@ public sealed partial class MainWindow : Window
         PageTitle.Text = "Projet";
         PageHint.Text = "Conversation avec l'agent central (Freebuff)";
         OuvrirPageDepuis(source); // flip hub → page AVANT d'allumer la vue
-        if (!_chatOuvert) // garde unique : une 2e ouverture sans 2e process node
+        // Garde anti re-spawn : le chat ne crée sa conversation qu'UNE fois. Un
+        // échec (moteur indisponible) autorise un nouvel essai SANS nouveau process :
+        // le host appartient au BootService, jamais relancé par le chat.
+        if (!_chatOuvert && !_chatEnCours)
         {
-            _chatOuvert = true;
+            _chatEnCours = true;
             DémarrerChat();
         }
         ChatScroll.Visibility = Visibility.Visible;
@@ -242,18 +413,28 @@ public sealed partial class MainWindow : Window
 
     private async void DémarrerChat()
     {
-        // Le host est le bundle de phase 1 (dist-electron/aven-engine-host.mjs) : le
-        // même moteur que l'app Electron — aucune logique moteur dupliquée.
-        var host = ChercherHost();
-        // Node embarqué du portable (nodejs/node.exe via RésoudreNode) : sans ça
-        // EngineClient spawn « node » via PATH et le chat meurt dans le portable.
-        _engine = new Aven.Bridge.EngineClient(host, Aven.Bridge.NodePtyTransport.RésoudreNode());
-        _client = new Aven.Bridge.ConversationClient(_engine);
-        _chat = new Aven.Bridge.ChatViewModel(_client, AppContext.BaseDirectory,
+        // Le boot (registre + clés + seed + initialize) part au lancement : le chat
+        // attend SA FIN — sans initialize, session.create échouerait (« OpenCode
+        // n'est pas prêt »). Cœur de la parité v10.0.0 (jalon espaces/clés).
+        Aven.Bridge.AppModelState état;
+        try { état = await _boot.AttendreAsync(TimeSpan.FromSeconds(60)); }
+        catch { état = _boot.State; }
+
+        if (état.Status != "ready" || _boot.Client is null || string.IsNullOrEmpty(_espace))
+        {
+            _chatEnCours = false;
+            PageHint.Text = "Moteur indisponible : " + (état.Error
+                ?? (état.NeedsWorkspace ? "choisis d'abord un espace de travail."
+                : "démarrage en cours — réessaie dans un instant."));
+            return;
+        }
+
+        var client = _boot.Client;
+        _chat = new Aven.Bridge.ChatViewModel(client, _espace,
             marshal: action => DispatcherQueue.TryEnqueue(() => action()));
 
-        // Conversation de phase 3 : création à la volée (la relecture des anciens
-        // chats arrive en phase 4). On n'attache le VM qu'APRÈS : les événements
+        // Conversation créée à la volée (la relecture des anciens chats arrive avec
+        // la sidebar des conversations). On n'attache le VM qu'APRÈS : les événements
         // d'une autre session seraient filtrés comme « child ».
         try
         {
@@ -263,46 +444,48 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception erreur)
         {
+            _chatEnCours = false;
             PageHint.Text = "Moteur indisponible : " + erreur.Message;
             return;
         }
 
-        _chat.PropertyChanged += (_, _) => SynchroniserChat();
+        _chatOuvert = true;
+        _chatEnCours = false;
 
-        // Follow-bottom : l'utilisateur re-arme en revenant au bas (parité « Dernier message »).
-        ChatScroll.ViewChanged += (_, _) =>
-            _chat.FollowBottom = ChatScroll.VerticalOffset + ChatScroll.ViewportHeight >= ChatScroll.ExtentHeight - 40;
-
-        // Échap = Arrêter (parité v9.7 : raccourci global du tour en cours).
-        var échap = new Microsoft.UI.Xaml.Input.KeyboardAccelerator { Key = Windows.System.VirtualKey.Escape };
-        échap.Invoked += (_, args) =>
+        if (!_chatBranche)
         {
-            if (_chat?.Live.Busy == true)
+            _chatBranche = true;
+
+            _chat.PropertyChanged += (_, _) => SynchroniserChat();
+
+            // Follow-bottom : l'utilisateur re-arme en revenant au bas (parité « Dernier message »).
+            ChatScroll.ViewChanged += (_, _) =>
             {
-                ArrêterTour();
-                args.Handled = true;
-            }
-        };
-        TitleBar.KeyboardAccelerators.Add(échap);
+                if (_chat is { } c)
+                    c.FollowBottom = ChatScroll.VerticalOffset + ChatScroll.ViewportHeight >= ChatScroll.ExtentHeight - 40;
+            };
 
-        // Mesure brute pour l'acceptation « 60 fps » : frames comptées pendant les
-        // tours (fenêtres d'une seconde, 30 s glissantes affichées dans le hint).
-        Microsoft.UI.Xaml.Media.CompositionTarget.Rendering += SurFrame;
+            // Échap = Arrêter (parité v9.7 : raccourci global du tour en cours).
+            var échap = new Microsoft.UI.Xaml.Input.KeyboardAccelerator { Key = Windows.System.VirtualKey.Escape };
+            échap.Invoked += (_, args) =>
+            {
+                if (_chat?.Live.Busy == true)
+                {
+                    ArrêterTour();
+                    args.Handled = true;
+                }
+            };
+            TitleBar.KeyboardAccelerators.Add(échap);
 
-        // Live → lignes : les événements du moteur arrivent sur le thread de lecture,
-        // la réconciliation d'arbre doit passer par l'interface.
-        _client.LiveChanged += _ => DispatcherQueue.TryEnqueue(SynchroniserChat);
-        SynchroniserChat();
-    }
+            // Mesure brute pour l'acceptation « 60 fps » : frames comptées pendant les
+            // tours (fenêtres d'une seconde, 30 s glissantes affichées dans le hint).
+            Microsoft.UI.Xaml.Media.CompositionTarget.Rendering += SurFrame;
 
-    private static string ChercherHost()
-    {
-        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
-        {
-            var candidat = Path.Combine(dir.FullName, "dist-electron", "aven-engine-host.mjs");
-            if (File.Exists(candidat)) return candidat;
+            // Live → lignes : les événements du moteur arrivent sur le thread de lecture,
+            // la réconciliation d'arbre doit passer par l'interface.
+            client.LiveChanged += _ => DispatcherQueue.TryEnqueue(SynchroniserChat);
         }
-        return Path.Combine(AppContext.BaseDirectory, "aven-engine-host.mjs");
+        SynchroniserChat();
     }
 
     private void OnComposerKey(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
@@ -335,8 +518,10 @@ public sealed partial class MainWindow : Window
 
     // ── Vue Fichiers (phase 4) — FilesService cloisonné par safeResolve ───────
 
-    private static string Espace() => Directory.Exists("C:/Users/Liam/Downloads/Aven")
-        ? "C:/Users/Liam/Downloads/Aven" : AppContext.BaseDirectory;
+    /// <summary>Espace actif (registre v10.0.0) — parité requireWorkspace de
+    /// l'Electron : JAMAIS de dossier par défaut (v9.1.5) ; "" = aucun espace
+    /// choisi (l'écran de choix couvre l'UI, les vues affichent l'erreur).</summary>
+    private string Espace() => _espace ?? "";
 
     private void OuvrirFichiers(UIElement? source = null)
     {
@@ -803,20 +988,32 @@ public sealed partial class MainWindow : Window
         if (_voix is not null) return;
         _voixPipeline = new Aven.Bridge.VoicePipeline(new GroqHttp());
         _voix = new VoiceRuntime(_voixPipeline);
-        // Annonceur : voix Windows SAPI via PowerShell (parité speakWithSapi de main.ts).
-        _annonceur = new Aven.Bridge.Announcer(speak: texte => Task.Run(async () =>
+        if (_boot.Engine is { } moteur) BrancherAnnonceur(moteur);
+    }
+
+    /// <summary>Annonceur (parité announcer.ts) : créé une fois puis branché à CHAQUE
+    /// host moteur — indépendant du push-to-talk : les événements arrivent dès le boot.</summary>
+    private void BrancherAnnonceur(Aven.Bridge.EngineClient moteur)
+    {
+        if (_engineAnnoncé == moteur && _annonceur is not null) return;
+        _engineAnnoncé = moteur;
+        // Voix Windows SAPI via PowerShell (parité speakWithSapi de main.ts).
+        var annonceur = _annonceur = new Aven.Bridge.Announcer(speak: texte => Task.Run(async () =>
         {
             var sûr = texte.Replace("'", "''");
             await ExécuterPowerShell(
                 $"Add-Type -AssemblyName System.Speech; (New-Object System.Speech.Synthesis.SpeechSynthesizer).Speak('{sûr}')");
         }), settleMs: 250);
-        _engine!.EventReceived += ev =>
+        // Parité v8.7.9 : l'annonceur est un OPT-IN (off par défaut côté web, dans
+        // l'apparence) — le réglage natif sera branché avec le panneau Apparence.
+        annonceur.SetEnabled(false);
+        moteur.EventReceived += ev =>
         {
             var données = new Dictionary<string, string>();
             if (Aven.Bridge.JsonAide.Texte(ev.Data, "text") is { } t) données["text"] = t;
             if (Aven.Bridge.JsonAide.Texte(ev.Data, "action") is { } a) données["action"] = a;
             if (Aven.Bridge.JsonAide.Texte(ev.Data, "errorMessage") is { } m) données["errorMessage"] = m;
-            _annonceur.Handle(ev.Type, données);
+            annonceur.Handle(ev.Type, données);
         };
     }
 
@@ -1117,7 +1314,7 @@ public sealed partial class MainWindow : Window
     /// <summary>Sélecteur de modèles (parité v9.4.0) : « Auto » + chaîne du routeur.</summary>
     private async void OnModelMenu(object sender, RoutedEventArgs e)
     {
-        if (_client is null || _chat is null) return;
+        if (_boot.Client is not { } client || _chat is null) return;
         var flyout = new MenuFlyout();
         var auto = new MenuFlyoutItem { Text = _modelLabel == "Auto" ? "Auto ✓" : "Auto" };
         auto.Click += (_, _) => _ = ÉpinglerModèle(null);
@@ -1125,7 +1322,7 @@ public sealed partial class MainWindow : Window
         flyout.Items.Add(new MenuFlyoutSeparator());
         try
         {
-            var chain = await _client.ChainForAsync("projet");
+            var chain = await client.ChainForAsync("projet");
             if (chain is System.Text.Json.Nodes.JsonArray liste)
             {
                 foreach (var item in liste)
@@ -1148,10 +1345,10 @@ public sealed partial class MainWindow : Window
 
     private async Task ÉpinglerModèle(string? reference)
     {
-        if (_client is null || _chat is null) return;
+        if (_boot.Client is not { } client || _chat is null) return;
         try
         {
-            var résultat = await _client.SetChatModelAsync(_chat.ChatId, reference);
+            var résultat = await client.SetChatModelAsync(_chat.ChatId, reference);
             _modelLabel = reference is null ? "Auto" : résultat.Model;
             ModelButton.Content = _modelLabel + " \u25BE";
             PageHint.Text = "Modèle : " + _modelLabel;
@@ -1165,7 +1362,7 @@ public sealed partial class MainWindow : Window
     /// <summary>Autorisation d'outil en ContentDialog (parité FormDialog, décision v9.4).</summary>
     private async void ReconsidérerAutorisations()
     {
-        if (_dialogOuvert || _client is null || _chat is null) return;
+        if (_dialogOuvert || _boot.Client is not { } client || _chat is null) return;
         var demande = _chat.Live.Asks.FirstOrDefault();
         if (demande is null) return;
         _dialogOuvert = true;
@@ -1189,7 +1386,7 @@ public sealed partial class MainWindow : Window
                 ContentDialogResult.Secondary => "once",
                 _ => "reject",
             };
-            await _client.ReplyPermissionAsync(demande.SessionId, demande.Id, réponse);
+            await client.ReplyPermissionAsync(demande.SessionId, demande.Id, réponse);
         }
         catch { /* dialog fermé avec la fenêtre */ }
         finally { _dialogOuvert = false; }
@@ -1198,7 +1395,7 @@ public sealed partial class MainWindow : Window
     /// <summary>Question de l'agent (outil « question ») en ContentDialog — parité FormDialog.</summary>
     private async void ReconsidérerQuestions()
     {
-        if (_dialogOuvert || _client is null || _chat is null) return;
+        if (_dialogOuvert || _boot.Client is not { } client || _chat is null) return;
         var question = _chat.Live.Forms.FirstOrDefault();
         if (question is null) return;
         _dialogOuvert = true;
@@ -1220,7 +1417,7 @@ public sealed partial class MainWindow : Window
                 // La clé attendue est celle du premier champ du formulaire (parité web).
                 var clé = question.Raw?["fields"] is System.Text.Json.Nodes.JsonArray champs
                     && champs.Count > 0 && champs[0]?["key"]?.GetValue<string>() is { } k ? k : "answer";
-                await _client.ReplyFormAsync(_chat.ChatId, question.Id, new Dictionary<string, object> { [clé] = champ.Text.Trim() });
+                await client.ReplyFormAsync(_chat.ChatId, question.Id, new Dictionary<string, object> { [clé] = champ.Text.Trim() });
             }
         }
         finally { _dialogOuvert = false; }

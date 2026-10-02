@@ -10,8 +10,8 @@
 #   3. retour    : "Retour au hub" ramene bien le hub
 #   4. fichiers  : carte Fichiers -> liste remplie -> clic dossier -> "Dossier
 #                  parent" monte d'un niveau puis disparait a la racine
-#   5. chat      : 1 seul spawn node moteur a la 1re ouverture, AUCUN re-spawn
-#                  a la 2e (garde _chatOuvert - regressions de release classiques)
+#   5. chat      : moteur pret AU BOOT (statut "En ligne" au hub), AUCUN spawn
+#                  ni re-spawn a l'ouverture (garde _chatOuvert - non regression)
 #   6. terminal  : ouverture de la vue + spawn node PTY (descendant du process app)
 #   7. parametres: panneau version affiche
 # Verdict : "SMOKE_OK" + code 0, ou "SMOKE_KO - etape [...] : ..." + code 1
@@ -442,20 +442,29 @@ foreach ($cheminZip in $zips) {
             }
             Write-Host "[smoke] ok fichiers : liste remplie + navigation racine/sous-dossier"
 
-            # 6. garde chat : 1 spawn moteur a la 1re ouverture, 0 a la 2e
+            # 6. garde chat : moteur pret AU BOOT, AUCUN spawn a l'ouverture, 0 a la 2e
             $script:Etape = "chat-garde"
+            # Boot au lancement (parite Electron) : le host node appartient au
+            # BootService et doit deja etre pret AVANT le 1er clic Projet.
+            if ($null -eq (Trouver-El -prefixe "En ligne" -attenteMs 60000)) {
+                Echec "moteur non pret au hub apres 60 s : le boot doit partir au lancement (statut 'En ligne' absent)."
+            }
             $baseChat = @(Nodes-App -pidApp $pidApp -Direct)
+            if ($baseChat.Count -eq 0) {
+                Echec "statut pret mais aucun process node moteur (enfant direct) au boot."
+            }
             Cliquer-El "Projet"
             if ($null -eq (Trouver-El -prefixe "Envoyer" -attenteMs 15000 -Cliquable)) {
                 Echec "composeur de chat absent : la carte Projet n'a pas ouvert la conversation."
             }
-            $nouveaux = Attendre-Nouveaux -pidApp $pidApp -dejaConnus $baseChat -attenteMs 30000 -Direct
-            if ($nouveaux.Count -eq 0) {
-                Echec "aucun process node moteur (enfant direct) apres ouverture du chat."
+            # L'ouverture ne fait que session.create sur le host du boot : 0 spawn.
+            $nouveaux = Attendre-Nouveaux -pidApp $pidApp -dejaConnus $baseChat -attenteMs 15000 -Direct
+            if ($nouveaux.Count -gt 0) {
+                Echec ("spawn moteur a l'ouverture du chat (pids " + ($nouveaux -join ",") + ") : le host appartient au BootService, jamais au chat.")
             }
             [void](Nodes-Stables -pidApp $pidApp -attenteMs 30000)
             $set1 = @(Nodes-App -pidApp $pidApp -Direct)
-            Write-Host ("[smoke] moteur spawn (" + $set1.Count + " node direct(s)) - test du garde : 2e ouverture")
+            Write-Host ("[smoke] moteur au boot (" + $set1.Count + " node direct(s)) - test du garde : 2e ouverture")
             Cliquer-El $accueil
             if (-not (Attendre-Absent "Envoyer" 8000)) { Echec "le chat reste visible apres retour au hub." }
             Cliquer-El "Projet"
@@ -468,7 +477,7 @@ foreach ($cheminZip in $zips) {
             if ($reSpawn.Count -gt 0) {
                 Echec ("re-spawn moteur a la 2e ouverture (pids " + ($reSpawn -join ",") + ") : garde _chatOuvert cassee.")
             }
-            Write-Host "[smoke] ok chat : 1 spawn, aucun re-spawn a la 2e ouverture"
+            Write-Host "[smoke] ok chat : moteur pret au hub, 0 spawn a l'ouverture, 0 re-spawn a la 2e"
 
             # 7. terminal : vue + spawn du PTY (descendant du process app)
             $script:Etape = "terminal"
