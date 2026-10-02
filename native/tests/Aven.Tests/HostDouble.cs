@@ -83,6 +83,19 @@ public sealed class HostDouble : IDisposable
                   const all = [...sessions.values()].map((s) => ({ id: s.id, title: s.title, agent: s.agent, parentID: s.parentID, model: { providerID: "free", id: "big-pickle" }, time: { updated: 1 } }));
                   return { data: all };
                 }
+                if (m === "agent.list") {
+                  // Fixture parite listAgents : subagent + hidden + hors TABS a filtrer.
+                  return { data: [
+                    { id: "projet", name: "Projet", description: "Orchestrateur", mode: "primary" },
+                    { id: "code", name: "Code", description: "Code et commandes" },
+                    { id: "analyse", name: "Analyse", description: "Donnees et chiffres" },
+                    { id: "recherche", name: "Recherche", description: "Documentation" },
+                    { id: "summary", name: "Resume", mode: "subagent" },
+                    { id: "cache", name: "Cache", hidden: true },
+                    { id: "hors-onglets", name: "Hors onglets" }
+                  ] };
+                }
+                if (m === "session.remove") { sessions.delete(p.sessionID); return { ok: true }; }
                 if (m === "message.list") {
                   const s = sessions.get(p.sessionID);
                   return { data: s ? s.messages : [] };

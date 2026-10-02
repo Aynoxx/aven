@@ -1,5 +1,6 @@
 using System.Text;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
@@ -90,9 +91,17 @@ public sealed partial class MainWindow : Window
 
     // ── Chat (phase 3) : VM locale ; le moteur/client appartiennent au BootService ──
     private Aven.Bridge.ChatViewModel? _chat;
-    private bool _chatOuvert;   // conversation créée (jamais de 2e création)
+    private bool _chatOuvert;   // une conversation est ouverte (jamais de 2e création auto)
     private bool _chatEnCours;  // création en vol (anti double-clic)
     private bool _chatBranche;  // abonnements UI posés UNE seule fois
+    private string? _chatId;             // conversation ouverte (sidebar / récents)
+    private string _chatAgent = "projet"; // agent de la conversation ouverte
+    private bool _sidebarArchivées;      // bascule « voir les archivées » de la sidebar
+    private string _sidebarFiltre = "";  // recherche courante dans la sidebar
+    private string? _renommageId;        // conversation en cours de renommage inline
+    private List<Aven.Bridge.ChatInfo> _sidebarChats = [];
+    private List<Aven.Bridge.AgentInfo> _agentsTaches = [];
+    private Aven.Bridge.ChatViewModel? _chatRendu; // VM à l'origine des bulles affichées
     private bool _filesOuvert, _notesOuvert;
     private string _filesRelative = "";
     private Aven.Bridge.Note? _noteOuverte;
@@ -180,6 +189,7 @@ public sealed partial class MainWindow : Window
     {
         if (sender is not Button carte || carte.Tag is not string index) return;
         if (index == "0") { OuvrirChat(carte); return; } // carte Projet = conversation réelle (phase 3)
+        if (index == "1") { OuvrirTaches(carte); return; } // carte Tâches = page agents/modes (jalon 2)
         if (index == "2") { OuvrirFichiers(carte); return; } // carte Fichiers (phase 4)
         if (index == "3") { OuvrirNotes(carte); return; } // carte Notes (phase 4)
         var cible = Cibles[int.Parse(index)];
@@ -215,6 +225,7 @@ public sealed partial class MainWindow : Window
         PageView.Visibility = Visibility.Collapsed;
         CascaderEntreeDuHub();
         RafraîchirBannières(); // le hub n'affiche que sa pastille d'état
+        RafraîchirAprèsChat(); // récents + sidebar fraîchis à chaque retour au hub
     }
 
     private void OnSettings(object sender, RoutedEventArgs e)
@@ -279,7 +290,10 @@ public sealed partial class MainWindow : Window
         else if (état.Status == "starting")
             StatusBannerText.Text = "Démarrage d'Aven…";
         if (état.Status == "ready" && _boot.Engine is { } moteur)
+        {
             BrancherAnnonceur(moteur); // parité : les événements sont annoncés/relayés dès le boot
+            _ = RafraîchirRecentsAsync(); // hub enrichi : les récents arrivent avec le moteur
+        }
         RafraîchirBannières();
     }
 
@@ -404,14 +418,16 @@ public sealed partial class MainWindow : Window
         if (!_chatOuvert && !_chatEnCours)
         {
             _chatEnCours = true;
-            DémarrerChat();
+            _ = DémarrerChat();
         }
         ChatScroll.Visibility = Visibility.Visible;
         ComposerBar.Visibility = Visibility.Visible;
+        ChatSidebar.Visibility = Visibility.Visible; // parité : la liste suit la conversation
+        _ = RafraîchirSidebarAsync();
         Composer.Focus(FocusState.Programmatic);
     }
 
-    private async void DémarrerChat()
+    private async Task DémarrerChat(string agent = "projet")
     {
         // Le boot (registre + clés + seed + initialize) part au lancement : le chat
         // attend SA FIN — sans initialize, session.create échouerait (« OpenCode
@@ -430,16 +446,19 @@ public sealed partial class MainWindow : Window
         }
 
         var client = _boot.Client;
+        _chatAgent = agent;
         _chat = new Aven.Bridge.ChatViewModel(client, _espace,
             marshal: action => DispatcherQueue.TryEnqueue(() => action()));
+        _chat.PropertyChanged += (_, _) => SynchroniserChat();
 
-        // Conversation créée à la volée (la relecture des anciens chats arrive avec
-        // la sidebar des conversations). On n'attache le VM qu'APRÈS : les événements
-        // d'une autre session seraient filtrés comme « child ».
+        // Conversation créée à la volée (la relecture des anciens chats vit dans la
+        // sidebar). On n'attache le VM qu'APRÈS : les événements d'une autre session
+        // seraient filtrés comme « child ».
         try
         {
-            var ouverte = await _chat.CreateChatAsync("projet");
+            var ouverte = await _chat.CreateChatAsync(agent);
             _chat.Attach(ouverte.Id);
+            _chatId = ouverte.Id;
             PageHint.Text = $"Conversation {ouverte.Model}";
         }
         catch (Exception erreur)
@@ -451,42 +470,564 @@ public sealed partial class MainWindow : Window
 
         _chatOuvert = true;
         _chatEnCours = false;
-
-        if (!_chatBranche)
-        {
-            _chatBranche = true;
-
-            _chat.PropertyChanged += (_, _) => SynchroniserChat();
-
-            // Follow-bottom : l'utilisateur re-arme en revenant au bas (parité « Dernier message »).
-            ChatScroll.ViewChanged += (_, _) =>
-            {
-                if (_chat is { } c)
-                    c.FollowBottom = ChatScroll.VerticalOffset + ChatScroll.ViewportHeight >= ChatScroll.ExtentHeight - 40;
-            };
-
-            // Échap = Arrêter (parité v9.7 : raccourci global du tour en cours).
-            var échap = new Microsoft.UI.Xaml.Input.KeyboardAccelerator { Key = Windows.System.VirtualKey.Escape };
-            échap.Invoked += (_, args) =>
-            {
-                if (_chat?.Live.Busy == true)
-                {
-                    ArrêterTour();
-                    args.Handled = true;
-                }
-            };
-            TitleBar.KeyboardAccelerators.Add(échap);
-
-            // Mesure brute pour l'acceptation « 60 fps » : frames comptées pendant les
-            // tours (fenêtres d'une seconde, 30 s glissantes affichées dans le hint).
-            Microsoft.UI.Xaml.Media.CompositionTarget.Rendering += SurFrame;
-
-            // Live → lignes : les événements du moteur arrivent sur le thread de lecture,
-            // la réconciliation d'arbre doit passer par l'interface.
-            client.LiveChanged += _ => DispatcherQueue.TryEnqueue(SynchroniserChat);
-        }
+        AssurerBranchementsChat(client);
+        RafraîchirAprèsChat(); // sidebar + récents fraîchis à chaque conversation créée
         SynchroniserChat();
     }
+
+    /// <summary>Câblages FENÊTRE du chat (follow-bottom, Échap, frames, Live) posés UNE
+    /// seule fois — extraits de DémarrerChat pour être partagés avec l'ouverture d'une
+    /// conversation existante (sidebar / récents), qui ne passe pas par une création.</summary>
+    private void AssurerBranchementsChat(Aven.Bridge.ConversationClient client)
+    {
+        if (_chatBranche) return;
+        _chatBranche = true;
+
+        // Follow-bottom : l'utilisateur re-arme en revenant au bas (parité « Dernier message »).
+        ChatScroll.ViewChanged += (_, _) =>
+        {
+            if (_chat is { } c)
+                c.FollowBottom = ChatScroll.VerticalOffset + ChatScroll.ViewportHeight >= ChatScroll.ExtentHeight - 40;
+        };
+
+        // Échap = Arrêter (parité v9.7 : raccourci global du tour en cours).
+        var échap = new Microsoft.UI.Xaml.Input.KeyboardAccelerator { Key = Windows.System.VirtualKey.Escape };
+        échap.Invoked += (_, args) =>
+        {
+            if (_chat?.Live.Busy == true)
+            {
+                ArrêterTour();
+                args.Handled = true;
+            }
+        };
+        TitleBar.KeyboardAccelerators.Add(échap);
+
+        // Mesure brute pour l'acceptation « 60 fps » : frames comptées pendant les
+        // tours (fenêtres d'une seconde, 30 s glissantes affichées dans le hint).
+        Microsoft.UI.Xaml.Media.CompositionTarget.Rendering += SurFrame;
+
+        // Live → lignes : les événements du moteur arrivent sur le thread de lecture,
+        // la réconciliation d'arbre doit passer par l'interface.
+        client.LiveChanged += _ => DispatcherQueue.TryEnqueue(SynchroniserChat);
+    }
+
+    private void RafraîchirAprèsChat()
+    {
+        _ = RafraîchirSidebarAsync();
+        _ = RafraîchirRecentsAsync();
+    }
+
+    // ── Jalon 2 (parité v10) : sidebar conversations, récents du hub, page Tâches ──
+
+    /// <summary>Ouvre une conversation EXISTANTE (clic sidebar, récents du hub ou
+    /// « dernière conversation » d'un mode) — parité openConversation du web.</summary>
+    private async void OuvrirConversation(string chatId, string agent, UIElement? source = null)
+    {
+        if (_espace is null || _boot.Client is null) return;
+        if (source is not null || PageView.Visibility != Visibility.Visible)
+            OuvrirPageDepuis(source); // flip si on vient du hub (masque les autres vues)
+        MasquerVues();
+        ChatScroll.Visibility = Visibility.Visible;
+        ComposerBar.Visibility = Visibility.Visible;
+        ChatSidebar.Visibility = Visibility.Visible;
+        PageTitle.Text = agent == "projet" ? "Projet" : NomAgent(agent);
+        PageHint.Text = "Conversation " + agent;
+
+        if (chatId == _chatId && _chat is not null)
+        {
+            SynchroniserChat(); // déjà ouverte : simple réaffichage
+            Composer.Focus(FocusState.Programmatic);
+            return;
+        }
+
+        var vm = new Aven.Bridge.ChatViewModel(_boot.Client, _espace,
+            marshal: action => DispatcherQueue.TryEnqueue(() => action()));
+        _chat = vm;
+        _chatId = chatId;
+        _chatAgent = agent;
+        _chatOuvert = true;
+        _chatEnCours = false;
+        vm.PropertyChanged += (_, _) => SynchroniserChat();
+        AssurerBranchementsChat(_boot.Client);
+        try
+        {
+            await vm.AttachExistingAsync(chatId); // transcript complet (sous-agents inclus)
+        }
+        catch (Exception erreur)
+        {
+            PageHint.Text = "Ouverture impossible : " + erreur.Message;
+        }
+        SynchroniserChat();
+        ScrollBas();
+        _ = RafraîchirSidebarAsync(); // l'actif de la sidebar suit
+        Composer.Focus(FocusState.Programmatic);
+    }
+
+    /// <summary>Crée une conversation pour l'agent donné et l'ouvre (boutons « Ouvrir »
+    /// des modes, « Nouvelle conversation » de la sidebar, carte Tâches).</summary>
+    private async void NouvelleConversation(string agent)
+    {
+        if (_espace is null || _boot.Client is null)
+        {
+            PageHint.Text = "Moteur indisponible : le boot n'a pas encore abouti.";
+            return;
+        }
+        if (PageView.Visibility != Visibility.Visible) OuvrirPageDepuis(null);
+        MasquerVues();
+        ChatScroll.Visibility = Visibility.Visible;
+        ComposerBar.Visibility = Visibility.Visible;
+        ChatSidebar.Visibility = Visibility.Visible;
+        ChatRows.Children.Clear();
+        _chatRendu = null;
+        _chatId = null;
+        _chatOuvert = false;
+        _chatAgent = agent;
+        PageTitle.Text = agent == "projet" ? "Projet" : NomAgent(agent);
+        PageHint.Text = "Création de la conversation...";
+        _chatEnCours = true;
+        await DémarrerChat(agent);
+    }
+
+    /// <summary>Recharge la sidebar (parité loadChats) : TOUTES les conversations,
+    /// groupées par agent (parité chatsGroupedByAgent v9.0.0).</summary>
+    private async Task RafraîchirSidebarAsync()
+    {
+        if (_espace is null) return;
+        SidebarTitre.Text = _sidebarArchivées ? "Archivées" : "Actives";
+        if (_boot.Client is null) { _sidebarChats = []; ConstruireSidebar(); return; }
+        if (_agentsTaches.Count == 0)
+        {
+            try { _agentsTaches = (await _boot.Client.ListAgentsAsync(_espace)).ToList(); }
+            catch { /* noms personnalisés indisponibles : les ids font foi */ }
+        }
+        try
+        {
+            _sidebarChats = (await _boot.Client.ListChatsAsync(
+                _espace, agent: null, includeArchived: _sidebarArchivées)).ToList();
+        }
+        catch (Exception erreur)
+        {
+            _sidebarChats = [];
+            System.Diagnostics.Debug.WriteLine("sidebar : " + erreur.Message);
+        }
+        ConstruireSidebar();
+    }
+
+    private string NomAgent(string id) =>
+        _agentsTaches.FirstOrDefault(a => a.Id == id)?.Name ?? id;
+
+    private void ConstruireSidebar()
+    {
+        SidebarListe.Children.Clear();
+        var filtre = _sidebarFiltre.Trim();
+        IEnumerable<Aven.Bridge.ChatInfo> visibles = _sidebarChats;
+        if (filtre.Length > 0)
+            visibles = visibles.Where(c => c.Title.Contains(filtre, StringComparison.OrdinalIgnoreCase));
+
+        var groupes = visibles.GroupBy(c => c.Agent ?? "").ToList();
+        // agents connus (ordre TABS) d'abord, « Autre » en dernier (parité groupChatsByAgent).
+        var ordre = groupes.Where(g => Aven.Bridge.ConversationClient.Tabs.Contains(g.Key)).ToList();
+        ordre.AddRange(groupes.Where(g => !Aven.Bridge.ConversationClient.Tabs.Contains(g.Key)));
+
+        foreach (var groupe in ordre)
+        {
+            var enTête = new Grid();
+            enTête.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            enTête.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var nom = new TextBlock
+            {
+                Text = groupe.Key.Length > 0 ? NomAgent(groupe.Key) : "Autre",
+                FontSize = 11,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Foreground = BrushDe("AvenMutedBrush"),
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            var compte = new TextBlock
+            {
+                Text = groupe.Count().ToString(),
+                FontSize = 11,
+                Foreground = BrushDe("AvenMutedBrush"),
+                VerticalAlignment = VerticalAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Right,
+            };
+            Grid.SetColumn(nom, 0);
+            Grid.SetColumn(compte, 1);
+            enTête.Children.Add(nom);
+            enTête.Children.Add(compte);
+            SidebarListe.Children.Add(enTête);
+
+            foreach (var chat in groupe)
+                SidebarListe.Children.Add(RangéeConversation(chat));
+        }
+
+        if (SidebarListe.Children.Count == 0)
+        {
+            SidebarListe.Children.Add(new TextBlock
+            {
+                Text = "Rien à afficher ici.",
+                FontSize = 12,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = BrushDe("AvenMutedBrush"),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(0, 18, 0, 0),
+            });
+        }
+    }
+
+    /// <summary>Une conversation de la sidebar : titre cliquable + actions (renommer,
+    /// archiver/désarchiver, supprimer) — parité .chat du web.</summary>
+    private Border RangéeConversation(Aven.Bridge.ChatInfo chat)
+    {
+        var bordure = new Border
+        {
+            CornerRadius = new CornerRadius(8),
+            BorderBrush = BrushDe("AvenBorderBrush"),
+            BorderThickness = new Thickness(1),
+            Background = _chatId == chat.Id ? BrushDe("AvenPanelSoftBrush") : BrushDe("AvenPanelBrush"),
+            Padding = new Thickness(8, 4, 8, 4),
+        };
+        var grille = new Grid();
+        grille.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grille.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        if (_renommageId == chat.Id)
+        {
+            var zone = new TextBox
+            {
+                Text = chat.Title,
+                MinHeight = 30,
+                FontSize = 12,
+                Background = BrushDe("AvenPanelBrush"),
+                BorderBrush = BrushDe("AvenAccentBrush"),
+            };
+            var idRenommage = chat.Id;
+            zone.KeyDown += (_, args) =>
+            {
+                if (args.Key == Windows.System.VirtualKey.Enter)
+                {
+                    args.Handled = true;
+                    _ = RenommerAsync(idRenommage, zone.Text);
+                }
+                else if (args.Key == Windows.System.VirtualKey.Escape)
+                {
+                    args.Handled = true;
+                    _renommageId = null;
+                    ConstruireSidebar();
+                }
+            };
+            zone.LostFocus += (_, _) =>
+            {
+                if (_renommageId == idRenommage) _ = RenommerAsync(idRenommage, zone.Text);
+            };
+            Grid.SetColumn(zone, 0);
+            grille.Children.Add(zone);
+        }
+        else
+        {
+            var contenu = new StackPanel { Spacing = 1 };
+            contenu.Children.Add(new TextBlock
+            {
+                Text = chat.Title,
+                FontSize = 12,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                Foreground = BrushDe("AvenTextBrush"),
+            });
+            contenu.Children.Add(new TextBlock
+            {
+                Text = DateCourte(chat.Updated),
+                FontSize = 10,
+                Foreground = BrushDe("AvenMutedBrush"),
+            });
+            var main = new Button
+            {
+                Content = contenu,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = HorizontalAlignment.Left,
+                MinHeight = 36,
+                Padding = new Thickness(4, 2, 4, 2),
+                Background = BrushDe("AvenPanelSoftBrush"),
+                BorderThickness = new Thickness(0),
+                CornerRadius = new CornerRadius(6),
+            };
+            AutomationProperties.SetName(main, "Conversation : " + chat.Title);
+            var idC = chat.Id;
+            var agentC = chat.Agent ?? _chatAgent;
+            main.Click += (_, _) => OuvrirConversation(idC, agentC);
+            Grid.SetColumn(main, 0);
+            grille.Children.Add(main);
+
+            var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
+            actions.Children.Add(ActionBouton("\u270E", "Renommer : " + chat.Title,
+                (_, _) => { _renommageId = chat.Id; ConstruireSidebar(); }));
+            actions.Children.Add(ActionBouton(_sidebarArchivées ? "R" : "A",
+                (_sidebarArchivées ? "Désarchiver : " : "Archiver : ") + chat.Title,
+                async (_, _) => await BasculerArchiveAsync(chat.Id, !_sidebarArchivées)));
+            actions.Children.Add(ActionBouton("\u00D7", "Supprimer : " + chat.Title,
+                async (_, _) => await SupprimerAsync(chat.Id)));
+            Grid.SetColumn(actions, 1);
+            grille.Children.Add(actions);
+        }
+
+        bordure.Child = grille;
+        return bordure;
+    }
+
+    private Button ActionBouton(string contenu, string nomUi, RoutedEventHandler clic)
+    {
+        var bouton = new Button
+        {
+            Content = contenu,
+            MinWidth = 24,
+            MinHeight = 26,
+            Padding = new Thickness(4, 2, 4, 2),
+            FontSize = 11,
+            Background = BrushDe("AvenPanelSoftBrush"),
+            BorderThickness = new Thickness(0),
+            Foreground = BrushDe("AvenTextBrush"),
+        };
+        AutomationProperties.SetName(bouton, nomUi);
+        bouton.Click += clic;
+        return bouton;
+    }
+
+    private static string DateCourte(long updated)
+    {
+        if (updated <= 0) return "";
+        try { return DateTimeOffset.FromUnixTimeMilliseconds(updated).ToLocalTime().ToString("dd MMM"); }
+        catch { return ""; }
+    }
+
+    private async Task RenommerAsync(string id, string titre)
+    {
+        _renommageId = null;
+        try
+        {
+            if (_boot.Client is not null) await _boot.Client.RenameChatAsync(id, titre);
+        }
+        catch (Exception erreur) { PageHint.Text = "Renommage impossible : " + erreur.Message; }
+        await RafraîchirSidebarAsync();
+        _ = RafraîchirRecentsAsync();
+    }
+
+    private async Task BasculerArchiveAsync(string id, bool archiver)
+    {
+        if (_espace is null) return;
+        try { Aven.Bridge.ChatsService.SetArchived(_espace, id, archiver); }
+        catch (Exception erreur) { PageHint.Text = "Archivage impossible : " + erreur.Message; }
+        await RafraîchirSidebarAsync();
+        _ = RafraîchirRecentsAsync();
+    }
+
+    private async Task SupprimerAsync(string id)
+    {
+        if (_espace is null || _boot.Client is null) return;
+        try { await _boot.Client.DeleteChatAsync(id, _espace); }
+        catch (Exception erreur) { PageHint.Text = "Suppression impossible : " + erreur.Message; return; }
+        if (_chatId == id)
+        {
+            // La conversation ouverte disparaît : retour au hub (parité removeChat).
+            _chat = null;
+            _chatId = null;
+            _chatOuvert = false;
+            _chatRendu = null;
+            ChatRows.Children.Clear();
+            OnHome(this, new RoutedEventArgs());
+        }
+        await RafraîchirSidebarAsync();
+        _ = RafraîchirRecentsAsync();
+    }
+
+    /// <summary>Hub enrichi (parité .home-recent) : les 3 dernières conversations,
+    /// clic = réouverture. Nom UIA « Reprendre : » (jamais le préfixe d'une carte).</summary>
+    private async Task RafraîchirRecentsAsync()
+    {
+        if (_espace is null || _boot.Client is null) return;
+        try
+        {
+            var récentes = (await _boot.Client.ListChatsAsync(_espace)).Take(3).ToList();
+            HubRecentsList.Children.Clear();
+            foreach (var chat in récentes)
+            {
+                var pile = new StackPanel { Spacing = 1 };
+                pile.Children.Add(new TextBlock
+                {
+                    Text = chat.Title,
+                    FontSize = 12,
+                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                    Foreground = BrushDe("AvenTextBrush"),
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                });
+                var meta = (chat.Agent ?? "") + (chat.Model is { Length: > 0 } modèle ? " · " + modèle : "");
+                pile.Children.Add(new TextBlock
+                {
+                    Text = meta,
+                    FontSize = 10,
+                    Foreground = BrushDe("AvenMutedBrush"),
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                });
+                var bouton = new Button
+                {
+                    Content = pile,
+                    HorizontalAlignment = HorizontalAlignment.Stretch,
+                    HorizontalContentAlignment = HorizontalAlignment.Left,
+                    MinHeight = 42,
+                    Padding = new Thickness(10, 6, 10, 6),
+                    Background = BrushDe("AvenPanelSoftBrush"),
+                    BorderThickness = new Thickness(0),
+                    CornerRadius = new CornerRadius(10),
+                };
+                AutomationProperties.SetName(bouton, "Reprendre : " + chat.Title);
+                var id = chat.Id;
+                var agent = chat.Agent ?? "projet";
+                bouton.Click += (_, _) => OuvrirConversation(id, agent, bouton);
+                HubRecentsList.Children.Add(bouton);
+            }
+            if (récentes.Count == 0)
+            {
+                HubRecentsList.Children.Add(new TextBlock
+                {
+                    Text = "Commencez une conversation pour la retrouver ici.",
+                    FontSize = 11,
+                    TextWrapping = TextWrapping.Wrap,
+                    Foreground = BrushDe("AvenMutedBrush"),
+                });
+            }
+        }
+        catch (Exception erreur)
+        {
+            System.Diagnostics.Debug.WriteLine("récents : " + erreur.Message);
+        }
+    }
+
+    // ── Page Tâches (parité v9.6.0) : agent principal + modes ────────────────────
+
+    private void OuvrirTaches(UIElement? source)
+    {
+        PageTitle.Text = "Tâches";
+        PageHint.Text = "Un agent principal, des modes par besoin — l'orchestrateur délègue aux spécialistes.";
+        OuvrirPageDepuis(source); // flip hub → page AVANT d'allumer la vue
+        TasksScroll.Visibility = Visibility.Visible;
+        _ = ChargerTachesAsync();
+    }
+
+    private async Task ChargerTachesAsync()
+    {
+        if (_espace is null || _boot.Client is null)
+        {
+            TasksPrincipalOuvrir.IsEnabled = false; // parité tasks-card-off
+            return;
+        }
+        try { _agentsTaches = (await _boot.Client.ListAgentsAsync(_espace)).ToList(); }
+        catch { _agentsTaches = []; }
+
+        var principal = _agentsTaches.FirstOrDefault(a => a.Id == "projet");
+        TasksPrincipalNom.Text = principal?.Name ?? "Projet";
+        TasksPrincipalOuvrir.IsEnabled = principal is not null;
+
+        List<Aven.Bridge.ChatInfo> toutes = [];
+        try { toutes = (await _boot.Client.ListChatsAsync(_espace)).ToList(); }
+        catch { /* pas de dernière conversation affichée */ }
+
+        var modes = new (string Id, string Repli, string Desc)[]
+        {
+            ("code", "Code", "Écrire, corriger, exécuter du code et des commandes."),
+            ("analyse", "Analyse", "Données, chiffres, statistiques, rapports."),
+            ("recherche", "Recherche", "Documentation, comparaisons, veille, explications."),
+            ("projet", "Tâche complexe", "Orchestre code + analyse + recherche, puis synthétise."),
+        };
+
+        TasksModes.Children.Clear();
+        foreach (var (id, repli, desc) in modes)
+        {
+            var agent = _agentsTaches.FirstOrDefault(a => a.Id == id);
+            var dernière = toutes.FirstOrDefault(c => c.Agent == id);
+            var pile = new StackPanel { Spacing = 6 };
+            pile.Children.Add(new TextBlock
+            {
+                Text = id,
+                FontSize = 11,
+                Foreground = BrushDe("AvenMutedBrush"),
+            });
+            pile.Children.Add(new TextBlock
+            {
+                Text = agent?.Name ?? repli,
+                FontSize = 15,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Foreground = BrushDe("AvenTextBrush"),
+            });
+            pile.Children.Add(new TextBlock
+            {
+                Text = desc,
+                FontSize = 12,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = BrushDe("AvenMutedBrush"),
+            });
+            if (dernière is not null)
+            {
+                var idDernier = dernière.Id;
+                var ouvrirDernier = new Button
+                {
+                    Content = dernière.Title,
+                    HorizontalAlignment = HorizontalAlignment.Stretch,
+                    HorizontalContentAlignment = HorizontalAlignment.Left,
+                    MinHeight = 32,
+                    Padding = new Thickness(10, 4, 10, 4),
+                    FontSize = 12,
+                    Background = BrushDe("AvenPanelSoftBrush"),
+                    BorderThickness = new Thickness(0),
+                    CornerRadius = new CornerRadius(8),
+                    Foreground = BrushDe("AvenTextBrush"),
+                };
+                AutomationProperties.SetName(ouvrirDernier, "Dernière conversation " + id + " : " + dernière.Title);
+                ouvrirDernier.Click += (_, _) => OuvrirConversation(idDernier, id);
+                pile.Children.Add(ouvrirDernier);
+            }
+            var ouvrir = new Button
+            {
+                Content = "Ouvrir",
+                IsEnabled = agent is not null,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                MinHeight = 32,
+                Padding = new Thickness(14, 4, 14, 4),
+                Background = BrushDe("AvenPanelSoftBrush"),
+                Foreground = BrushDe("AvenTextBrush"),
+            };
+            var agentId = id;
+            ouvrir.Click += (_, _) => NouvelleConversation(agentId);
+            pile.Children.Add(ouvrir);
+
+            var carte = new Border
+            {
+                CornerRadius = new CornerRadius(12),
+                Padding = new Thickness(14, 12, 14, 12),
+                Background = BrushDe("AvenPanelBrush"),
+                BorderBrush = agent is null ? BrushDe("AvenBorderBrush") : BrushDe("AvenAccentBorderBrush"),
+                BorderThickness = new Thickness(1),
+                Child = pile,
+            };
+            if (agent is null) carte.Opacity = 0.55; // parité tasks-card-off
+            TasksModes.Children.Add(carte);
+        }
+    }
+
+    // ── Handlers XAML de la sidebar / page Tâches ────────────────────────────────
+
+    private void OnSidebarNouvelle(object sender, RoutedEventArgs e) => NouvelleConversation(_chatAgent);
+
+    private void OnSidebarArchive(object sender, RoutedEventArgs e)
+    {
+        _sidebarArchivées = !_sidebarArchivées;
+        SidebarArchive.Content = _sidebarArchivées ? "Revenir aux actives" : "Voir les archivées";
+        _ = RafraîchirSidebarAsync();
+    }
+
+    private void OnSidebarRecherche(object sender, TextChangedEventArgs e)
+    {
+        _sidebarFiltre = SidebarRecherche.Text;
+        ConstruireSidebar();
+    }
+
+    private void OnTasksPrincipal(object sender, RoutedEventArgs e) => NouvelleConversation("projet");
 
     private void OnComposerKey(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
     {
@@ -806,6 +1347,8 @@ public sealed partial class MainWindow : Window
     {
         ChatScroll.Visibility = Visibility.Collapsed;
         ComposerBar.Visibility = Visibility.Collapsed;
+        ChatSidebar.Visibility = Visibility.Collapsed;
+        TasksScroll.Visibility = Visibility.Collapsed;
         FilesView.Visibility = Visibility.Collapsed;
         NotesScroll.Visibility = Visibility.Collapsed;
         TerminalView.Visibility = Visibility.Collapsed;
@@ -1056,11 +1599,17 @@ public sealed partial class MainWindow : Window
 
         // Diff incrémental : le VM ne touche que les lignes changées ; ici on reflète
         // l'ObservableCollection (insertions) et les propriétés (INPC) dans l'arbre XAML.
-        if (ChatRows.Children.Count != chat.Rows.Count)
+        // Changement de conversation (sidebar / récents) : les bulles de l'ANCIEN VM sont
+        // jetées entièrement — patcher des Tags périmés afficherait le vieux transcript.
+        if (!ReferenceEquals(_chatRendu, chat))
         {
-            for (var i = ChatRows.Children.Count; i < chat.Rows.Count; i++)
-                ChatRows.Children.Add(FabriqueBulle(chat.Rows[i]));
+            ChatRows.Children.Clear();
+            _chatRendu = chat;
         }
+        while (ChatRows.Children.Count > chat.Rows.Count)
+            ChatRows.Children.RemoveAt(ChatRows.Children.Count - 1);
+        for (var i = ChatRows.Children.Count; i < chat.Rows.Count; i++)
+            ChatRows.Children.Add(FabriqueBulle(chat.Rows[i]));
         for (var i = 0; i < Math.Min(ChatRows.Children.Count, chat.Rows.Count); i++)
         {
             if (ChatRows.Children[i] is Border bordure && bordure.Tag is Aven.Bridge.ChatRow ligne) RemplirBulle(bordure, ligne);

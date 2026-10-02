@@ -16,6 +16,12 @@ public sealed record ChatMsg(
 
 public sealed record ToolMsg(string Id, string Name, string Status, string? Output = null);
 
+/// <summary>Conversation listée (parité Chat de web/src/types.ts).</summary>
+public sealed record ChatInfo(string Id, string Title, string? Agent, string? Model, long Updated, bool Archived);
+
+/// <summary>Agent affichable (parité Agent de web/src/types.ts).</summary>
+public sealed record AgentInfo(string Id, string Name, string DefaultName, string Description);
+
 /// <summary>Référence de modèle « fournisseur/modèle » — parité model-ref.ts (coupe au PREMIER « / »).</summary>
 public static class ModelRef
 {
@@ -77,6 +83,8 @@ public sealed class ConversationClient(EngineClient engine)
     public async Task<(string Id, string Title, string Agent, string Model)> CreateChatAsync(
         string agent, string workspace, CancellationToken cancellation = default)
     {
+        if (!Tabs.Contains(agent))
+            throw new InvalidOperationException($"Agent inconnu : {agent}"); // parité isTab (ops.createChat)
         var model = await engine.CallAsync("router.pick", new { agent }, cancellation).ConfigureAwait(false)
             ?? throw new InvalidOperationException($"Aucun modèle disponible pour l'agent « {agent} ». Vérifie les fournisseurs actifs et la table de priorités.");
         var reference = Jsonx.S(model) ?? "";
@@ -101,6 +109,80 @@ public sealed class ConversationClient(EngineClient engine)
         }
         return (Jsonx.S(créé["id"]) ?? "", Jsonx.S(créé["title"]) ?? TitreDefaut,
             Jsonx.S(fresh?["agent"]) ?? Jsonx.S(créé["agent"]) ?? agent, resolved);
+    }
+
+    /// <summary>Onglets admis (parité TABS de electron/opencode-bridge.ts v9.0.0).</summary>
+    public static readonly string[] Tabs = ["projet", "code", "recherche", "analyse"];
+
+    /// <summary>Liste des conversations — parité ops.chats : session.list desc (100),
+    /// sessions de sous-agents (parentID) exclues, filtre agent et archivées.</summary>
+    public async Task<IReadOnlyList<ChatInfo>> ListChatsAsync(
+        string workspace, string? agent = null, bool includeArchived = false, CancellationToken cancellation = default)
+    {
+        var page = await engine.CallAsync("session.list",
+            new { directory = workspace, order = "desc", limit = 100 }, cancellation).ConfigureAwait(false);
+        var archivées = ChatsService.ListArchived(workspace);
+        var chats = new List<ChatInfo>();
+        foreach (var s in Jsonx.At(page, "data") as JsonArray ?? [])
+        {
+            if (Jsonx.At(s, "parentID") is not null) continue; // sous-agents hors liste
+            var id = Jsonx.S(Jsonx.At(s, "id"));
+            if (string.IsNullOrEmpty(id)) continue;
+            var sAgent = Jsonx.S(Jsonx.At(s, "agent"));
+            if (agent is not null && sAgent != agent) continue;
+            var estArchivée = archivées.Contains(id);
+            if (!includeArchived && estArchivée) continue;
+            chats.Add(new ChatInfo(id,
+                Jsonx.S(Jsonx.At(s, "title")) ?? "Sans titre",
+                sAgent,
+                ModelRef.Of(Jsonx.At(s, "model")),
+                Jsonx.N(Jsonx.At(Jsonx.At(s, "time"), "updated")) ?? 0,
+                estArchivée));
+        }
+        return chats;
+    }
+
+    /// <summary>Agents affichables — parité listAgents : agent.list filtré (ni subagent,
+    /// ni hidden, ni hors TABS) avec les noms personnalisés de l'espace.</summary>
+    public async Task<IReadOnlyList<AgentInfo>> ListAgentsAsync(string workspace, CancellationToken cancellation = default)
+    {
+        var reponse = await engine.CallAsync("agent.list",
+            new { location = new { directory = workspace } }, cancellation).ConfigureAwait(false);
+        var noms = ChatsService.LoadAgentNames(workspace);
+        var agents = new List<AgentInfo>();
+        foreach (var a in Jsonx.At(reponse, "data") as JsonArray ?? [])
+        {
+            var id = Jsonx.S(Jsonx.At(a, "id"));
+            if (string.IsNullOrEmpty(id) || !Tabs.Contains(id)) continue;
+            if (Jsonx.S(Jsonx.At(a, "mode")) == "subagent") continue;
+            if (Jsonx.At(a, "hidden") is JsonValue caché && caché.TryGetValue<bool>(out var estCaché) && estCaché) continue;
+            var parDéfaut = Jsonx.S(Jsonx.At(a, "name")) ?? id;
+            agents.Add(new AgentInfo(id,
+                noms.TryGetValue(id, out var nom) ? nom : parDéfaut,
+                parDéfaut,
+                Jsonx.S(Jsonx.At(a, "description")) ?? ""));
+        }
+        return agents;
+    }
+
+    /// <summary>Supprime une conversation (parité deleteChat) : interrupt best effort,
+    /// session.remove, puis nettoyage de l'entrée d'archive.</summary>
+    public async Task DeleteChatAsync(string sessionId, string workspace, CancellationToken cancellation = default)
+    {
+        try { await engine.CallAsync("session.interrupt", new { sessionID = sessionId }, cancellation).ConfigureAwait(false); }
+        catch { /* pas de tour en cours */ }
+        await engine.CallAsync("session.remove", new { sessionID = sessionId }, cancellation).ConfigureAwait(false);
+        ChatsService.SetArchived(workspace, sessionId, false);
+    }
+
+    /// <summary>Renomme une conversation (parité renameChat) : trim, 120 caractères max, non vide.</summary>
+    public async Task<string> RenameChatAsync(string sessionId, string title, CancellationToken cancellation = default)
+    {
+        var clean = title.Trim();
+        if (clean.Length == 0) throw new InvalidOperationException("Le titre ne peut pas être vide.");
+        if (clean.Length > 120) clean = clean[..120];
+        await engine.CallAsync("session.update", new { sessionID = sessionId, title = clean }, cancellation).ConfigureAwait(false);
+        return clean;
     }
 
     /// <summary>Envoie un message : titre auto au 1er message, beforeSend, prompt — parité send.</summary>

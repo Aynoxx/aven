@@ -59,6 +59,22 @@
         <Grid Grid.Row="2">
             <!-- HUB : 4 cartes &#224; 90&#176; autour du centre (parit&#233; .home-hub) -->
             <Grid x:Name="HubView" Visibility="Visible">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <!-- R&#201;CENTS (parit&#233; .home-recent du hub web) : 3 derni&#232;res
+                     conversations, clic = r&#233;ouverture. Nom UIA pr&#233;fix&#233; « Reprendre : »
+                     pour ne jamais croiser les pr&#233;fixes de clic du smoke (« Projet »…). -->
+                <StackPanel Grid.Column="0" x:Name="HubRecents" Width="240" Margin="20,0,0,0"
+                            VerticalAlignment="Center" Spacing="8">
+                    <TextBlock Text="R&#201;CENTS" FontSize="11" FontWeight="SemiBold"
+                               Foreground="{ThemeResource AvenAccentBrush}" />
+                    <TextBlock Text="Reprendre rapidement" FontSize="14" FontWeight="SemiBold"
+                               Foreground="{ThemeResource AvenTextBrush}" />
+                    <StackPanel x:Name="HubRecentsList" Spacing="4" />
+                </StackPanel>
+                <Grid Grid.Column="1">
                 <Grid.Resources>
                     <Style TargetType="Button" x:Key="HubCardStyle">
                         <Setter Property="Width" Value="150" />
@@ -120,10 +136,65 @@
                                    Foreground="{ThemeResource AvenMutedBrush}" />
                     </StackPanel>
                 </Button>
+                </Grid>
             </Grid>
 
             <!-- PAGE CIBLE : socle de phase 2 (les vues r&#233;elles arrivent en phases 3-6) -->
             <Grid x:Name="PageView" Visibility="Collapsed">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <!-- Sidebar conversations (parit&#233; .sidebar web v9.0.0) : liste group&#233;e
+                     par agent, recherche, bascule archiv&#233;es, actions — visible UNIQUEMENT
+                     sur la vue chat. -->
+                <Border x:Name="ChatSidebar" Grid.Column="0" Visibility="Collapsed" Width="260"
+                        Background="{ThemeResource AvenPanelBrush}"
+                        BorderBrush="{ThemeResource AvenBorderBrush}" BorderThickness="0,0,1,0">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid Grid.Row="0" Margin="14,12,14,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Spacing="2">
+                                <TextBlock Text="CONVERSATIONS" FontSize="11" FontWeight="SemiBold"
+                                           Foreground="{ThemeResource AvenAccentBrush}" />
+                                <TextBlock x:Name="SidebarTitre" Text="Actives" FontSize="14" FontWeight="SemiBold"
+                                           Foreground="{ThemeResource AvenTextBrush}" />
+                            </StackPanel>
+                            <Button Grid.Column="1" x:Name="SidebarNouvelle" Content="+" Click="OnSidebarNouvelle"
+                                    MinHeight="30" MinWidth="34" Padding="8,4"
+                                    Background="{ThemeResource AvenAccentBrush}" Foreground="White"
+                                    AutomationProperties.Name="Nouvelle conversation" />
+                        </Grid>
+                        <TextBox x:Name="SidebarRecherche" Grid.Row="1" PlaceholderText="Rechercher..."
+                                 Margin="14,10,14,0" MinHeight="32" TextChanged="OnSidebarRecherche"
+                                 Background="{ThemeResource AvenPanelBrush}"
+                                 BorderBrush="{ThemeResource AvenBorderBrush}" />
+                        <Button x:Name="SidebarArchive" Grid.Row="2" Content="Voir les archiv&#233;es"
+                                Click="OnSidebarArchive" Margin="14,8,14,0" MinHeight="30"
+                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                Background="{ThemeResource AvenPanelSoftBrush}" BorderThickness="0"
+                                Foreground="{ThemeResource AvenTextBrush}" />
+                        <ScrollViewer Grid.Row="3" Margin="0,8,0,0">
+                            <StackPanel x:Name="SidebarListe" Spacing="4" Margin="14,0,14,0" />
+                        </ScrollViewer>
+                        <Button Grid.Row="4" x:Name="SidebarNouvellePied" Content="+ Nouvelle conversation"
+                                Click="OnSidebarNouvelle" Margin="14,8,14,14" MinHeight="34"
+                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                Background="{ThemeResource AvenPanelSoftBrush}"
+                                Foreground="{ThemeResource AvenTextBrush}" />
+                    </Grid>
+                </Border>
+                <Grid Grid.Column="1">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
@@ -162,6 +233,39 @@
                         </StackPanel>
                     </ScrollViewer>
                 </Grid>
+                <!-- Page T&#226;ches (parit&#233; v9.6.0) : agent principal + modes — cartes
+                     construites en C# (agents charg&#233;s + derni&#232;re conversation). -->
+                <ScrollViewer x:Name="TasksScroll" Grid.Row="1" Visibility="Collapsed">
+                    <StackPanel MaxWidth="900" Spacing="12" Margin="32,24,32,42" HorizontalAlignment="Left">
+                        <Border CornerRadius="14" Padding="18"
+                                Background="{ThemeResource AvenPanelBrush}"
+                                BorderBrush="{ThemeResource AvenAccentBorderBrush}" BorderThickness="1">
+                            <StackPanel Spacing="8">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock x:Name="TasksPrincipalId" Text="projet" FontSize="11"
+                                               VerticalAlignment="Center"
+                                               Foreground="{ThemeResource AvenMutedBrush}" />
+                                    <Border Background="{ThemeResource AvenPanelSoftBrush}" CornerRadius="8" Padding="6,2">
+                                        <TextBlock Text="agent principal" FontSize="10"
+                                                   Foreground="{ThemeResource AvenAccentBrush}" />
+                                    </Border>
+                                </StackPanel>
+                                <TextBlock x:Name="TasksPrincipalNom" Text="Projet" FontSize="18" FontWeight="SemiBold"
+                                           Foreground="{ThemeResource AvenTextBrush}" />
+                                <TextBlock x:Name="TasksPrincipalDesc" FontSize="13" TextWrapping="Wrap"
+                                           Foreground="{ThemeResource AvenMutedBrush}"
+                                           Text="Comprend la demande, la d&#233;coupe, d&#233;l&#232;gue &#224; code / analyse / recherche, puis synth&#233;tise." />
+                                <Button x:Name="TasksPrincipalOuvrir" Content="Ouvrir une conversation"
+                                        Click="OnTasksPrincipal" MinHeight="36" Padding="14,6"
+                                        HorizontalAlignment="Left"
+                                        Background="{ThemeResource AvenAccentBrush}" Foreground="White" />
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Text="MODES" FontSize="11" FontWeight="SemiBold" Margin="0,6,0,0"
+                                   Foreground="{ThemeResource AvenAccentBrush}" />
+                        <StackPanel x:Name="TasksModes" Spacing="12" />
+                    </StackPanel>
+                </ScrollViewer>
                 <ScrollViewer x:Name="NotesScroll" Grid.Row="1" Visibility="Collapsed">
                     <StackPanel MaxWidth="980" Spacing="12" Margin="20,12,20,16" HorizontalAlignment="Left">
                         <Grid>
@@ -314,6 +418,7 @@
                                 Foreground="{ThemeResource AvenTextBrush}" />
                     </StackPanel>
                 </ScrollViewer>
+                </Grid>
             </Grid>
         </Grid>
 

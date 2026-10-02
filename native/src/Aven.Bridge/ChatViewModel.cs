@@ -198,8 +198,52 @@ public sealed class ChatViewModel
         string agent, CancellationToken cancellation = default) =>
         _client.CreateChatAsync(agent, _workspace, cancellation);
 
-    public Task AttachExistingAsync(string chatId, CancellationToken cancellation = default) =>
-        Task.CompletedTask; // phase 4 : relecture via MessagesAsync
+    /// <summary>Ouvre une conversation EXISTANTE (parité openConversation) : reset des
+    /// lignes, relecture du transcript complet (sous-agents inclus, tri chronologique)
+    /// puis branchement live. Les bulles agent chargées sont enregistrées dans
+    /// _agentRows (id = assistantMessageID) : un delta qui arrive pendant ou après la
+    /// relecture PATCH la ligne au lieu d'en créer une doublon.</summary>
+    public async Task AttachExistingAsync(string chatId, CancellationToken cancellation = default)
+    {
+        var messages = await _client.MessagesAsync(chatId, _workspace, cancellation).ConfigureAwait(false);
+
+        var lignes = new List<(string Id, ChatRow Row)>();
+        foreach (var m in messages)
+        {
+            if (m.Role == "user")
+            {
+                lignes.Add(("", new ChatRow(ChatRowKind.User, m.Text)));
+                continue;
+            }
+            var ligne = new ChatRow(ChatRowKind.Agent, m.Text, m.Child ? "sous-agent" : null);
+            if (m.Tools is { Count: > 0 })
+            {
+                ligne.PatchTools(string.Join(" · ", m.Tools
+                    .GroupBy(t => t.Name)
+                    .Select(g => g.Count() > 1 ? $"{g.Key} ×{g.Count()}" : g.Key)));
+            }
+            lignes.Add((m.Id, ligne));
+            if (m.Error is { Length: > 0 }) lignes.Add(("", new ChatRow(ChatRowKind.Error, m.Error)));
+        }
+
+        void Remplir()
+        {
+            _agentRows.Clear();
+            _formRows.Clear();
+            Rows.Clear();
+            foreach (var (id, ligne) in lignes)
+            {
+                Rows.Add(ligne);
+                if (id.Length > 0) _agentRows.Add((id, ligne));
+            }
+            FollowBottom = true;
+            OnPropertyChanged(nameof(Busy));
+            OnPropertyChanged(nameof(Error));
+        }
+
+        Attach(chatId); // abonnement live : les événements ne sont pas perdus pendant la relecture
+        if (_marshal is { } poster) poster(Remplir); else Remplir();
+    }
 
     public async Task SendAsync(string text, CancellationToken cancellation = default)
     {
