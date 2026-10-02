@@ -8,23 +8,32 @@
 #   1. hub       : les 4 cartes sont presentes et cliquables
 #   2. notes     : carte Notes -> "+ Nouvelle" -> editeur visible -> "Annuler" le ferme
 #   3. retour    : "Retour au hub" ramene bien le hub
-#   4. chat      : 1 seul spawn node moteur a la 1re ouverture, AUCUN re-spawn
+#   4. fichiers  : carte Fichiers -> liste remplie -> clic dossier -> "Dossier
+#                  parent" monte d'un niveau puis disparait a la racine
+#   5. chat      : 1 seul spawn node moteur a la 1re ouverture, AUCUN re-spawn
 #                  a la 2e (garde _chatOuvert - regressions de release classiques)
-#   5. terminal  : ouverture de la vue + spawn node PTY (descendant du process app)
-#   6. parametres: panneau version affiche
+#   6. terminal  : ouverture de la vue + spawn node PTY (descendant du process app)
+#   7. parametres: panneau version affiche
 # Verdict : "SMOKE_OK" + code 0, ou "SMOKE_KO - etape [...] : ..." + code 1
-# (avec dump UIA complet dans native\.out\smoke-uia.txt pour diagnostic).
+# (avec dump UIA complet dans native\.out\smoke-uia-<arch>.txt pour diagnostic).
+#
+# Mode multi-arch : -Archs x64,x86,arm64 fume TOUTES les cibles en une execution.
+# Une arch non executable sur la machine hote (zip arm64 sous Windows x64 : aucune
+# emulation dans ce sens) est SAUTER avec une ligne SMOKE_SKIP explicite - la
+# validation arm64 se fait donc sur un hote ARM64 (CI ou machine cible).
 #
 # ATTENTION : ce fichier doit rester 100% ASCII - PowerShell lit les .ps1 sans
 # BOM en code page ANSI et tout accent casse le parsing (piege recurrent du
-# projet). Les caracteres UI (accents, fleches) sont construits via [char]0x....
+# projet). Les caracteres UI (accents, fleches, emoji dossier) sont construits
+# via [char]0x....
 #
 # Usage :
-#   powershell -NoProfile -File scripts/smoke-native.ps1              # zip x64 le plus recent
-#   powershell -NoProfile -File scripts/smoke-native.ps1 -Zip <zip>   # zip portable precis
-#   powershell -NoProfile -File scripts/smoke-native.ps1 -Dump        # dump UIA de l'app puis sortie
-#   powershell -NoProfile -File scripts/smoke-native.ps1 -Conserver   # garde le dossier scratch
-#   powershell -NoProfile -File scripts/smoke-native.ps1 -Dossier <dossier>  # layout deja extrait
+#   powershell -NoProfile -File scripts/smoke-native.ps1                       # zip x64 le plus recent
+#   powershell -NoProfile -File scripts/smoke-native.ps1 -Zip <zip>            # zip portable precis
+#   powershell -NoProfile -File scripts/smoke-native.ps1 -Archs x64,x86,arm64  # multi-arch d'un coup
+#   powershell -NoProfile -File scripts/smoke-native.ps1 -Dump                 # dump UIA puis sortie
+#   powershell -NoProfile -File scripts/smoke-native.ps1 -Conserver            # garde le dossier scratch
+#   powershell -NoProfile -File scripts/smoke-native.ps1 -Dossier <dossier>    # layout deja extrait
 #
 # PIEGES project evites ici : variable locale JAMAIS homonyme d'un parametre
 # (les variables sont insensibles a la casse), match de noms UIA en PREFIXE
@@ -33,6 +42,7 @@
 # (jamais les nodes des autres sessions du poste).
 param(
     [string]$Zip = "",
+    [string]$Archs = "",
     [string]$Dossier = "",
     [switch]$Conserver,
     [switch]$Dump
@@ -44,8 +54,8 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 
 $racine = Split-Path -Parent $PSScriptRoot
 $outDir = Join-Path $racine "native\.out"
-$fichierDump = Join-Path $outDir "smoke-uia.txt"
 
+$script:Tag = "zip"   # tag du zip en cours (x64/x86/arm64) : dump + messages
 $script:Etape = "init"
 $script:Raison = ""
 $script:Fen = $null
@@ -129,8 +139,9 @@ function Dump-Arbre {
         }
     } catch { }
     New-Item -ItemType Directory -Path $outDir -Force | Out-Null
+    $fichierDump = Join-Path $outDir ("smoke-uia-" + $script:Tag + ".txt")
     $lignes | Set-Content -Path $fichierDump -Encoding UTF8
-    Write-Host ("[smoke] dump UIA (" + $lignes.Count + " noeuds) : " + $fichierDump)
+    Write-Host ("[smoke] dump UIA [" + $script:Tag + "] (" + $lignes.Count + " noeuds) : " + $fichierDump)
 }
 
 function Echec([string]$raison) {
@@ -186,7 +197,7 @@ function Nodes-App {
     return $resultat
 }
 
-# Attend l'apparition d'au moins un node NON connu ; $null/[] = delai depasse.
+# Attend l'apparition d'au moins un node NON connu ; tableau vide = delai depasse.
 function Attendre-Nouveaux {
     param([int]$pidApp, [int[]]$dejaConnus, [int]$attenteMs, [switch]$Direct)
     $deadline = (Get-Date).AddMilliseconds($attenteMs)
@@ -211,6 +222,36 @@ function Nodes-Stables([int]$pidApp, [int]$attenteMs = 30000) {
         if ((Get-Date) -ge $deadline) { return $n }
         Start-Sleep -Seconds 1
     }
+}
+
+# --- Multi-arch : tag, hote, executabilite -----------------------------------
+
+function Tag-De([string]$chemin) {
+    if ($chemin -match "Aven-native-(x64|x86|arm64)-") { return $Matches[1] }
+    return "zip"
+}
+
+# Arch de la machine : PROCESSOR_ARCHITEW6432 (PS 32 bits sous OS 64) gagne
+# sur PROCESSOR_ARCHITECTURE. Resultat : x64 | x86 | arm64.
+function Hote-Arch {
+    $a = $env:PROCESSOR_ARCHITEW6432
+    if (-not $a) { $a = $env:PROCESSOR_ARCHITECTURE }
+    if (-not $a) { return "x86" }
+    $a = $a.ToLowerInvariant()
+    if ($a -eq "amd64") { return "x64" }
+    return $a
+}
+
+# Un zip ne peut tourner que si la machine l'emule/execute nativement :
+#   hote x64   : x64 + x86 natifs, arm64 IMPOSSIBLE (aucune emulation x64->arm64)
+#   hote arm64 : tout (Windows on ARM emule x64 et x86)
+#   hote x86   : x86 seul
+# Tag inconnu (zip livre par -Zip avec un nom exotique) : on tente quand meme.
+function Arch-Lancable([string]$arch, [string]$hote) {
+    if ($arch -ne "x64" -and $arch -ne "x86" -and $arch -ne "arm64") { return $true }
+    if ($hote -eq "arm64") { return $true }
+    if ($hote -eq "x64") { return ($arch -ne "arm64") }
+    return ($arch -eq "x86")
 }
 
 # --- Purge : app + SEULEMENT ses node orphelins + scratch --------------------
@@ -240,7 +281,7 @@ function Purge {
                 }
             }
         } catch { }
-        Write-Host ("[smoke] purge : app pid " + $pidApp + " + " + $attribues.Count + " node orphelin(s)")
+        Write-Host ("[smoke] purge [" + $script:Tag + "] : app pid " + $pidApp + " + " + $attribues.Count + " node orphelin(s)")
     }
     if ($dossier -ne "" -and -not $dossierFourni -and -not $garder -and $succes) {
         try { Remove-Item $dossier -Recurse -Force -ErrorAction SilentlyContinue } catch { }
@@ -249,170 +290,258 @@ function Purge {
     }
 }
 
-# --- Deroule -----------------------------------------------------------------
+# --- Resolution de la liste des zips a fumer ---------------------------------
 
-$etat = "ok"
-$procApp = $null
-$pidApp = 0
-$cheminZip = ""
-$dossierScratch = ""
-$dossierFourni = $false
-
-try {
-    # 1. preparation : zip + extraction dans un scratch dedie
-    $script:Etape = "preparation"
-    if ($Zip -ne "") {
-        $cheminZip = if ([System.IO.Path]::IsPathRooted($Zip)) { $Zip } else { Join-Path (Get-Location).Path $Zip }
-    } else {
-        $candidat = Get-ChildItem (Join-Path $outDir "Aven-native-x64-*.zip") -ErrorAction SilentlyContinue |
+$zips = @()
+if ($Zip -ne "") {
+    $cheminZip = if ([System.IO.Path]::IsPathRooted($Zip)) { $Zip } else { Join-Path (Get-Location).Path $Zip }
+    if (-not (Test-Path $cheminZip)) {
+        Write-Host "SMOKE_KO - etape [preparation] : zip introuvable : $cheminZip"
+        exit 1
+    }
+    $zips += $cheminZip
+} else {
+    $listeArchs = @()
+    if ($Archs -ne "") { $listeArchs = @($Archs -split "[,;\s]+" | Where-Object { $_ -ne "" }) }
+    if ($listeArchs.Count -eq 0) { $listeArchs = @("x64") }
+    foreach ($archCible in $listeArchs) {
+        $archCible = $archCible.ToLowerInvariant()
+        $candidat = Get-ChildItem (Join-Path $outDir "Aven-native-$archCible-*.zip") -ErrorAction SilentlyContinue |
             Sort-Object LastWriteTime -Descending | Select-Object -First 1
         if (-not $candidat) {
-            throw "Aucun zip portable x64 dans native\.out - packager d'abord (scripts/package-native.ps1)."
+            Write-Host "SMOKE_KO - etape [preparation] : aucun zip portable $archCible dans native\.out (packager d'abord : scripts/package-native.ps1 -Archs $archCible)."
+            exit 1
         }
-        $cheminZip = $candidat.FullName
+        $zips += $candidat.FullName
     }
-    if (-not (Test-Path $cheminZip)) { throw "Zip introuvable : $cheminZip" }
-
-    if ($Dossier -ne "") {
-        $dossierScratch = if ([System.IO.Path]::IsPathRooted($Dossier)) { $Dossier } else { Join-Path (Get-Location).Path $Dossier }
-        $dossierFourni = $true # dossier fourni : jamais supprime par la purge
-    } else {
-        $dossierScratch = Join-Path $outDir ("smoke-" + (Get-Date).ToString("yyyyMMdd-HHmmss"))
-        Write-Host "[smoke] extraction : $cheminZip"
-        $depart = Get-Date
-        [System.IO.Compression.ZipFile]::ExtractToDirectory($cheminZip, $dossierScratch)
-        $duree = [math]::Round(((Get-Date) - $depart).TotalSeconds)
-        Write-Host "[smoke] extrait en $duree s : $dossierScratch"
-    }
-    $exePortable = Join-Path $dossierScratch "Aven.Native.exe"
-    if (-not (Test-Path $exePortable)) { throw "Aven.Native.exe absent de l'archive ($dossierScratch)." }
-
-    # 2. lancement + attente de la fenetre principale
-    $script:Etape = "lancement"
-    $procApp = Start-Process -FilePath $exePortable -WorkingDirectory $dossierScratch -PassThru
-    $pidApp = $procApp.Id
-    Write-Host "[smoke] app lancee (pid $pidApp)"
-    $script:Fen = Attendre-Fenetre -pidApp $pidApp -attenteMs 90000
-    if ($null -eq $script:Fen) {
-        $mort = $false
-        try { $mort = $procApp.HasExited } catch { $mort = $true }
-        throw "fenetre principale introuvable apres 90 s (app terminee : $mort)."
-    }
-    Start-Sleep -Seconds 2 # laisse la cascade du hub se poser
-
-    if ($Dump) {
-        $script:Etape = "dump"
-        Dump-Arbre
-    } else {
-        # 3. hub : 4 cartes presentes et cliquables
-        $script:Etape = "hub"
-        $cartes = @("Projet", ("T" + [char]0xE2 + "ches"), "Fichiers", "Notes")
-        foreach ($c in $cartes) {
-            if ($null -eq (Trouver-El -prefixe $c -attenteMs 15000 -Cliquable)) {
-                Echec "carte du hub introuvable/incliqable : '$c'."
-            }
-        }
-        Write-Host "[smoke] ok hub : 4 cartes cliquables"
-
-        # 4. notes : ouverture, editeur, annulation, retour hub
-        $script:Etape = "notes"
-        Cliquer-El "Notes"
-        if ($null -eq (Trouver-El -prefixe "+ Nouvelle" -attenteMs 10000 -Cliquable)) {
-            Echec "bouton '+ Nouvelle' absent : la vue Notes ne s'est pas ouverte."
-        }
-        Cliquer-El "+ Nouvelle"
-        if ($null -eq (Trouver-El -prefixe "Annuler" -attenteMs 10000 -Cliquable)) {
-            Echec "editeur de note non visible apres '+ Nouvelle'."
-        }
-        Cliquer-El "Annuler"
-        if (-not (Attendre-Absent "Annuler" 8000)) { Echec "'Annuler' n'a pas ferme l'editeur." }
-        $retour = [char]0x2190 + " Retour au hub"
-        if ($null -eq (Trouver-El -prefixe $retour -attenteMs 8000 -Cliquable)) {
-            Echec "bouton '$retour' absent en page Notes."
-        }
-        Cliquer-El $retour
-        if ($null -eq (Trouver-El -prefixe "Projet" -attenteMs 8000 -Cliquable)) {
-            Echec "retour au hub KO : les cartes ne sont pas revenues."
-        }
-        Write-Host "[smoke] ok notes : editeur ouvre/ferme + retour hub"
-
-        # 5. garde chat : 1 spawn moteur a la 1re ouverture, 0 a la 2e
-        $script:Etape = "chat-garde"
-        $baseChat = @(Nodes-App -pidApp $pidApp -Direct)
-        Cliquer-El "Projet"
-        if ($null -eq (Trouver-El -prefixe "Envoyer" -attenteMs 15000 -Cliquable)) {
-            Echec "composeur de chat absent : la carte Projet n'a pas ouvert la conversation."
-        }
-        $nouveaux = Attendre-Nouveaux -pidApp $pidApp -dejaConnus $baseChat -attenteMs 30000 -Direct
-        if ($nouveaux.Count -eq 0) {
-            Echec "aucun process node moteur (enfant direct) apres ouverture du chat."
-        }
-        [void](Nodes-Stables -pidApp $pidApp -attenteMs 30000)
-        $set1 = @(Nodes-App -pidApp $pidApp -Direct)
-        Write-Host ("[smoke] moteur spawn (" + $set1.Count + " node direct(s)) - test du garde : 2e ouverture")
-        $accueil = [char]0x2190 + " Accueil"
-        Cliquer-El $accueil
-        if (-not (Attendre-Absent "Envoyer" 8000)) { Echec "le chat reste visible apres retour au hub." }
-        Cliquer-El "Projet"
-        if ($null -eq (Trouver-El -prefixe "Envoyer" -attenteMs 10000 -Cliquable)) {
-            Echec "2e ouverture du chat sans composeur visible."
-        }
-        Start-Sleep -Seconds 6 # fenetre ou un re-spawn intempestif se produirait
-        $set2 = @(Nodes-App -pidApp $pidApp -Direct)
-        $reSpawn = @($set2 | Where-Object { $set1 -notcontains $_ })
-        if ($reSpawn.Count -gt 0) {
-            Echec ("re-spawn moteur a la 2e ouverture (pids " + ($reSpawn -join ",") + ") : garde _chatOuvert cassee.")
-        }
-        Write-Host "[smoke] ok chat : 1 spawn, aucun re-spawn a la 2e ouverture"
-
-        # 6. terminal : vue + spawn du PTY (descendant du process app)
-        $script:Etape = "terminal"
-        $baseTerm = @(Nodes-App -pidApp $pidApp)
-        Cliquer-El "Terminal Freebuff"
-        if ($null -eq (Trouver-El -prefixe "Relancer" -attenteMs 15000 -Cliquable)) {
-            Echec "barre de session absente : la vue Terminal Freebuff ne s'est pas ouverte."
-        }
-        $nodesTerm = Attendre-Nouveaux -pidApp $pidApp -dejaConnus $baseTerm -attenteMs 30000
-        if ($nodesTerm.Count -eq 0) {
-            Echec "aucun process node PTY descendant de l'app apres ouverture du terminal."
-        }
-        Write-Host "[smoke] ok terminal : spawn node PTY"
-
-        # 7. parametres : panneau version visible
-        $script:Etape = "parametres"
-        Cliquer-El ("Param" + [char]0xE8 + "tres")
-        $marqueur = $null
-        foreach ($p in @("Aven ", ("Dict" + [char]0xE9 + "es"), "Stats indisponibles")) {
-            $marqueur = Trouver-El -prefixe $p -attenteMs 8000
-            if ($null -ne $marqueur) { break }
-        }
-        if ($null -eq $marqueur) {
-            # repli sur l'AutomationId (x:Name) si le TextBlock n'expose pas son texte
-            $marqueur = Trouver-El -Id -valeur "SettingsVersion" -attenteMs 3000
-        }
-        if ($null -eq $marqueur) {
-            Echec "panneau Parametres introuvable (ni texte de version, ni AutomationId SettingsVersion)."
-        }
-        Write-Host "[smoke] ok parametres : version affichee"
-    }
-} catch {
-    $msg = $_.Exception.Message
-    if ($msg -ne "SMOKE_ECHEC") { $script:Raison = $msg }
-    if ($script:Etape -eq "dump" -and $script:Raison -eq "") { $etat = "dump" }
-    else { $etat = "echec" }
-} finally {
-    Purge -pidApp $pidApp -procApp $procApp -dossier $dossierScratch `
-        -garder $Conserver.IsPresent -succes ($etat -ne "echec") -dossierFourni $dossierFourni
+}
+if ($Dossier -ne "" -and $zips.Count -gt 1) {
+    Write-Host "SMOKE_KO - etape [preparation] : -Dossier ne fonctionne qu'avec un seul zip (retirer -Archs)."
+    exit 1
 }
 
-if ($etat -eq "echec") {
+# --- Deroule : une execution par zip -----------------------------------------
+
+$hote = Hote-Arch
+$echecs = @()
+$lances = 0
+$sauts = 0
+
+foreach ($cheminZip in $zips) {
+    $tag = Tag-De $cheminZip
+    if (-not (Arch-Lancable $tag $hote)) {
+        Write-Host "SMOKE_SKIP - [$tag] zip non executable sur hote $hote (validation a faire sur un hote $tag)"
+        $sauts++
+        continue
+    }
+    $lances++
     Write-Host ""
-    Write-Host ("SMOKE_KO - etape [" + $script:Etape + "] : " + $script:Raison)
+    Write-Host "=== Smoke [$tag] : $cheminZip ==="
+    $script:Tag = $tag
+    $etat = "ok"
+    $script:Raison = ""
+    $script:Etape = "init"
+    $script:Fen = $null
+    $procApp = $null
+    $pidApp = 0
+    $dossierScratch = ""
+    $dossierFourni = ($Dossier -ne "")
+
+    try {
+        # 1. preparation : extraction dans un scratch dedie
+        $script:Etape = "preparation"
+        if ($dossierFourni) {
+            $dossierScratch = if ([System.IO.Path]::IsPathRooted($Dossier)) { $Dossier } else { Join-Path (Get-Location).Path $Dossier }
+        } else {
+            $dossierScratch = Join-Path $outDir ("smoke-" + (Get-Date).ToString("yyyyMMdd-HHmmss") + "-" + $tag)
+            Write-Host "[smoke] extraction : $cheminZip"
+            $depart = Get-Date
+            [System.IO.Compression.ZipFile]::ExtractToDirectory($cheminZip, $dossierScratch)
+            $duree = [math]::Round(((Get-Date) - $depart).TotalSeconds)
+            Write-Host "[smoke] extrait en $duree s : $dossierScratch"
+        }
+        $exePortable = Join-Path $dossierScratch "Aven.Native.exe"
+        if (-not (Test-Path $exePortable)) { throw "Aven.Native.exe absent de l'archive ($dossierScratch)." }
+
+        # 2. lancement + attente de la fenetre principale
+        $script:Etape = "lancement"
+        $procApp = Start-Process -FilePath $exePortable -WorkingDirectory $dossierScratch -PassThru
+        $pidApp = $procApp.Id
+        Write-Host "[smoke] app lancee (pid $pidApp)"
+        $script:Fen = Attendre-Fenetre -pidApp $pidApp -attenteMs 90000
+        if ($null -eq $script:Fen) {
+            $mort = $false
+            try { $mort = $procApp.HasExited } catch { $mort = $true }
+            throw "fenetre principale introuvable apres 90 s (app terminee : $mort)."
+        }
+        Start-Sleep -Seconds 2 # laisse la cascade du hub se poser
+
+        if ($Dump) {
+            $script:Etape = "dump"
+            Dump-Arbre
+        } else {
+            # 3. hub : 4 cartes presentes et cliquables
+            $script:Etape = "hub"
+            $cartes = @("Projet", ("T" + [char]0xE2 + "ches"), "Fichiers", "Notes")
+            foreach ($c in $cartes) {
+                if ($null -eq (Trouver-El -prefixe $c -attenteMs 15000 -Cliquable)) {
+                    Echec "carte du hub introuvable/incliqable : '$c'."
+                }
+            }
+            Write-Host "[smoke] ok hub : 4 cartes cliquables"
+
+            $retour = [char]0x2190 + " Retour au hub"
+            $accueil = [char]0x2190 + " Accueil"
+            $dossierParent = [char]0x2190 + " Dossier parent"
+            # ligne des DOSSIERS de la liste fichiers : emoji dossier U+1F4C1
+            # (paire de surrogates [char]0xD83D [char]0xDCC1) + 2 espaces, en
+            # prefixe des rangees "dir" uniquement (les crumb racine = "Espace").
+            $iconeDossier = "$([char]0xD83D)$([char]0xDCC1)  "
+
+            # 4. notes : ouverture, editeur, annulation, retour hub
+            $script:Etape = "notes"
+            Cliquer-El "Notes"
+            if ($null -eq (Trouver-El -prefixe "+ Nouvelle" -attenteMs 10000 -Cliquable)) {
+                Echec "bouton '+ Nouvelle' absent : la vue Notes ne s'est pas ouverte."
+            }
+            Cliquer-El "+ Nouvelle"
+            if ($null -eq (Trouver-El -prefixe "Annuler" -attenteMs 10000 -Cliquable)) {
+                Echec "editeur de note non visible apres '+ Nouvelle'."
+            }
+            Cliquer-El "Annuler"
+            if (-not (Attendre-Absent "Annuler" 8000)) { Echec "'Annuler' n'a pas ferme l'editeur." }
+            if ($null -eq (Trouver-El -prefixe $retour -attenteMs 8000 -Cliquable)) {
+                Echec "bouton '$retour' absent en page Notes."
+            }
+            Cliquer-El $retour
+            if ($null -eq (Trouver-El -prefixe "Projet" -attenteMs 8000 -Cliquable)) {
+                Echec "retour au hub KO apres Notes : les cartes ne sont pas revenues."
+            }
+            Write-Host "[smoke] ok notes : editeur ouvre/ferme + retour hub"
+
+            # 5. fichiers : liste remplie + navigation racine <-> sous-dossier
+            $script:Etape = "fichiers"
+            Cliquer-El "Fichiers"
+            if ($null -eq (Trouver-El -prefixe "Explorateur de l'espace" -attenteMs 10000)) {
+                Echec "page Fichiers non ouverte (PageHint absent)."
+            }
+            if ($null -eq (Trouver-El -prefixe $iconeDossier -attenteMs 10000 -Cliquable)) {
+                Echec "aucune entree dossier cliquable dans la liste racine (arbre/liste vide ?)."
+            }
+            Cliquer-El $iconeDossier
+            if ($null -eq (Trouver-El -prefixe $dossierParent -attenteMs 10000 -Cliquable)) {
+                Echec "navigation KO : '$dossierParent' absent apres clic sur un dossier."
+            }
+            Cliquer-El $dossierParent
+            if (-not (Attendre-Absent $dossierParent 8000)) {
+                Echec "'$dossierParent' ne disparait pas au retour a la racine."
+            }
+            Cliquer-El $retour
+            if ($null -eq (Trouver-El -prefixe "Projet" -attenteMs 8000 -Cliquable)) {
+                Echec "retour au hub KO apres Fichiers : les cartes ne sont pas revenues."
+            }
+            Write-Host "[smoke] ok fichiers : liste remplie + navigation racine/sous-dossier"
+
+            # 6. garde chat : 1 spawn moteur a la 1re ouverture, 0 a la 2e
+            $script:Etape = "chat-garde"
+            $baseChat = @(Nodes-App -pidApp $pidApp -Direct)
+            Cliquer-El "Projet"
+            if ($null -eq (Trouver-El -prefixe "Envoyer" -attenteMs 15000 -Cliquable)) {
+                Echec "composeur de chat absent : la carte Projet n'a pas ouvert la conversation."
+            }
+            $nouveaux = Attendre-Nouveaux -pidApp $pidApp -dejaConnus $baseChat -attenteMs 30000 -Direct
+            if ($nouveaux.Count -eq 0) {
+                Echec "aucun process node moteur (enfant direct) apres ouverture du chat."
+            }
+            [void](Nodes-Stables -pidApp $pidApp -attenteMs 30000)
+            $set1 = @(Nodes-App -pidApp $pidApp -Direct)
+            Write-Host ("[smoke] moteur spawn (" + $set1.Count + " node direct(s)) - test du garde : 2e ouverture")
+            Cliquer-El $accueil
+            if (-not (Attendre-Absent "Envoyer" 8000)) { Echec "le chat reste visible apres retour au hub." }
+            Cliquer-El "Projet"
+            if ($null -eq (Trouver-El -prefixe "Envoyer" -attenteMs 10000 -Cliquable)) {
+                Echec "2e ouverture du chat sans composeur visible."
+            }
+            Start-Sleep -Seconds 6 # fenetre ou un re-spawn intempestif se produirait
+            $set2 = @(Nodes-App -pidApp $pidApp -Direct)
+            $reSpawn = @($set2 | Where-Object { $set1 -notcontains $_ })
+            if ($reSpawn.Count -gt 0) {
+                Echec ("re-spawn moteur a la 2e ouverture (pids " + ($reSpawn -join ",") + ") : garde _chatOuvert cassee.")
+            }
+            Write-Host "[smoke] ok chat : 1 spawn, aucun re-spawn a la 2e ouverture"
+
+            # 7. terminal : vue + spawn du PTY (descendant du process app)
+            $script:Etape = "terminal"
+            $baseTerm = @(Nodes-App -pidApp $pidApp)
+            Cliquer-El "Terminal Freebuff"
+            if ($null -eq (Trouver-El -prefixe "Relancer" -attenteMs 15000 -Cliquable)) {
+                Echec "barre de session absente : la vue Terminal Freebuff ne s'est pas ouverte."
+            }
+            $nodesTerm = Attendre-Nouveaux -pidApp $pidApp -dejaConnus $baseTerm -attenteMs 30000
+            if ($nodesTerm.Count -eq 0) {
+                Echec "aucun process node PTY descendant de l'app apres ouverture du terminal."
+            }
+            Write-Host "[smoke] ok terminal : spawn node PTY"
+
+            # 8. parametres : panneau version visible
+            $script:Etape = "parametres"
+            Cliquer-El ("Param" + [char]0xE8 + "tres")
+            $marqueur = $null
+            foreach ($p in @("Aven ", ("Dict" + [char]0xE9 + "es"), "Stats indisponibles")) {
+                $marqueur = Trouver-El -prefixe $p -attenteMs 8000
+                if ($null -ne $marqueur) { break }
+            }
+            if ($null -eq $marqueur) {
+                # repli sur l'AutomationId (x:Name) si le TextBlock n'expose pas son texte
+                $marqueur = Trouver-El -Id -valeur "SettingsVersion" -attenteMs 3000
+            }
+            if ($null -eq $marqueur) {
+                Echec "panneau Parametres introuvable (ni texte de version, ni AutomationId SettingsVersion)."
+            }
+            Write-Host "[smoke] ok parametres : version affichee"
+        }
+    } catch {
+        $msg = $_.Exception.Message
+        if ($msg -ne "SMOKE_ECHEC") { $script:Raison = $msg }
+        if ($script:Raison -eq "") { $script:Raison = "erreur interne : $msg" }
+        $etat = "echec"
+    } finally {
+        Purge -pidApp $pidApp -procApp $procApp -dossier $dossierScratch `
+            -garder $Conserver.IsPresent -succes ($etat -ne "echec") -dossierFourni $dossierFourni
+    }
+
+    if ($etat -eq "echec") {
+        $detail = "etape [" + $tag + "/" + $script:Etape + "] : " + $script:Raison
+        Write-Host "SMOKE_KO - $detail"
+        $echecs += $detail
+    } else {
+        Write-Host ("[smoke] OK [" + $tag + "]")
+    }
+}
+
+# --- Verdict global ----------------------------------------------------------
+
+if ($echecs.Count -gt 0) {
+    Write-Host ""
+    if ($echecs.Count -eq 1) {
+        Write-Host ("SMOKE_KO - " + $echecs[0])
+    } else {
+        Write-Host ("SMOKE_KO - " + $echecs.Count + " echecs :")
+        foreach ($e in $echecs) { Write-Host ("  " + $e) }
+    }
+    exit 1
+}
+if ($lances -eq 0) {
+    Write-Host "SMOKE_KO - etape [preparation] : aucun zip lancable sur cette machine (hote $hote)."
     exit 1
 }
 if ($Dump) {
     Write-Host "SMOKE_DUMP_OK"
     exit 0
 }
-Write-Host "SMOKE_OK"
+if ($sauts -gt 0) {
+    Write-Host ("SMOKE_OK - " + $lances + " smoke(s), " + $sauts + " saut(s) (arch non executable sur hote " + $hote + ")")
+} else {
+    Write-Host "SMOKE_OK"
+}
 exit 0

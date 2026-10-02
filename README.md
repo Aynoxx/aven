@@ -13,6 +13,7 @@
 > powershell -NoProfile -File scripts/package-native.ps1       # MSIX signé + zip portable
 > powershell -NoProfile -File scripts/package-native.ps1 -Smoke # idem + smoke UIA de chaque zip
 > npm run smoke:native                                          # smoke UIA seul (zip x64 récent)
+> npm run smoke:native -- -Archs x64,x86,arm64                   # multi-arch en une exécution
 > ```
 >
 > État : phases 0-7 faites (socle, moteur, coquille, chat, services, terminal,

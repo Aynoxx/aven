@@ -314,22 +314,31 @@ divergence TUI par construction. TESTS D'INTÉGRATION réels : echo, cmd interac
     un MSIX, UnknownError systématique), zip portable (layout RID `win-x64\` car
     le runtime .NET embarqué vit dans le sous-dossier, + dist-electron hosts +
     @lydell/node-pty embarqué). Pièges consignés : .ps1 en ASCII strict (ANSI
-    sinon), `2>&1` + `$ErrorActionPreference=Stop` transforme stderr natif en
-    erreur terminante (relâcher localement).
+    sinon),    `2>&1` + `$ErrorActionPreference=Stop` transforme stderr natif en
+    erreur terminante (relâcher localement), redirection RID `win-<arch>` à
+    ré-évaluer APRÈS un build depuis dossier propre (sinon l'exe sort imbriqué
+    et le zip n'a pas d'exe à la racine — bug attrapé par le smoke sur x86 et
+    arm64 le 02/10/2026, corrigé).
   - **Suite de smoke UIA réutilisable** (`scripts/smoke-native.ps1`, aussi
     `npm run smoke:native`) : le parcours de release pour CHAQUE zip portable —
-    extraction dans un scratch `native/.out/smoke-<stamp>`, pilotage en COM
-    UI Automation (`UIAutomationClient`, sans WinAppDriver), 6 verrous :
+    extraction dans un scratch `native/.out/smoke-<stamp>-<arch>`, pilotage en
+    COM UI Automation (`UIAutomationClient`, sans WinAppDriver), **7 verrous** :
     hub (4 cartes cliquables) → Notes (`+ Nouvelle` ouvre l'éditeur, `Annuler`
-    le ferme) → retour hub → garde chat (1 seul spawn node moteur à la 1re
-    ouverture, AUCUN re-spawn à la 2e — régression `_chatOuvert` historique) →
-    terminal (spawn node PTY descendant du PID) → Paramètres (version).
-    Verdict `SMOKE_OK` (exit 0) ou `SMOKE_KO - etape [...] : raison` (exit 1)
-    + dump UIA complet `native/.out/smoke-uia.txt`. Purge stricte : app + SEULES
-    node descendants du PID lancé (jamais ceux des autres sessions), scratch
-    supprimé sauf échec. `scripts/package-native.ps1 -Smoke` la lance sur chaque
-    zip produit et annule le packaging en cas d'échec. Pièges UIA : match en
-    prefixe (`-like "nom*"`, l'égalité stricte échoue sur les entités XAML),
+    le ferme) → retour hub → Fichiers (liste remplie, clic sur un dossier →
+    `← Dossier parent` monte d'un niveau puis disparaît à la racine) → garde
+    chat (1 seul spawn node moteur à la 1re ouverture, AUCUN re-spawn à la 2e —
+    régression `_chatOuvert` historique) → terminal (spawn node PTY descendant
+    du PID) → Paramètres (version). Mode **multi-arch** : `-Archs x64,x86,arm64`
+    fume tout en une exécution ; une arch non exécutable sur l'hôte (zip arm64
+    sous Windows x64, aucune émulation dans ce sens) est `SMOKE_SKIP` — la
+    validation arm64 se fait sur un hôte ARM64 (CI ou machine cible).
+    Verdict `SMOKE_OK` (exit 0) ou `SMOKE_KO - etape [<arch>/<etape>] : raison`
+    (exit 1) + dump UIA complet `native/.out/smoke-uia-<arch>.txt`. Purge
+    stricte : app + SEULES node descendants du PID lancé (jamais ceux des
+    autres sessions), scratch supprimé sauf échec.
+    `scripts/package-native.ps1 -Smoke` la lance sur chaque zip produit et
+    annule le packaging en cas d'échec. Pièges UIA : match en prefixe
+    (`-like "nom*"`, l'égalité stricte échoue sur les entités XAML),
     variable locale jamais homonyme d'un paramètre.
   - **Anciens smoke tests réels** : app du layout dev ET du portable vivantes
     (pid, fenêtre « Aven », kill propre).

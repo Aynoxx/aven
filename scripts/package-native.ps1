@@ -166,6 +166,19 @@ foreach ($arch in $Archs) {
         if ($LASTEXITCODE -ne 0) { throw "Build $arch en echec." }
     }
 
+    # Redirection RID REAPPLIQUEE apres build (PIEGE 02/10/2026, attrape par
+    # scripts/smoke-native.ps1 sur x86 et arm64) : elle n'est evaluee qu'AVANT
+    # le build - depuis un dossier propre, l'exe sort dans win-<arch>\ et
+    # Copy-Item "$bin\*" imbrique ce sous-dossier dans le portable :
+    # Aven.Native.exe absent de la racine du zip = portable non lancable tel quel.
+    if (-not (Test-Path (Join-Path $bin "Aven.Native.exe")) -and
+        (Test-Path (Join-Path $bin "win-$arch\Aven.Native.exe"))) {
+        $bin = Join-Path $bin "win-$arch"
+    }
+    if (-not (Test-Path (Join-Path $bin "Aven.Native.exe"))) {
+        throw "Aven.Native.exe introuvable pour $arch apres build ($bin)."
+    }
+
     # --- 2. MSIX signe ---
     $pkgDir = Join-Path $outRoot "$arch"
     dotnet build native/src/Aven.Native/Aven.Native.csproj -c Release -p:Platform=$arch -p:RuntimeIdentifier=win-$arch --nologo `
