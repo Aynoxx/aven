@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Windows.Media;
 using Windows.Media.Capture;
 using Windows.Media.MediaProperties;
@@ -45,7 +46,20 @@ public sealed class VoiceRuntime : IDisposable
                         await lecteur.LoadAsync(taille);
                         var octets = new byte[taille];
                         lecteur.ReadBytes(octets);
-                        var clé = Environment.GetEnvironmentVariable("AVEN_GROQ_KEY") ?? "";
+                        // Clé Groq ancrée dans les Paramètres (service de clés chiffrées DPAPI) :
+                        // - d'abord le store natif settings.json (provider "groq"),
+                        // - ensuite la variable d'environnement GROQ_API_KEY (parité de l'import).
+                        var clés = Aven.Bridge.KeysService.Load(Aven.Bridge.AppData.Dir());
+                        var clé = "";
+                        if (clés.TryGetValue("groq", out var valClé) && !string.IsNullOrEmpty(valClé))
+                        {
+                            clé = valClé;
+                        }
+                        else if (Aven.Bridge.Providers.De("groq") is { } fournisseur && !string.IsNullOrEmpty(
+                            System.Environment.GetEnvironmentVariable(fournisseur.Env)))
+                        {
+                            clé = System.Environment.GetEnvironmentVariable(fournisseur.Env)!;
+                        }
                         if (clé.Length == 0) return; // pas de clé : la dictée se tait (comme le web)
                         var dictée = await _pipeline.TranscribeSpeechAsync(octets, "audio/wav", clé).ConfigureAwait(false);
                         résultat(dictée);
