@@ -1,0 +1,6 @@
+# R\u00e9pertoires de build/test/debug cr\u00e9\u00e9s pour le travail local (ne sont jamais versionn\u00e9s)
+native/Dbg/
+native/tmp/
+native/ttest/
+native/ttest2/
+native/ttest3/

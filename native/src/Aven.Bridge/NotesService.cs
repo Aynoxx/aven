@@ -120,6 +120,20 @@ public static class NotesService
         return Get(workspace, finalId);
     }
 
+    /// <summary>Nom de fichier pour l'export .md (parité notes:export) : caractères
+    /// interdits Windows remplacés par « _ », tronqué à 80, jamais vide.</summary>
+    public static string NomExport(string? titre)
+    {
+        var propre = Regex.Replace(titre ?? "", "[\\\\/:*?\"<>|]", "_");
+        var coupe = propre.Length > 80 ? propre[..80] : propre;
+        return coupe.Length > 0 ? coupe : "note";
+    }
+
+    /// <summary>Texte injecté au composeur par « Joindre à la conversation »
+    /// (parité attachToConversation de web/src/NotesView.tsx).</summary>
+    public static string TexteJoindre(Note note) =>
+        $"Voici ma note « {note.Title} » :\n\n{note.Markdown}";
+
     // ── Métadonnées (parité notes-meta.ts) ────────────────────────────────────
 
     private static (List<string> Pinned, Dictionary<string, List<string>> Tags) ReadMeta(string workspace)

@@ -217,13 +217,29 @@
                     <ScrollViewer Grid.Column="1">
                         <StackPanel MaxWidth="980" Spacing="12" Margin="8,12,20,16" HorizontalAlignment="Left">
                             <StackPanel x:Name="FilesCrumbs" Orientation="Horizontal" Spacing="4" />
-                            <Button x:Name="FilesUp" Content="&#8592; Dossier parent" Click="OnFilesUp"
-                                    Visibility="Collapsed" HorizontalAlignment="Left" MinHeight="32"
-                                    Background="{ThemeResource AvenPanelSoftBrush}" BorderThickness="0" />
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button x:Name="FilesUp" Content="&#8592; Dossier parent" Click="OnFilesUp"
+                                        Visibility="Collapsed" MinHeight="32"
+                                        Background="{ThemeResource AvenPanelSoftBrush}" BorderThickness="0" />
+                                <Button x:Name="FilesOpenExplorer" Content="Ouvrir dans l'Explorateur"
+                                        Click="OnFilesOpenExplorer" MinHeight="32" FontSize="12"
+                                        Background="{ThemeResource AvenPanelSoftBrush}" BorderThickness="0" />
+                            </StackPanel>
                             <StackPanel x:Name="FilesList" Spacing="4" />
                             <StackPanel x:Name="FilesPreview" Spacing="6" Visibility="Collapsed">
-                                <TextBlock x:Name="FilesPreviewPath" FontSize="11" Foreground="{ThemeResource AvenMutedBrush}" />
-                                <TextBlock x:Name="FilesPreviewMeta" FontSize="11" Foreground="{ThemeResource AvenMutedBrush}" />
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock x:Name="FilesPreviewPath" FontSize="11" VerticalAlignment="Center"
+                                               Foreground="{ThemeResource AvenMutedBrush}" />
+                                    <TextBlock x:Name="FilesPreviewMeta" FontSize="11" VerticalAlignment="Center"
+                                               Foreground="{ThemeResource AvenMutedBrush}" />
+                                    <Button x:Name="FilesAnalyzeButton" Content="Faire analyser par un agent"
+                                            Click="OnFilesAnalyser" MinHeight="28" Padding="10,2" FontSize="11"
+                                            Background="{ThemeResource AvenPanelSoftBrush}" />
+                                </StackPanel>
+                                <!-- Rang&#233;e d'agents (parit&#233; files-analyze-row) : le clic
+                                     injecte l'&#233;non&#233; dans le composeur de l'onglet actif. -->
+                                <StackPanel x:Name="FilesAnalyzeAgents" Orientation="Horizontal" Spacing="6"
+                                            Visibility="Collapsed" />
                                 <Border Background="{ThemeResource AvenPanelBrush}" CornerRadius="10" Padding="12"
                                         BorderBrush="{ThemeResource AvenBorderBrush}" BorderThickness="1">
                                     <TextBlock x:Name="FilesPreviewContent" FontFamily="Consolas" FontSize="12" TextWrapping="Wrap"
@@ -279,7 +295,17 @@
                             <Button x:Name="NoteNewButton" Grid.Column="1" Content="+ Nouvelle" Click="OnNoteNew" MinHeight="34"
                                     Margin="8,0,0,0" Padding="12,4" Background="{ThemeResource AvenAccentBrush}" Foreground="White" />
                         </Grid>
-                        <TextBlock x:Name="NotesDirHint" FontSize="11" Foreground="{ThemeResource AvenMutedBrush}" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock x:Name="NotesDirHint" FontSize="11" VerticalAlignment="Center"
+                                       Foreground="{ThemeResource AvenMutedBrush}" />
+                            <Button x:Name="NoteFolderButton" Content="Ouvrir le dossier" Click="OnNoteOuvrirDossier"
+                                    MinHeight="28" Padding="10,2" FontSize="11"
+                                    Background="{ThemeResource AvenPanelSoftBrush}" />
+                        </StackPanel>
+                        <!-- Filtre par agent (parit&#233; notes-tags-filter) : boutons
+                             construits en C# selon les tags r&#233;ellement pr&#233;sents. -->
+                        <StackPanel x:Name="NotesTagFilter" Orientation="Horizontal" Spacing="6"
+                                    Visibility="Collapsed" />
                         <StackPanel x:Name="NotesList" Spacing="4" />
                         <StackPanel x:Name="NoteEditor" Visibility="Collapsed" Spacing="8">
                             <TextBlock x:Name="NoteEditorTitre" Text="NOUVELLE NOTE" FontSize="11" Foreground="{ThemeResource AvenMutedBrush}" />
@@ -295,6 +321,10 @@
                                 <Button Content="Annuler" Click="OnNoteCancel" MinHeight="34" Padding="12,4"
                                         Background="{ThemeResource AvenPanelSoftBrush}" />
                             </StackPanel>
+                            <!-- &#201;tiquettes de la NOUVELLE note (parit&#233; notes-tag-picker) :
+                                 l'agent courant est pr&#233;-coch&#233; (li&#233; &#224; la conversation). -->
+                            <StackPanel x:Name="NoteTagPicker" Orientation="Horizontal" Spacing="6"
+                                        Visibility="Collapsed" />
                         </StackPanel>
                         <StackPanel x:Name="NotePreview" Visibility="Collapsed" Spacing="6">
                             <TextBlock x:Name="NotePreviewTitre" FontSize="16" FontWeight="SemiBold" Foreground="{ThemeResource AvenTextBrush}" />
@@ -303,8 +333,17 @@
                                         Background="Transparent" BorderThickness="0" Foreground="{ThemeResource AvenTextBrush}" />
                                 <Button Content="Modifier" Click="OnNoteEdit" MinHeight="30" Padding="10,2"
                                         Background="Transparent" BorderThickness="0" Foreground="{ThemeResource AvenTextBrush}" />
+                                <Button x:Name="NoteJoinButton" Content="Joindre &#224; la conversation" Click="OnNoteJoindre"
+                                        MinHeight="30" Padding="10,2" Background="Transparent" BorderThickness="0"
+                                        Foreground="{ThemeResource AvenTextBrush}" />
+                                <Button Content="Exporter .md" Click="OnNoteExporter" MinHeight="30" Padding="10,2"
+                                        Background="Transparent" BorderThickness="0" Foreground="{ThemeResource AvenTextBrush}" />
                                 <TextBlock x:Name="NoteMeta" FontSize="11" VerticalAlignment="Center" Foreground="{ThemeResource AvenMutedBrush}" />
                             </StackPanel>
+                            <!-- &#201;tiquettes par agent de la note s&#233;lectionn&#233;e (parit&#233;
+                                 notes-tags-editor) : boutons construits en C#, toggle direct. -->
+                            <StackPanel x:Name="NoteTagsEditor" Orientation="Horizontal" Spacing="6"
+                                        Visibility="Collapsed" />
                             <Border Background="{ThemeResource AvenPanelBrush}" CornerRadius="10" Padding="12"
                                     BorderBrush="{ThemeResource AvenBorderBrush}" BorderThickness="1">
                                 <StackPanel x:Name="NotePreviewBody" Spacing="4" />

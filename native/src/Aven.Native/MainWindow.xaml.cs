@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json.Nodes;
 using Microsoft.UI.Xaml;
@@ -111,8 +112,10 @@ public sealed partial class MainWindow : Window
     private Aven.Bridge.ChatViewModel? _chatRendu; // VM à l'origine des bulles affichées
     private bool _filesOuvert, _notesOuvert;
     private string _filesRelative = "";
+    private string? _filesApercuChemin;           // fichier en aperçu (cible « analyser »)
     private Aven.Bridge.Note? _noteOuverte;
-    private string? _noteNouvelleTags;
+    private List<string>? _noteNouvelleTags;      // étiquettes de la note EN CRÉATION (parité editingTags)
+    private string? _notesTagFiltre;              // filtre par agent de la liste Notes (parité tagFilter)
     private bool _dialogOuvert;
 
     // ── Jalon 3 (parité SettingsDialog) : apparence persistée + garde anti-boucle ──
@@ -1791,6 +1794,8 @@ public sealed partial class MainWindow : Window
             var entrées = Aven.Bridge.FilesService.List(Espace(), relatif);
             FilesList.Children.Clear();
             FilesPreview.Visibility = Visibility.Collapsed;
+            FilesAnalyzeAgents.Visibility = Visibility.Collapsed; // parite openDir : analyzeFor = null
+            _filesApercuChemin = null;
             FilesUp.Visibility = relatif.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
 
             // Fil d'ariane cliquable (parité files-crumbs).
@@ -1850,6 +1855,8 @@ public sealed partial class MainWindow : Window
         try
         {
             var fichier = Aven.Bridge.FilesService.Read(Espace(), chemin);
+            _filesApercuChemin = fichier.Path; // cible de "Faire analyser" (parite preview.path)
+            FilesAnalyzeAgents.Visibility = Visibility.Collapsed; // parite openFile : analyzeFor = null
             FilesPreviewPath.Text = "APER\u00C7U \u00B7 " + fichier.Path;
             FilesPreviewMeta.Text = TailleHumaine(fichier.Size) + (fichier.Truncated ? " \u00B7 aper\u00E7u tronqu\u00E9 (512 Kio)" : "");
             FilesPreviewContent.Text = fichier.Content;
@@ -1857,6 +1864,8 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception erreur)
         {
+            _filesApercuChemin = null;
+            FilesAnalyzeAgents.Visibility = Visibility.Collapsed;
             FilesPreview.Visibility = Visibility.Visible;
             FilesPreviewPath.Text = "";
             FilesPreviewMeta.Text = "";
@@ -1884,6 +1893,7 @@ public sealed partial class MainWindow : Window
         NotesScroll.Visibility = Visibility.Visible;
         NotesDirHint.Text = Aven.Bridge.NotesService.Dir(Espace());
         ListerNotes();
+        _ = RafraîchirÉtiquettesAsync(); // noms d'agents réels sur les étiquettes
     }
 
     private void ListerNotes()
@@ -1892,16 +1902,34 @@ public sealed partial class MainWindow : Window
         {
             var query = NotesQuery.Text.Trim().ToLowerInvariant();
             var pins = Aven.Bridge.NotesService.LoadPinned(Espace());
-            var notes = Aven.Bridge.NotesService.List(Espace())
+            var toutes = Aven.Bridge.NotesService.List(Espace());
+
+            // Étiquettes par note (parité useEffect tags), puis filtre par agent
+            // (notes-tags-filter) appliqué à la liste.
+            var tags = new Dictionary<string, IReadOnlyList<string>>();
+            foreach (var n in toutes)
+            {
+                try { tags[n.Id] = Aven.Bridge.NotesService.LoadTags(Espace(), n.Id); }
+                catch { tags[n.Id] = []; }
+            }
+            var tousTags = tags.Values.SelectMany(t => t).Distinct().ToList();
+            if (_notesTagFiltre is { } actif && !tousTags.Contains(actif)) _notesTagFiltre = null;
+            ConstruireFiltreTags(tousTags);
+
+            var notes = toutes
+                .Where(n => _notesTagFiltre is null || tags[n.Id].Contains(_notesTagFiltre))
                 .Where(n => query.Length == 0 || n.Title.ToLowerInvariant().Contains(query) || n.Markdown.ToLowerInvariant().Contains(query))
                 .OrderByDescending(n => pins.Contains(n.Id)) // épinglées d'abord (parité visible)
                 .ThenByDescending(n => n.Updated);
             NotesList.Children.Clear();
             foreach (var note in notes)
             {
+                // Parité rangée web : titre, id, puis les tags (noms d'agents).
+                var étiquettes = tags[note.Id];
+                var affichage = étiquettes.Count == 0 ? "" : "   \u00B7 " + string.Join(", ", étiquettes.Select(NomAgent));
                 var rangée = new Button
                 {
-                    Content = (pins.Contains(note.Id) ? "\uD83D\uDCCC " : "") + note.Title + "   " + note.Id,
+                    Content = (pins.Contains(note.Id) ? "\uD83D\uDCCC " : "") + note.Title + "   " + note.Id + affichage,
                     HorizontalAlignment = HorizontalAlignment.Stretch,
                     HorizontalContentAlignment = HorizontalAlignment.Left,
                     MinHeight = 36,
@@ -1967,6 +1995,8 @@ public sealed partial class MainWindow : Window
         NoteBodyBox.Text = note.Markdown;
         NotePreview.Visibility = Visibility.Collapsed;
         NoteEditor.Visibility = Visibility.Visible;
+        NoteTagPicker.Visibility = Visibility.Collapsed; // picker = création seule (parité)
+        _noteNouvelleTags = null;
     }
 
     private void OnNoteNew(object sender, RoutedEventArgs e)
@@ -1974,9 +2004,11 @@ public sealed partial class MainWindow : Window
         NoteEditorTitre.Text = "NOUVELLE NOTE";
         NoteTitleBox.Text = "";
         NoteBodyBox.Text = "";
-        _noteNouvelleTags = null;
+        // L'agent de la conversation ouverte est pr\u00E9-coch\u00E9 (parit\u00E9 editingTags).
+        _noteNouvelleTags = string.IsNullOrEmpty(_chatAgent) ? null : new List<string> { _chatAgent };
         NotePreview.Visibility = Visibility.Collapsed;
         NoteEditor.Visibility = Visibility.Visible;
+        _ = ConstruireNoteTagPickerAsync();
     }
 
     private async void OnNoteSave(object sender, RoutedEventArgs e)
@@ -1986,7 +2018,11 @@ public sealed partial class MainWindow : Window
             var id = _noteOuverte is { } ouverte && NoteEditorTitre.Text == "\u00C9DITION" ? ouverte.Id : "";
             var note = await Task.Run(() => Aven.Bridge.NotesService.Save(Espace(), id, NoteTitleBox.Text, NoteBodyBox.Text));
             _noteOuverte = note;
-            if (_noteNouvelleTags is { } tag) { Aven.Bridge.NotesService.SetTags(Espace(), note.Id, new[] { tag }); _noteNouvelleTags = null; }
+            // Etiquettes choisies a la CREATION seulement (parite commitEdit :
+            // editing.id === ""), puis remise a zero quoi qu'il arrive.
+            if (id.Length == 0 && _noteNouvelleTags is { Count: > 0 } tags)
+                Aven.Bridge.NotesService.SetTags(Espace(), note.Id, tags);
+            _noteNouvelleTags = null;
             NoteEditor.Visibility = Visibility.Collapsed;
             ListerNotes();
             OuvrirNote(note.Id);
@@ -1997,7 +2033,245 @@ public sealed partial class MainWindow : Window
     private void OnNoteCancel(object sender, RoutedEventArgs e)
     {
         NoteEditor.Visibility = Visibility.Collapsed;
+        NoteTagPicker.Visibility = Visibility.Collapsed; // parite setEditingTags(null)
+        _noteNouvelleTags = null;
         if (_noteOuverte is { } note) OuvrirNote(note.Id);
+    }
+
+    // ── Jalon 4 : parite Notes/Fichiers du web (tags agents, joindre, exporter,
+    //    ouvrir dans l'Explorateur, analyse par agent) ─────────────────────────
+
+    /// <summary>Pastille cliquable (facture .notes-tag du web, style SurbrillerOnglet) :
+    /// accent quand actif, soft sinon. L'id vit dans Tag pour les mises a jour d'etat.</summary>
+    private Button BoutonÉtiquette(string nom, string id, bool actif, RoutedEventHandler clic)
+    {
+        var bouton = new Button
+        {
+            Content = nom,
+            Tag = id,
+            MinHeight = 26,
+            Padding = new Thickness(10, 2, 10, 2),
+            FontSize = 11,
+            CornerRadius = new CornerRadius(999),
+            Background = BrushDe(actif ? "AvenAccentBrush" : "AvenPanelSoftBrush"),
+            Foreground = actif ? new SolidColorBrush(Microsoft.UI.Colors.White) : BrushDe("AvenMutedBrush"),
+            BorderBrush = BrushDe(actif ? "AvenAccentBrush" : "AvenBorderBrush"),
+            BorderThickness = new Thickness(1),
+        };
+        bouton.Click += clic;
+        return bouton;
+    }
+
+    /// <summary>Charge la liste d'agents du moteur UNE fois (noms lisibles des
+    /// etiquettes) — sans moteur, les ids d'onglets font foi (parite fallback web).</summary>
+    private async Task AssurerAgentsAsync()
+    {
+        if (_agentsTaches.Count > 0 || _espace is null || _boot.Client is null) return;
+        try { _agentsTaches = (await _boot.Client.ListAgentsAsync(_espace)).ToList(); }
+        catch { /* moteur muet : les ids restent affichés */ }
+    }
+
+    /// <summary>Noms d'agents arrivés tard : la liste et l'editeur d'etiquettes se
+    /// redessinent avec les noms reels (une seule fois, si la vue est encore ouverte).</summary>
+    private async Task RafraîchirÉtiquettesAsync()
+    {
+        var avant = _agentsTaches.Count;
+        await AssurerAgentsAsync();
+        if (_agentsTaches.Count == avant || !_notesOuvert) return;
+        ListerNotes();
+        if (_noteOuverte is { } note && NotePreview.Visibility == Visibility.Visible)
+            ConstruireNoteTagsEditor(note);
+    }
+
+    /// <summary>Filtre par agent (parite notes-tags-filter) : "Toutes" + un bouton
+    /// par tag reellement present ; le clic filtre la liste (toggle sur un tag).</summary>
+    private void ConstruireFiltreTags(IReadOnlyList<string> tags)
+    {
+        NotesTagFilter.Children.Clear();
+        if (tags.Count == 0) { NotesTagFilter.Visibility = Visibility.Collapsed; return; }
+        NotesTagFilter.Children.Add(BoutonÉtiquette("Toutes", "", _notesTagFiltre is null, (_, _) =>
+        {
+            _notesTagFiltre = null;
+            ListerNotes();
+        }));
+        foreach (var tag in tags)
+        {
+            var local = tag;
+            NotesTagFilter.Children.Add(BoutonÉtiquette(NomAgent(tag), tag, _notesTagFiltre == tag, (_, _) =>
+            {
+                _notesTagFiltre = _notesTagFiltre == local ? null : local;
+                ListerNotes();
+            }));
+        }
+        NotesTagFilter.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>Pastilles de la NOUVELLE note (parite notes-tag-picker) : agents du
+    /// moteur (ids d'onglets en secours), agent courant pre-coche, toggle en memoire
+    /// puis SetTags a l'enregistrement.</summary>
+    private async Task ConstruireNoteTagPickerAsync()
+    {
+        try
+        {
+            await AssurerAgentsAsync();
+            var ids = _agentsTaches.Count > 0
+                ? _agentsTaches.Select(a => a.Id).ToList()
+                : Aven.Bridge.ConversationClient.Tabs.ToList();
+            NoteTagPicker.Children.Clear();
+            foreach (var id in ids)
+            {
+                var local = id;
+                NoteTagPicker.Children.Add(BoutonÉtiquette(NomAgent(id), id, _noteNouvelleTags?.Contains(id) == true, (s, _) =>
+                {
+                    var tags = _noteNouvelleTags ?? new List<string>();
+                    if (tags.Contains(local)) tags.Remove(local);
+                    else if (tags.Count < Aven.Bridge.NotesService.MaxNoteTags) tags.Add(local);
+                    _noteNouvelleTags = tags;
+                    SurbrillerOnglet((Button)s!, _noteNouvelleTags.Contains(local));
+                }));
+            }
+            NoteTagPicker.Visibility = NoteTagPicker.Children.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
+        catch (Exception erreur) { PageHint.Text = erreur.Message; }
+    }
+
+    /// <summary>Etiquettes de la note ouverte (parite notes-tags-editor) : un clic
+    /// bascule l'agent avec SetTags immediate (parite commitTags), la liste suit.</summary>
+    private async void ConstruireNoteTagsEditor(Aven.Bridge.Note note)
+    {
+        try
+        {
+            await AssurerAgentsAsync();
+            if (_noteOuverte?.Id != note.Id) return; // l'utilisateur a change de note entre-temps
+            var actifs = Aven.Bridge.NotesService.LoadTags(Espace(), note.Id);
+            NoteTagsEditor.Children.Clear();
+            var ids = _agentsTaches.Count > 0
+                ? _agentsTaches.Select(a => a.Id).ToList()
+                : Aven.Bridge.ConversationClient.Tabs.ToList();
+            foreach (var id in ids)
+            {
+                var local = id;
+                NoteTagsEditor.Children.Add(BoutonÉtiquette(NomAgent(id), id, actifs.Contains(id), (_, _) =>
+                {
+                    try
+                    {
+                        var courants = Aven.Bridge.NotesService.LoadTags(Espace(), note.Id).ToList();
+                        if (courants.Contains(local)) courants.Remove(local);
+                        else if (courants.Count < Aven.Bridge.NotesService.MaxNoteTags) courants.Add(local);
+                        var sauvés = Aven.Bridge.NotesService.SetTags(Espace(), note.Id, courants);
+                        foreach (Button b in NoteTagsEditor.Children)
+                            SurbrillerOnglet(b, sauvés.Contains((string)b.Tag!));
+                        ListerNotes(); // la liste et le filtre reflètent les tags
+                    }
+                    catch (Exception erreur) { PageHint.Text = erreur.Message; }
+                }));
+            }
+            NoteTagsEditor.Visibility = NoteTagsEditor.Children.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
+        catch (Exception erreur) { PageHint.Text = erreur.Message; }
+    }
+
+    /// <summary>Ouvre un chemin via le shell (parite shell.openPath de l'Electron :
+    /// dossier -> Explorateur, fichier -> application par defaut).</summary>
+    private static void OuvrirDansExplorateur(string chemin)
+    {
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = chemin,
+            UseShellExecute = true,
+        });
+    }
+
+    private void OnNoteOuvrirDossier(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var dossier = Aven.Bridge.NotesService.Dir(Espace());
+            Directory.CreateDirectory(dossier); // parite ensureDir(notesDir)
+            OuvrirDansExplorateur(dossier);
+        }
+        catch (Exception erreur) { PageHint.Text = erreur.Message; }
+    }
+
+    /// <summary>Parite composeIntoChat : le texte atterrit dans le composeur de la
+    /// conversation de l'agent courant ( creee si aucune n'est ouverte ) — l'utilisateur
+    /// valide lui-meme avec Envoyer.</summary>
+    private void ComposerVersChat(string texte)
+    {
+        Composer.Text = texte;
+        if (!string.IsNullOrEmpty(_chatId) && _chat is not null)
+            OuvrirConversation(_chatId, _chatAgent, null);
+        else if (_chatEnCours)
+            OuvrirChat(null); // creation en vol : on rejoint la conversation naissante
+        else
+            NouvelleConversation(_chatAgent); // composeIntoChat : createChat si besoin
+        Composer.Focus(FocusState.Programmatic);
+    }
+
+    private void OnNoteJoindre(object sender, RoutedEventArgs e)
+    {
+        if (_noteOuverte is not { } note) return;
+        ComposerVersChat(Aven.Bridge.NotesService.TexteJoindre(note));
+    }
+
+    private async void OnNoteExporter(object sender, RoutedEventArgs e)
+    {
+        if (_noteOuverte is not { } note) return;
+        try
+        {
+            var picker = new Windows.Storage.Pickers.FileSavePicker
+            {
+                SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.DocumentsLibrary,
+                SuggestedFileName = Aven.Bridge.NotesService.NomExport(note.Title) + ".md",
+            };
+            picker.FileTypeChoices.Add("Markdown", new List<string> { ".md" });
+            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
+            var fichier = await picker.PickSaveFileAsync();
+            if (fichier is null) return; // annule (parite res.canceled)
+            await Windows.Storage.FileIO.WriteTextAsync(fichier, note.Markdown); // UTF-8 sans BOM
+            PageHint.Text = "Note exportée : " + fichier.Path;
+        }
+        catch (Exception erreur) { PageHint.Text = erreur.Message; }
+    }
+
+    private void OnFilesOpenExplorer(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var cible = Aven.Bridge.FilesService.SafeResolve(Espace(), _filesRelative);
+            OuvrirDansExplorateur(cible); // parite files:open (dossier courant)
+        }
+        catch (Exception erreur) { PageHint.Text = erreur.Message; }
+    }
+
+    private async void OnFilesAnalyser(object sender, RoutedEventArgs e)
+    {
+        // Bascule de la rangée d'agents (parite analyzeFor : un 2e clic referme).
+        if (FilesAnalyzeAgents.Visibility == Visibility.Visible)
+        {
+            FilesAnalyzeAgents.Visibility = Visibility.Collapsed;
+            return;
+        }
+        try
+        {
+            await AssurerAgentsAsync();
+            var ids = _agentsTaches.Count > 0
+                ? _agentsTaches.Select(a => a.Id).ToList()
+                : Aven.Bridge.ConversationClient.Tabs.ToList();
+            FilesAnalyzeAgents.Children.Clear();
+            foreach (var id in ids)
+            {
+                FilesAnalyzeAgents.Children.Add(BoutonÉtiquette(NomAgent(id), id, false, (_, _) =>
+                {
+                    var cible = _filesApercuChemin ?? _filesRelative;
+                    FilesAnalyzeAgents.Visibility = Visibility.Collapsed;
+                    ComposerVersChat(Aven.Bridge.FilesService.TexteAnalyse(cible));
+                }));
+            }
+            FilesAnalyzeAgents.Visibility = FilesAnalyzeAgents.Children.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
+        catch (Exception erreur) { PageHint.Text = erreur.Message; }
     }
 
     // ── Terminal Freebuff (phase 5) ──────────────────────────────────────

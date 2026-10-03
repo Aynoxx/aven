@@ -125,6 +125,11 @@ public static class FilesService
             Encoding.UTF8.GetString(buffer, 0, (int)Math.Min(buffer.Length, MaxTextBytes)));
     }
 
+    /// <summary>Texte injecté au composeur par « Faire analyser par un agent »
+    /// (parité askAgent de web/src/FilesView.tsx — chemin relatif de l'espace).</summary>
+    public static string TexteAnalyse(string chemin) =>
+        $"Analyse le fichier « {chemin} » de l'espace et explique-moi ce qu'il contient.";
+
     /// <summary>Fil d'ariane : segments { label, path } depuis la racine (parité breadcrumbOf).</summary>
     public static IReadOnlyList<Crumb> Breadcrumb(string? relative)
     {

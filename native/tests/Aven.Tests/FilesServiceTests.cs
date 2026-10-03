@@ -94,4 +94,11 @@ public class FilesServiceTests : IDisposable
         Assert.Equal([("Espace", ""), ("src", "src"), ("lib", "src/lib"), ("deep", "src/lib/deep")],
             crumbs.Select(c => (c.Label, c.Path)));
     }
+
+    [Fact]
+    public void TexteAnalyse_reproduit_le_format_du_web()
+    {
+        Assert.Equal("Analyse le fichier « src/main.ts » de l'espace et explique-moi ce qu'il contient.",
+            FilesService.TexteAnalyse("src/main.ts"));
+    }
 }

@@ -4,7 +4,7 @@ using Xunit;
 namespace Aven.Tests;
 
 /// <summary>
-/// Parité DISQUE de la phase 4 : le NotesService natif écrit exactement le format
+        // Parité DISQUE de la phase 4 (J4 fix) : le NotesService natif écrit exactement le format
 /// qu'electron/notes.ts et notes-meta.ts lisent (et réciproquement) — les deux apps
 /// partagent le même espace sans corruption. Vérifications byte-exactes du format
 /// (première ligne = titre, retour à la ligne final, meta JSON indenté).
