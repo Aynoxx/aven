@@ -8,7 +8,7 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
 
-    <Grid>
+    <Grid x:Name="Racine">
         <Grid.RowDefinitions>
             <RowDefinition Height="48" />
             <RowDefinition Height="Auto" />
@@ -393,25 +393,168 @@
                                    Foreground="{ThemeResource AvenTextBrush}" />
                         <TextBlock x:Name="PageHint" Text="" FontSize="13" TextWrapping="Wrap"
                                    Foreground="{ThemeResource AvenMutedBrush}" />
-                        <Border CornerRadius="18" Background="{ThemeResource AvenPanelBrush}"
+                        <Border x:Name="PagePlaceholder" CornerRadius="18" Background="{ThemeResource AvenPanelBrush}"
                                 BorderBrush="{ThemeResource AvenBorderBrush}" BorderThickness="1"
                                 Padding="18">
                             <TextBlock Text="Cette vue arrive en phases 3-6 du protocole MIGRATION-WINUI.md &#8212; la coquille, la navigation et le th&#232;me sont en place."
                                        TextWrapping="Wrap" FontSize="13"
                                        Foreground="{ThemeResource AvenMutedBrush}" />
                         </Border>
-                        <!-- Panneau Param&#232;tres (usage local) : version + stats dict&#233;es (SQLite,
-                             d&#233;cision &#167;5.3) &#8212; masqu&#233; par d&#233;faut, visible par OnSettings seul. -->
-                        <StackPanel x:Name="SettingsPanel" Visibility="Collapsed" Spacing="10">
-                            <Border CornerRadius="18" Background="{ThemeResource AvenPanelBrush}"
-                                    BorderBrush="{ThemeResource AvenBorderBrush}" BorderThickness="1" Padding="18">
-                                <StackPanel Spacing="6">
-                                    <TextBlock x:Name="SettingsVersion" FontSize="16" FontWeight="SemiBold"
-                                               Foreground="{ThemeResource AvenTextBrush}" />
-                                    <TextBlock x:Name="SettingsDictations" FontSize="13" TextWrapping="Wrap"
+                        <!-- Panneau Param&#232;tres (jalon 3, parit&#233; SettingsDialog v9.3.0) :
+                             3 onglets Configuration | Apparence | Usage &#8212; masqu&#233; par
+                             d&#233;faut, visible par OnSettings seul. Les bascules/curseurs sont
+                             branch&#233;s en C# (signatures d&#233;l&#233;gu&#233;s), les clics via XAML. -->
+                        <StackPanel x:Name="SettingsPanel" Visibility="Collapsed" Spacing="14">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button x:Name="OngletConfiguration" Content="Configuration" Tag="config"
+                                        Click="OnOngletParametres" MinHeight="30" Padding="14,6" />
+                                <Button x:Name="OngletApparence" Content="Apparence" Tag="apparence"
+                                        Click="OnOngletParametres" MinHeight="30" Padding="14,6" />
+                                <Button x:Name="OngletUsage" Content="Usage" Tag="usage"
+                                        Click="OnOngletParametres" MinHeight="30" Padding="14,6" />
+                            </StackPanel>
+
+                            <!-- Onglet Configuration (parit&#233; renderGeneral) : cl&#233;s, notifications,
+                                 diagnostic, priorit&#233;s, espaces, sync, versions. -->
+                            <StackPanel x:Name="PanneauConfiguration" Spacing="14">
+                                <TextBlock Text="Cl&#233;s API" FontSize="16" FontWeight="SemiBold"
+                                           Foreground="{ThemeResource AvenTextBrush}" />
+                                <TextBlock TextWrapping="Wrap" FontSize="13" Foreground="{ThemeResource AvenMutedBrush}"
+                                           Text="OpenRouter Free fournit les mod&#232;les gratuits des agents et Groq alimente la dict&#233;e vocale. Les cl&#233;s sont chiffr&#233;es par le syst&#232;me (DPAPI) et ne quittent jamais l&#8217;application." />
+                                <StackPanel x:Name="ClesListe" Spacing="10" />
+
+                                <TextBlock Text="Notifications de bureau" FontSize="16" FontWeight="SemiBold"
+                                           Foreground="{ThemeResource AvenTextBrush}" />
+                                <TextBlock TextWrapping="Wrap" FontSize="13" Foreground="{ThemeResource AvenMutedBrush}"
+                                           Text="Pr&#233;vient quand un agent a besoin de toi : permission demand&#233;e, formulaire, tour termin&#233;. Jamais quand la fen&#234;tre est au premier plan." />
+                                <ToggleSwitch x:Name="BasculeNotifications" Header="Activer les notifications" />
+
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Button Content="Copier le diagnostic" Click="OnDiagnostic" MinHeight="32" Padding="12,6"
+                                            Background="{ThemeResource AvenPanelSoftBrush}"
+                                            Foreground="{ThemeResource AvenTextBrush}" />
+                                    <TextBlock x:Name="DiagnosticEtat" VerticalAlignment="Center" FontSize="12"
                                                Foreground="{ThemeResource AvenMutedBrush}" />
                                 </StackPanel>
-                            </Border>
+
+                                <TextBlock Text="Priorit&#233; des mod&#232;les par agent" FontSize="16" FontWeight="SemiBold"
+                                           Foreground="{ThemeResource AvenTextBrush}" />
+                                <TextBlock TextWrapping="Wrap" FontSize="13" Foreground="{ThemeResource AvenMutedBrush}"
+                                           Text="Chaque agent re&#231;oit le premier mod&#232;le disponible de sa cha&#238;ne de priorit&#233; ; le routeur passe au suivant si ce mod&#232;le est indisponible." />
+                                <TextBlock x:Name="PrioritesTexte" TextWrapping="Wrap" FontSize="13"
+                                           Foreground="{ThemeResource AvenTextBrush}" />
+
+                                <TextBlock Text="Espaces" FontSize="16" FontWeight="SemiBold"
+                                           Foreground="{ThemeResource AvenTextBrush}" />
+                                <TextBlock TextWrapping="Wrap" FontSize="13" Foreground="{ThemeResource AvenMutedBrush}"
+                                           Text="Chaque espace a ses propres conversations, agents et priorit&#233;s. Les cl&#233;s API sont partag&#233;es entre tous. Retirer le dernier espace ram&#232;ne &#224; l&#8217;&#233;cran de choix." />
+                                <StackPanel x:Name="EspacesListe" Spacing="6" />
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Button Content="Cr&#233;er un nouvel espace&#8230;" Click="OnParamCreerEspace"
+                                            MinHeight="34" Padding="12,6" Background="{ThemeResource AvenAccentBrush}"
+                                            Foreground="White" />
+                                    <Button Content="Ouvrir un dossier existant&#8230;" Click="OnParamOuvrirEspace"
+                                            MinHeight="34" Padding="12,6" Background="{ThemeResource AvenPanelSoftBrush}"
+                                            Foreground="{ThemeResource AvenTextBrush}" />
+                                </StackPanel>
+                                <TextBlock x:Name="EspaceErreur" TextWrapping="Wrap" FontSize="13"
+                                           Foreground="{ThemeResource AvenDangerBrush}" />
+
+                                <TextBlock Text="Fichiers de config du dossier de travail" FontSize="16" FontWeight="SemiBold"
+                                           Foreground="{ThemeResource AvenTextBrush}" />
+                                <TextBlock x:Name="SyncTexte" TextWrapping="Wrap" FontSize="13"
+                                           Foreground="{ThemeResource AvenMutedBrush}" />
+
+                                <Border CornerRadius="18" Background="{ThemeResource AvenPanelBrush}"
+                                        BorderBrush="{ThemeResource AvenBorderBrush}" BorderThickness="1" Padding="18">
+                                    <TextBlock x:Name="SettingsVersion" FontSize="13" TextWrapping="Wrap"
+                                               Foreground="{ThemeResource AvenMutedBrush}" />
+                                </Border>
+                            </StackPanel>
+
+                            <!-- Onglet Apparence (parit&#233; renderAppearance, champs applicables) -->
+                            <StackPanel x:Name="PanneauApparence" Visibility="Collapsed" Spacing="14">
+                                <TextBlock Text="Th&#232;me" FontSize="16" FontWeight="SemiBold"
+                                           Foreground="{ThemeResource AvenTextBrush}" />
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Button x:Name="BoutonThemeClair" Content="Clair" Tag="light" Click="OnChoisirTheme"
+                                            MinHeight="30" Padding="14,6" />
+                                    <Button x:Name="BoutonThemeSysteme" Content="Syst&#232;me" Tag="system" Click="OnChoisirTheme"
+                                            MinHeight="30" Padding="14,6" />
+                                    <Button x:Name="BoutonThemeSombre" Content="Sombre" Tag="dark" Click="OnChoisirTheme"
+                                            MinHeight="30" Padding="14,6" />
+                                </StackPanel>
+
+                                <TextBlock Text="Accent" FontSize="16" FontWeight="SemiBold"
+                                           Foreground="{ThemeResource AvenTextBrush}" />
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Button x:Name="BoutonAccentViolet" Content="Violet" Tag="violet" Click="OnChoisirAccent"
+                                            MinHeight="30" Padding="12,6" />
+                                    <Button x:Name="BoutonAccentBleu" Content="Bleu" Tag="blue" Click="OnChoisirAccent"
+                                            MinHeight="30" Padding="12,6" />
+                                    <Button x:Name="BoutonAccentEmeraude" Content="&#201;meraude" Tag="emerald" Click="OnChoisirAccent"
+                                            MinHeight="30" Padding="12,6" />
+                                    <Button x:Name="BoutonAccentRose" Content="Rose" Tag="rose" Click="OnChoisirAccent"
+                                            MinHeight="30" Padding="12,6" />
+                                    <Button x:Name="BoutonAccentAmbre" Content="Ambre" Tag="amber" Click="OnChoisirAccent"
+                                            MinHeight="30" Padding="12,6" />
+                                    <Button x:Name="BoutonAccentPerso" Content="Personnalis&#233;e" Tag="custom" Click="OnChoisirAccent"
+                                            MinHeight="30" Padding="12,6" />
+                                </StackPanel>
+                                <ColorPicker x:Name="ChoixCouleur" Visibility="Collapsed" IsAlphaEnabled="False"
+                                             Width="280" Height="230" />
+
+                                <StackPanel Spacing="6">
+                                    <TextBlock x:Name="EtiquetteLargeurSidebar" FontSize="13"
+                                               Foreground="{ThemeResource AvenTextBrush}" />
+                                    <Slider x:Name="CurseurLargeurSidebar" Minimum="240" Maximum="420" StepFrequency="2"
+                                            Margin="0,0,120,0" />
+                                    <TextBlock x:Name="EtiquetteLargeurMessages" FontSize="13"
+                                               Foreground="{ThemeResource AvenTextBrush}" />
+                                    <Slider x:Name="CurseurLargeurMessages" Minimum="560" Maximum="1100" StepFrequency="10"
+                                            Margin="0,0,120,0" />
+                                </StackPanel>
+
+                                <TextBlock Text="&#201;l&#233;ments de l&#8217;interface" FontSize="16" FontWeight="SemiBold"
+                                           Foreground="{ThemeResource AvenTextBrush}" />
+                                <ToggleSwitch x:Name="BasculeSidebar" Header="Conversations" Tag="sidebar" />
+                                <ToggleSwitch x:Name="BasculeModele" Header="Mod&#232;le actif" Tag="model" />
+                                <ToggleSwitch x:Name="BasculeCompositeur" Header="&#201;diteur de message" Tag="composer" />
+                                <ToggleSwitch x:Name="BasculeGroupement" Header="Grouper les conversations par agent" Tag="group" />
+
+                                <TextBlock Text="Annonce vocale" FontSize="16" FontWeight="SemiBold"
+                                           Foreground="{ThemeResource AvenTextBrush}" />
+                                <TextBlock TextWrapping="Wrap" FontSize="13" Foreground="{ThemeResource AvenMutedBrush}"
+                                           Text="Annonce &#224; voix haute (voix Windows, hors ligne) les moments cl&#233;s des agents : permission demand&#233;e, tour termin&#233;, bascule de mod&#232;le. Jamais le contenu des r&#233;ponses. La voix se coupe automatiquement quand tu tapes." />
+                                <ToggleSwitch x:Name="BasculeVoix" Header="Annoncer les &#233;v&#233;nements des agents" Tag="voice" />
+                                <Button Content="Tester la voix" Click="OnTesterVoix" MinHeight="32" Padding="12,6"
+                                        Background="{ThemeResource AvenPanelSoftBrush}"
+                                        Foreground="{ThemeResource AvenTextBrush}" />
+
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Button Content="R&#233;initialiser" Click="OnResetApparence" MinHeight="32" Padding="12,6"
+                                            Background="{ThemeResource AvenPanelSoftBrush}"
+                                            Foreground="{ThemeResource AvenTextBrush}" />
+                                    <TextBlock x:Name="ApparenceEtat" VerticalAlignment="Center" FontSize="12"
+                                               Foreground="{ThemeResource AvenMutedBrush}" />
+                                </StackPanel>
+                            </StackPanel>
+
+                            <!-- Onglet Usage (parit&#233; renderUsage v9.3.0) : tuiles construites en C#. -->
+                            <StackPanel x:Name="PanneauUsage" Visibility="Collapsed" Spacing="12">
+                                <TextBlock Text="Usage de l&#8217;application" FontSize="16" FontWeight="SemiBold"
+                                           Foreground="{ThemeResource AvenTextBrush}" />
+                                <TextBlock TextWrapping="Wrap" FontSize="13" Foreground="{ThemeResource AvenMutedBrush}"
+                                           Text="Conversations, dict&#233;es et mod&#232;les &#8212; compt&#233;s dans l&#8217;espace actif." />
+                                <StackPanel x:Name="UsageStats" Spacing="8" />
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Button Content="Actualiser" Click="OnUsageActualiser" MinHeight="32" Padding="12,6"
+                                            Background="{ThemeResource AvenPanelSoftBrush}"
+                                            Foreground="{ThemeResource AvenTextBrush}" />
+                                    <TextBlock x:Name="UsageEtat" VerticalAlignment="Center" FontSize="12"
+                                               Foreground="{ThemeResource AvenMutedBrush}" />
+                                </StackPanel>
+                            </StackPanel>
                         </StackPanel>
                         <Button Content="&#8592; Retour au hub" Click="OnHome" MinHeight="36" Padding="14,6"
                                 Background="{ThemeResource AvenPanelSoftBrush}"

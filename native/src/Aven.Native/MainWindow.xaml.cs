@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json.Nodes;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
@@ -34,6 +35,12 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+
+        // Jalon 3 : apparence persistée (appearance.json) appliquée DÈS le démarrage,
+        // puis événements des contrôles Paramètres (délégés typés branchés en C#).
+        _apparence = Aven.Bridge.AppearanceService.Load(Aven.Bridge.AppData.Dir());
+        BrancherRéglages();
+        ApplerApparence();
 
         Title = "Aven";
         // Taille par défaut 1200×800 CLAMPÉE à la zone de travail : sur ce poste
@@ -107,6 +114,11 @@ public sealed partial class MainWindow : Window
     private Aven.Bridge.Note? _noteOuverte;
     private string? _noteNouvelleTags;
     private bool _dialogOuvert;
+
+    // ── Jalon 3 (parité SettingsDialog) : apparence persistée + garde anti-boucle ──
+    private Aven.Bridge.AppearanceConfig _apparence = Aven.Bridge.AppearanceService.Defaut;
+    private bool _majApparence; // Peupler* remplit les contrôles sans redéclencher les handlers
+    private readonly Dictionary<string, PasswordBox> _boitesCles = new();
 
     // ── Terminal Freebuff (phase 5) : machine à états testée + ConPTY réel ────
     private Aven.Bridge.FreebuffTerminal? _terminal;
@@ -207,6 +219,7 @@ public sealed partial class MainWindow : Window
         PageView.Visibility = Visibility.Visible;
         HubView.Visibility = Visibility.Collapsed;
         MasquerVues();
+        PagePlaceholder.Visibility = Visibility.Visible; // repli générique (OnSettings le masque)
         RafraîchirBannières(); // les bannières d'état ne vivent que hors hub (parité)
         // Connected Animation (parité du shared element v9.7.0) : la source
         // (carte du hub, bouton Terminal/Paramètres) DEVIENT l'en-tête de la page.
@@ -228,25 +241,673 @@ public sealed partial class MainWindow : Window
         RafraîchirAprèsChat(); // récents + sidebar fraîchis à chaque retour au hub
     }
 
+    // ── Jalon 3 (parité SettingsDialog v9.3.0) : page Paramètres 3 onglets ─────────
+    // Configuration (clés/notifications/diagnostic/priorités/espaces) | Apparence
+    // (thème/accent/largeurs/affichages/voix) | Usage (statistiques agrégées).
+
     private void OnSettings(object sender, RoutedEventArgs e)
     {
         PageTitle.Text = "Paramètres";
-        PageHint.Text = "Version, espace actif et statistiques locales — clés et réglages complets arrivent avec le panneau Configuration.";
+        PageHint.Text = "Configuration, apparence et usage de l'application.";
         OuvrirPageDepuis(HomeButton);
+        PagePlaceholder.Visibility = Visibility.Collapsed; // le panneau porte son contenu
         SettingsPanel.Visibility = Visibility.Visible;
-        SettingsVersion.Text = "Aven " + AppVersion + " — natif WinUI 3 (WASDK 1.7)";
+        AfficherOngletParametres("config");
+        PeuplerConfiguration();
+        PeuplerApparence();
+    }
+
+    private void OnOngletParametres(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button bouton || bouton.Tag is not string onglet) return;
+        AfficherOngletParametres(onglet);
+    }
+
+    private void AfficherOngletParametres(string onglet)
+    {
+        PanneauConfiguration.Visibility = onglet == "config" ? Visibility.Visible : Visibility.Collapsed;
+        PanneauApparence.Visibility = onglet == "apparence" ? Visibility.Visible : Visibility.Collapsed;
+        PanneauUsage.Visibility = onglet == "usage" ? Visibility.Visible : Visibility.Collapsed;
+        // Onglet actif en surbrillance (parité .settings-tabs .selected).
+        SurbrillerOnglet(OngletConfiguration, onglet == "config");
+        SurbrillerOnglet(OngletApparence, onglet == "apparence");
+        SurbrillerOnglet(OngletUsage, onglet == "usage");
+        if (onglet == "usage") PeuplerUsage(); // rechargé à chaque ouverture (parité useEffect)
+    }
+
+    private void SurbrillerOnglet(Button bouton, bool actif)
+    {
+        bouton.Background = BrushDe(actif ? "AvenAccentBrush" : "AvenPanelSoftBrush");
+        bouton.Foreground = actif ? new SolidColorBrush(Microsoft.UI.Colors.White) : BrushDe("AvenTextBrush");
+        bouton.BorderBrush = BrushDe(actif ? "AvenAccentBrush" : "AvenBorderBrush");
+    }
+
+    /// <summary>Onglet Configuration (parité renderGeneral) : recharge tout l'état
+    /// affiché depuis le BootService — clés, warnings, priorités, espaces, sync, versions.</summary>
+    private void PeuplerConfiguration()
+    {
+        var état = _boot.State;
+
+        // Clés API par fournisseur (parité state.providers + state.keys + keyWarnings).
+        ClesListe.Children.Clear();
+        _boitesCles.Clear();
+        foreach (var fournisseur in Aven.Bridge.Providers.Liste)
+            ClesListe.Children.Add(CarteClé(fournisseur, état));
+
+        // Notifications (parité api.prefs → prefs.json).
+        _majApparence = true;
         try
         {
-            // Stats SQLite (décision §5.3) : compteur + fenêtre 7 jours en une requête.
-            var stats = Aven.Bridge.StatsSqlite.ReadDictationStats(Espace());
-            var semaine = Aven.Bridge.StatsSqlite.History(Espace(), 7).Sum(h => h.Count);
-            SettingsDictations.Text = $"Dictées : {stats.Total} au total · {stats.DayCount} aujourd'hui · {semaine} sur 7 jours.";
+            BasculeNotifications.IsOn = Aven.Bridge.SettingsService.Load(Aven.Bridge.AppData.Dir()).Notifications;
+        }
+        finally { _majApparence = false; }
+
+        PrioritesTexte.Text = FormaterPriorites(état);
+
+        EspacesListe.Children.Clear();
+        foreach (var espace in _boot.ListerEspaces())
+            EspacesListe.Children.Add(RangéeEspace(espace, état.Workspace));
+
+        SyncTexte.Text = état.Sync.Count == 0
+            ? "Aucun fichier de config signalé pour l'instant (le seed se fait au démarrage de l'espace)."
+            : string.Join("\n", état.Sync.Select(s => "  " + s.File + " : " + LibelleSync(s.Status)));
+
+        var version = "OpenCode " + (état.Version ?? "?") + " · CLI : " + (état.Cli ?? "?")
+            + "\nDossier de travail actif : " + (état.Workspace ?? "?")
+            + "\nAven " + AppVersion + " — natif WinUI 3 (WASDK 1.7)";
+        if (état.Status == "error" && état.Error is not null) version += "\nMoteur : " + état.Error;
+        if (état.VersionWarning is not null) version += "\n" + état.VersionWarning;
+        if (état.NewModels.Count > 0)
+            version += "\nNouveaux modèles ajoutés à ta table de priorités : " + string.Join(", ", état.NewModels);
+        if (état.RemovedModels.Count > 0)
+            version += "\nModèles payants retirés de cet espace : " + string.Join(", ", état.RemovedModels);
+        SettingsVersion.Text = version;
+    }
+
+    /// <summary>Une carte clé par fournisseur (parité du champ .field du web) :</r
+    /// statut, avertissement, saisie masquée + Enregistrer / Effacer / Obtenir une clé.</summary>
+    private Border CarteClé(Aven.Bridge.ProviderInfo fournisseur, Aven.Bridge.AppModelState état)
+    {
+        var enregistrée = état.Keys.TryGetValue(fournisseur.Id, out var aClé) && aClé;
+        var bloc = new StackPanel { Spacing = 6 };
+
+        var titre = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        titre.Children.Add(new TextBlock
+        {
+            Text = fournisseur.Label,
+            FontSize = 14,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = BrushDe("AvenTextBrush"),
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        if (enregistrée)
+        {
+            titre.Children.Add(new TextBlock
+            {
+                Text = "\u2713 clé enregistrée",
+                FontSize = 12,
+                Foreground = BrushDe("AvenSuccessBrush"),
+                VerticalAlignment = VerticalAlignment.Center,
+            });
+        }
+        bloc.Children.Add(titre);
+        bloc.Children.Add(new TextBlock
+        {
+            Text = fournisseur.Note,
+            FontSize = 12,
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = BrushDe("AvenMutedBrush"),
+        });
+        if (état.KeyWarnings.TryGetValue(fournisseur.Id, out var avertissement))
+        {
+            bloc.Children.Add(new TextBlock
+            {
+                Text = avertissement,
+                FontSize = 12,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = BrushDe("AvenDangerBrush"),
+            });
+        }
+
+        var ligne = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        var boite = new PasswordBox
+        {
+            PlaceholderText = enregistrée ? "Remplacer la clé…" : "Coller la clé…",
+            Width = 240,
+            MinHeight = 32,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        _boitesCles[fournisseur.Id] = boite;
+        ligne.Children.Add(boite);
+
+        var enregistrer = new Button
+        {
+            Content = "Enregistrer",
+            MinHeight = 32,
+            Padding = new Thickness(12, 4, 12, 4),
+            Background = BrushDe("AvenAccentBrush"),
+            Foreground = new SolidColorBrush(Microsoft.UI.Colors.White),
+            IsEnabled = false,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        boite.PasswordChanged += (_, _) => enregistrer.IsEnabled = boite.Password.Trim().Length > 0;
+        var id = fournisseur.Id;
+        enregistrer.Click += async (_, _) => await EnregistrerCléAsync(id, boite.Password);
+        ligne.Children.Add(enregistrer);
+
+        if (enregistrée)
+        {
+            var effacer = new Button
+            {
+                Content = "Effacer",
+                MinHeight = 32,
+                Padding = new Thickness(12, 4, 12, 4),
+                Background = BrushDe("AvenPanelSoftBrush"),
+                Foreground = BrushDe("AvenDangerBrush"),
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            effacer.Click += async (_, _) => await EnregistrerCléAsync(id, "");
+            ligne.Children.Add(effacer);
+        }
+
+        var obtenir = new Button
+        {
+            Content = "Obtenir une clé",
+            MinHeight = 32,
+            Padding = new Thickness(12, 4, 12, 4),
+            Background = BrushDe("AvenPanelSoftBrush"),
+            Foreground = BrushDe("AvenTextBrush"),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        obtenir.Click += async (_, _) =>
+        {
+            try { await Windows.System.Launcher.LaunchUriAsync(new Uri(fournisseur.Url)); }
+            catch (Exception erreur) { EspaceErreur.Text = erreur.Message; }
+        };
+        ligne.Children.Add(obtenir);
+        bloc.Children.Add(ligne);
+
+        return new Border
+        {
+            CornerRadius = new CornerRadius(12),
+            Background = BrushDe("AvenPanelBrush"),
+            BorderBrush = BrushDe("AvenBorderBrush"),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(14, 10, 14, 10),
+            Child = bloc,
+        };
+    }
+
+    /// <summary>Sauvegarde/efface une clé puis relance le boot (parité api.setKey :
+    /// le main relit les clés et redémarre le moteur pour prendre l'env à jour).</summary>
+    private async Task EnregistrerCléAsync(string id, string cle)
+    {
+        try
+        {
+            EspaceErreur.Text = "";
+            Aven.Bridge.KeysService.Save(Aven.Bridge.AppData.Dir(), id, cle.Trim());
+            if (_boitesCles.TryGetValue(id, out var boite)) boite.Password = "";
+            if (_espace is not null) await _boot.BootAsync(_espace);
+            PeuplerConfiguration();
+        }
+        catch (Exception erreur) { EspaceErreur.Text = erreur.Message; }
+    }
+
+    private static string FormaterPriorites(Aven.Bridge.AppModelState état)
+    {
+        var lignes = new List<string>();
+        if (état.Warning is not null) lignes.Add("Table de priorités : " + état.Warning);
+        if (état.Assignments is JsonObject obj && obj.Count > 0)
+        {
+            foreach (var (agent, noeud) in obj)
+            {
+                var chaine = (noeud as JsonArray ?? [])
+                    .Select(m => Aven.Bridge.JsonAide.Texte(m, "label") ?? Aven.Bridge.JsonAide.Texte(m, "ref") ?? "")
+                    .Where(s => s.Length > 0)
+                    .ToList();
+                if (chaine.Count == 0)
+                {
+                    lignes.Add(agent + " : aucun modèle disponible");
+                    continue;
+                }
+                var cinq = string.Join("  \u2192  ", chaine.Take(5).Select((l, i) => (i + 1) + ". " + l));
+                lignes.Add(agent + " : " + cinq + (chaine.Count > 5 ? "  (+" + (chaine.Count - 5) + ")" : ""));
+            }
+        }
+        else if (lignes.Count == 0)
+        {
+            lignes.Add("Moteur non démarré — les priorités apparaîtront ici au boot.");
+        }
+        return string.Join("\n", lignes);
+    }
+
+    private static string LibelleSync(string status) => status switch
+    {
+        "created" => "créé",
+        "updated" => "mis à jour automatiquement (tu ne l'avais pas modifié)",
+        "unchanged" => "à jour",
+        "custom" => "personnalisé — laissé tel quel",
+        _ => status,
+    };
+
+    /// <summary>Une ligne d'espace : nom (actif en surbrillance) + chemin + Utiliser /
+    /// Retirer — parité de la liste workspaces du web.</summary>
+    private Border RangéeEspace(Aven.Bridge.WorkspaceEntry espace, string? actif)
+    {
+        var estActif = actif is not null &&
+            string.Equals(Path.GetFullPath(espace.Path), Path.GetFullPath(actif), StringComparison.OrdinalIgnoreCase);
+        var ligne = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        var infos = new StackPanel { Spacing = 2 };
+        infos.Children.Add(new TextBlock
+        {
+            Text = (estActif ? "\u25CF " : "") + espace.Name,
+            FontSize = 13,
+            FontWeight = estActif ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal,
+            Foreground = BrushDe(estActif ? "AvenAccentBrush" : "AvenTextBrush"),
+        });
+        infos.Children.Add(new TextBlock
+        {
+            Text = espace.Path,
+            FontSize = 11,
+            Foreground = BrushDe("AvenMutedBrush"),
+        });
+        ligne.Children.Add(infos);
+
+        if (!estActif)
+        {
+            var utiliser = new Button
+            {
+                Content = "Utiliser",
+                MinHeight = 30,
+                Padding = new Thickness(12, 4, 12, 4),
+                Background = BrushDe("AvenPanelSoftBrush"),
+                Foreground = BrushDe("AvenTextBrush"),
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            var chemin = espace.Path;
+            utiliser.Click += (_, _) => ActiverEspace(chemin);
+            ligne.Children.Add(utiliser);
+        }
+
+        var retirer = new Button
+        {
+            Content = "Retirer de la liste",
+            MinHeight = 30,
+            Padding = new Thickness(12, 4, 12, 4),
+            Background = BrushDe("AvenPanelSoftBrush"),
+            Foreground = BrushDe("AvenDangerBrush"),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        var àRetirer = espace.Path;
+        retirer.Click += (_, _) => RetirerEspace(àRetirer);
+        ligne.Children.Add(retirer);
+
+        return new Border
+        {
+            CornerRadius = new CornerRadius(10),
+            Background = BrushDe("AvenPanelBrush"),
+            BorderBrush = BrushDe("AvenBorderBrush"),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(12, 8, 12, 8),
+            Child = ligne,
+        };
+    }
+
+    /// <summary>Retirer un espace (parité removeWs) : le dernier retiré ramène à
+    /// l'écran de choix (aucun dossier n'est créé à ta place), sinon l'espace actif
+    /// parti cède la place au premier restant.</summary>
+    private void RetirerEspace(string chemin)
+    {
+        try
+        {
+            var dataDir = Aven.Bridge.AppData.Dir();
+            var restantes = Aven.Bridge.WorkspacesService.Remove(dataDir, chemin);
+            if (restantes.Count == 0)
+            {
+                _espace = null;
+                _boot.PublierBesoinEspace();
+                SettingsPanel.Visibility = Visibility.Collapsed;
+                AfficherChoixEspace(true);
+                return;
+            }
+            if (_boot.ActiveWorkspace() is null)
+                ActiverEspace(restantes[0].Path); // l'espace actif partait : on en choisit un autre
+            PeuplerConfiguration();
+        }
+        catch (Exception erreur) { EspaceErreur.Text = erreur.Message; }
+    }
+
+    private async void OnParamCreerEspace(object sender, RoutedEventArgs e) => await ChoisirEspaceAsync(creer: true);
+
+    private async void OnParamOuvrirEspace(object sender, RoutedEventArgs e) => await ChoisirEspaceAsync(creer: false);
+
+    /// <summary>Diagnostic copiable (parité api.diagnostic) : un JSON lisible SANS
+    /// aucune clé API — la rédaction de Diagnostic.Build passe sur le document entier.</summary>
+    private void OnDiagnostic(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var état = _boot.State;
+            var texte = Aven.Bridge.Diagnostic.Build(new Aven.Bridge.DiagnosticInput(
+                Versions: new Dictionary<string, string?>
+                {
+                    ["app"] = AppVersion,
+                    ["os"] = Environment.OSVersion.VersionString,
+                    ["dotnet"] = Environment.Version.ToString(),
+                },
+                Platform: Environment.OSVersion.Platform + "-" + System.Runtime.InteropServices.RuntimeInformation.OSArchitecture,
+                Status: état.Status + (état.Error is null ? "" : " — " + état.Error),
+                OpencodeVersion: état.Version,
+                Cli: état.Cli,
+                // Jamais de VALEUR de clé : seulement les ids des providers présents.
+                KeyIds: état.Keys.Where(kv => kv.Value).Select(kv => kv.Key).ToList(),
+                Assignments: état.Assignments,
+                Warning: état.Warning ?? état.VersionWarning,
+                KeyWarnings: état.KeyWarnings,
+                Workspace: état.Workspace,
+                Workspaces: _boot.ListerEspaces().Select(w => w.Path).ToList(),
+                Log:
+                [
+                    "status=" + état.Status,
+                    "sync=" + string.Join(",", état.Sync.Select(s => s.File + ":" + s.Status)),
+                    "newModels=" + string.Join(",", état.NewModels),
+                ]));
+            var paquet = new Windows.ApplicationModel.DataTransfer.DataPackage();
+            paquet.SetText(texte);
+            Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(paquet);
+            try { Windows.ApplicationModel.DataTransfer.Clipboard.Flush(); } catch { /* best effort */ }
+            DiagnosticEtat.Text = "Diagnostic copié (sans aucune clé API).";
+        }
+        catch (Exception erreur) { DiagnosticEtat.Text = erreur.Message; }
+    }
+
+    /// <summary>Onglet Usage (parité renderUsage) : mêmes agrégats que l'Electron
+    /// (compteurs = conversations par modèle, agentIds = les 4 onglets).</summary>
+    private async void PeuplerUsage()
+    {
+        UsageStats.Children.Clear();
+        UsageEtat.Text = "Chargement…";
+        try
+        {
+            var espace = _espace ?? "";
+            var note = "";
+            var chats = new List<Aven.Bridge.ChatInfo>();
+            if (_boot.Client is not null && espace.Length > 0)
+            {
+                try
+                {
+                    chats = (await _boot.Client.ListChatsAsync(espace, agent: null, includeArchived: true)).ToList();
+                }
+                catch (Exception erreur) { note = "Moteur indisponible : " + erreur.Message; }
+            }
+            var dictations = espace.Length > 0
+                ? Aven.Bridge.StatsSqlite.ReadDictationStats(espace)
+                : new Aven.Bridge.DictationStats(0, "", 0);
+            var compteurs = chats.Where(c => c.Model is not null)
+                .GroupBy(c => c.Model!)
+                .ToDictionary(g => g.Key, g => (long)g.Count());
+            var payload = new Aven.Bridge.StatsService.StatsPayload(
+                chats.Select(c => new Aven.Bridge.StatsService.ChatLite(c.Id, c.Agent, c.Archived)).ToList(),
+                dictations,
+                compteurs);
+            var agrégé = Aven.Bridge.StatsService.Aggregate(payload, Aven.Bridge.ConversationClient.Tabs);
+
+            AjouterTuile(UsageStats, agrégé.TotalChats.ToString(), "conversations actives");
+            AjouterTuile(UsageStats, agrégé.ArchivedChats.ToString(), "archivées");
+            AjouterTuile(UsageStats, agrégé.DictationsTotal.ToString(),
+                "dictées (" + agrégé.DictationsToday + " aujourd'hui)");
+            foreach (var (agent, compte) in agrégé.PerAgent)
+                AjouterTuile(UsageStats, compte.ToString(), "conversations · " + NomAgent(agent));
+            if (agrégé.TopModels.Count > 0)
+            {
+                AjouterTuile(UsageStats,
+                    string.Join(" · ", agrégé.TopModels.Select(m => m.Model + " (" + m.Count + ")")),
+                    "modèles les plus utilisés");
+            }
+            UsageEtat.Text = note;
         }
         catch (Exception erreur)
         {
-            SettingsDictations.Text = "Stats indisponibles : " + erreur.Message;
+            UsageEtat.Text = "Stats indisponibles : " + erreur.Message;
         }
     }
+
+    private void AjouterTuile(StackPanel conteneur, string valeur, string libelle)
+    {
+        var ligne = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
+        ligne.Children.Add(new TextBlock
+        {
+            Text = valeur,
+            FontSize = 20,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = BrushDe("AvenAccentBrush"),
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        ligne.Children.Add(new TextBlock
+        {
+            Text = libelle,
+            FontSize = 13,
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = BrushDe("AvenMutedBrush"),
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        conteneur.Children.Add(new Border
+        {
+            CornerRadius = new CornerRadius(12),
+            Background = BrushDe("AvenPanelBrush"),
+            BorderBrush = BrushDe("AvenBorderBrush"),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(14, 10, 14, 10),
+            Child = ligne,
+        });
+    }
+
+    private void OnUsageActualiser(object sender, RoutedEventArgs e) => PeuplerUsage();
+
+    // ── Onglet Apparence : thème/accent/largeurs appliqués EN DIRECT à la fenêtre ────
+
+    private void OnChoisirTheme(object sender, RoutedEventArgs e)
+    {
+        if (_majApparence || sender is not Button bouton || bouton.Tag is not string theme) return;
+        _apparence = _apparence with { Theme = theme };
+        EnregistrerApparence();
+    }
+
+    private void OnChoisirAccent(object sender, RoutedEventArgs e)
+    {
+        if (_majApparence || sender is not Button bouton || bouton.Tag is not string accent) return;
+        _apparence = _apparence with { Accent = accent };
+        EnregistrerApparence();
+    }
+
+    private void OnResetApparence(object sender, RoutedEventArgs e)
+    {
+        if (_majApparence) return;
+        _apparence = Aven.Bridge.AppearanceService.Defaut;
+        EnregistrerApparence();
+        ApparenceEtat.Text = "Réglages réinitialisés.";
+    }
+
+    /// <summary>Parité api.announcerTest : la voix SE PARLE quel que soit l'état de
+    /// l'opt-in (c'est le test qui doit convaincre de l'activer).</summary>
+    private void OnTesterVoix(object sender, RoutedEventArgs e) =>
+        _ = ParlerAsync("Annonce vocale activée. Les événements des agents seront annoncés.");
+
+    /// <summary>Test de voix : parle TOUJOURS (même opt-in off) — même comportement
+    /// que api.announcerTest côté web.</summary>
+    private async Task ParlerAsync(string texte)
+    {
+        try
+        {
+            var sûr = texte.Replace("'", "''");
+            await ExécuterPowerShell(
+                $"Add-Type -AssemblyName System.Speech; (New-Object System.Speech.Synthesis.SpeechSynthesizer).Speak('{sûr}')");
+        }
+        catch (Exception erreur) { ApparenceEtat.Text = erreur.Message; }
+    }
+
+    /// <summary>Branche les événements des contrôles Paramètres : délégés typés en C#
+    /// (Slider/ColorPicker/ToggleSwitch — signatures d'événements non garantis côté XAML).
+    /// Appelé UNE fois au ctor, après InitializeComponent.</summary>
+    private void BrancherRéglages()
+    {
+        BasculeNotifications.Toggled += (_, _) =>
+        {
+            if (_majApparence) return;
+            try
+            {
+                Aven.Bridge.SettingsService.SaveNotifications(Aven.Bridge.AppData.Dir(), BasculeNotifications.IsOn);
+            }
+            catch (Exception erreur) { EspaceErreur.Text = erreur.Message; }
+        };
+        CurseurLargeurSidebar.ValueChanged += (_, _) =>
+        {
+            if (_majApparence) return;
+            _apparence = _apparence with { SidebarWidth = (int)Math.Round(CurseurLargeurSidebar.Value) };
+            EnregistrerApparence();
+        };
+        CurseurLargeurMessages.ValueChanged += (_, _) =>
+        {
+            if (_majApparence) return;
+            _apparence = _apparence with { MessageWidth = (int)Math.Round(CurseurLargeurMessages.Value) };
+            EnregistrerApparence();
+        };
+        ChoixCouleur.ColorChanged += (_, _) =>
+        {
+            if (_majApparence) return;
+            _apparence = _apparence with { Accent = "custom", CustomAccent = ColorVersHex(ChoixCouleur.Color) };
+            EnregistrerApparence();
+        };
+        BasculeSidebar.Toggled += (_, _) => MajBascule("sidebar", BasculeSidebar.IsOn);
+        BasculeModele.Toggled += (_, _) => MajBascule("model", BasculeModele.IsOn);
+        BasculeCompositeur.Toggled += (_, _) => MajBascule("composer", BasculeCompositeur.IsOn);
+        BasculeGroupement.Toggled += (_, _) => MajBascule("group", BasculeGroupement.IsOn);
+        BasculeVoix.Toggled += (_, _) => MajBascule("voice", BasculeVoix.IsOn);
+    }
+
+    private void MajBascule(string cle, bool valeur)
+    {
+        if (_majApparence) return;
+        _apparence = cle switch
+        {
+            "sidebar" => _apparence with { ShowSidebar = valeur },
+            "model" => _apparence with { ShowModel = valeur },
+            "composer" => _apparence with { ShowComposer = valeur },
+            "group" => _apparence with { ChatsGroupedByAgent = valeur },
+            "voice" => _apparence with { VoiceAnnouncements = valeur },
+            _ => _apparence,
+        };
+        EnregistrerApparence();
+        if (cle == "group") ConstruireSidebar(); // regroupement appliqué immédiatement
+    }
+
+    /// <summary>Sauvegarde (appearance.json compact atomique) puis application EN DIRECT
+    /// + resynchronisation des contrôles (parité updateAppearance du hook web).</summary>
+    private void EnregistrerApparence()
+    {
+        try { _apparence = Aven.Bridge.AppearanceService.Save(Aven.Bridge.AppData.Dir(), _apparence); }
+        catch (Exception erreur) { ApparenceEtat.Text = "Sauvegarde impossible : " + erreur.Message; }
+        ApplerApparence();
+        if (SettingsPanel.Visibility == Visibility.Visible) PeuplerApparence();
+    }
+
+    /// <summary>Applique l'apparence à la fenêtre (parité useAppearance : dataset.theme,
+    /// --accent, --sidebar-width, --message-width + visibilités d'interface).</summary>
+    private void ApplerApparence()
+    {
+        _majApparence = true;
+        try
+        {
+            // Thème : la racine est la source unique ; « system » = thème de Windows.
+            Racine.RequestedTheme = _apparence.Theme switch
+            {
+                "dark" => ElementTheme.Dark,
+                "light" => ElementTheme.Light,
+                _ => ElementTheme.Default,
+            };
+
+            // Accent (parité --accent) : couleur partagée + brushes dérivées
+            // (Soft = accent à 8 %, Border = accent à 30 % — comme le color-mix CSS).
+            var couleur = HexVersColor(Aven.Bridge.AppearanceService.CouleurAccent(_apparence));
+            Application.Current.Resources["AvenAccentColor"] = couleur;
+            RemplacerBrush("AvenAccentBrush", couleur, 0xFF);
+            RemplacerBrush("AvenAccentSoftBrush", couleur, 0x14);
+            RemplacerBrush("AvenAccentBorderBrush", couleur, 0x4D);
+
+            // Largeurs (parité --sidebar-width / --message-width).
+            ChatSidebar.Width = _apparence.SidebarWidth;
+            ChatRows.MaxWidth = _apparence.MessageWidth;
+
+            // Éléments de l'interface (parité show*).
+            ModelButton.Visibility = _apparence.ShowModel ? Visibility.Visible : Visibility.Collapsed;
+            if (ChatScroll.Visibility == Visibility.Visible)
+            {
+                ChatSidebar.Visibility = _apparence.ShowSidebar ? Visibility.Visible : Visibility.Collapsed;
+                ComposerBar.Visibility = _apparence.ShowComposer ? Visibility.Visible : Visibility.Collapsed;
+            }
+
+            // Opt-in vocal (v8.7.9) : le réglage suit l'annonceur, créé au boot.
+            _annonceur?.SetEnabled(_apparence.VoiceAnnouncements);
+        }
+        finally { _majApparence = false; }
+    }
+
+    private static void RemplacerBrush(string cle, Windows.UI.Color baseColor, byte alpha)
+    {
+        var couleur = alpha == 0xFF
+            ? baseColor
+            : Windows.UI.Color.FromArgb(alpha, baseColor.R, baseColor.G, baseColor.B);
+        if (Application.Current.Resources[cle] is SolidColorBrush pinceau)
+        {
+            try { pinceau.Color = couleur; return; } // instance partagée : tout l'écran suit
+            catch (InvalidOperationException) { /* ressource gelée : on remplace l'entrée */ }
+        }
+        Application.Current.Resources[cle] = new SolidColorBrush(couleur);
+    }
+
+    /// <summary>Remplit les contrôles de l'onglet Apparence sans redéclencher les
+    /// handlers (garde _majApparence) — parité du rendu depuis l'état.</summary>
+    private void PeuplerApparence()
+    {
+        _majApparence = true;
+        try
+        {
+            CurseurLargeurSidebar.Value = _apparence.SidebarWidth;
+            CurseurLargeurMessages.Value = _apparence.MessageWidth;
+            EtiquetteLargeurSidebar.Text = "Largeur de la barre latérale  " + _apparence.SidebarWidth + "px";
+            EtiquetteLargeurMessages.Text = "Largeur des messages  " + _apparence.MessageWidth + "px";
+            BasculeSidebar.IsOn = _apparence.ShowSidebar;
+            BasculeModele.IsOn = _apparence.ShowModel;
+            BasculeCompositeur.IsOn = _apparence.ShowComposer;
+            BasculeGroupement.IsOn = _apparence.ChatsGroupedByAgent;
+            BasculeVoix.IsOn = _apparence.VoiceAnnouncements;
+            SurbrillerOnglet(BoutonThemeClair, _apparence.Theme == "light");
+            SurbrillerOnglet(BoutonThemeSysteme, _apparence.Theme == "system");
+            SurbrillerOnglet(BoutonThemeSombre, _apparence.Theme == "dark");
+            SurbrillerOnglet(BoutonAccentViolet, _apparence.Accent == "violet");
+            SurbrillerOnglet(BoutonAccentBleu, _apparence.Accent == "blue");
+            SurbrillerOnglet(BoutonAccentEmeraude, _apparence.Accent == "emerald");
+            SurbrillerOnglet(BoutonAccentRose, _apparence.Accent == "rose");
+            SurbrillerOnglet(BoutonAccentAmbre, _apparence.Accent == "amber");
+            SurbrillerOnglet(BoutonAccentPerso, _apparence.Accent == "custom");
+            ChoixCouleur.Visibility = _apparence.Accent == "custom" ? Visibility.Visible : Visibility.Collapsed;
+            try { ChoixCouleur.Color = HexVersColor(_apparence.CustomAccent); }
+            catch (FormatException) { /* hex déjà sanitisé par le service */ }
+        }
+        finally { _majApparence = false; }
+    }
+
+    private static Windows.UI.Color HexVersColor(string hex)
+    {
+        var s = hex.TrimStart('#');
+        return Windows.UI.Color.FromArgb(255,
+            Convert.ToByte(s.Substring(0, 2), 16),
+            Convert.ToByte(s.Substring(2, 2), 16),
+            Convert.ToByte(s.Substring(4, 2), 16));
+    }
+
+    private static string ColorVersHex(Windows.UI.Color couleur) =>
+        "#" + couleur.R.ToString("x2") + couleur.G.ToString("x2") + couleur.B.ToString("x2");
 
     // ── Socle parité v10.0.0 : démarrage, registre d'espaces, bannières ──────────
 
@@ -421,8 +1082,8 @@ public sealed partial class MainWindow : Window
             _ = DémarrerChat();
         }
         ChatScroll.Visibility = Visibility.Visible;
-        ComposerBar.Visibility = Visibility.Visible;
-        ChatSidebar.Visibility = Visibility.Visible; // parité : la liste suit la conversation
+        ComposerBar.Visibility = _apparence.ShowComposer ? Visibility.Visible : Visibility.Collapsed;
+        ChatSidebar.Visibility = _apparence.ShowSidebar ? Visibility.Visible : Visibility.Collapsed; // réglage Apparence (défaut : suit la conversation)
         _ = RafraîchirSidebarAsync();
         Composer.Focus(FocusState.Programmatic);
     }
@@ -528,8 +1189,8 @@ public sealed partial class MainWindow : Window
             OuvrirPageDepuis(source); // flip si on vient du hub (masque les autres vues)
         MasquerVues();
         ChatScroll.Visibility = Visibility.Visible;
-        ComposerBar.Visibility = Visibility.Visible;
-        ChatSidebar.Visibility = Visibility.Visible;
+        ComposerBar.Visibility = _apparence.ShowComposer ? Visibility.Visible : Visibility.Collapsed;
+        ChatSidebar.Visibility = _apparence.ShowSidebar ? Visibility.Visible : Visibility.Collapsed;
         PageTitle.Text = agent == "projet" ? "Projet" : NomAgent(agent);
         PageHint.Text = "Conversation " + agent;
 
@@ -575,8 +1236,8 @@ public sealed partial class MainWindow : Window
         if (PageView.Visibility != Visibility.Visible) OuvrirPageDepuis(null);
         MasquerVues();
         ChatScroll.Visibility = Visibility.Visible;
-        ComposerBar.Visibility = Visibility.Visible;
-        ChatSidebar.Visibility = Visibility.Visible;
+        ComposerBar.Visibility = _apparence.ShowComposer ? Visibility.Visible : Visibility.Collapsed;
+        ChatSidebar.Visibility = _apparence.ShowSidebar ? Visibility.Visible : Visibility.Collapsed;
         ChatRows.Children.Clear();
         _chatRendu = null;
         _chatId = null;
