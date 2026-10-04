@@ -1,172 +1,76 @@
-using System;
-using System.Reflection;
+using Microsoft.Windows.AppNotifications;
+using Microsoft.Windows.AppNotifications.Builder;
 
 namespace Aven.Native;
 
 /// <summary>
-/// Notifications de bureau (jalon 7) — aucune ne sort jamais en avant-plan.
-/// Les méthodes essaient les deux API Windows les plus probables et ne
-/// remontent aucune erreur : si la plate-forme n'est pas disponible sur ce
-/// SDK, l'envoi se contente de ne pas se faire.
+/// Jalon 7 — notifications de bureau via l'API TYPÉE du Windows App SDK 1.7
+/// (<c>AppNotificationManager</c> + <c>AppNotificationBuilder</c>, parité de la
+/// spéc « Notifications hub → AppNotification » de MIGRATION-WINUI.md).
+/// Contrat : aucun appelant ne reçoit jamais d'erreur — <see cref="Afficher"/> et
+/// <see cref="ViderTous"/> rattrapent tout (session sans coquille MSIX, notifications
+/// désactivées par l'utilisateur, SDK absent) et se contentent de ne pas envoyer.
+/// Le clic sur le toast remonte via <see cref="ClicSurToast"/> (branché par la fenêtre
+/// principale pour ramener Aven au premier plan — parité « n.on(click) » d'Electron).
 /// </summary>
 public static class NotificationService
 {
-    public static void Afficher(string message)
+    private static readonly object Verrou = new();
+    private static bool _registré;
+
+    /// <summary>Déclenché quand l'utilisateur clique sur un toast (thread d'arrière-plan
+    /// WinAppSDK — l'abonné est tenu de rétroprojecter sur le thread UI).</summary>
+    public static event Action? ClicSurToast;
+
+    /// <summary>Publie un toast (titre + corps). Jamais d'exception : en cas d'indisponibilité
+    /// de la plate-forme, l'envoi est silencieusement ignoré.</summary>
+    public static void Afficher(string titre, string corps)
     {
-        if (string.IsNullOrWhiteSpace(message)) return;
-
+        if (string.IsNullOrWhiteSpace(corps)) return;
         try
         {
-            TrySendToastUpLevel(message);
+            Enregistrer();
+            var toast = new AppNotificationBuilder()
+                .AddText(string.IsNullOrEmpty(titre) ? "Aven" : titre)
+                .AddText(corps)
+                .BuildNotification();
+            AppNotificationManager.Default.Show(toast);
         }
         catch
         {
-            // Silent.
-        }
-
-        try
-        {
-            TrySendAppNotificationBuilder(message);
-        }
-        catch
-        {
-            // Silent.
+            // Silencieux : la notification n'est jamais bloquante ni observable comme erreur.
         }
     }
 
-    private static void TrySendToastUpLevel(string message)
-    {
-        var managerType = Type.GetType("Windows.UI.Notifications.ToastNotificationManager");
-        if (managerType is null) return;
-
-        var createMethod = managerType.GetMethod("CreateToastNotifier", BindingFlags.Public | BindingFlags.Static);
-        if (createMethod is null) return;
-
-        var notifier = createMethod.Invoke(null, Array.Empty<object>());
-        if (notifier is null) return;
-
-        var showMethod = notifier.GetType().GetMethod("Show", BindingFlags.Public | BindingFlags.Instance);
-        if (showMethod is null) return;
-
-        var content = ResolveToastContent(managerType, message);
-        if (content is not null)
-        {
-            try
-            {
-                showMethod.Invoke(notifier, new object[] { content });
-            }
-            catch
-            {
-                // Silent.
-            }
-        }
-    }
-
-    private static object? ResolveToastContent(Type? managerType, string message)
-    {
-        if (managerType is null) return null;
-
-        var content = managerType.Assembly?.GetType("Windows.UI.Notifications.ToastContent");
-        if (content is null) return null;
-
-        var text02 = managerType.Assembly?.GetType("Windows.UI.Notifications.Text02");
-        object? text = null;
-        try
-        {
-            if (text02 is not null)
-            {
-                var ctor = text02.GetConstructor(BindingFlags.Public | BindingFlags.Instance, null, new[] { typeof(string) }, Array.Empty<ParameterModifier>());
-                text = ctor?.Invoke(new object[] { message });
-            }
-        }
-        catch
-        {
-            text = null;
-        }
-
-        var textArg = managerType.Assembly?.GetType("Windows.UI.Notifications.Text01")
-            ?? text02
-            ?? typeof(object);
-
-        var c = content.GetConstructor(BindingFlags.Public | BindingFlags.Instance, null, new[] { textArg }, Array.Empty<ParameterModifier>());
-        if (c is null) return null;
-
-        try
-        {
-            return c.Invoke(new object[] { text });
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static void TrySendAppNotificationBuilder(string message)
-    {
-        var builderAsm = Type.GetType(
-            "Microsoft.Windows.AppNotifications.Builder.Projection, Microsoft.Windows.AppNotifications.Builder.Projection, Culture=neutral, PublicKeyToken=61733769cca94f40");
-
-        if (builderAsm is null) return;
-
-        var builderType = builderAsm.Assembly?.GetType("Microsoft.Windows.AppNotifications.Builder.Projection.AppNotificationBuilder");
-        if (builderType is null) return;
-
-        var createMethod = builderType.GetMethod("Create", BindingFlags.Public | BindingFlags.Static);
-        if (createMethod is null) return;
-
-        var text01 = builderAsm.Assembly?.GetType("Microsoft.Windows.AppNotifications.Builder.Projection.ContentText01");
-        var text02 = builderAsm.Assembly?.GetType("Microsoft.Windows.AppNotifications.Builder.Projection.ContentText02");
-
-        object? text = null;
-        try
-        {
-            if (text01 is not null)
-            {
-                var ctor = text01.GetConstructor(BindingFlags.Public | BindingFlags.Instance, null, new[] { typeof(string) }, Array.Empty<ParameterModifier>());
-                text = ctor?.Invoke(new object[] { message });
-            }
-        }
-        catch
-        {
-            text = null;
-        }
-
-        if (text is null && text02 is not null)
-        {
-            try
-            {
-                var ctor = text02.GetConstructor(BindingFlags.Public | BindingFlags.Instance, null, new[] { typeof(string) }, Array.Empty<ParameterModifier>());
-                text = ctor?.Invoke(new object[] { message });
-            }
-            catch
-            {
-                text = null;
-            }
-        }
-
-        if (text is null) return;
-
-        var args = new object?[] { text01 is not null ? text01 : (text02 is not null ? text02 : typeof(object)) };
-        try
-        {
-            var content = createMethod.Invoke(null, args);
-            if (content is null) return;
-
-            var managerType = builderAsm.Assembly?.GetType("Microsoft.Windows.AppNotifications.Builder.Projection.AppNotificationManager");
-            var showMethod = managerType?.GetMethod("Show", BindingFlags.Public | BindingFlags.Static);
-            if (showMethod is not null)
-            {
-                showMethod.Invoke(null, new object[] { content });
-            }
-        }
-        catch
-        {
-            // Silent.
-        }
-    }
-
+    /// <summary>Retire tous les toasts en attente (idempotent, jamais d'exception).</summary>
     public static void ViderTous()
     {
-        // Idempotent by design.
+        try
+        {
+            Enregistrer();
+            AppNotificationManager.Default.RemoveAllAsync().GetAwaiter().GetResult();
+        }
+        catch
+        {
+            // Silencieux (parité de l'ancien comportement « no-op sûr »).
+        }
+    }
+
+    /// <summary>Enregistrement unique : handler d'activation + Register() du SDK.
+    /// <c>Register()</c> est requis pour recevoir les clics (activation) ; empaqueté
+    /// comme portable, une deuxième fois lèverait — d'où le verrou.</summary>
+    private static void Enregistrer()
+    {
+        lock (Verrou)
+        {
+            if (_registré) return;
+            AppNotificationManager.Default.NotificationInvoked += (_, _) =>
+            {
+                try { ClicSurToast?.Invoke(); }
+                catch { /* jamais d'exception depuis le SDK */ }
+            };
+            AppNotificationManager.Default.Register();
+            _registré = true;
+        }
     }
 }

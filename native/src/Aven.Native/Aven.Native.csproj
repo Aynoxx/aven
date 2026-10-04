@@ -44,7 +44,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- J7 (04/10/2026) : seul tray.ico du tray est copié dans l'output (donc dans le
+         zip portable) — le wildcard Content ne va qu'au MSIX. Copier Assets/terminal
+         out aussi activerait l'écran VT WebView2 dans le portable : l'arbre UIA s'y
+         arrête alors au panneau WebView2 (constaté au probe du 04/10), rendant les
+         contrôles du bas inaccessibles aux clients d'accessibilité ET au smoke. -->
     <Content Include="Assets\**\*" />
+    <Content Update="Assets\tray.ico" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

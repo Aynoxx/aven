@@ -31,24 +31,34 @@ function chunk(type, data) {
   return Buffer.concat([len, body, crc])
 }
 
-// Rend un PNG RGBA w×h : losange plein centré (|dx|/rx + |dy|/ry <= 1).
-function diamondPng(w, h) {
-  const raw = Buffer.alloc(h * (w * 4 + 1))
+// Rend les pixels RGBA w×h (haut → bas) du losange plein centré
+// (|dx|/rx + |dy|/ry <= 1) — même dessin pour le PNG du manifeste et le ICO du tray.
+function diamondPixels(w, h) {
+  const px = Buffer.alloc(w * h * 4)
   const cx = (w - 1) / 2
   const cy = (h - 1) / 2
   const rx = w * 0.42
   const ry = h * 0.42
   for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const o = (y * w + x) * 4
+      const dedans = Math.abs(x - cx) / rx + Math.abs(y - cy) / ry <= 1
+      px[o] = 0x8b // R
+      px[o + 1] = 0x5c // G
+      px[o + 2] = 0xf6 // B
+      px[o + 3] = dedans ? 0xff : 0x00
+    }
+  }
+  return px
+}
+
+function diamondPng(w, h) {
+  const px = diamondPixels(w, h)
+  const raw = Buffer.alloc(h * (w * 4 + 1))
+  for (let y = 0; y < h; y++) {
     const ligne = y * (w * 4 + 1)
     raw[ligne] = 0 // filtre 0 = None
-    for (let x = 0; x < w; x++) {
-      const o = ligne + 1 + x * 4
-      const dedans = Math.abs(x - cx) / rx + Math.abs(y - cy) / ry <= 1
-      raw[o] = 0x8b // R
-      raw[o + 1] = 0x5c // G
-      raw[o + 2] = 0xf6 // B
-      raw[o + 3] = dedans ? 0xff : 0x00
-    }
+    px.copy(raw, ligne + 1, y * w * 4, (y + 1) * w * 4)
   }
   const ihdr = Buffer.alloc(13)
   ihdr.writeUInt32BE(w, 0)
@@ -61,6 +71,55 @@ function diamondPng(w, h) {
     chunk("IDAT", zlib.deflateSync(raw)),
     chunk("IEND", Buffer.alloc(0)),
   ])
+}
+
+// ICO multi-tailles (J7) pour l'icône du tray : entrées BMP 32 bpp classiques
+// (BITMAPINFOHEADER à hauteur doublée + masque AND à zéro, alpha porté par le BGRA) —
+// format lu par Shell_NotifyIconW depuis l'XP, sans dépendance ni PNG décodé.
+function diamondIco(sizes) {
+  const entrées = []
+  let offset = 6 + sizes.length * 16 // en-tête + une ICONDIRENTRY par taille
+  for (const n of sizes) {
+    const px = diamondPixels(n, n)
+    const xor = Buffer.alloc(n * n * 4)
+    for (let y = 0; y < n; y++) {
+      // Les lignes BMP remontent depuis le bas ; le masque AND (lignes alignées 32 b) est vide.
+      const src = (n - 1 - y) * n * 4
+      px.copy(xor, y * n * 4, src, src + n * 4)
+      for (let x = 0; x < n * 4; x += 4) {
+        const o = y * n * 4 + x
+        const b = xor[o]
+        xor[o] = xor[o + 2]
+        xor[o + 2] = b // RGBA → BGRA
+      }
+    }
+    const etMasque = Math.ceil(n / 32) * 4 * n // masque AND : lignes alignées sur 32 bits
+    const bmi = Buffer.alloc(40)
+    bmi.writeUInt32LE(40, 0)          // BITMAPINFOHEADER
+    bmi.writeInt32LE(n, 4)            // biWidth
+    bmi.writeInt32LE(n * 2, 8)         // biHeight = 2× (XOR en bas + AND au-dessus)
+    bmi.writeUInt16LE(1, 12)           // biPlanes
+    bmi.writeUInt16LE(32, 14)          // biBitCount
+    bmi.writeUInt32LE(xor.length + etMasque, 20) // biSizeImage
+    const and = Buffer.alloc(etMasque) // tout à zéro : alpha BGRA porte la transparence
+    const image = Buffer.concat([bmi, xor, and])
+    const dir = Buffer.alloc(16)
+    dir.writeUInt8(n >= 256 ? 0 : n, 0)
+    dir.writeUInt8(n >= 256 ? 0 : n, 1)
+    dir.writeUInt8(0, 2)              // couleurs du masque (palettisé)
+    dir.writeUInt8(0, 3)
+    dir.writeUInt16LE(1, 4)           // planes
+    dir.writeUInt16LE(32, 6)          // bits/pixel
+    dir.writeUInt32LE(image.length, 8)
+    dir.writeUInt32LE(offset, 12)
+    entrées.push({ dir, image })
+    offset += image.length
+  }
+  const enTête = Buffer.alloc(6)
+  enTête.writeUInt16LE(0, 0)          // réservé
+  enTête.writeUInt16LE(1, 2)          // type = icône
+  enTête.writeUInt16LE(sizes.length, 4)
+  return Buffer.concat([enTête, ...entrées.map(e => e.dir), ...entrées.map(e => e.image)])
 }
 
 const assets = {
@@ -77,4 +136,9 @@ for (const [name, [w, h]] of Object.entries(assets)) {
   fs.writeFileSync(path.join(outDir, name), diamondPng(w, h))
   console.log(`✓ ${name} (${w}×${h})`)
 }
-console.log(`\n7 assets écrits dans ${outDir}`)
+
+// J7 : icône du tray système (16/24/32/48 px — pêche Shell_NotifyIconW).
+const tray = path.join(outDir, "tray.ico")
+fs.writeFileSync(tray, diamondIco([16, 24, 32, 48]))
+console.log("✓ tray.ico (16/24/32/48)")
+console.log(`\n${Object.keys(assets).length + 1} assets écrits dans ${outDir}`)

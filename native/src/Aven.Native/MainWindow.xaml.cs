@@ -90,6 +90,42 @@ public sealed partial class MainWindow : Window
             System.Diagnostics.Debug.WriteLine("Ctrl+Maj+V global déjà pris : l'accélérateur local reste actif.");
         Closed += (_, _) => _hotkey.Dispose();
 
+        // ── Jalon 7 : notifications de bureau + tray + raccourci d'affichage ──
+        // Focus suivi EN DIRECT (parité win.isFocused() d'Electron) : la politique
+        // NotifyPolicy.ne toaste jamais quand l'utilisateur regarde déjà l'écran.
+        _fenêtreActive = true;
+        Activated += (_, args) =>
+            _fenêtreActive = args.WindowActivationState != WindowActivationState.Deactivated;
+
+        // Clic sur un toast → fenêtre au premier plan (parité n.on("click") → showWindow).
+        // Le SDK notifie depuis un thread d'arrière-plan : rétroprojection obligatoire.
+        Aven.Native.NotificationService.ClicSurToast += () => DispatcherQueue.TryEnqueue(MontrerFenêtre);
+
+        // Fermeture = masquage vers le tray (parité window-all-closed : l'app reste en
+        // arrière-plan, seul Quitter sort vraiment).
+        AppWindow.Closing += (_, args) =>
+        {
+            if (_quitExplicite) return;
+            args.Cancel = true;
+            try { AppWindow.Hide(); } catch { /* jamais bloquant */ }
+        };
+
+        // Raccourci global Ctrl+Maj+O (parité CommandOrControl+Shift+O de main.ts).
+        _hotkeyAfficher = new Aven.Bridge.GlobalHotKey();
+        _hotkeyAfficher.Pressé += () => DispatcherQueue.TryEnqueue(MontrerFenêtre);
+        if (!_hotkeyAfficher.Start(Aven.Bridge.GlobalHotKey.ModControl | Aven.Bridge.GlobalHotKey.ModShift
+                                   | Aven.Bridge.GlobalHotKey.ModNoRepeat, (uint)'O'))
+            System.Diagnostics.Debug.WriteLine("Ctrl+Maj+O global déjà pris : le tray reste la voie d'accès.");
+        Closed += (_, _) => _hotkeyAfficher.Dispose();
+
+        // Icône système (parité createTray) : Afficher / Quitter, clic gauche = afficher.
+        _tray = new TrayIcon();
+        _tray.AfficherDemandé += () => DispatcherQueue.TryEnqueue(MontrerFenêtre);
+        _tray.QuitterDemandé += () => DispatcherQueue.TryEnqueue(Quitter);
+        if (!_tray.Start())
+            System.Diagnostics.Debug.WriteLine("tray indisponible : l'app fonctionne sans icône système.");
+        Closed += (_, _) => _tray.Dispose();
+
         // Socle parité v10.0.0 : registre d'espaces (import du Classic à la 1re
         // exécution) puis boot du moteur au lancement — l'Electron fait pareil : le
         // chat est prêt dès le hub, l'état poll app:state est reflété en direct.
@@ -141,6 +177,13 @@ public sealed partial class MainWindow : Window
 
     // ── Voix (phase 6) : pipeline testé + capture micro + annonceur ──────────
     private Aven.Bridge.GlobalHotKey? _hotkey; // raccourci OS global Ctrl+Maj+V (décision phase 6)
+    private Aven.Bridge.GlobalHotKey? _hotkeyAfficher; // raccourci OS global Ctrl+Maj+O (J7, parité Electron)
+    private TrayIcon? _tray;                    // icône de tray système (J7)
+    private bool _fenêtreActive;                // focus suivi via Window.Activated (J7)
+    private bool _quitExplicite;                // Quitter() a ordonné la sortie (sinon fermeture = tray)
+    private Aven.Bridge.EngineClient? _moteurNotifié; // garde anti double-abonnement notifications (J7)
+    private readonly Dictionary<string, long> _départsTours = new(); // sessionID → TickCount64 (J7)
+    private readonly object _verrouTours = new();
     private Aven.Bridge.VoicePipeline? _voixPipeline;
     private VoiceRuntime? _voix;
     private Aven.Bridge.Announcer? _annonceur;
@@ -2474,6 +2517,7 @@ public sealed partial class MainWindow : Window
     /// host moteur — indépendant du push-to-talk : les événements arrivent dès le boot.</summary>
     private void BrancherAnnonceur(Aven.Bridge.EngineClient moteur)
     {
+        BrancherNotifications(moteur); // J7 : la politique de toast est indépendante de l'annonceur
         if (_engineAnnoncé == moteur && _annonceur is not null) return;
         _engineAnnoncé = moteur;
         // Voix Windows SAPI via PowerShell (parité speakWithSapi de main.ts).
@@ -2494,6 +2538,100 @@ public sealed partial class MainWindow : Window
             if (Aven.Bridge.JsonAide.Texte(ev.Data, "errorMessage") is { } m) données["errorMessage"] = m;
             annonceur.Handle(ev.Type, données);
         };
+    }
+
+    // ── Jalon 7 : notifications de bureau, tray, raccourci Ctrl+Maj+O ──────────
+
+    /// <summary>Ramène Aven au premier plan (parité showWindow d'Electron) : restaure
+    /// si réduite, montre si masquée dans le tray, puis donne le focus.</summary>
+    private void MontrerFenêtre()
+    {
+        try
+        {
+            if (AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter
+                { State: Microsoft.UI.Windowing.OverlappedPresenterState.Minimized } réduit)
+                réduit.Restore();
+            AppWindow.Show(); // active aussi la fenêtre (contrat du SDK)
+        }
+        catch (Exception erreur) { System.Diagnostics.Debug.WriteLine("showWindow : " + erreur.Message); }
+    }
+
+    /// <summary>Sortie EXPLICITE depuis le tray (parité before-quit) : autorise la
+    /// fermeture, libère les ressources, puis ferme — l'app se termine faute de fenêtre.</summary>
+    private void Quitter()
+    {
+        _quitExplicite = true;
+        try { _tray?.Dispose(); } catch { /* jamais bloquant */ }
+        try { _ = _boot.DisposeAsync(); } catch { /* idem */ }
+        try { Close(); }
+        catch { Application.Current.Exit(); } // repli : fermeture de l'app XAML
+    }
+
+    /// <summary>Notifications pilotées par les événements moteur (J7 — parité
+    /// notifyFromEvent de main.ts) : durée mesurée au session.execution.started de
+    /// CHAQUE session (sous-agents inclus), politique pure NotifyPolicy, toast via
+    /// l'API typée du Windows App SDK. Abonnement UNE seule fois par moteur.</summary>
+    private void BrancherNotifications(Aven.Bridge.EngineClient moteur)
+    {
+        if (_moteurNotifié == moteur) return;
+        _moteurNotifié = moteur;
+        moteur.EventReceived += NotifierDepuisÉvénement;
+    }
+
+    private void NotifierDepuisÉvénement(Aven.Bridge.EngineEvent ev)
+    {
+        try
+        {
+            var sessionID = Aven.Bridge.JsonAide.Texte(ev.Data, "sessionID") ?? "";
+            var maintenant = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+            if (ev.Type == "session.execution.started" && sessionID.Length > 0)
+            {
+                lock (_verrouTours) _départsTours[sessionID] = maintenant;
+                return;
+            }
+            if (ev.Type == "session.execution.succeeded" && sessionID.Length > 0)
+            {
+                long? durée = null;
+                lock (_verrouTours)
+                {
+                    if (_départsTours.Remove(sessionID, out var départ)) durée = maintenant - départ;
+                }
+                Notifier(Aven.Bridge.NotifyPolicy.TourTermine, durée);
+                return;
+            }
+            if (ev.Type == "session.execution.failed" && sessionID.Length > 0)
+            {
+                lock (_verrouTours) _départsTours.Remove(sessionID);
+                Notifier(Aven.Bridge.NotifyPolicy.TourEchoue, null);
+                return;
+            }
+            if (ev.Type == "permission.asked") Notifier(Aven.Bridge.NotifyPolicy.Permission, null);
+            else if (ev.Type == "form.created") Notifier(Aven.Bridge.NotifyPolicy.Formulaire, null);
+        }
+        catch (Exception erreur)
+        {
+            // Jamais d'exception vers le moteur : la notification reste best-effort.
+            System.Diagnostics.Debug.WriteLine("notif : " + erreur.Message);
+        }
+    }
+
+    /// <summary>Applique la politique (focus + interruptateur réglages + durée) puis
+    /// publie le toast. Thread arrière-plan accepté : NotificationService est thread-safe.</summary>
+    private void Notifier(string type, long? duréeTourMs)
+    {
+        try
+        {
+            // Parité win.isFocused() && win.isVisible() : masquée dans le tray ⇒ la
+            // fenêtre est déactivée ⇒ _fenêtreActive est déjà false (aucun accès AppWindow
+            // hors thread UI ici).
+            var fenêtreAuPremierPlan = _fenêtreActive;
+            var activé = Aven.Bridge.SettingsService.Load(Aven.Bridge.AppData.Dir()).Notifications;
+            if (!Aven.Bridge.NotifyPolicy.DevraitNotifier(fenêtreAuPremierPlan, type, activé, duréeTourMs)) return;
+            var (titre, corps) = Aven.Bridge.NotifyPolicy.Contenu(type, duréeTourMs);
+            Aven.Native.NotificationService.Afficher(titre, corps);
+        }
+        catch (Exception erreur) { System.Diagnostics.Debug.WriteLine("notif : " + erreur.Message); }
     }
 
     /// <summary>Push-to-talk Ctrl+Maj+V : démarre/arrête la dictée, exécute les intentions d'app.</summary>
