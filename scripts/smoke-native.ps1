@@ -541,8 +541,12 @@ if ($echecs.Count -gt 0) {
     exit 1
 }
 if ($lances -eq 0) {
-    Write-Host "SMOKE_KO - etape [preparation] : aucun zip lancable sur cette machine (hote $hote)."
-    exit 1
+    # Tous les zips etaient pour une autre architecture : SKIP explicite et NON
+    # un echec (avant ce correctif, ce cas sortait SMOKE_KO [preparation] en exit 1
+    # apres avoir imprime SMOKE_SKIP — contradiction qui abortait le packaging
+    # arm64 sur un hote x64). La validation se fera sur un hote de l'arch cible.
+    Write-Host ("SMOKE_SKIP - " + $sauts + " zip(s) saute(s), aucun executable sur hote " + $hote + " (validation a faire sur un hote cible).")
+    exit 0
 }
 if ($Dump) {
     Write-Host "SMOKE_DUMP_OK"
