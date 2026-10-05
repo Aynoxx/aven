@@ -15,7 +15,7 @@ set "NATIVE_PROJECT=%REPO_ROOT%native\src\Aven.Native\Aven.Native.csproj"
 
 if not exist "%NATIVE_PROJECT%" (
     echo [E] Projet Windows introuvable : %NATIVE_PROJECT%
-    echo [E] Ce script doit être lancé à la racine du projet Aven.
+    echo [E] Ce script doit etre lance a la racine du projet Aven.
     pause
     exit /b 1
 )
@@ -37,7 +37,7 @@ for %%D in (
 
 if not exist "%DOTNET_EXE%" (
     echo [E] SDK dotnet introuvable.
-    echo [E] Recherches effectuées : %DOTNET_CANDIDATES%
+    echo [E] Recherches effectuees : %DOTNET_CANDIDATES%
     echo [E] Installe le .NET 8 SDK (Windows x64) et/ou ajuste DOTNET_ROOT dans ce script.
     pause
     exit /b 1
@@ -56,15 +56,15 @@ echo.
 "%DOTNET_EXE%" build "%NATIVE_PROJECT%" -c Release -p:Platform=x64
 if %errorlevel% neq 0 (
     echo.
-    echo [E] Build échoué (code %errorlevel%). L'application ne sera pas lancée.
+    echo [E] Build echoue (code %errorlevel%). L'application ne sera pas lancee.
     pause
     exit /b %errorlevel%
 )
 
 echo.
-echo [I] Build terminé.
+echo [I] Build termine.
 
-rem Cherche le binaire publié
+rem Cherche le binaire publie
 set "PUBLISH_DIR="
 for /d %%D in ("%REPO_ROOT%native\src\Aven.Native\bin\Release\net8.0-windows10.0.19041.0\win-x64\publish\*") do set "PUBLISH_DIR=%%D"
 if not exist "%PUBLISH_DIR%%~nxPUBLISH_DIR%" (
@@ -76,19 +76,19 @@ if not exist "%PUBLISH_DIR%%~nxPUBLISH_DIR%" (
 
 set "BIN_EXE=%PUBLISH_DIR%Aven.Native.exe"
 if exist "%BIN_EXE%" (
-    echo [I] Binaire trouvé : %BIN_EXE%
+    echo [I] Binaire trouve : %BIN_EXE%
     start "" "%BIN_EXE%"
     exit /b 0
 )
 
 echo.
-echo [W] Binaire de release non trouvé dans le dossier attendu.
-echo [W] Le build a réussi, mais le dossier de publication est absent ou vide.
-echo [W] C'est normal si tu as lancé uniquement `dotnet build`, sans `dotnet publish`.
+echo [W] Binaire de release non trouve dans le dossier attendu.
+echo [W] Le build a reussi, mais le dossier de publication est absent ou vide.
+echo [W] C'est normal si tu as lance uniquement `dotnet build`, sans `dotnet publish`.
 echo [W] Option 1 : relance avec publish:
 echo      dotnet publish %NATIVE_PROJECT% -c Release -p:Platform=x64 -o "%REPO_ROOT%native\src\Aven.Native\bin\Release\net8.0-windows10.0.19041.0\win-x64\publish"
 echo.
-echo [W] Option 2 : lance directement l'assembly via dotnet run (développement) :
+echo [W] Option 2 : lance directement l'assembly via dotnet run (developpement) :
 echo      dotnet run -p %NATIVE_PROJECT% -c Release -p:Platform=x64
 exit /b 1
 
