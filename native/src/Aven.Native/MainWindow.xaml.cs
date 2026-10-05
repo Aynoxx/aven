@@ -516,13 +516,28 @@ public sealed partial class MainWindow : Window
         catch (Exception erreur) { CliFreebuffStatut.Text = "Lancement impossible : " + erreur.Message; }
     }
 
-    /// <summary>Parité checkUpdates (main.ts:800) : jamais branchée côté natif tant que
-    /// le canal de publication n'existe pas — le bouton reste caché, ce handler ne
-    /// sert que si UpdatesConfigured passe un jour à true.</summary>
-    private void OnVerifierMisesAJour(object sender, RoutedEventArgs e)
+    /// <summary>Parité checkUpdates (main.ts:800) : interroge la GitHub Releases
+    /// du dépôt (canal natif, UpdateCheck) et affiche le MÊME message que l'IPC web —
+    /// « Version disponible : X » ou « Aucune mise à jour disponible. ». On signale
+    /// sans jamais installer (parité autoDownload=false). Le bouton est verrouillé
+    /// pendant l'appel réseau.</summary>
+    private async void OnVerifierMisesAJour(object sender, RoutedEventArgs e)
     {
-        MisesAJourMessage.Text = "Vérification…";
-        MisesAJourMessage.Text = "Aucune mise à jour disponible.";
+        try
+        {
+            BoutonVerifierMisesAJour.IsEnabled = false;
+            MisesAJourMessage.Text = "Vérification…";
+            var résultat = await Aven.Bridge.UpdateCheck.VerifierAsync(AppVersion);
+            MisesAJourMessage.Text = résultat.Ok ? résultat.Message : "Vérification impossible : " + résultat.Message;
+        }
+        catch (Exception erreur)
+        {
+            MisesAJourMessage.Text = "Vérification impossible : " + erreur.Message;
+        }
+        finally
+        {
+            BoutonVerifierMisesAJour.IsEnabled = true;
+        }
     }
 
     /// <summary>Une carte clé par fournisseur (parité du champ .field du web) :</r
