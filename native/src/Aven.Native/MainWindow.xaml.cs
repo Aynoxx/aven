@@ -102,6 +102,9 @@ public sealed partial class MainWindow : Window
         // local reste en repli si le raccourci est déjà pris par un autre process.
         var ptt = new KeyboardAccelerator { Modifiers = Windows.System.VirtualKeyModifiers.Control | Windows.System.VirtualKeyModifiers.Shift, Key = Windows.System.VirtualKey.V };
         ptt.Invoked += (_, args) => { SurPushToTalk(); args.Handled = true; };
+        // Agent vocal VISIBLE (parité voice-core du composeur web) : clic = bascule
+        // Dicter / J'écoute — même SurPushToTalk que le raccourci Ctrl+Maj+V.
+        BoutonVoix.Click += (_, _) => SurPushToTalk();
         TitleBar.KeyboardAccelerators.Add(ptt);
 
         // Raccourci OS GLOBAL : la dictée marche fenêtre Aven inactive. La fenêtre
@@ -3237,7 +3240,10 @@ public sealed partial class MainWindow : Window
         catch (Exception erreur) { System.Diagnostics.Debug.WriteLine("notif : " + erreur.Message); }
     }
 
-    /// <summary>Push-to-talk Ctrl+Maj+V : démarre/arrête la dictée, exécute les intentions d'app.</summary>
+    /// <summary>Agent vocal (parité useDictation + routeAppAction du web) : démarre/arrête
+    /// la dictée (hotkey Ctrl+Maj+V ou bouton Dicter), exécute les intentions d'app PUIS
+    /// pose le texte dicté dans le COMPOSEUR — jamais directement chez l'agent ; depuis
+    /// le hub, ComposerVersChat navigue vers la conversation (parité setShowHome(false)).</summary>
     private async void SurPushToTalk()
     {
         InitialiserVoix();
@@ -3245,24 +3251,40 @@ public sealed partial class MainWindow : Window
         {
             await _voix!.BasculerDictée(résultat => DispatcherQueue.TryEnqueue(() =>
             {
+                var texte = (résultat.Cleaned is { Length: > 0 } nettoyé ? nettoyé : résultat.Raw) ?? "";
                 if (résultat.Intent is { Kind: "app", Action: not null } intention)
                 {
                     switch (intention.Action)
                     {
                         case "open-notes": OuvrirNotes(); break;
                         case "open-settings": OnSettings(this, new RoutedEventArgs()); break;
-                        case "open-freebuff": OnPastilleFreebuff(FreebuffButton, new RoutedEventArgs()); break; // Lot 2 : avis si CLI absent (parité routeAppAction)
+                        case "open-freebuff": OnPastilleFreebuff(FreebuffButton, new RoutedEventArgs()); break; // Lot 2 : avis si CLI absent
+                        case "open-agents": OuvrirTaches(null); break;
+                        case "open-projects": OnSettings(this, new RoutedEventArgs()); break; // espaces = onglet Configuration (parité openConfiguration)
+                        case "open-workspace": OuvrirFichiers(); break;
+                        case "open-stats": OnSettings(this, new RoutedEventArgs()); AfficherOngletParametres("usage"); break;
+                        case "new-chat": NouvelleConversation(_chatAgent); break;
                     }
+                    PageHint.Text = "Commande vocale exécutée.";
+                    return; // le texte ne va PAS au composeur pour une commande d'app (parité web)
                 }
-                else if (résultat.Intent is { Kind: "agent" })
-                    PageHint.Text = "Dictée pour l'agent " + (résultat.Intent.Target ?? "courant") + " : " + (résultat.Cleaned ?? résultat.Raw);
-                else
-                    PageHint.Text = "Dictée : " + (résultat.Cleaned ?? résultat.Raw);
+                if (résultat.Intent is { Kind: "agent", Target: { Length: > 0 } cible })
+                    PageHint.Text = "Dictée pour l'agent " + cible + " — texte posé dans le composeur.";
+                if (texte.Length > 0) ComposerVersChat(texte); // parité setInput + navigation + focus
             }));
-            PageHint.Text = _voix.EnCours ? "🎙 Dictée en cours... (Ctrl+Maj+V pour arrêter)" : "Dictée terminée";
+            MajBoutonVoix();
+            PageHint.Text = _voix.EnCours ? "🎙 Dictée en cours... (Ctrl+Maj+V ou clic pour arrêter)" : "Dictée terminée";
         }
-        catch (Exception erreur) { PageHint.Text = "Micro indisponible : " + erreur.Message; }
+        catch (Exception erreur)
+        {
+            MajBoutonVoix();
+            PageHint.Text = "Micro indisponible : " + erreur.Message;
+        }
     }
+
+    /// <summary>Étiquette du bouton vocal (parité voice-core : « Dicter » / « J'écoute… »).</summary>
+    private void MajBoutonVoix() =>
+        BoutonVoix.Content = (_voix is { } v && v.EnCours) ? "\U0001F399 J'écoute…" : "\U0001F399 Dicter";
 
     private async void ArrêterTour()
     {
