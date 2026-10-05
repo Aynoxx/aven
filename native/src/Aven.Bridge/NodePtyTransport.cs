@@ -26,7 +26,12 @@ public sealed class NodePtyTransport : Aven.Bridge.ITerminalTransport, IDisposab
     /// <param name="espace">Espace de travail passé au host (--cwd).</param>
     /// <param name="cols">Colonnes initiales.</param>
     /// <param name="rows">Lignes initiales.</param>
-    private NodePtyTransport(string nodeExecPath, string hostPath, string espace, int cols, int rows)
+    /// <param name="trustAgents">Lot 3 (parité buildPtyCommand v9.5.0) : ajoute
+    /// --trust-agents (lit le .agents/ généré par Aven, sans confirmation).</param>
+    /// <param name="resume">Lot 3 (parité v9.5.0) : ajoute --continue (reprend la
+    /// dernière conversation, préférence « Reprendre »).</param>
+    private NodePtyTransport(string nodeExecPath, string hostPath, string espace, int cols, int rows,
+        bool trustAgents, bool resume)
     {
         var psi = new ProcessStartInfo
         {
@@ -71,11 +76,21 @@ public sealed class NodePtyTransport : Aven.Bridge.ITerminalTransport, IDisposab
         _host.BeginOutputReadLine();
         _host.BeginErrorReadLine();
 
-        Envoyer(new JsonObject { ["type"] = "start", ["cwd"] = espace, ["cols"] = cols, ["rows"] = rows });
+        Envoyer(new JsonObject
+        {
+            ["type"] = "start",
+            ["cwd"] = espace,
+            ["cols"] = cols,
+            ["rows"] = rows,
+            // Lot 3 (parité buildPtyCommand) : pont agents Aven + reprise de conversation.
+            ["trustAgents"] = trustAgents,
+            ["resume"] = resume,
+        });
     }
 
     /// <summary>Démarre le micro-host et la session freebuff dans son ConPTY.</summary>
-    public static NodePtyTransport Démarrer(string espace, int cols, int rows, string? nodeExecPath = null, string? hostPath = null)
+    public static NodePtyTransport Démarrer(string espace, int cols, int rows, string? nodeExecPath = null,
+        string? hostPath = null, bool trustAgents = false, bool resume = false)
     {
         if (hostPath is null)
         {
@@ -89,7 +104,8 @@ public sealed class NodePtyTransport : Aven.Bridge.ITerminalTransport, IDisposab
             if (string.IsNullOrEmpty(hostPath))
                 throw new FileNotFoundException("aven-pty-host.mjs introuvable (bundle phase 1 manquant).");
         }
-        var t = new NodePtyTransport(nodeExecPath is not null ? nodeExecPath : RésoudreNode(), hostPath, espace, cols, rows);
+        var t = new NodePtyTransport(nodeExecPath is not null ? nodeExecPath : RésoudreNode(), hostPath, espace, cols, rows,
+            trustAgents, resume);
         return t;
     }
 

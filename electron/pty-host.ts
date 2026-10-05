@@ -35,7 +35,7 @@ async function loadPty(): Promise<PtyModule> {
   return mod
 }
 
-async function start(cwd: string, cols: number, rows: number) {
+async function start(cwd: string, cols: number, rows: number, opts: { trustAgents?: boolean; resume?: boolean } = {}) {
   if (pty) throw new Error("Une session PTY existe déjà.")
   const mod = await loadPty()
   // Parité buildPtyCommand (cmd /c freebuff --cwd …). AVEN_PTY_COMMAND (tests/diag)
@@ -43,7 +43,15 @@ async function start(cwd: string, cols: number, rows: number) {
   const custom = process.env.AVEN_PTY_COMMAND
   const cmd = custom
     ? { file: "cmd.exe", args: ["/c", custom] }
-    : { file: "cmd.exe", args: ["/c", "freebuff", "--cwd", cwd] }
+    : (() => {
+        // (Lot 3 natif) Pont agents v9.5.0 : --trust-agents lit le .agents/ généré
+        // par Aven (mêmes agents, sans confirmation) et --continue reprend la
+        // dernière conversation (préférence « Reprendre la dernière conversation »).
+        const args = ["/c", "freebuff", "--cwd", cwd]
+        if (opts.trustAgents) args.push("--trust-agents")
+        if (opts.resume) args.push("--continue")
+        return { file: "cmd.exe", args }
+      })()
   pty = mod.spawn(cmd.file, cmd.args, { cwd, cols, rows, env: process.env as Record<string, string> })
   send({ type: "ready", pid: pty.pid })
   pty.onData((chunk) => send({ type: "data", chunk }))
@@ -60,7 +68,7 @@ rl.on("line", (line: string) => {
   try { msg = JSON.parse(line) } catch { send({ type: "error", message: "Ligne JSON illisible." }); return }
   try {
     switch (msg.type) {
-      case "start": start(String(msg.cwd ?? ""), Number(msg.cols ?? 120), Number(msg.rows ?? 30)).catch((err: unknown) => send({ type: "error", message: err instanceof Error ? err.message : String(err) })); break
+      case "start": start(String(msg.cwd ?? ""), Number(msg.cols ?? 120), Number(msg.rows ?? 30), { trustAgents: msg.trustAgents === true, resume: msg.resume === true }).catch((err: unknown) => send({ type: "error", message: err instanceof Error ? err.message : String(err) })); break
       case "write": { const d = String(msg.data ?? ""); if (d) pty?.write(d); break }
       case "resize": try { pty?.resize(Number(msg.cols), Number(msg.rows)) } catch { /* mort en cours */ } break
       case "kill": try { pty?.kill() } catch { /* déjà mort */ } break

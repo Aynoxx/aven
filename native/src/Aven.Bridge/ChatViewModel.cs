@@ -119,6 +119,13 @@ public sealed class ChatViewModel
     public void Attach(string chatId)
     {
         ChatId = chatId;
+        // Correctif 04/10/2026 : BRANCHE la reduction d'evenements moteur.
+        // Subscribe etait appele UNIQUEMENT par les tests — jamais par l'app :
+        // EventReceived n'arrivait donc jamais a ConversationLive.Apply, d'ou
+        // aucun evenement Live dans l'UI (pas de bulles agent, pas de bouton
+        // Stop, pas de dialog de permission) alors que le moteur repondait
+        // (constate en live : reponse completes en 5,3 s cote moteur, ecran vide).
+        _client.Subscribe(chatId); // reabonnement idempotent si la conversation change
         _client.LiveChanged -= OnLive;
         _client.LiveChanged += OnLive;
         OnLive(_client.Live);

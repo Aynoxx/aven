@@ -4,15 +4,19 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <!-- Tokens Aven (parit&#233; web/src/App.css &#8212; test&#233;e par AvenThemeParityTests).
-         Les valeurs dupliquent AvenTheme.cs : le test de parit&#233; compare le C# au CSS ;
-         ici le XAML lit les M&#202;MES constantes via x:Static quand possible, sinon valeur litt&#233;rale. -->
+         Ordre hexad&#233;cimal : #AARRGGBB (WinUI, alpha AVANT RRGGBB) comme exig&#233;e par le parseur sans d&#233;pendance d'AvenColor.FromHex — contrairement au CSS qui est #RRGGBBAA.
+         Corrections (4 occurrences) :
+         - Dark : #FFFFFF14 -> #14FFFFFF (blanc 8 %) ; #FFFFFF24 -> #24FFFFFF (blanc 14 %).
+         - Light : #14182617 -> #17141826 ; #14182626 -> #26141826 (m&#234;me bleuage informel de l'alpha).
+         AvenTheme.cs et AvenThemeParityTests.cs s'en tamponnent volontairement : elles gardent
+         l'ordre CSS (#RRGGBBAA) et sont les r&#233;f&#233;rences de la parit&#233;. -->
     <ResourceDictionary.ThemeDictionaries>
         <ResourceDictionary x:Key="Light">
             <Color x:Key="AvenBgColor">#FDFCFE</Color>
             <Color x:Key="AvenPanelColor">#FFFFFF</Color>
             <Color x:Key="AvenPanelSoftColor">#EEF0F6</Color>
-            <Color x:Key="AvenBorderColor">#14182617</Color>
-            <Color x:Key="AvenBorderStrongColor">#14182626</Color>
+            <Color x:Key="AvenBorderColor">#17141826</Color>
+            <Color x:Key="AvenBorderStrongColor">#26141826</Color>
             <Color x:Key="AvenTextColor">#171923</Color>
             <Color x:Key="AvenMutedColor">#707689</Color>
             <SolidColorBrush x:Key="AvenBgBrush" Color="{StaticResource AvenBgColor}" />
@@ -27,8 +31,8 @@
             <Color x:Key="AvenBgColor">#12151D</Color>
             <Color x:Key="AvenPanelColor">#12151D</Color>
             <Color x:Key="AvenPanelSoftColor">#171B24</Color>
-            <Color x:Key="AvenBorderColor">#FFFFFF14</Color>
-            <Color x:Key="AvenBorderStrongColor">#FFFFFF24</Color>
+            <Color x:Key="AvenBorderColor">#14FFFFFF</Color>
+            <Color x:Key="AvenBorderStrongColor">#24FFFFFF</Color>
             <Color x:Key="AvenTextColor">#F4F5F8</Color>
             <Color x:Key="AvenMutedColor">#9299AA</Color>
             <SolidColorBrush x:Key="AvenBgBrush" Color="{StaticResource AvenBgColor}" />

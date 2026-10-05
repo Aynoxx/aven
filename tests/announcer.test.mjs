@@ -60,7 +60,15 @@ test("coalescence : deux succès rapprochés ne laissent qu'une annonce (fenêtr
   })
   slow.handle({ type: "session.execution.succeeded", data: { tools: [] } }) // "Terminé."
   slow.handle({ type: "session.execution.succeeded", data: { tools: [{ name: "edit" }] } }) // "Terminé — 1 fichier modifié."
-  await new Promise((r) => setTimeout(r, 80))
+  // Correctif 04/10/2026 : attente active au lieu du sommeil fixe de 80 ms — sous la
+  // charge de la suite complète, le timer de stabilisation (25 ms) + le speak (15 ms)
+  // pouvaient dépasser 80 ms et le test échouait à tort (0 !== 1). On attend qu'UNE
+  // phrase soit dite, puis une fenêtre de QUIESCENCE (100 ms > settle 25 + speak 15)
+  // avant les ASSERTIONS STRICTES inchangées : une coalescence cassée produirait une
+  // 2e annonce pendant cette fenêtre et l'égalité à 1 échouerait toujours.
+  const deadline = Date.now() + 500
+  while (spoken.length === 0 && Date.now() < deadline) await new Promise((r) => setTimeout(r, 10))
+  await new Promise((r) => setTimeout(r, 100))
   assert.equal(spoken.length, 1)
   assert.match(spoken[0], /Terminé/)
 })
