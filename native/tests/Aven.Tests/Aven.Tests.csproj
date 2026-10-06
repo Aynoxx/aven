@@ -1,9 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!-- Aven.Tests — tests xUnit du socle natif (phase 0). Ne référence que Aven.Bridge :
-       la coquille WinUI se build via le workflow CI, pas via le runner de tests. -->
-
-  <PropertyGroup>
+       la coquille WinUI se build via le workflow CI, pas via le runner de tests. -->  <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

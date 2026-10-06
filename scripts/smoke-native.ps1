@@ -390,6 +390,16 @@ foreach ($cheminZip in $zips) {
             }
             Write-Host "[smoke] ok hub : 4 cartes cliquables"
 
+            # 3bis. v9.7.5 : le noyau vocal central est PRESENT au hub (sans cliquer :
+            # demarrer le micro rendrait l'etape dependante du materiel de l'hote).
+            # Prefixe du nom UIA : "Dicter <em dash> bascule la dictee vocale" (U+2014).
+            $dicter = "Dicter " + [char]0x2014
+            if ($null -eq (Trouver-El -prefixe $dicter -attenteMs 8000 -Cliquable)) {
+                $attendu = "Dicter " + [char]0x2014 + "..."
+                Echec "noyau vocal central du hub introuvable (nom UIA '$attendu')."
+            }
+            Write-Host "[smoke] ok hub : noyau vocal central present"
+
             $retour = [char]0x2190 + " Retour au hub"
             $accueil = [char]0x2190 + " Accueil"
             $dossierParent = [char]0x2190 + " Dossier parent"
@@ -541,8 +551,12 @@ if ($echecs.Count -gt 0) {
     exit 1
 }
 if ($lances -eq 0) {
-    Write-Host "SMOKE_KO - etape [preparation] : aucun zip lancable sur cette machine (hote $hote)."
-    exit 1
+    # Tous les zips etaient pour une autre architecture : SKIP explicite et NON
+    # un echec (avant ce correctif, ce cas sortait SMOKE_KO [preparation] en exit 1
+    # apres avoir imprime SMOKE_SKIP — contradiction qui abortait le packaging
+    # arm64 sur un hote x64). La validation se fera sur un hote de l'arch cible.
+    Write-Host ("SMOKE_SKIP - " + $sauts + " zip(s) saute(s), aucun executable sur hote " + $hote + " (validation a faire sur un hote cible).")
+    exit 0
 }
 if ($Dump) {
     Write-Host "SMOKE_DUMP_OK"

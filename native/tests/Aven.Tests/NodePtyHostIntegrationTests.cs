@@ -99,6 +99,31 @@ public class NodePtyHostIntegrationTests
     }
 
     [Fact]
+    public async Task Démarrer_transmet_trustAgents_et_resume_au_host()
+    {
+        // Contrat Lot 3 (parité buildPtyCommand v9.5.0) : les options du pont agents
+        // (--trust-agents) et de reprise (--continue) traversent le protocole stdio
+        // du micro-host sans le faire dérailler — le process démarre, répond et sort
+        // exactement comme sans options (les commandes de test ignorent les drapeaux).
+        Assert.True(OperatingSystem.IsWindows());
+        Environment.SetEnvironmentVariable("AVEN_PTY_COMMAND", "echo OPTIONS-OK");
+        try
+        {
+            var fin = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var t = NodePtyTransport.Démarrer(AppContext.BaseDirectory, 80, 24, trustAgents: true, resume: true);
+            try
+            {
+                t.Exit += (_, _) => fin.TrySetResult();
+                var sortie = await SortieDe(t, fin.Task);
+                Assert.Contains("OPTIONS-OK", sortie);
+                Assert.True(t.Pid > 0);
+            }
+            finally { t.Dispose(); }
+        }
+        finally { Environment.SetEnvironmentVariable("AVEN_PTY_COMMAND", null); }
+    }
+
+    [Fact]
     public async Task FreebuffTerminal_pilote_le_transport_réel_comme_un_double()
     {
         // La machine à états (backoff, grâce, coalescing) s'applique TELLE QUELLE au

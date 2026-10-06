@@ -1,5 +1,7 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json.Nodes;
+using Aven.Bridge;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
@@ -23,7 +25,14 @@ public sealed partial class MainWindow : Window
     public const string AppVersion = "10.0.0.0";
 
     // Positions polaires du hub (parité .hub-card-project/agents/files/notes : 0°/90°/180°/270°).
-    private const double Rayon = 250;
+    // Correctif 04/10/2026 : le rayon N'EST PLUS CONSTANT — HubScene.SizeChanged le
+    // recalcule pour que la carte la plus excentrée reste ENTIÈRE dans la scène
+    // (parité du --hub-r: clamp(…) du web). À rayon fixe 250 + cartes 150×112, le bloc
+    // hub fait 650 px de large : sous ~950 px utiles, la carte Notes (270°) entrait en
+    // collision avec le panneau RÉCENTS (constaté sur capture 1366×720).
+    private const double RayonMax = 250;
+    private const double RayonMin = 150;
+    private double _rayon = RayonMax;
     private static readonly (double AngleDeg, string Titre, string Hint)[] Cibles =
     {
         (0, "Projet — Agent Freebuff", "Le terminal Freebuff embarqué arrive en phase 5 (ConPTY natif)."),
@@ -59,6 +68,16 @@ public sealed partial class MainWindow : Window
                 Math.Min(Math.Max(pos.Y, zone.Y), zone.Y + zone.Height - hauteur)));
         }
 
+        // Ouverture en fenêtre MAXIMISÉE (retour 04/10/2026) : « fenêtré full » —
+        // la taille ci-dessus devient la taille de RESTAURATION (dé-maximiser) et
+        // son clamp garde les cartes du hub entières sur les petits écrans.
+        try
+        {
+            if (AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter presentateur)
+                presentateur.Maximize();
+        }
+        catch { /* jamais bloquant */ }
+
         if (Microsoft.UI.Composition.SystemBackdrops.MicaController.IsSupported())
         {
             SystemBackdrop = new Microsoft.UI.Xaml.Media.MicaBackdrop();
@@ -66,15 +85,26 @@ public sealed partial class MainWindow : Window
 
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(null);
+        MettreAJourBoutonsDeCaption(); // glyphes caption = thème courant (clair/sombre)
 
         PositionHubCards();
         CascaderEntreeDuHub();
+        ConstruirePastilleFreebuff(); // Lot 2 : la pastille d'état Freebuff (parité .freebuff-pill)
+        ConstruireNoticeHub();        // Lot 2 : avis du hub (parité .home-notice, TTL 6 s)
+
+        // Lot 2 : Ctrl+K (parité web) — hub : barre de commande ; chat : recherche sidebar.
+        var raccourciRecherche = new KeyboardAccelerator { Modifiers = Windows.System.VirtualKeyModifiers.Control, Key = Windows.System.VirtualKey.K };
+        raccourciRecherche.Invoked += OnRaccourciRecherche;
+        TitleBar.KeyboardAccelerators.Add(raccourciRecherche);
 
         // Push-to-talk de la fenêtre : Ctrl+Maj+V (parité v8.8.0). Le hotkey OS
         // GLOBAL (option phase 6 actée) est enregistré juste dessous ; l'accélérateur
         // local reste en repli si le raccourci est déjà pris par un autre process.
         var ptt = new KeyboardAccelerator { Modifiers = Windows.System.VirtualKeyModifiers.Control | Windows.System.VirtualKeyModifiers.Shift, Key = Windows.System.VirtualKey.V };
         ptt.Invoked += (_, args) => { SurPushToTalk(); args.Handled = true; };
+        // Agent vocal VISIBLE (parité voice-core du composeur web) : clic = bascule
+        // Dicter / J'écoute — même SurPushToTalk que le raccourci Ctrl+Maj+V.
+        BoutonVoix.Click += (_, _) => SurPushToTalk();
         TitleBar.KeyboardAccelerators.Add(ptt);
 
         // Raccourci OS GLOBAL : la dictée marche fenêtre Aven inactive. La fenêtre
@@ -88,11 +118,51 @@ public sealed partial class MainWindow : Window
             System.Diagnostics.Debug.WriteLine("Ctrl+Maj+V global déjà pris : l'accélérateur local reste actif.");
         Closed += (_, _) => _hotkey.Dispose();
 
+        // ── Jalon 7 : notifications de bureau + tray + raccourci d'affichage ──
+        // Focus lu EN DIRECT à chaque notification (parité win.isFocused()
+        // d'Electron) : voir FenêtreAuPremierPlan(). L'ancien booléen piloté par
+        // Window.Activated restait à true quand Windows refusait le foreground à la
+        // fenêtre (lancement en arrière-plan), et NotifyPolicy supprimait alors TOUS
+        // les toasts en silence — bug constaté par le probe J7 du 04/10/2026.
+
+        // Clic sur un toast → fenêtre au premier plan (parité n.on("click") → showWindow).
+        // Le SDK notifie depuis un thread d'arrière-plan : rétroprojection obligatoire.
+        Aven.Native.NotificationService.ClicSurToast += () => DispatcherQueue.TryEnqueue(MontrerFenêtre);
+
+        // Fermeture = VRAIE sortie (retour utilisateur 04/10/2026) : le masquage
+        // tray laissait l'app ET ses process node enfants en arrière-plan — la croix
+        // ferme maintenant TOUT : Quitter() tue moteur + host PTY puis ferme.
+        AppWindow.Closing += (_, args) =>
+        {
+            if (_quitExplicite) return;
+            args.Cancel = true; // fermeture différée : nettoyage d'abord
+            DispatcherQueue.TryEnqueue(Quitter);
+        };
+
+        // Raccourci global Ctrl+Maj+O (parité CommandOrControl+Shift+O de main.ts).
+        _hotkeyAfficher = new Aven.Bridge.GlobalHotKey();
+        _hotkeyAfficher.Pressé += () => DispatcherQueue.TryEnqueue(MontrerFenêtre);
+        if (!_hotkeyAfficher.Start(Aven.Bridge.GlobalHotKey.ModControl | Aven.Bridge.GlobalHotKey.ModShift
+                                   | Aven.Bridge.GlobalHotKey.ModNoRepeat, (uint)'O'))
+            System.Diagnostics.Debug.WriteLine("Ctrl+Maj+O global déjà pris : le tray reste la voie d'accès.");
+        Closed += (_, _) => _hotkeyAfficher.Dispose();
+
+        // Icône système (parité createTray) : Afficher / Quitter, clic gauche = afficher.
+        _tray = new TrayIcon();
+        _tray.AfficherDemandé += () => DispatcherQueue.TryEnqueue(MontrerFenêtre);
+        _tray.QuitterDemandé += () => DispatcherQueue.TryEnqueue(Quitter);
+        if (!_tray.Start())
+            System.Diagnostics.Debug.WriteLine("tray indisponible : l'app fonctionne sans icône système.");
+        Closed += (_, _) => _tray.Dispose();
+
         // Socle parité v10.0.0 : registre d'espaces (import du Classic à la 1re
         // exécution) puis boot du moteur au lancement — l'Electron fait pareil : le
         // chat est prêt dès le hub, l'état poll app:state est reflété en direct.
         _boot.StateChanged += état => DispatcherQueue.TryEnqueue(() => MajÉtat(état));
         Closed += (_, _) => { _ = _boot.DisposeAsync(); };
+        // Mono-instance (Lot 6) : au dernier Closed, le mutex disparaît — un crash
+        // de l'app ne bloque jamais le lancement suivant (pas de branche « abandonné »).
+        Closed += (_, _) => Aven.Bridge.InstanceUnique.Libérer();
         _ = DémarrerApplicationAsync();
     }
 
@@ -111,8 +181,10 @@ public sealed partial class MainWindow : Window
     private Aven.Bridge.ChatViewModel? _chatRendu; // VM à l'origine des bulles affichées
     private bool _filesOuvert, _notesOuvert;
     private string _filesRelative = "";
+    private string? _filesApercuChemin;           // fichier en aperçu (cible « analyser »)
     private Aven.Bridge.Note? _noteOuverte;
-    private string? _noteNouvelleTags;
+    private List<string>? _noteNouvelleTags;      // étiquettes de la note EN CRÉATION (parité editingTags)
+    private string? _notesTagFiltre;              // filtre par agent de la liste Notes (parité tagFilter)
     private bool _dialogOuvert;
 
     // ── Jalon 3 (parité SettingsDialog) : apparence persistée + garde anti-boucle ──
@@ -122,6 +194,7 @@ public sealed partial class MainWindow : Window
 
     // ── Terminal Freebuff (phase 5) : machine à états testée + ConPTY réel ────
     private Aven.Bridge.FreebuffTerminal? _terminal;
+    private CheckBox? _caseReprise; // Lot 3 : case « Reprendre la dernière conversation » (préférence freebuffResume)
     private readonly StringBuilder _tamponBrut = new();
     private readonly List<string> _lignesBrutes = [];
 
@@ -130,6 +203,17 @@ public sealed partial class MainWindow : Window
     private bool _écranActif = true; // défaut : TUI complet (parité vue terminal web)
     private (int Cols, int Rows) _dims = (Aven.Bridge.FreebuffTerminal.DefaultCols, Aven.Bridge.FreebuffTerminal.DefaultRows);
 
+    // ── Lot 2 (parité v9.3.0) : pastille Freebuff du hub + avis hub TTL 6 s ─────
+    private const string AvisCliAbsent = "Le CLI Freebuff n'est pas installé : Paramètres → Freebuff CLI gratuit → « Installer le CLI (npm) »."; // FREEBUFF_MISSING_NOTICE (web App.tsx:33)
+    private const int NoticeTtlMs = 6000; // HOME_NOTICE_TTL (web App.tsx:30)
+    private Microsoft.UI.Xaml.Shapes.Ellipse? _pastillePoint;   // point d'état de la pastille (couleur par état)
+    private TextBlock? _pastilleLibellé;                        // étiquette « Freebuff »
+    private Task<string>? _pastilleTâche;                       // dédoublonnage du sondage CLI (un spawn à la fois)
+    private readonly Border _noticeHub = new();                 // avis du hub (parité .home-notice)
+    private readonly TextBlock _noticeHubTexte = new();
+    private readonly Button _noticeHubInstaller = new();
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _minuterieNotice;
+
     // ── Socle parité v10.0.0 : registre d'espaces + clés + boot moteur ──────────
     private readonly Aven.Bridge.BootService _boot = new();
     private string? _espace;                       // espace actif (registre)
@@ -137,8 +221,18 @@ public sealed partial class MainWindow : Window
 
     // ── Voix (phase 6) : pipeline testé + capture micro + annonceur ──────────
     private Aven.Bridge.GlobalHotKey? _hotkey; // raccourci OS global Ctrl+Maj+V (décision phase 6)
+    private Aven.Bridge.GlobalHotKey? _hotkeyAfficher; // raccourci OS global Ctrl+Maj+O (J7, parité Electron)
+    private TrayIcon? _tray;                    // icône de tray système (J7)
+    private bool _quitExplicite;                // Quitter() a ordonné la sortie (sinon fermeture = tray)
+    private Aven.Bridge.EngineClient? _moteurNotifié; // garde anti double-abonnement notifications (J7)
+    private readonly Dictionary<string, long> _départsTours = new(); // sessionID → TickCount64 (J7)
+    private readonly object _verrouTours = new();
     private Aven.Bridge.VoicePipeline? _voixPipeline;
     private VoiceRuntime? _voix;
+    // v9.6.1 : 3e état du bouton vocal (parité dictation.state === "transcribing") :
+    // armé au signal VoiceRuntime, désarmé au résultat, en cas d'échec, ou par le
+    // filet de sécurité — aucun « Transcription… » figé (parité setTimeout 35 s web).
+    private bool _voixTranscriptionEnCours;
     private Aven.Bridge.Announcer? _annonceur;
     private string _modelLabel = "Auto";
     private readonly Queue<int> _fpsHistorique = new();
@@ -147,18 +241,48 @@ public sealed partial class MainWindow : Window
 
     private void PositionHubCards()
     {
-        // Le hub entier est centré dans sa cellule : sinon la grille (et son
-        // Ellipse 540×540 à taille explicite) reste calée en haut-gauche et les
-        // cartes ne reposent plus sur l'anneau. Parité croix .home-hub web.
-        HubView.HorizontalAlignment = HorizontalAlignment.Center;
-        HubView.VerticalAlignment = VerticalAlignment.Center;
+        // Correctif 04/10/2026 : seul le CONTENU du hub (colonne 1, HubScene) se centre.
+        // HubView entier était centré AVANT, panneau RÉCENTS compris : le bloc
+        // « récents + hub » glissait vers la gauche et la carte Notes (270°) venait
+        // se poser SUR la liste des conversations récentes (capture 1366×720).
+        // HubView reprend son étirement par défaut : récents calés à gauche (parité
+        // .home-workspace du web), hub centré dans l'espace RESTANT.
         Placer(CardProject, Cibles[0].AngleDeg);
         Placer(CardTasks, Cibles[1].AngleDeg);
         Placer(CardFiles, Cibles[2].AngleDeg);
         Placer(CardNotes, Cibles[3].AngleDeg);
     }
 
-    private static void Placer(Button carte, double angleDeg)
+    /// <summary>Correctif 04/10/2026 : rayon dynamique du hub. À chaque taille de la
+    /// scène, le rayon garde la carte la plus excentrée entièrement visible :
+    /// demi-largeur carte 75 + marge 8, demi-hauteur 56 + marge 8 (parité du
+    /// clamp responsive --hub-r du web). L'anneau suit (2 × rayon + 8 %, comme le
+    /// ::after du web qui passe par les centres des cartes).</summary>
+    private void SurTailleSceneHub(object sender, SizeChangedEventArgs args)
+    {
+        var largeur = args.NewSize.Width;
+        var hauteur = args.NewSize.Height;
+        var rayon = Math.Min(largeur / 2 - 83, hauteur / 2 - 64);
+        _rayon = Math.Clamp(double.IsFinite(rayon) ? rayon : RayonMax, RayonMin, RayonMax);
+        var anneau = Math.Round(_rayon * 2 * 1.08);
+        HubAnneau.Width = anneau;
+        HubAnneau.Height = anneau;
+        // v9.7.5 : noyau vocal central (parité clamp hub-core du web : ~92 % du rayon,
+        // plafond 236 px). Plancher ADAPTATIF à la place du 168 fixe du web : RayonMin
+        // natif (150) est plus bas que le clamp web, un noyau de 168 mordrait sur les
+        // cartes — on borne par l'espace libre (bord de carte à rayon − 75, marge 10).
+        var noyau = Math.Clamp(Math.Round(Math.Min(_rayon * 0.92, 2 * (_rayon - 85))), 120.0, 236.0);
+        HubVoixFond.Width = HubVoixFond.Height = noyau;
+        HubVoixCore.Width = HubVoixCore.Height = noyau;
+        HubVoixAnneauExterne.Width = HubVoixAnneauExterne.Height = Math.Round(noyau * 0.78);
+        HubVoixAnneauInterne.Width = HubVoixAnneauInterne.Height = Math.Round(noyau * 0.58);
+        Placer(CardProject, Cibles[0].AngleDeg);
+        Placer(CardTasks, Cibles[1].AngleDeg);
+        Placer(CardFiles, Cibles[2].AngleDeg);
+        Placer(CardNotes, Cibles[3].AngleDeg);
+    }
+
+    private void Placer(Button carte, double angleDeg)
     {
         // Centre la carte dans sa cellule AVANT la translation polaire : avec une
         // taille explicite (150×112) WinUI la pose en haut-gauche et la translation
@@ -169,8 +293,8 @@ public sealed partial class MainWindow : Window
         // TranslateX/Y relatifs au centre (cartes centrées via Alignment + render transform).
         carte.RenderTransform = new TranslateTransform
         {
-            X = Math.Cos(rad - Math.PI / 2) * Rayon,
-            Y = Math.Sin(rad - Math.PI / 2) * Rayon,
+            X = Math.Cos(rad - Math.PI / 2) * _rayon,
+            Y = Math.Sin(rad - Math.PI / 2) * _rayon,
         };
     }
 
@@ -218,8 +342,15 @@ public sealed partial class MainWindow : Window
     {
         PageView.Visibility = Visibility.Visible;
         HubView.Visibility = Visibility.Collapsed;
+        HubCommande.Visibility = Visibility.Collapsed; // Lot 2 : la barre de commande est une surface hub (parité home-toolbar)
         MasquerVues();
-        PagePlaceholder.Visibility = Visibility.Visible; // repli générique (OnSettings le masque)
+        // Correctif 04/10/2026 : le placeholder phase 2 (« Cette vue arrive en
+        // phases 3-6 du protocole… ») n'est plus jamais montré. TOUTES les vues
+        // cibles existent (chat, fichiers, notes, tâches, terminal, réglages) et
+        // il s'affichait en tête de CHACUNE d'elles — un texte périmé qui
+        // affirmait que la vue n'existait pas (constaté en live sur la page
+        // Projet, capture du 04/10/2026). L'élément reste en XAML, inactif.
+        PagePlaceholder.Visibility = Visibility.Collapsed;
         RafraîchirBannières(); // les bannières d'état ne vivent que hors hub (parité)
         // Connected Animation (parité du shared element v9.7.0) : la source
         // (carte du hub, bouton Terminal/Paramètres) DEVIENT l'en-tête de la page.
@@ -236,6 +367,7 @@ public sealed partial class MainWindow : Window
         // Retour : la page cède sa place, le hub reprend sa cascade (parité goHome v9.7.1).
         HubView.Visibility = Visibility.Visible;
         PageView.Visibility = Visibility.Collapsed;
+        HubCommande.Visibility = Visibility.Visible; // Lot 2 : de retour sur le hub (parité home-toolbar)
         CascaderEntreeDuHub();
         RafraîchirBannières(); // le hub n'affiche que sa pastille d'état
         RafraîchirAprèsChat(); // récents + sidebar fraîchis à chaque retour au hub
@@ -322,6 +454,106 @@ public sealed partial class MainWindow : Window
         if (état.RemovedModels.Count > 0)
             version += "\nModèles payants retirés de cet espace : " + string.Join(", ", état.RemovedModels);
         SettingsVersion.Text = version;
+
+        // Lot 5 (parité SettingsDialog v9.1.2) : statut du CLI Freebuff + rangée mise à jour.
+        CliFreebuffStatut.Text = "Vérification…";
+        CliFreebuffConnecter.Visibility = Visibility.Collapsed;
+        CliFreebuffInstaller.Visibility = Visibility.Visible;
+        CliFreebuffInstaller.IsEnabled = true;
+        CliFreebuffInstaller.Content = "Installer le CLI (npm)";
+        _ = AppliquerStatutCliAsync();
+        // Sans canal de mise à jour côté natif (UpdatesConfigured = false, BootService) :
+        // parité du web non configuré — message, pas de bouton.
+        BoutonVerifierMisesAJour.Visibility = état.UpdatesConfigured ? Visibility.Visible : Visibility.Collapsed;
+        MisesAJourMessage.Text = état.UpdatesConfigured ? "" : "Mise à jour automatique non configurée (canal de publication natif à définir).";
+    }
+
+    /// <summary>Statut CLI dans Réglages (parité useEffect freebuffCliStatus) : partage
+    /// le sondage dédupliqué de la pastille, met à jour statut + boutons.</summary>
+    private async Task AppliquerStatutCliAsync()
+    {
+        var (installé, version) = await StatutCliFreebuffAsync();
+        CliFreebuffStatut.Text = installé
+            ? "CLI installé" + (version is { } v ? " — v" + v : "")
+            : "CLI non installé";
+        CliFreebuffConnecter.Visibility = installé ? Visibility.Visible : Visibility.Collapsed;
+        CliFreebuffInstaller.Visibility = installé ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    /// <summary>Parité cliAction("install") : console externe npm install -g freebuff,
+    /// bouton verrouillé « Installation en cours… », re-vérification du statut pendant
+    /// 60 s (12 × 5 s) pour voir « CLI installé » sans fermer le panneau.</summary>
+    private async void OnCliFreebuffInstaller(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            CliFreebuffInstaller.IsEnabled = false;
+            CliFreebuffInstaller.Content = "Installation en cours…";
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "cmd",
+                Arguments = "/c start \"\" cmd /k npm install -g freebuff",
+                UseShellExecute = true,
+            });
+            for (var i = 0; i < 12; i++)
+            {
+                await Task.Delay(5000);
+                var (installé, version) = await StatutCliFreebuffAsync();
+                if (!installé) continue;
+                CliFreebuffStatut.Text = "CLI installé" + (version is { } v ? " — v" + v : "");
+                CliFreebuffConnecter.Visibility = Visibility.Visible;
+                CliFreebuffInstaller.Visibility = Visibility.Collapsed;
+                CliFreebuffInstaller.IsEnabled = true;
+                CliFreebuffInstaller.Content = "Installer le CLI (npm)";
+                return;
+            }
+        }
+        catch (Exception erreur) { CliFreebuffStatut.Text = "Vérification impossible : " + erreur.Message; }
+        finally
+        {
+            CliFreebuffInstaller.IsEnabled = true;
+            CliFreebuffInstaller.Content = "Installer le CLI (npm)";
+            _ = RafraîchirPastilleFreebuffAsync(); // la pastille suit l'installation
+        }
+    }
+
+    /// <summary>Parité cliAction("login") : console externe « freebuff login » sur l'espace.</summary>
+    private void OnCliFreebuffConnecter(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "cmd",
+                Arguments = $"/c start \"\" /D \"{Espace()}\" cmd /k freebuff login",
+                UseShellExecute = true,
+            });
+        }
+        catch (Exception erreur) { CliFreebuffStatut.Text = "Lancement impossible : " + erreur.Message; }
+    }
+
+    /// <summary>Parité checkUpdates (main.ts:800) : interroge la GitHub Releases
+    /// du dépôt (canal natif, UpdateCheck) et affiche le MÊME message que l'IPC web —
+    /// « Version disponible : X » ou « Aucune mise à jour disponible. ». On signale
+    /// sans jamais installer (parité autoDownload=false). Le bouton est verrouillé
+    /// pendant l'appel réseau.</summary>
+    private async void OnVerifierMisesAJour(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            BoutonVerifierMisesAJour.IsEnabled = false;
+            MisesAJourMessage.Text = "Vérification…";
+            var résultat = await Aven.Bridge.UpdateCheck.VerifierAsync(AppVersion);
+            MisesAJourMessage.Text = résultat.Ok ? résultat.Message : "Vérification impossible : " + résultat.Message;
+        }
+        catch (Exception erreur)
+        {
+            MisesAJourMessage.Text = "Vérification impossible : " + erreur.Message;
+        }
+        finally
+        {
+            BoutonVerifierMisesAJour.IsEnabled = true;
+        }
     }
 
     /// <summary>Une carte clé par fournisseur (parité du champ .field du web) :</r
@@ -813,6 +1045,30 @@ public sealed partial class MainWindow : Window
 
     /// <summary>Applique l'apparence à la fenêtre (parité useAppearance : dataset.theme,
     /// --accent, --sidebar-width, --message-width + visibilités d'interface).</summary>
+    /// <summary>Boutons de caption (minimiser/agrandir/fermer) calqués sur le thème
+    /// de l'app (retour 04/10/2026) : sans cette affectation WinUI suit le thème
+    /// SYSTÈME de Windows — app claire sur Windows sombre = glyphes blancs
+    /// invisibles sur fond clair.</summary>
+    private void MettreAJourBoutonsDeCaption()
+    {
+        try
+        {
+            var sombre = _apparence.Theme == "dark"
+                || (_apparence.Theme != "light" && Application.Current.RequestedTheme == ApplicationTheme.Dark);
+            var barre = AppWindow.TitleBar;
+            barre.ButtonBackgroundColor = Windows.UI.Color.FromArgb(0, 0, 0, 0);
+            barre.ButtonInactiveBackgroundColor = Windows.UI.Color.FromArgb(0, 0, 0, 0);
+            barre.ButtonForegroundColor = sombre ? Windows.UI.Color.FromArgb(255, 255, 255, 255) : Windows.UI.Color.FromArgb(255, 0, 0, 0);
+            barre.ButtonHoverBackgroundColor = sombre
+                ? Windows.UI.Color.FromArgb(0x33, 0xFF, 0xFF, 0xFF)
+                : Windows.UI.Color.FromArgb(0x1A, 0x00, 0x00, 0x00);
+            barre.ButtonPressedBackgroundColor = sombre
+                ? Windows.UI.Color.FromArgb(0x50, 0xFF, 0xFF, 0xFF)
+                : Windows.UI.Color.FromArgb(0x33, 0x00, 0x00, 0x00);
+        }
+        catch { /* jamais bloquant */ }
+    }
+
     private void ApplerApparence()
     {
         _majApparence = true;
@@ -850,6 +1106,7 @@ public sealed partial class MainWindow : Window
             _annonceur?.SetEnabled(_apparence.VoiceAnnouncements);
         }
         finally { _majApparence = false; }
+        MettreAJourBoutonsDeCaption(); // caption recalée à chaque application d'apparence
     }
 
     private static void RemplacerBrush(string cle, Windows.UI.Color baseColor, byte alpha)
@@ -945,7 +1202,9 @@ public sealed partial class MainWindow : Window
         StatusBarre.Text = enLigne ? "En ligne" : état.Status == "error" ? "Indisponible" : "Démarrage";
         StatusDot.Fill = BrushDe(enLigne ? "AvenSuccessBrush"
             : état.Status == "error" ? "AvenDangerBrush" : "AvenWarningBrush");
-        HubWorkspace.Text = NomEspace(état.Workspace ?? _espace);
+        // v9.7.5 : l'espace quitte le centre du hub (parité web, aucun texte au centre)
+        // et se reflète en barre de titre, à côté du statut moteur.
+        EspaceTitre.Text = "· " + NomEspace(état.Workspace ?? _espace);
         if (état.Status == "error")
             StatusBannerText.Text = "Aven n'a pas démarré. " + (état.Error ?? "");
         else if (état.Status == "starting")
@@ -956,6 +1215,7 @@ public sealed partial class MainWindow : Window
             _ = RafraîchirRecentsAsync(); // hub enrichi : les récents arrivent avec le moteur
         }
         RafraîchirBannières();
+        _ = RafraîchirPastilleFreebuffAsync(); // Lot 2 : l'état CLI/PTY est reflété au boot
     }
 
     private static string NomEspace(string? chemin)
@@ -1165,11 +1425,26 @@ public sealed partial class MainWindow : Window
 
         // Mesure brute pour l'acceptation « 60 fps » : frames comptées pendant les
         // tours (fenêtres d'une seconde, 30 s glissantes affichées dans le hint).
-        Microsoft.UI.Xaml.Media.CompositionTarget.Rendering += SurFrame;
+        // ABONNEMENT PENDANT UN TOUR UNIQUEMENT (retour 04/10/2026) : posé en
+        // permanence, CompositionTarget.Rendering réveille la boucle de rendu en
+        // continu et le premier survol d'un bouton attend la file de frames
+        // (latence souris → highlight perçue).
+        void MajAbonnementFps()
+        {
+            // retrait puis ajout : jamais deux abonnements (idempotent).
+            Microsoft.UI.Xaml.Media.CompositionTarget.Rendering -= SurFrame;
+            if (_chat?.Live.Busy == true)
+                Microsoft.UI.Xaml.Media.CompositionTarget.Rendering += SurFrame;
+        }
 
         // Live → lignes : les événements du moteur arrivent sur le thread de lecture,
         // la réconciliation d'arbre doit passer par l'interface.
-        client.LiveChanged += _ => DispatcherQueue.TryEnqueue(SynchroniserChat);
+        client.LiveChanged += _ => DispatcherQueue.TryEnqueue(() =>
+        {
+            SynchroniserChat();
+            MajAbonnementFps();
+        });
+        MajAbonnementFps(); // tour déjà actif au branchement : ne rien manquer du début
     }
 
     private void RafraîchirAprèsChat()
@@ -1420,6 +1695,8 @@ public sealed partial class MainWindow : Window
             var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
             actions.Children.Add(ActionBouton("\u270E", "Renommer : " + chat.Title,
                 (_, _) => { _renommageId = chat.Id; ConstruireSidebar(); }));
+            actions.Children.Add(ActionBouton("\u21B4", "Exporter : " + chat.Title,
+                async (_, _) => await ExporterConversationAsync(chat.Id)));
             actions.Children.Add(ActionBouton(_sidebarArchivées ? "R" : "A",
                 (_sidebarArchivées ? "Désarchiver : " : "Archiver : ") + chat.Title,
                 async (_, _) => await BasculerArchiveAsync(chat.Id, !_sidebarArchivées)));
@@ -1468,6 +1745,37 @@ public sealed partial class MainWindow : Window
         catch (Exception erreur) { PageHint.Text = "Renommage impossible : " + erreur.Message; }
         await RafraîchirSidebarAsync();
         _ = RafraîchirRecentsAsync();
+    }
+
+    /// <summary>Export Markdown d'une conversation (Lot 4, parité api.exportChat) : le
+    /// Markdown est construit par le client (ExporterMarkdownAsync), l'utilisateur
+    /// choisit l'emplacement via le sélecteur système, le fichier est écrit en UTF-8.</summary>
+    private async Task ExporterConversationAsync(string id)
+    {
+        var client = _boot.Client;
+        if (client is null) { PageHint.Text = "Moteur indisponible : export impossible."; return; }
+        try
+        {
+            var exporté = await client.ExporterMarkdownAsync(id, Espace());
+            if (exporté is not { } export) { PageHint.Text = "Conversation introuvable pour l'export."; return; }
+            var sûr = export.Titre.Replace("\\", "_").Replace("/", "_").Replace(":", "_")
+                .Replace("*", "_").Replace("?", "_").Replace("\"", "_")
+                .Replace("<", "_").Replace(">", "_").Replace("|", "_");
+            if (sûr.Length > 80) sûr = sûr[..80];
+            var picker = new Windows.Storage.Pickers.FileSavePicker
+            {
+                SuggestedFileName = sûr.Length > 0 ? sûr : "conversation",
+                SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.DocumentsLibrary,
+            };
+            picker.FileTypeChoices.Add("Markdown", new List<string> { ".md" });
+            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
+            var fichier = await picker.PickSaveFileAsync();
+            if (fichier is null) return; // annulé : parité res.canceled
+            await Windows.Storage.FileIO.WriteTextAsync(fichier, export.Markdown);
+            PageHint.Text = "Conversation exportée : " + fichier.Name;
+        }
+        catch (Exception erreur) { PageHint.Text = "Export impossible : " + erreur.Message; }
     }
 
     private async Task BasculerArchiveAsync(string id, bool archiver)
@@ -1541,6 +1849,27 @@ public sealed partial class MainWindow : Window
                 var id = chat.Id;
                 var agent = chat.Agent ?? "projet";
                 bouton.Click += (_, _) => OuvrirConversation(id, agent, bouton);
+                // Navigation clavier (Lot 6, parité arrow-navigation.ts) : Haut/Bas
+                // bouclent parmi les récents, Home/End vont aux extrémités, Entrée
+                // laisse le bouton s'activer (Invoke d'un Button focusé). La logique
+                // décisionnelle vit dans FlèchesHub (pure, testée sans UI).
+                var indexRécent = HubRecentsList.Children.Count;
+                foreach (var (touche, nom) in new[]
+                {
+                    (Windows.System.VirtualKey.Up, "ArrowUp"),
+                    (Windows.System.VirtualKey.Down, "ArrowDown"),
+                    (Windows.System.VirtualKey.Home, "Home"),
+                    (Windows.System.VirtualKey.End, "End"),
+                })
+                {
+                    var accélérateur = new KeyboardAccelerator { Key = touche };
+                    accélérateur.Invoked += (_, args) =>
+                    {
+                        args.Handled = true;
+                        NaviguerRécents(nom, indexRécent);
+                    };
+                    bouton.KeyboardAccelerators.Add(accélérateur);
+                }
                 HubRecentsList.Children.Add(bouton);
             }
             if (récentes.Count == 0)
@@ -1558,6 +1887,19 @@ public sealed partial class MainWindow : Window
         {
             System.Diagnostics.Debug.WriteLine("récents : " + erreur.Message);
         }
+    }
+
+    /// <summary>Déplace le focus clavier parmi les récents du hub (Lot 6, parité
+    /// arrow-navigation.ts) : FlèchesHub.Suivant calcule l'index cible (bouclage,
+    /// Home/End, null = touche ignorée) puis Focus(FocusState.Keyboard) l'active.
+    /// Seuls les boutons comptent — le bloc « Commencez une conversation… » n'est
+    /// pas focusable et ne doit pas décaler les index.</summary>
+    private void NaviguerRécents(string touche, int courant)
+    {
+        var boutons = HubRecentsList.Children.OfType<Button>().ToList();
+        var cible = Aven.Bridge.FlèchesHub.Suivant(touche, courant, boutons.Count);
+        if (cible is { } index && index >= 0 && index < boutons.Count)
+            boutons[index].Focus(FocusState.Keyboard);
     }
 
     // ── Page Tâches (parité v9.6.0) : agent principal + modes ────────────────────
@@ -1791,6 +2133,8 @@ public sealed partial class MainWindow : Window
             var entrées = Aven.Bridge.FilesService.List(Espace(), relatif);
             FilesList.Children.Clear();
             FilesPreview.Visibility = Visibility.Collapsed;
+            FilesAnalyzeAgents.Visibility = Visibility.Collapsed; // parite openDir : analyzeFor = null
+            _filesApercuChemin = null;
             FilesUp.Visibility = relatif.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
 
             // Fil d'ariane cliquable (parité files-crumbs).
@@ -1850,6 +2194,8 @@ public sealed partial class MainWindow : Window
         try
         {
             var fichier = Aven.Bridge.FilesService.Read(Espace(), chemin);
+            _filesApercuChemin = fichier.Path; // cible de "Faire analyser" (parite preview.path)
+            FilesAnalyzeAgents.Visibility = Visibility.Collapsed; // parite openFile : analyzeFor = null
             FilesPreviewPath.Text = "APER\u00C7U \u00B7 " + fichier.Path;
             FilesPreviewMeta.Text = TailleHumaine(fichier.Size) + (fichier.Truncated ? " \u00B7 aper\u00E7u tronqu\u00E9 (512 Kio)" : "");
             FilesPreviewContent.Text = fichier.Content;
@@ -1857,6 +2203,8 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception erreur)
         {
+            _filesApercuChemin = null;
+            FilesAnalyzeAgents.Visibility = Visibility.Collapsed;
             FilesPreview.Visibility = Visibility.Visible;
             FilesPreviewPath.Text = "";
             FilesPreviewMeta.Text = "";
@@ -1884,6 +2232,7 @@ public sealed partial class MainWindow : Window
         NotesScroll.Visibility = Visibility.Visible;
         NotesDirHint.Text = Aven.Bridge.NotesService.Dir(Espace());
         ListerNotes();
+        _ = RafraîchirÉtiquettesAsync(); // noms d'agents réels sur les étiquettes
     }
 
     private void ListerNotes()
@@ -1892,16 +2241,34 @@ public sealed partial class MainWindow : Window
         {
             var query = NotesQuery.Text.Trim().ToLowerInvariant();
             var pins = Aven.Bridge.NotesService.LoadPinned(Espace());
-            var notes = Aven.Bridge.NotesService.List(Espace())
+            var toutes = Aven.Bridge.NotesService.List(Espace());
+
+            // Étiquettes par note (parité useEffect tags), puis filtre par agent
+            // (notes-tags-filter) appliqué à la liste.
+            var tags = new Dictionary<string, IReadOnlyList<string>>();
+            foreach (var n in toutes)
+            {
+                try { tags[n.Id] = Aven.Bridge.NotesService.LoadTags(Espace(), n.Id); }
+                catch { tags[n.Id] = []; }
+            }
+            var tousTags = tags.Values.SelectMany(t => t).Distinct().ToList();
+            if (_notesTagFiltre is { } actif && !tousTags.Contains(actif)) _notesTagFiltre = null;
+            ConstruireFiltreTags(tousTags);
+
+            var notes = toutes
+                .Where(n => _notesTagFiltre is null || tags[n.Id].Contains(_notesTagFiltre))
                 .Where(n => query.Length == 0 || n.Title.ToLowerInvariant().Contains(query) || n.Markdown.ToLowerInvariant().Contains(query))
                 .OrderByDescending(n => pins.Contains(n.Id)) // épinglées d'abord (parité visible)
                 .ThenByDescending(n => n.Updated);
             NotesList.Children.Clear();
             foreach (var note in notes)
             {
+                // Parité rangée web : titre, id, puis les tags (noms d'agents).
+                var étiquettes = tags[note.Id];
+                var affichage = étiquettes.Count == 0 ? "" : "   \u00B7 " + string.Join(", ", étiquettes.Select(NomAgent));
                 var rangée = new Button
                 {
-                    Content = (pins.Contains(note.Id) ? "\uD83D\uDCCC " : "") + note.Title + "   " + note.Id,
+                    Content = (pins.Contains(note.Id) ? "\uD83D\uDCCC " : "") + note.Title + "   " + note.Id + affichage,
                     HorizontalAlignment = HorizontalAlignment.Stretch,
                     HorizontalContentAlignment = HorizontalAlignment.Left,
                     MinHeight = 36,
@@ -1967,6 +2334,8 @@ public sealed partial class MainWindow : Window
         NoteBodyBox.Text = note.Markdown;
         NotePreview.Visibility = Visibility.Collapsed;
         NoteEditor.Visibility = Visibility.Visible;
+        NoteTagPicker.Visibility = Visibility.Collapsed; // picker = création seule (parité)
+        _noteNouvelleTags = null;
     }
 
     private void OnNoteNew(object sender, RoutedEventArgs e)
@@ -1974,9 +2343,11 @@ public sealed partial class MainWindow : Window
         NoteEditorTitre.Text = "NOUVELLE NOTE";
         NoteTitleBox.Text = "";
         NoteBodyBox.Text = "";
-        _noteNouvelleTags = null;
+        // L'agent de la conversation ouverte est pr\u00E9-coch\u00E9 (parit\u00E9 editingTags).
+        _noteNouvelleTags = string.IsNullOrEmpty(_chatAgent) ? null : new List<string> { _chatAgent };
         NotePreview.Visibility = Visibility.Collapsed;
         NoteEditor.Visibility = Visibility.Visible;
+        _ = ConstruireNoteTagPickerAsync();
     }
 
     private async void OnNoteSave(object sender, RoutedEventArgs e)
@@ -1986,7 +2357,11 @@ public sealed partial class MainWindow : Window
             var id = _noteOuverte is { } ouverte && NoteEditorTitre.Text == "\u00C9DITION" ? ouverte.Id : "";
             var note = await Task.Run(() => Aven.Bridge.NotesService.Save(Espace(), id, NoteTitleBox.Text, NoteBodyBox.Text));
             _noteOuverte = note;
-            if (_noteNouvelleTags is { } tag) { Aven.Bridge.NotesService.SetTags(Espace(), note.Id, new[] { tag }); _noteNouvelleTags = null; }
+            // Etiquettes choisies a la CREATION seulement (parite commitEdit :
+            // editing.id === ""), puis remise a zero quoi qu'il arrive.
+            if (id.Length == 0 && _noteNouvelleTags is { Count: > 0 } tags)
+                Aven.Bridge.NotesService.SetTags(Espace(), note.Id, tags);
+            _noteNouvelleTags = null;
             NoteEditor.Visibility = Visibility.Collapsed;
             ListerNotes();
             OuvrirNote(note.Id);
@@ -1997,12 +2372,509 @@ public sealed partial class MainWindow : Window
     private void OnNoteCancel(object sender, RoutedEventArgs e)
     {
         NoteEditor.Visibility = Visibility.Collapsed;
+        NoteTagPicker.Visibility = Visibility.Collapsed; // parite setEditingTags(null)
+        _noteNouvelleTags = null;
         if (_noteOuverte is { } note) OuvrirNote(note.Id);
+    }
+
+    // ── Jalon 4 : parite Notes/Fichiers du web (tags agents, joindre, exporter,
+    //    ouvrir dans l'Explorateur, analyse par agent) ─────────────────────────
+
+    /// <summary>Pastille cliquable (facture .notes-tag du web, style SurbrillerOnglet) :
+    /// accent quand actif, soft sinon. L'id vit dans Tag pour les mises a jour d'etat.</summary>
+    private Button BoutonÉtiquette(string nom, string id, bool actif, RoutedEventHandler clic)
+    {
+        var bouton = new Button
+        {
+            Content = nom,
+            Tag = id,
+            MinHeight = 26,
+            Padding = new Thickness(10, 2, 10, 2),
+            FontSize = 11,
+            CornerRadius = new CornerRadius(999),
+            Background = BrushDe(actif ? "AvenAccentBrush" : "AvenPanelSoftBrush"),
+            Foreground = actif ? new SolidColorBrush(Microsoft.UI.Colors.White) : BrushDe("AvenMutedBrush"),
+            BorderBrush = BrushDe(actif ? "AvenAccentBrush" : "AvenBorderBrush"),
+            BorderThickness = new Thickness(1),
+        };
+        bouton.Click += clic;
+        return bouton;
+    }
+
+    /// <summary>Charge la liste d'agents du moteur UNE fois (noms lisibles des
+    /// etiquettes) — sans moteur, les ids d'onglets font foi (parite fallback web).</summary>
+    private async Task AssurerAgentsAsync()
+    {
+        if (_agentsTaches.Count > 0 || _espace is null || _boot.Client is null) return;
+        try { _agentsTaches = (await _boot.Client.ListAgentsAsync(_espace)).ToList(); }
+        catch { /* moteur muet : les ids restent affichés */ }
+    }
+
+    /// <summary>Noms d'agents arrivés tard : la liste et l'editeur d'etiquettes se
+    /// redessinent avec les noms reels (une seule fois, si la vue est encore ouverte).</summary>
+    private async Task RafraîchirÉtiquettesAsync()
+    {
+        var avant = _agentsTaches.Count;
+        await AssurerAgentsAsync();
+        if (_agentsTaches.Count == avant || !_notesOuvert) return;
+        ListerNotes();
+        if (_noteOuverte is { } note && NotePreview.Visibility == Visibility.Visible)
+            ConstruireNoteTagsEditor(note);
+    }
+
+    /// <summary>Filtre par agent (parite notes-tags-filter) : "Toutes" + un bouton
+    /// par tag reellement present ; le clic filtre la liste (toggle sur un tag).</summary>
+    private void ConstruireFiltreTags(IReadOnlyList<string> tags)
+    {
+        NotesTagFilter.Children.Clear();
+        if (tags.Count == 0) { NotesTagFilter.Visibility = Visibility.Collapsed; return; }
+        NotesTagFilter.Children.Add(BoutonÉtiquette("Toutes", "", _notesTagFiltre is null, (_, _) =>
+        {
+            _notesTagFiltre = null;
+            ListerNotes();
+        }));
+        foreach (var tag in tags)
+        {
+            var local = tag;
+            NotesTagFilter.Children.Add(BoutonÉtiquette(NomAgent(tag), tag, _notesTagFiltre == tag, (_, _) =>
+            {
+                _notesTagFiltre = _notesTagFiltre == local ? null : local;
+                ListerNotes();
+            }));
+        }
+        NotesTagFilter.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>Pastilles de la NOUVELLE note (parite notes-tag-picker) : agents du
+    /// moteur (ids d'onglets en secours), agent courant pre-coche, toggle en memoire
+    /// puis SetTags a l'enregistrement.</summary>
+    private async Task ConstruireNoteTagPickerAsync()
+    {
+        try
+        {
+            await AssurerAgentsAsync();
+            var ids = _agentsTaches.Count > 0
+                ? _agentsTaches.Select(a => a.Id).ToList()
+                : Aven.Bridge.ConversationClient.Tabs.ToList();
+            NoteTagPicker.Children.Clear();
+            foreach (var id in ids)
+            {
+                var local = id;
+                NoteTagPicker.Children.Add(BoutonÉtiquette(NomAgent(id), id, _noteNouvelleTags?.Contains(id) == true, (s, _) =>
+                {
+                    var tags = _noteNouvelleTags ?? new List<string>();
+                    if (tags.Contains(local)) tags.Remove(local);
+                    else if (tags.Count < Aven.Bridge.NotesService.MaxNoteTags) tags.Add(local);
+                    _noteNouvelleTags = tags;
+                    SurbrillerOnglet((Button)s!, _noteNouvelleTags.Contains(local));
+                }));
+            }
+            NoteTagPicker.Visibility = NoteTagPicker.Children.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
+        catch (Exception erreur) { PageHint.Text = erreur.Message; }
+    }
+
+    /// <summary>Etiquettes de la note ouverte (parite notes-tags-editor) : un clic
+    /// bascule l'agent avec SetTags immediate (parite commitTags), la liste suit.</summary>
+    private async void ConstruireNoteTagsEditor(Aven.Bridge.Note note)
+    {
+        try
+        {
+            await AssurerAgentsAsync();
+            if (_noteOuverte?.Id != note.Id) return; // l'utilisateur a change de note entre-temps
+            var actifs = Aven.Bridge.NotesService.LoadTags(Espace(), note.Id);
+            NoteTagsEditor.Children.Clear();
+            var ids = _agentsTaches.Count > 0
+                ? _agentsTaches.Select(a => a.Id).ToList()
+                : Aven.Bridge.ConversationClient.Tabs.ToList();
+            foreach (var id in ids)
+            {
+                var local = id;
+                NoteTagsEditor.Children.Add(BoutonÉtiquette(NomAgent(id), id, actifs.Contains(id), (_, _) =>
+                {
+                    try
+                    {
+                        var courants = Aven.Bridge.NotesService.LoadTags(Espace(), note.Id).ToList();
+                        if (courants.Contains(local)) courants.Remove(local);
+                        else if (courants.Count < Aven.Bridge.NotesService.MaxNoteTags) courants.Add(local);
+                        var sauvés = Aven.Bridge.NotesService.SetTags(Espace(), note.Id, courants);
+                        foreach (Button b in NoteTagsEditor.Children)
+                            SurbrillerOnglet(b, sauvés.Contains((string)b.Tag!));
+                        ListerNotes(); // la liste et le filtre reflètent les tags
+                    }
+                    catch (Exception erreur) { PageHint.Text = erreur.Message; }
+                }));
+            }
+            NoteTagsEditor.Visibility = NoteTagsEditor.Children.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
+        catch (Exception erreur) { PageHint.Text = erreur.Message; }
+    }
+
+    /// <summary>Ouvre un chemin via le shell (parite shell.openPath de l'Electron :
+    /// dossier -> Explorateur, fichier -> application par defaut).</summary>
+    private static void OuvrirDansExplorateur(string chemin)
+    {
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = chemin,
+            UseShellExecute = true,
+        });
+    }
+
+    private void OnNoteOuvrirDossier(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var dossier = Aven.Bridge.NotesService.Dir(Espace());
+            Directory.CreateDirectory(dossier); // parite ensureDir(notesDir)
+            OuvrirDansExplorateur(dossier);
+        }
+        catch (Exception erreur) { PageHint.Text = erreur.Message; }
+    }
+
+    /// <summary>Parite composeIntoChat : le texte atterrit dans le composeur de la
+    /// conversation de l'agent courant ( creee si aucune n'est ouverte ) — l'utilisateur
+    /// valide lui-meme avec Envoyer.</summary>
+    private void ComposerVersChat(string texte)
+    {
+        Composer.Text = texte;
+        if (!string.IsNullOrEmpty(_chatId) && _chat is not null)
+            OuvrirConversation(_chatId, _chatAgent, null);
+        else if (_chatEnCours)
+            OuvrirChat(null); // creation en vol : on rejoint la conversation naissante
+        else
+            NouvelleConversation(_chatAgent); // composeIntoChat : createChat si besoin
+        Composer.Focus(FocusState.Programmatic);
+    }
+
+    private void OnNoteJoindre(object sender, RoutedEventArgs e)
+    {
+        if (_noteOuverte is not { } note) return;
+        ComposerVersChat(Aven.Bridge.NotesService.TexteJoindre(note));
+    }
+
+    private async void OnNoteExporter(object sender, RoutedEventArgs e)
+    {
+        if (_noteOuverte is not { } note) return;
+        try
+        {
+            var picker = new Windows.Storage.Pickers.FileSavePicker
+            {
+                SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.DocumentsLibrary,
+                SuggestedFileName = Aven.Bridge.NotesService.NomExport(note.Title) + ".md",
+            };
+            picker.FileTypeChoices.Add("Markdown", new List<string> { ".md" });
+            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
+            var fichier = await picker.PickSaveFileAsync();
+            if (fichier is null) return; // annule (parite res.canceled)
+            await Windows.Storage.FileIO.WriteTextAsync(fichier, note.Markdown); // UTF-8 sans BOM
+            PageHint.Text = "Note exportée : " + fichier.Path;
+        }
+        catch (Exception erreur) { PageHint.Text = erreur.Message; }
+    }
+
+    private void OnFilesOpenExplorer(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var cible = Aven.Bridge.FilesService.SafeResolve(Espace(), _filesRelative);
+            OuvrirDansExplorateur(cible); // parite files:open (dossier courant)
+        }
+        catch (Exception erreur) { PageHint.Text = erreur.Message; }
+    }
+
+    private async void OnFilesAnalyser(object sender, RoutedEventArgs e)
+    {
+        // Bascule de la rangée d'agents (parite analyzeFor : un 2e clic referme).
+        if (FilesAnalyzeAgents.Visibility == Visibility.Visible)
+        {
+            FilesAnalyzeAgents.Visibility = Visibility.Collapsed;
+            return;
+        }
+        try
+        {
+            await AssurerAgentsAsync();
+            var ids = _agentsTaches.Count > 0
+                ? _agentsTaches.Select(a => a.Id).ToList()
+                : Aven.Bridge.ConversationClient.Tabs.ToList();
+            FilesAnalyzeAgents.Children.Clear();
+            foreach (var id in ids)
+            {
+                FilesAnalyzeAgents.Children.Add(BoutonÉtiquette(NomAgent(id), id, false, (_, _) =>
+                {
+                    var cible = _filesApercuChemin ?? _filesRelative;
+                    FilesAnalyzeAgents.Visibility = Visibility.Collapsed;
+                    ComposerVersChat(Aven.Bridge.FilesService.TexteAnalyse(cible));
+                }));
+            }
+            FilesAnalyzeAgents.Visibility = FilesAnalyzeAgents.Children.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
+        catch (Exception erreur) { PageHint.Text = erreur.Message; }
     }
 
     // ── Terminal Freebuff (phase 5) ──────────────────────────────────────
 
-    private void OnFreebuff(object sender, RoutedEventArgs e) => OuvrirTerminal(FreebuffButton);
+    // ── Lot 2 (parité v9.3.0) : pastille d'état Freebuff + barre de commande + avis hub ──
+
+    /// <summary>Remplace le contenu du bouton « Terminal Freebuff » par la pastille web
+    /// (.freebuff-pill) : point d'état + étiquette. Le nom UIA garde le préfixe
+    /// « Terminal Freebuff » que le smoke piloté par UIA vient cliquer.</summary>
+    private void ConstruirePastilleFreebuff()
+    {
+        _pastillePoint = new Microsoft.UI.Xaml.Shapes.Ellipse
+        {
+            Width = 8,
+            Height = 8,
+            VerticalAlignment = VerticalAlignment.Center,
+            Fill = BrushDe("AvenMutedBrush"),
+        };
+        _pastilleLibellé = new TextBlock
+        {
+            Text = "Freebuff",
+            FontSize = 12,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        FreebuffButton.Content = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 7,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children = { _pastillePoint, _pastilleLibellé },
+        };
+        AutomationProperties.SetName(FreebuffButton, "Terminal Freebuff");
+        _ = RafraîchirPastilleFreebuffAsync(); // état initial dès le lancement
+    }
+
+    /// <summary>Parité freebuffPillState (web App.tsx:120) : active (PTY vivant) >
+    /// ready (CLI installé) > missing. Dédupliqué : un seul sondage CLI à la fois
+    /// (chaque sondage spawn un process — jamais en rafale).</summary>
+    private Task<string> RafraîchirPastilleFreebuffAsync()
+    {
+        if (_pastilleTâche is { IsCompleted: false } enVol) return enVol;
+        _pastilleTâche = AppliquerPastilleAsync();
+        return _pastilleTâche;
+    }
+
+    private async Task<string> AppliquerPastilleAsync()
+    {
+        string état;
+        string? version = null;
+        if (_terminal is { IsActive: true })
+        {
+            état = "active";
+        }
+        else
+        {
+            (var installé, version) = await StatutCliFreebuffAsync();
+            état = installé ? "ready" : "missing";
+        }
+        if (_pastillePoint is { } point)
+            point.Fill = BrushDe(état switch
+            {
+                "active" => "AvenAccentBrush",
+                "ready" => "AvenSuccessBrush",
+                _ => "AvenMutedBrush",
+            });
+        if (_pastilleLibellé is { } étiquette)
+            étiquette.Foreground = BrushDe(état == "active" ? "AvenAccentBrush" : "AvenMutedBrush");
+        AutomationProperties.SetName(FreebuffButton, état switch
+        {
+            "active" => "Terminal Freebuff — session active",
+            "ready" => "Terminal Freebuff — CLI installé",
+            _ => "Terminal Freebuff — CLI non installé",
+        });
+        FreebuffButton.SetValue(ToolTipService.ToolTipProperty, état switch
+        {
+            "active" => "Session Freebuff active — ouvrir le terminal",
+            "ready" when version is not null => "CLI Freebuff " + version + " — ouvrir le terminal",
+            "ready" => "CLI Freebuff installé — ouvrir le terminal",
+            _ => "CLI Freebuff non installé — voir comment l'installer",
+        });
+        return état;
+    }
+
+    /// <summary>Parité api.freebuffCliStatus (checkFreebuffCli electron) : « freebuff --version »
+    /// via shell (le launcher est un .cmd), sortie parsée comme parseVersionOutput.</summary>
+    private static async Task<(bool Installé, string? Version)> StatutCliFreebuffAsync()
+    {
+        try
+        {
+            var sortie = await ExécuterPowerShell("freebuff --version 2>&1 | Out-String");
+            var m = System.Text.RegularExpressions.Regex.Match(sortie, @"\d+\.\d+\.\d+(?:[-+][\w.-]+)?");
+            return m.Success ? (true, (string?)m.Value) : (false, null);
+        }
+        catch { return (false, null); }
+    }
+
+    /// <summary>Clic pastille (parité routeAppAction « open-freebuff ») : CLI absent →
+    /// avis du hub avec bouton Installer ; sinon ouvre le terminal embarqué.</summary>
+    private async void OnPastilleFreebuff(object sender, RoutedEventArgs e)
+    {
+        var état = await RafraîchirPastilleFreebuffAsync();
+        if (état != "missing")
+        {
+            OuvrirTerminal(FreebuffButton);
+            return;
+        }
+        NotifierHub(AvisCliAbsent, avecInstall: true);
+    }
+
+    /// <summary>Entrée dans la barre de commande du hub (parité submitHomeCommand) :
+    /// conversation créée si besoin, texte posé dans le composeur, focus dedans —
+    /// l'utilisateur valide lui-même avec Envoyer.</summary>
+    private void OnHubCommande(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Key != Windows.System.VirtualKey.Enter) return;
+        var texte = HubCommande.Text.Trim();
+        if (texte.Length == 0) return;
+        HubCommande.Text = "";
+        ComposerVersChat(texte);
+    }
+
+    /// <summary>Ctrl+K (parité web) : hub → barre de commande ; chat → recherche sidebar.</summary>
+    private void OnRaccourciRecherche(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        if (HubView.Visibility == Visibility.Visible) HubCommande.Focus(FocusState.Programmatic);
+        else if (ChatSidebar.Visibility == Visibility.Visible) SidebarRecherche.Focus(FocusState.Programmatic);
+        else return;
+        args.Handled = true;
+    }
+
+    /// <summary>Avis du hub (parité .home-notice) : coin bas gauche, fermeture manuelle
+    /// ou TTL 6 s (HOME_NOTICE_TTL), action « Installer » quand le CLI manque.</summary>
+    private void ConstruireNoticeHub()
+    {
+        _noticeHubInstaller.Content = "Installer";
+        _noticeHubInstaller.MinHeight = 30;
+        _noticeHubInstaller.Padding = new Thickness(12, 4, 12, 4);
+        _noticeHubInstaller.Background = BrushDe("AvenAccentBrush");
+        _noticeHubInstaller.Foreground = new SolidColorBrush(Microsoft.UI.Colors.White);
+        _noticeHubInstaller.Visibility = Visibility.Collapsed;
+        _noticeHubInstaller.Click += OnNoticeInstaller;
+        var fermer = new Button
+        {
+            Content = "\u2715",
+            MinHeight = 30,
+            MinWidth = 30,
+            Padding = new Thickness(6, 2, 6, 2),
+            Background = BrushDe("AvenPanelSoftBrush"),
+            BorderThickness = new Thickness(0),
+            Foreground = BrushDe("AvenMutedBrush"),
+        };
+        AutomationProperties.SetName(fermer, "Fermer l'avis");
+        fermer.Click += OnNoticeFermer;
+        _noticeHubTexte.TextWrapping = TextWrapping.Wrap;
+        _noticeHubTexte.FontSize = 13;
+        _noticeHubTexte.MaxWidth = 430;
+        _noticeHubTexte.VerticalAlignment = VerticalAlignment.Center;
+        _noticeHubTexte.Foreground = BrushDe("AvenTextBrush");
+        _noticeHub.Padding = new Thickness(14, 10, 14, 10);
+        _noticeHub.CornerRadius = new CornerRadius(12);
+        _noticeHub.BorderThickness = new Thickness(1);
+        _noticeHub.BorderBrush = BrushDe("AvenBorderBrush");
+        _noticeHub.Background = BrushDe("AvenPanelBrush");
+        _noticeHub.HorizontalAlignment = HorizontalAlignment.Left;
+        _noticeHub.VerticalAlignment = VerticalAlignment.Bottom;
+        _noticeHub.Margin = new Thickness(12, 0, 0, 14);
+        _noticeHub.Visibility = Visibility.Collapsed;
+        _noticeHub.Child = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 10,
+            Children = { _noticeHubTexte, _noticeHubInstaller, fermer },
+        };
+        HubScene.Children.Add(_noticeHub); // dernier enfant : rendu au-dessus des cartes
+    }
+
+    private void NotifierHub(string texte, bool avecInstall = false)
+    {
+        _noticeHubTexte.Text = texte;
+        _noticeHubInstaller.Visibility = avecInstall ? Visibility.Visible : Visibility.Collapsed;
+        _noticeHub.Visibility = Visibility.Visible;
+        if (_minuterieNotice is null)
+        {
+            _minuterieNotice = DispatcherQueue.CreateTimer();
+            _minuterieNotice.Tick += (_, _) => FermerNoticeHub();
+        }
+        _minuterieNotice.Stop();
+        _minuterieNotice.Interval = TimeSpan.FromMilliseconds(NoticeTtlMs);
+        _minuterieNotice.Start();
+    }
+
+    private void FermerNoticeHub()
+    {
+        _minuterieNotice?.Stop();
+        _noticeHub.Visibility = Visibility.Collapsed;
+    }
+
+    private void OnNoticeFermer(object sender, RoutedEventArgs e) => FermerNoticeHub();
+
+    /// <summary>Parité api.freebuffCliLaunch("install") : console externe lançant
+    /// « npm install -g freebuff » (buildLaunchCommand, electron/freebuff-cli.ts).</summary>
+    private void OnNoticeInstaller(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "cmd",
+                Arguments = "/c start \"\" cmd /k npm install -g freebuff",
+                UseShellExecute = true,
+            });
+            NotifierHub("Installation du CLI lancée dans une fenêtre séparée (npm install -g freebuff).");
+        }
+        catch (Exception erreur)
+        {
+            NotifierHub("Installation impossible : " + erreur.Message);
+        }
+    }
+
+    /// <summary>Lot 3 (parité FreebuffAgentPage v9.5.0/v9.6.0) : prompts rapides (chips
+    /// qui remplissent le composeur, l'utilisateur garde la main) + case « Reprendre
+    /// la dernière conversation » (préférence freebuffResume, défaut : nouvelle
+    /// conversation). Construits une fois, préférence relue à chaque ouverture.</summary>
+    private void PréparerOptionsTerminal()
+    {
+        if (TerminalPrompts.Children.Count == 0)
+        {
+            foreach (var q in new[] { "Que peux-tu faire dans cet espace ?", "Résume l'état du projet", "Que vois-tu dans les fichiers ?" })
+            {
+                var question = q; // closure sur la question de CE chip
+                var puce = new Button
+                {
+                    Content = q,
+                    MinHeight = 30,
+                    Padding = new Thickness(12, 4, 12, 4),
+                    Background = BrushDe("AvenPanelSoftBrush"),
+                    BorderThickness = new Thickness(1),
+                    BorderBrush = BrushDe("AvenBorderBrush"),
+                    Foreground = BrushDe("AvenTextBrush"),
+                };
+                puce.Click += (_, _) =>
+                {
+                    TerminalInput.Text = question; // agent-quick-chip : remplit, n'envoie pas
+                    TerminalInput.Focus(FocusState.Programmatic);
+                };
+                TerminalPrompts.Children.Add(puce);
+            }
+            var étiquette = new CheckBox { Content = "Reprendre la dernière conversation à l'ouverture (sinon, nouvelle conversation)", MinHeight = 30 };
+            étiquette.Checked += (_, _) => EnregistrerReprise(true);
+            étiquette.Unchecked += (_, _) => EnregistrerReprise(false);
+            _caseReprise = étiquette;
+            TerminalOptions.Children.Add(étiquette);
+        }
+        var prefs = Aven.Bridge.SettingsService.Load(Aven.Bridge.AppData.Dir());
+        if (_caseReprise is { } boîte) boîte.IsChecked = prefs.FreebuffResume;
+        TerminalOptions.Visibility = Visibility.Visible;
+    }
+
+    private void EnregistrerReprise(bool valeur)
+    {
+        try { Aven.Bridge.SettingsService.SaveFreebuffResume(Aven.Bridge.AppData.Dir(), valeur); }
+        catch (Exception erreur) { TerminalSessionBar.Text = "Préférence non enregistrée : " + erreur.Message; }
+    }
 
     private void MasquerVues()
     {
@@ -2013,6 +2885,7 @@ public sealed partial class MainWindow : Window
         FilesView.Visibility = Visibility.Collapsed;
         NotesScroll.Visibility = Visibility.Collapsed;
         TerminalView.Visibility = Visibility.Collapsed;
+        TerminalOptions.Visibility = Visibility.Collapsed; // Lot 3 : optionnel terminal, caché avec lui
         SettingsPanel.Visibility = Visibility.Collapsed;
     }
 
@@ -2022,29 +2895,39 @@ public sealed partial class MainWindow : Window
         PageHint.Text = "Le CLI gratuit, dans Aven";
         OuvrirPageDepuis(source); // flip hub → page + masque les autres vues
         TerminalView.Visibility = Visibility.Visible;
+        PréparerOptionsTerminal(); // Lot 3 : chips + case reprise (préférence courante)
         TerminalInput.Focus(FocusState.Programmatic);
         if (_écranActif) AssurerÉcran(); // l'émulateur suit (le TUI se redessine aux prochains chunks)
 
         if (_terminal is not null) return;
         _terminal = new Aven.Bridge.FreebuffTerminal();
         var replay = _terminal.Start(
-            () => Aven.Bridge.NodePtyTransport.Démarrer(Espace(), Aven.Bridge.FreebuffTerminal.DefaultCols, Aven.Bridge.FreebuffTerminal.DefaultRows),
+            () => Aven.Bridge.NodePtyTransport.Démarrer(Espace(), Aven.Bridge.FreebuffTerminal.DefaultCols, Aven.Bridge.FreebuffTerminal.DefaultRows,
+                trustAgents: File.Exists(Path.Combine(Espace(), ".agents", "aven-code.ts")),
+                resume: Aven.Bridge.SettingsService.Load(Aven.Bridge.AppData.Dir()).FreebuffResume),
             new Aven.Bridge.TerminalHandlers(
                 OnData: chunk => DispatcherQueue.TryEnqueue(() => DonnéesTerminal(chunk)),
                 OnStatus: état => DispatcherQueue.TryEnqueue(() =>
+                {
                     PageHint.Text = état switch
                     {
                         Aven.Bridge.TerminalState.Starting => "Démarrage du CLI...",
                         Aven.Bridge.TerminalState.Restarting => "Relance automatique...",
                         _ => "Session active",
-                    }),
-                OnExit: (code, _) => DispatcherQueue.TryEnqueue(() =>
-                    TerminalSessionBar.Text = $"Session terminée (code {code}) — Relancer pour une nouvelle"),
+                    };
+                    _ = RafraîchirPastilleFreebuffAsync(); // Lot 2 : la pastille suit l'état du PTY
+                }),
+                OnExit: (code, signal) => DispatcherQueue.TryEnqueue(() =>
+                {
+                    TerminalSessionBar.Text = $"Session terminée (code {code}) — Relancer pour une nouvelle";
+                    _ = RafraîchirPastilleFreebuffAsync(); // Lot 2 : la pastille suit l'état du PTY
+                }),
                 OnError: message => DispatcherQueue.TryEnqueue(() =>
                     TerminalSessionBar.Text = message)),
             cols: _dims.Cols, rows: _dims.Rows); // dims par défaut (l'émulateur ajustera via event Taille)
         if (replay.Length > 0) DonnéesTerminal(replay); // reprise de session : replay du scrollback
         _ = VérifierConflitDesktop();
+        _ = RafraîchirPastilleFreebuffAsync(); // Lot 2 : l'ouverture crée la session (pastille → active)
     }
 
     private async Task VérifierConflitDesktop()
@@ -2159,9 +3042,19 @@ public sealed partial class MainWindow : Window
         {
             await _écran.InitialiserAsync(CouleurFond(), CouleurTexte(), "#8B5CF6");
         }
-        catch
+        catch (Exception erreur)
         {
-            // Runtime WebView2 absent (rare sur Win10 1803+) : transcript filtré, jamais d'écran noir.
+            // Runtime WebView2 absent OU ressource VT manquante : transcript filtré,
+            // jamais d'écran noir. La cause réelle part au journal (crash.log) —
+            // le catch silencieux rendait « Écran VT indisponible »indiagnostiquable.
+            try
+            {
+                var dossier = Aven.Bridge.AppData.Dir();
+                Directory.CreateDirectory(dossier);
+                File.AppendAllText(Path.Combine(dossier, "crash.log"),
+                    "[" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "] ecran VT : " + erreur + "\n");
+            }
+            catch { /* le journal ne casse jamais l'écran */ }
             _écranActif = false;
             TerminalScroll.Visibility = Visibility.Visible;
             _écran.Visibility = Visibility.Collapsed;
@@ -2199,6 +3092,7 @@ public sealed partial class MainWindow : Window
     /// host moteur — indépendant du push-to-talk : les événements arrivent dès le boot.</summary>
     private void BrancherAnnonceur(Aven.Bridge.EngineClient moteur)
     {
+        BrancherNotifications(moteur); // J7 : la politique de toast est indépendante de l'annonceur
         if (_engineAnnoncé == moteur && _annonceur is not null) return;
         _engineAnnoncé = moteur;
         // Voix Windows SAPI via PowerShell (parité speakWithSapi de main.ts).
@@ -2208,9 +3102,11 @@ public sealed partial class MainWindow : Window
             await ExécuterPowerShell(
                 $"Add-Type -AssemblyName System.Speech; (New-Object System.Speech.Synthesis.SpeechSynthesizer).Speak('{sûr}')");
         }), settleMs: 250);
-        // Parité v8.7.9 : l'annonceur est un OPT-IN (off par défaut côté web, dans
-        // l'apparence) — le réglage natif sera branché avec le panneau Apparence.
-        annonceur.SetEnabled(false);
+        // Parité v8.7.9 : l'annonceur est un OPT-IN — on applique DÉJÀ le réglage
+        // de l'apparence (correctif 04/10/2026 : l'ancien SetEnabled(false) dur
+        // écrasait l'opt-in de l'utilisateur tant que le panneau Apparence n'avait
+        // pas été rouvert, donc les annonces vocales ne démarraient jamais).
+        annonceur.SetEnabled(_apparence.VoiceAnnouncements);
         moteur.EventReceived += ev =>
         {
             var données = new Dictionary<string, string>();
@@ -2221,31 +3117,277 @@ public sealed partial class MainWindow : Window
         };
     }
 
-    /// <summary>Push-to-talk Ctrl+Maj+V : démarre/arrête la dictée, exécute les intentions d'app.</summary>
+    // ── Jalon 7 : notifications de bureau, tray, raccourci Ctrl+Maj+O ──────────
+
+    /// <summary>Ramène Aven au premier plan (parité showWindow d'Electron) : restaure
+    /// si réduite, montre si masquée dans le tray, puis donne le focus.</summary>
+    internal void MontrerFenêtre()
+    {
+        try
+        {
+            if (AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter
+                { State: Microsoft.UI.Windowing.OverlappedPresenterState.Minimized } réduit)
+                réduit.Restore();
+            AppWindow.Show(); // active aussi la fenêtre (contrat du SDK)
+        }
+        catch (Exception erreur) { System.Diagnostics.Debug.WriteLine("showWindow : " + erreur.Message); }
+    }
+
+    /// <summary>Sortie EXPLICITE depuis le tray (parité before-quit) : autorise la
+    /// fermeture, libère les ressources, puis ferme — l'app se termine faute de fenêtre.</summary>
+    private void Quitter()
+    {
+        if (_quitExplicite) return; // déjà en cours de sortie (double-clic croix)
+        _quitExplicite = true;
+        try { Aven.Bridge.InstanceUnique.Libérer(); } catch { /* jamais bloquant */ }
+        try { _tray?.Dispose(); } catch { /* jamais bloquant */ }
+        // Tuer l'arbre du PTY (host node + CLI freebuff) AVANT la fermeture :
+        // FreebuffTerminal.Dispose délègue à NodePtyTransport.Dispose (Kill de
+        // l'arbre entier) — sans cela, node reste orphelin à la sortie.
+        try { _terminal?.Dispose(); } catch { /* jamais bloquant */ }
+        try { _voix?.Dispose(); } catch { /* idem */ }
+        // Fermeture SYNCHRONE bornée : EngineClient.DisposeAsync fait Kill du
+        // process moteur — l'ancien « _ = » fire-and-forget mourait avec le process
+        // et laissait le host node en arrière-plan (retour 04/10/2026).
+        try { _boot.DisposeAsync().AsTask().Wait(2000); } catch { /* idem */ }
+        try { Close(); }
+        catch { Application.Current.Exit(); } // repli : fermeture de l'app XAML
+    }
+
+    /// <summary>Notifications pilotées par les événements moteur (J7 — parité
+    /// notifyFromEvent de main.ts) : durée mesurée au session.execution.started de
+    /// CHAQUE session (sous-agents inclus), politique pure NotifyPolicy, toast via
+    /// l'API typée du Windows App SDK. Abonnement UNE seule fois par moteur.</summary>
+    private void BrancherNotifications(Aven.Bridge.EngineClient moteur)
+    {
+        if (_moteurNotifié == moteur) return;
+        _moteurNotifié = moteur;
+        moteur.EventReceived += NotifierDepuisÉvénement;
+    }
+
+    private void NotifierDepuisÉvénement(Aven.Bridge.EngineEvent ev)
+    {
+        try
+        {
+            var sessionID = Aven.Bridge.JsonAide.Texte(ev.Data, "sessionID") ?? "";
+            var maintenant = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+            if (ev.Type == "session.execution.started" && sessionID.Length > 0)
+            {
+                lock (_verrouTours) _départsTours[sessionID] = maintenant;
+                return;
+            }
+            if (ev.Type == "session.execution.succeeded" && sessionID.Length > 0)
+            {
+                long? durée = null;
+                lock (_verrouTours)
+                {
+                    if (_départsTours.Remove(sessionID, out var départ)) durée = maintenant - départ;
+                }
+                Notifier(Aven.Bridge.NotifyPolicy.TourTermine, durée);
+                return;
+            }
+            if (ev.Type == "session.execution.failed" && sessionID.Length > 0)
+            {
+                lock (_verrouTours) _départsTours.Remove(sessionID);
+                Notifier(Aven.Bridge.NotifyPolicy.TourEchoue, null);
+                return;
+            }
+            if (ev.Type == "permission.asked") Notifier(Aven.Bridge.NotifyPolicy.Permission, null);
+            else if (ev.Type == "form.created") Notifier(Aven.Bridge.NotifyPolicy.Formulaire, null);
+        }
+        catch (Exception erreur)
+        {
+            // Jamais d'exception vers le moteur : la notification reste best-effort.
+            System.Diagnostics.Debug.WriteLine("notif : " + erreur.Message);
+        }
+    }
+
+    /// <summary>
+    /// Parité <c>win.isFocused()</c> d'Electron : l'utilisateur regarde-t-il Aven
+    /// MAINTENANT ? Réponse lue en direct à chaque notification plutôt que mémorisée
+    /// par <c>Window.Activated</c> : cet événement n'arrive jamais quand Windows
+    /// refuse le foreground à la fenêtre (lancement en arrière-plan, démarrage
+    /// automatique), auquel cas l'ancien booléen restait à true même une fois la
+    /// fenêtre masquée dans le tray et NotifyPolicy supprimait TOUS les toasts,
+    /// sans le moindre signe (probe J7 du 04/10/2026 : 0 événement de plate-forme
+    /// là où les runs avec focus en produisaient 6).
+    /// PID nul (premier plan illisible) = « pas actif » : un toast parasite pèse
+    /// moins qu'une notification perdue.
+    /// Thread-safe : appelé depuis le thread d'événement du moteur, aucun accès
+    /// AppWindow hors du thread UI.
+    /// </summary>
+    private bool FenêtreAuPremierPlan()
+    {
+        try
+        {
+            var fenêtre = GetForegroundWindow();
+            if (fenêtre == IntPtr.Zero) return false;
+            GetWindowThreadProcessId(fenêtre, out var pid);
+            // Notre processus : fenêtre principale, popup XAML ou fenêtre de tray
+            // (SetForegroundWindow pendant le menu) — l'utilisateur est sur Aven.
+            return pid == Environment.ProcessId;
+        }
+        catch { return false; } // jamais bloquant : en cas de doute, on notifie
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+    /// <summary>Applique la politique (focus + interruptateur réglages + durée) puis
+    /// publie le toast. Thread arrière-plan accepté : NotificationService est thread-safe.</summary>
+    private void Notifier(string type, long? duréeTourMs)
+    {
+        try
+        {
+            // Parité win.isFocused() && win.isVisible() : masquée dans le tray ⇒
+            // fenêtre pas au premier plan ⇒ lecture live (aucun accès AppWindow
+            // hors thread UI ici).
+            var fenêtreAuPremierPlan = FenêtreAuPremierPlan();
+            var activé = Aven.Bridge.SettingsService.Load(Aven.Bridge.AppData.Dir()).Notifications;
+            if (!Aven.Bridge.NotifyPolicy.DevraitNotifier(fenêtreAuPremierPlan, type, activé, duréeTourMs)) return;
+            var (titre, corps) = Aven.Bridge.NotifyPolicy.Contenu(type, duréeTourMs);
+            Aven.Native.NotificationService.Afficher(titre, corps);
+        }
+        catch (Exception erreur) { System.Diagnostics.Debug.WriteLine("notif : " + erreur.Message); }
+    }
+
+    /// <summary>Bouton vocal central du hub (v9.7.5, parité .voice-core du web) : même
+    /// bascule que le composeur ; sans clé Groq, avis du hub immédiat et aucune capture
+    /// lancée pour rien (le pointerDown du web vérifie keys.groq de la même façon). Un
+    /// clic pendant la dictée demande l'arrêt sans exiger la clé.</summary>
+    private void OnHubVoixCore(object sender, RoutedEventArgs e)
+    {
+        if (_voix is { } v && (v.Demandée || v.EnCours))
+        {
+            SurPushToTalk(); // clic pendant la dictée = arrêt → transcription
+            return;
+        }
+        if (VoiceRuntime.RésoudreCléGroq().Length == 0)
+        {
+            NotifierHub("Configure une clé Groq dans Paramètres pour dicter.");
+            return;
+        }
+        SurPushToTalk();
+    }
+
+    /// <summary>Agent vocal (parité useDictation + routeAppAction du web) : démarre/arrête
+    /// la dictée (hotkey Ctrl+Maj+V ou bouton Dicter), exécute les intentions d'app PUIS
+    /// pose le texte dicté dans le COMPOSEUR — jamais directement chez l'agent ; depuis
+    /// le hub, ComposerVersChat navigue vers la conversation (parité setShowHome(false)).</summary>
     private async void SurPushToTalk()
     {
         InitialiserVoix();
+        // v9.6.1 : pas de nouvelle dictée pendant une transcription (parité bouton
+        // désactivé du web) — le hotkey Ctrl+Maj+V resterait actif sinon.
+        if (_voixTranscriptionEnCours) return;
         try
         {
+            // v9.7.5 : label immédiat (parité setState("recording") synchrone du web)
+            // — la demande précède l'await : le bouton bascule pendant
+            // l'initialisation matérielle, qui vit désormais hors du thread UI.
+            _voix!.Demander();
+            MajBoutonVoix();
+            // v9.6.1 : filet de 35 s (parité setTimeout de voice-dictation.ts) — si la
+            // transcription ne répond jamais, le bouton revient seul à « Dicter ».
+            DispatcherTimer? filet = null;
             await _voix!.BasculerDictée(résultat => DispatcherQueue.TryEnqueue(() =>
             {
+                // Résultat arrivé : le 3e état se désarme, le bouton revient à « Dicter »
+                // (parité setState("idle")) et le filet s'arrête.
+                _voixTranscriptionEnCours = false;
+                filet?.Stop();
+                MajBoutonVoix();
+                var texte = (résultat.Cleaned is { Length: > 0 } nettoyé ? nettoyé : résultat.Raw) ?? "";
                 if (résultat.Intent is { Kind: "app", Action: not null } intention)
                 {
                     switch (intention.Action)
                     {
                         case "open-notes": OuvrirNotes(); break;
                         case "open-settings": OnSettings(this, new RoutedEventArgs()); break;
-                        case "open-freebuff": OuvrirTerminal(); break;
+                        case "open-freebuff": OnPastilleFreebuff(FreebuffButton, new RoutedEventArgs()); break; // Lot 2 : avis si CLI absent
+                        case "open-agents": OuvrirTaches(null); break;
+                        case "open-projects": OnSettings(this, new RoutedEventArgs()); break; // espaces = onglet Configuration (parité openConfiguration)
+                        case "open-workspace": OuvrirFichiers(); break;
+                        case "open-stats": OnSettings(this, new RoutedEventArgs()); AfficherOngletParametres("usage"); break;
+                        case "new-chat": NouvelleConversation(_chatAgent); break;
                     }
+                    PageHint.Text = "Commande vocale exécutée.";
+                    return; // le texte ne va PAS au composeur pour une commande d'app (parité web)
                 }
-                else if (résultat.Intent is { Kind: "agent" })
-                    PageHint.Text = "Dictée pour l'agent " + (résultat.Intent.Target ?? "courant") + " : " + (résultat.Cleaned ?? résultat.Raw);
-                else
-                    PageHint.Text = "Dictée : " + (résultat.Cleaned ?? résultat.Raw);
+                if (résultat.Intent is { Kind: "agent", Target: { Length: > 0 } cible })
+                    PageHint.Text = "Dictée pour l'agent " + cible + " — texte posé dans le composeur.";
+                if (texte.Length > 0)
+                {
+                    if (résultat.Intent is not { Kind: "agent", Target: { Length: > 0 } })
+                        PageHint.Text = "Dictée terminée"; // sinon l'indication resterait « Transcription... »
+                    ComposerVersChat(texte); // parité setInput + navigation + focus
+                }
+            }), transcriptionDémarrée: () => DispatcherQueue.TryEnqueue(() =>
+            {
+                // v9.6.1 : début de transcription (3e état, parité setState("transcribing")).
+                _voixTranscriptionEnCours = true;
+                MajBoutonVoix();
+                PageHint.Text = "Transcription en cours...";
             }));
-            PageHint.Text = _voix.EnCours ? "🎙 Dictée en cours... (Ctrl+Maj+V pour arrêter)" : "Dictée terminée";
+            // Filet armé après le basculement : il ne sert que pendant la transcription,
+            // et l'arrivée du résultat le stoppe avant qu'il ne tire.
+            filet = new DispatcherTimer { Interval = TimeSpan.FromSeconds(35) };            filet.Tick += (_, _) =>
+            {
+                filet?.Stop(); // WinUI : le sender de Tick est object — stop via la capture
+                if (!_voixTranscriptionEnCours) return; // le résultat est déjà arrivé
+                _voixTranscriptionEnCours = false;
+                MajBoutonVoix();
+            };
+            filet.Start();
+            MajBoutonVoix();
+            PageHint.Text = _voix.EnCours ? "🎙 Dictée en cours... (Ctrl+Maj+V ou clic pour arrêter)" : "Dictée terminée";
         }
-        catch (Exception erreur) { PageHint.Text = "Micro indisponible : " + erreur.Message; }
+        catch (Exception erreur)
+        {
+            _voix?.Renoncer(); // v9.7.5 : jamais de « J'écoute… » orphelin si l'init échoue
+            _voixTranscriptionEnCours = false; // v9.6.1 : jamais de 3e état orphelin
+            MajBoutonVoix();
+            PageHint.Text = "Micro indisponible : " + erreur.Message;
+        }
+    }
+
+    /// <summary>Étiquette du bouton vocal (parité voice-core + composer-footer : 3 états
+    /// « Dicter » / « J'écoute… » / « Transcription… », désactivé pendant la transcription
+    /// comme le disabled={dictation.state === "transcribing"} du web).</summary>
+    private void MajBoutonVoix()
+    {
+        // v9.7.5 : pilote les DEUX boutons vocaux (composeur + noyau central du hub)
+        // — l'état « demandé » couvre la fenêtre d'initialisation matérielle, qui vit
+        // désormais hors du thread UI (parité setState("recording") synchrone du web).
+        var enVoix = _voix is { } v && (v.Demandée || v.EnCours);
+        if (enVoix)
+        {
+            BoutonVoix.Content = "\U0001F399 J'écoute…";
+            BoutonVoix.IsEnabled = true; // on peut arrêter l'enregistrement
+            HubVoixCoreLabel.Text = "J'écoute…";
+            HubVoixCore.IsEnabled = true;
+            HubVoixFond.Stroke = BrushDe("AvenDangerBrush"); // parité .dictation-recording (rose)
+        }
+        else if (_voixTranscriptionEnCours)
+        {
+            BoutonVoix.Content = "\U0001F399 Transcription…";
+            BoutonVoix.IsEnabled = false; // parité disabled={state === "transcribing"}
+            HubVoixCoreLabel.Text = "Transcription…";
+            HubVoixCore.IsEnabled = false;
+            HubVoixFond.Stroke = BrushDe("AvenAccentBorderBrush");
+        }
+        else
+        {
+            BoutonVoix.Content = "\U0001F399 Dicter";
+            BoutonVoix.IsEnabled = true;
+            HubVoixCoreLabel.Text = "Dicter";
+            HubVoixCore.IsEnabled = true;
+            HubVoixFond.Stroke = BrushDe("AvenAccentBorderBrush");
+        }
     }
 
     private async void ArrêterTour()
@@ -2352,7 +3494,9 @@ public sealed partial class MainWindow : Window
             // Markdown-lite (parseur pur testé) : titres, gras, italique, code —
             // le contenu reste toujours du texte, rien n'est exécutable ni navigable.
             RemplirMarkdown(pile, ligne.Text,
-                ligne.IsUser ? new SolidColorBrush(Microsoft.UI.Colors.White) : BrushDe("AvenTextBrush"));
+                ligne.IsUser ? new SolidColorBrush(Microsoft.UI.Colors.White) : BrushDe("AvenTextBrush"),
+                sélectionnable: !ligne.IsUser); // Lot 4 : sélectable dans les réponses (parité selection-bar)
+            if (!ligne.IsUser) pile.Children.Add(BarreSélection(pile, ligne.Text)); // Lot 4 (parité selection-actions)
         }
         if (ligne.Meta is { } méta)
             pile.Children.Add(new TextBlock { Text = méta, FontSize = 11, Foreground = BrushDe("AvenMutedBrush") });
@@ -2371,10 +3515,86 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    /// <summary>Barre d'actions sur sélection (Lot 4, parité selection-bar web v8.9.0) :
+    /// Copier copie TOUTE la réponse ; Corriger / Expliquer / Faire relire / Envoyer à
+    /// l'agent construisent le prompt (SelectionPrompts, port pur testé) à partir du
+    /// texte sélectionné DANS les TextBlocks de CETTE bulle, posé dans le composeur —
+    /// l'utilisateur valide avec Entrée. La pile est capturée à la création (l'instance
+    /// reste la même, seul son contenu est re-rendu par RemplirBulle).</summary>
+    private Border BarreSélection(StackPanel pile, string texteRéponse)
+    {
+        var barre = new Border
+        {
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(4, 2, 4, 2),
+            Background = BrushDe("AvenPanelSoftBrush"),
+            BorderBrush = BrushDe("AvenBorderBrush"),
+            BorderThickness = new Thickness(1),
+            HorizontalAlignment = HorizontalAlignment.Left,
+        };
+        var rangée = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
+        barre.Child = rangée;
+        rangée.Children.Add(ActionBouton("\u2398", "Copier la réponse",
+            (_, _) => { try { Copier(texteRéponse); PageHint.Text = "Réponse copiée."; } catch { } }));
+        foreach (var (action, étiquette, nom) in new[]
+        {
+            ("fix", "\u2692", "Corriger la sélection"),
+            ("explain", "\u2139", "Expliquer la sélection"),
+            ("review", "\u270E", "Faire relire la sélection"),
+            ("send", "\u203A", "Envoyer la sélection à l'agent"),
+        })
+        {
+            var act = action;
+            rangée.Children.Add(ActionBouton(étiquette, nom, (_, _) =>
+            {
+                var sélection = Aven.Bridge.SelectionPrompts.Rogner(TexteSélectionné(pile));
+                if (sélection.Length == 0) sélection = texteRéponse; // rien de sélectionné : toute la réponse
+                ComposerVersChat(Aven.Bridge.SelectionPrompts.Prompt(act, sélection));
+            }));
+        }
+        return barre;
+    }
+
+    /// <summary>Texte sélectionné dans CETTE bulle : concatène le SelectedText des
+    /// TextBlocks du sous-arbre (ordre visuel, parité selectionWithin — les bords
+    /// sont rognés par SelectionPrompts.Rogner). Retourne "" sans sélection.</summary>
+    private static string TexteSélectionné(StackPanel pile)
+    {
+        try
+        {
+            var morceaux = new System.Text.StringBuilder();
+            foreach (var tb in DescendreTextBlocks(pile))
+            {
+                if (tb.SelectedText.Length > 0) morceaux.AppendLine(tb.SelectedText);
+            }
+            return morceaux.ToString();
+        }
+        catch { return ""; }
+    }
+
+    private static System.Collections.Generic.IEnumerable<Microsoft.UI.Xaml.Controls.TextBlock> DescendreTextBlocks(Microsoft.UI.Xaml.DependencyObject racine)
+    {
+        var count = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(racine);
+        for (var i = 0; i < count; i++)
+        {
+            if (Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChild(racine, i) is not { } enfant) continue;
+            if (enfant is Microsoft.UI.Xaml.Controls.TextBlock tb) yield return tb;
+            foreach (var profonde in DescendreTextBlocks(enfant)) yield return profonde;
+        }
+    }
+
+    /// <summary>Presse-papiers texte brut (parité navigator.clipboard.writeText).</summary>
+    private static void Copier(string texte)
+    {
+        var paquet = new Windows.ApplicationModel.DataTransfer.DataPackage { RequestedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Copy };
+        paquet.SetText(texte);
+        Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(paquet);
+    }
+
     /// <summary>Rendu du Markdown-lite (parité RichMarkdown web) : blocs de code,
     /// titres, listes à puces/numérotées, tableaux GFM, liens inertes (label visible,
     /// jamais navigable — span mdlink côté web).</summary>
-    private static void RemplirMarkdown(StackPanel pile, string texte, Brush couleur)
+    private static void RemplirMarkdown(StackPanel pile, string texte, Brush couleur, bool sélectionnable = false)
     {
         foreach (var bloc in Aven.Bridge.MarkdownLite.Parse(texte))
         {
@@ -2393,6 +3613,7 @@ public sealed partial class MainWindow : Window
                         FontSize = 12,
                         TextWrapping = TextWrapping.Wrap,
                         Foreground = couleur,
+                        IsTextSelectionEnabled = sélectionnable, // Lot 4 : la sélection doit exister pour la barre d'actions
                     };
                     monospace.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run
                     {
@@ -2409,6 +3630,7 @@ public sealed partial class MainWindow : Window
                         Foreground = couleur,
                         FontSize = 13,
                         Margin = new Thickness(14 + 14 * puce.Niveau, 0, 0, 0),
+                        IsTextSelectionEnabled = sélectionnable,
                     };
                     lignePuce.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run { Text = "\u2022  " });
                     AjouterSegments(lignePuce, puce.Segments, couleur);
@@ -2422,6 +3644,7 @@ public sealed partial class MainWindow : Window
                         Foreground = couleur,
                         FontSize = 13,
                         Margin = new Thickness(14, 0, 0, 0),
+                        IsTextSelectionEnabled = sélectionnable,
                     };
                     ligneNum.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run { Text = énum.Num + ".  " });
                     AjouterSegments(ligneNum, énum.Segments, couleur);
@@ -2439,6 +3662,7 @@ public sealed partial class MainWindow : Window
                         Foreground = couleur,
                         FontSize = ligne.HeadingLevel > 0 ? 15 : 13,
                         FontWeight = ligne.HeadingLevel > 0 ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal,
+                        IsTextSelectionEnabled = sélectionnable,
                     };
                     AjouterSegments(blocTexte, ligne.Segments, couleur);
                     pile.Children.Add(blocTexte);

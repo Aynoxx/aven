@@ -141,15 +141,19 @@ export async function transcribeSpeech(
     const reason = cleanedRes.reason
     result.warning = reason instanceof Error ? reason.message : String(reason)
   }
-  // L'intention est best effort : absente = la dictée se comporte comme en v8.7.9.
-  // v9.1.3 : filet de secours déterministe — si la classification a échoué OU a répondu
-  // « chat » alors qu'un motif de commande clair est dicté, l'intention est déduite du
-  // texte. L'exécution (routeAppAction) reste côté renderer, rien ne part chez l'agent.
-  if (intentRes.status === "fulfilled") {
-    const classified = intentRes.value
-    result.intent = classified.intent === "chat" ? (fallbackIntent(raw) ?? classified) : classified
+  // v9.7.6 : FILET D'ABORD — les motifs de commande sont stricts (verbe d'action + nom
+  // d'interface, garde anti-faux-positifs testée), l'appel LLM peut échouer (quota,
+  // réseau, timeout) et, sur un modèle raisonneur, répondre TRONQUÉ (jetons de pensée
+  // dans le budget max_tokens → JSON illisible). Les commandes courantes doivent
+  // s'exécuter SANS dépendre de la santé du classifieur : le filet décide, sinon le
+  // classifieur tranche, sinon aucune intention (dictée ordinaire, comportement v8.7.9).
+  const filet = fallbackIntent(raw)
+  if (filet && filet.intent === "app") {
+    result.intent = filet
+  } else if (intentRes.status === "fulfilled") {
+    result.intent = intentRes.value
   } else {
-    result.intent = fallbackIntent(raw)
+    result.intent = filet // (agent si motif d'agent, sinon undefined : dictée ordinaire)
   }
   return result
 }

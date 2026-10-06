@@ -44,7 +44,15 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- tray.ico + Assets/terminal copiés dans l'output (retour 04/10/2026) :
+         SANS terminal.html à côté de l'exe, SetVirtualHostNameToFolderMapping
+         échoue et le terminal Freebuff tombe en transcript filtré (« Écran VT
+         indisponible ») — le terminal devait fonctionner. La contrainte J7
+         initiale (arbre UIA s'arrêtant au panneau WebView2) est revérifiée par
+         scripts/smoke-native.ps1 après ce changement. -->
     <Content Include="Assets\**\*" />
+    <Content Update="Assets\tray.ico" CopyToOutputDirectory="PreserveNewest" />
+    <Content Update="Assets\terminal\**\*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

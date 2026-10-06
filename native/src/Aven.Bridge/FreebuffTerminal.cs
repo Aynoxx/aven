@@ -226,6 +226,10 @@ public sealed class FreebuffTerminal : IDisposable
             IsActive = false;
             _handlers = null;
         }
+        // Kill gracieux (message « kill » du micro-host) PUIS fermeture dure :
+        // NodePtyTransport.Dispose fait Kill(entireProcessTree) — sans cette étape,
+        // fermer l'app peut laisser le host PTY orphelin (retour 04/10/2026).
         try { transport?.Kill(); } catch { /* déjà mort */ }
+        try { (transport as IDisposable)?.Dispose(); } catch { /* idem */ }
     }
 }

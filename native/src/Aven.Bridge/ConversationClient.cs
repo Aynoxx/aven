@@ -324,4 +324,33 @@ public sealed class ConversationClient(EngineClient engine)
             _ => null,
         };
     }
+
+    /// <summary>
+    /// Export Markdown d'une conversation (Lot 4, parité exportMarkdown de
+    /// electron/operations.ts) : titre de la session, messages triés, rôle en gras
+    /// (+ modèle), outils listés. Retourne null si la session est introuvable.
+    /// </summary>
+    public async Task<(string Titre, string Markdown)?> ExporterMarkdownAsync(string sessionId, string workspace, CancellationToken cancellation = default)
+    {
+        var sessions = await engine.CallAsync("session.list", new { directory = workspace, order = "desc", limit = 100 }, cancellation).ConfigureAwait(false);
+        var session = (sessions?["data"] as JsonArray ?? []).FirstOrDefault(s => Jsonx.S(Jsonx.At(s, "id")) == sessionId);
+        if (session is null) return null;
+        var titre = Jsonx.S(Jsonx.At(session, "title")) ?? "Conversation";
+        var msgs = await MessagesAsync(sessionId, workspace, cancellation).ConfigureAwait(false);
+        var lignes = new List<string> { "# " + titre, "" };
+        foreach (var m in msgs)
+        {
+            var qui = m.Role == "user" ? "**Toi**" : "**" + (m.Agent ?? "Agent") + (m.Child ? " (sous-agent)" : "") + "**";
+            lignes.Add(qui + (m.Model is { } modèle ? " _(" + modèle + ")_" : "") + " :");
+            lignes.Add("");
+            lignes.Add(m.Text.Length > 0 ? m.Text : "_(pas de texte)_");
+            lignes.Add("");
+            if (m.Tools is { Count: > 0 } outils)
+            {
+                lignes.Add("Outils utilisés : " + string.Join(", ", outils.Select(t => t.Name)));
+                lignes.Add("");
+            }
+        }
+        return (titre, string.Join("\n", lignes));
+    }
 }

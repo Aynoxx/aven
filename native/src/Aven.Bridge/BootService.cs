@@ -8,8 +8,8 @@ public sealed record FileSyncResult(string File, string Status);
 /// <summary>
 /// État global de l'app — parité AppState de electron/main.ts (v10.0.0, jalon parité) :
 /// ce que l'UI affiche (statut, clés enregistrées, espace actif, warnings) sans jamais
-/// voir une clé en clair. <c>UpdatesConfigured</c> reste false côté natif (pas de
-/// mise à jour auto — message identique à l'Electron « non configurée »).
+/// voir une clé en clair. <c>UpdatesConfigured</c> est vrai côté natif (canal
+/// GitHub Releases, <c>UpdateCheck</c> — parité du publish electron-updater web).
 /// </summary>
 public sealed class AppModelState
 {
@@ -32,7 +32,7 @@ public sealed class AppModelState
     public JsonNode? Assignments { get; init; }
     public string? Warning { get; init; }
     public string? VersionWarning { get; init; }
-    public bool UpdatesConfigured { get; init; } // false : aucune mise à jour auto côté natif
+    public bool UpdatesConfigured { get; init; } // true (canal GitHub Releases, UpdateCheck) : l'etat ready l'active
 }
 
 /// <summary>
@@ -238,6 +238,7 @@ public sealed class BootService : IAsyncDisposable
                 return Publier(new AppModelState
                 {
                     Status = "ready",
+                    UpdatesConfigured = true, // canal MAJ natif : GitHub Releases (UpdateCheck, parité publish web)
                     Keys = flags,
                     KeyWarnings = keyWarnings,
                     Workspaces = entries,

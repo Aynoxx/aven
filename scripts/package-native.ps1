@@ -267,6 +267,9 @@ foreach ($arch in $Archs) {
 # --- 5. Smoke UIA (-Smoke) : chaque zip sortant repasse le parcours complet ---
 # Extraction dans un scratch + hub/notes/chat/terminal/parametres via COM UIA.
 # L'echec du smoke ABORT le packaging (throw) : pas de release sans SMOKE_OK.
+# Un SMOKE_SKIP (zip d'une autre arch que l'hote, ex. arm64 sur un hote x64)
+# sort en 0 : verdict explicite dans la sortie, le packaging continue — la
+# validation reelle se fera sur un hote de l'architecture cible.
 if ($Smoke) {
     if ($zips.Count -eq 0) {
         throw "-Smoke demande mais aucun zip portable produit (-NoPortable ?)."

@@ -1,4 +1,5 @@
 name: CI
+# v9.7.4 : actions en Node 24 (checkout v7, setup-node v7) — supprime l'avertissement de dépréciation Node 20
 
 on:
   push:
@@ -9,8 +10,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -24,12 +25,10 @@ jobs:
         run: npm run build:web
       - name: Build electron (inclut le bundle du host du moteur)
         run: npm run build:electron
-      - name: Setup .NET 8 (bande 8.0.4xx exigée par native/global.json)
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 8.0.x
-      - name: Tests du socle natif (pont JSON-RPC C#)
-        run: dotnet test tests/Aven.Tests/Aven.Tests.csproj -c Release
-        working-directory: native
+      # v9.7.3 : plus de dotnet test dans ce job Linux — la suite Aven.Tests est
+      # Windows-only par conception (DPAPI, EventWaitHandle nommé, RegisterHotKey,
+      # ConPTY : 17 tests refusent hors Windows via Assert.True(OperatingSystem
+      # .IsWindows())). Elle tourne intégralement (310/310) dans native.yml
+      # (Socle WinUI, windows-latest), le runner natif dédié.
       - name: Vérification v8.8.0 + fraîcheur du build
         run: npm run verify
