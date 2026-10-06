@@ -23,8 +23,13 @@ public sealed class VoiceRuntime : IDisposable
 
     public VoiceRuntime(Aven.Bridge.VoicePipeline pipeline) => _pipeline = pipeline;
 
-    /// <summary>Enregistre ou arrête la dictée ; à l'arrêt le résultat est poussé au callback.</summary>
-    public async Task BasculerDictée(Action<Aven.Bridge.DictationResult> résultat)
+    /// <summary>Enregistre ou arrête la dictée ; à l'arrêt le résultat est poussé au callback.
+    /// v9.6.1 : <paramref name="transcriptionDémarrée"/> signale l'entrée en transcription
+    /// (3e état du bouton vocal, parité « Transcription… » de voice-dictation.ts). Tiré
+    /// UNIQUEMENT quand le pipeline s'engage (pas de clé = pas de faux état) : le
+    /// désarmement appartient à l'appelant — résultat, échec, ou filet de sécurité.</summary>
+    public async Task BasculerDictée(Action<Aven.Bridge.DictationResult> résultat,
+        Action? transcriptionDémarrée = null)
     {
         await _verrou.WaitAsync().ConfigureAwait(true);
         try
@@ -61,6 +66,11 @@ public sealed class VoiceRuntime : IDisposable
                             clé = System.Environment.GetEnvironmentVariable(fournisseur.Env)!;
                         }
                         if (clé.Length == 0) return; // pas de clé : la dictée se tait (comme le web)
+                        // v9.6.1 : début de transcription (parité setState("transcribing") de
+                        // voice-dictation.ts) — le badge « Transcription… » s'allume pendant
+                        // l'appel Groq ; l'appelant désarme au résultat, en cas d'échec, ou
+                        // via son filet de sécurité.
+                        transcriptionDémarrée?.Invoke();
                         var dictée = await _pipeline.TranscribeSpeechAsync(octets, "audio/wav", clé).ConfigureAwait(false);
                         résultat(dictée);
                     }

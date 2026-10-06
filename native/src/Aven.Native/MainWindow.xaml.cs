@@ -229,6 +229,10 @@ public sealed partial class MainWindow : Window
     private readonly object _verrouTours = new();
     private Aven.Bridge.VoicePipeline? _voixPipeline;
     private VoiceRuntime? _voix;
+    // v9.6.1 : 3e état du bouton vocal (parité dictation.state === "transcribing") :
+    // armé au signal VoiceRuntime, désarmé au résultat, en cas d'échec, ou par le
+    // filet de sécurité — aucun « Transcription… » figé (parité setTimeout 35 s web).
+    private bool _voixTranscriptionEnCours;
     private Aven.Bridge.Announcer? _annonceur;
     private string _modelLabel = "Auto";
     private readonly Queue<int> _fpsHistorique = new();
@@ -3247,10 +3251,21 @@ public sealed partial class MainWindow : Window
     private async void SurPushToTalk()
     {
         InitialiserVoix();
+        // v9.6.1 : pas de nouvelle dictée pendant une transcription (parité bouton
+        // désactivé du web) — le hotkey Ctrl+Maj+V resterait actif sinon.
+        if (_voixTranscriptionEnCours) return;
         try
         {
+            // v9.6.1 : filet de 35 s (parité setTimeout de voice-dictation.ts) — si la
+            // transcription ne répond jamais, le bouton revient seul à « Dicter ».
+            DispatcherTimer? filet = null;
             await _voix!.BasculerDictée(résultat => DispatcherQueue.TryEnqueue(() =>
             {
+                // Résultat arrivé : le 3e état se désarme, le bouton revient à « Dicter »
+                // (parité setState("idle")) et le filet s'arrête.
+                _voixTranscriptionEnCours = false;
+                filet?.Stop();
+                MajBoutonVoix();
                 var texte = (résultat.Cleaned is { Length: > 0 } nettoyé ? nettoyé : résultat.Raw) ?? "";
                 if (résultat.Intent is { Kind: "app", Action: not null } intention)
                 {
@@ -3270,21 +3285,61 @@ public sealed partial class MainWindow : Window
                 }
                 if (résultat.Intent is { Kind: "agent", Target: { Length: > 0 } cible })
                     PageHint.Text = "Dictée pour l'agent " + cible + " — texte posé dans le composeur.";
-                if (texte.Length > 0) ComposerVersChat(texte); // parité setInput + navigation + focus
+                if (texte.Length > 0)
+                {
+                    if (résultat.Intent is not { Kind: "agent", Target: { Length: > 0 } })
+                        PageHint.Text = "Dictée terminée"; // sinon l'indication resterait « Transcription... »
+                    ComposerVersChat(texte); // parité setInput + navigation + focus
+                }
+            }), transcriptionDémarrée: () => DispatcherQueue.TryEnqueue(() =>
+            {
+                // v9.6.1 : début de transcription (3e état, parité setState("transcribing")).
+                _voixTranscriptionEnCours = true;
+                MajBoutonVoix();
+                PageHint.Text = "Transcription en cours...";
             }));
+            // Filet armé après le basculement : il ne sert que pendant la transcription,
+            // et l'arrivée du résultat le stoppe avant qu'il ne tire.
+            filet = new DispatcherTimer { Interval = TimeSpan.FromSeconds(35) };            filet.Tick += (_, _) =>
+            {
+                filet?.Stop(); // WinUI : le sender de Tick est object — stop via la capture
+                if (!_voixTranscriptionEnCours) return; // le résultat est déjà arrivé
+                _voixTranscriptionEnCours = false;
+                MajBoutonVoix();
+            };
+            filet.Start();
             MajBoutonVoix();
             PageHint.Text = _voix.EnCours ? "🎙 Dictée en cours... (Ctrl+Maj+V ou clic pour arrêter)" : "Dictée terminée";
         }
         catch (Exception erreur)
         {
+            _voixTranscriptionEnCours = false; // v9.6.1 : jamais de 3e état orphelin
             MajBoutonVoix();
             PageHint.Text = "Micro indisponible : " + erreur.Message;
         }
     }
 
-    /// <summary>Étiquette du bouton vocal (parité voice-core : « Dicter » / « J'écoute… »).</summary>
-    private void MajBoutonVoix() =>
-        BoutonVoix.Content = (_voix is { } v && v.EnCours) ? "\U0001F399 J'écoute…" : "\U0001F399 Dicter";
+    /// <summary>Étiquette du bouton vocal (parité voice-core + composer-footer : 3 états
+    /// « Dicter » / « J'écoute… » / « Transcription… », désactivé pendant la transcription
+    /// comme le disabled={dictation.state === "transcribing"} du web).</summary>
+    private void MajBoutonVoix()
+    {
+        if (_voix is { } v && v.EnCours)
+        {
+            BoutonVoix.Content = "\U0001F399 J'écoute…";
+            BoutonVoix.IsEnabled = true; // on peut arrêter l'enregistrement
+        }
+        else if (_voixTranscriptionEnCours)
+        {
+            BoutonVoix.Content = "\U0001F399 Transcription…";
+            BoutonVoix.IsEnabled = false; // parité disabled={state === "transcribing"}
+        }
+        else
+        {
+            BoutonVoix.Content = "\U0001F399 Dicter";
+            BoutonVoix.IsEnabled = true;
+        }
+    }
 
     private async void ArrêterTour()
     {
