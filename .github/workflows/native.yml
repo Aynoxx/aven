@@ -2,8 +2,10 @@ name: CI native
 
 # Phase 0 du protocole MIGRATION-WINUI.md : le socle WinUI 3 se build en CI,
 # séparé du job Electron (ci.yml, inchangé). Déclenché quand native/ ou ce
-# workflow changent. Acceptation : tests du pont verts + fenêtre vide buildée
-# + MSIX téléchargeable en artefact.
+# workflow changent. Acceptation : tests du pont verts (BUNDLES ELECTRON
+# CONSTRUITS ICI — les 8 tests d'intégration exigent aven-engine-host.mjs et
+# aven-pty-host.mjs, contrairement au MSIX qui n'en a pas besoin) + fenêtre
+# vide buildée + MSIX téléchargeable en artefact.
 on:
   push:
     branches: [main]
@@ -20,6 +22,18 @@ jobs:
         working-directory: native # global.json (épinglage SDK) s'applique
     steps:
       - uses: actions/checkout@v4
+
+      - name: Setup Node 22 (bundles Electron exigés par les tests d'intégration)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Installation racine (Electron, CLI OpenCode, esbuild)
+        run: npm install
+
+      - name: Bundles Electron (aven-engine-host.mjs + aven-pty-host.mjs)
+        run: npm run build:electron
 
       - name: Setup .NET 8
         uses: actions/setup-dotnet@v4

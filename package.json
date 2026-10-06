@@ -32,10 +32,12 @@
   },
   "dependencies": {
     "@lydell/node-pty": "^1.1.0",
-    "@lydell/node-pty-win32-arm64": "^1.1.0",
     "@opencode/cli": "2.0.10",
     "@opencode/client": "2.0.10",
     "electron-updater": "^6.3.0"
+  },
+  "optionalDependencies": {
+    "@lydell/node-pty-win32-arm64": "^1.1.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
