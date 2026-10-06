@@ -267,6 +267,15 @@ public sealed partial class MainWindow : Window
         var anneau = Math.Round(_rayon * 2 * 1.08);
         HubAnneau.Width = anneau;
         HubAnneau.Height = anneau;
+        // v9.7.5 : noyau vocal central (parité clamp hub-core du web : ~92 % du rayon,
+        // plafond 236 px). Plancher ADAPTATIF à la place du 168 fixe du web : RayonMin
+        // natif (150) est plus bas que le clamp web, un noyau de 168 mordrait sur les
+        // cartes — on borne par l'espace libre (bord de carte à rayon − 75, marge 10).
+        var noyau = Math.Clamp(Math.Round(Math.Min(_rayon * 0.92, 2 * (_rayon - 85))), 120.0, 236.0);
+        HubVoixFond.Width = HubVoixFond.Height = noyau;
+        HubVoixCore.Width = HubVoixCore.Height = noyau;
+        HubVoixAnneauExterne.Width = HubVoixAnneauExterne.Height = Math.Round(noyau * 0.78);
+        HubVoixAnneauInterne.Width = HubVoixAnneauInterne.Height = Math.Round(noyau * 0.58);
         Placer(CardProject, Cibles[0].AngleDeg);
         Placer(CardTasks, Cibles[1].AngleDeg);
         Placer(CardFiles, Cibles[2].AngleDeg);
@@ -1193,7 +1202,9 @@ public sealed partial class MainWindow : Window
         StatusBarre.Text = enLigne ? "En ligne" : état.Status == "error" ? "Indisponible" : "Démarrage";
         StatusDot.Fill = BrushDe(enLigne ? "AvenSuccessBrush"
             : état.Status == "error" ? "AvenDangerBrush" : "AvenWarningBrush");
-        HubWorkspace.Text = NomEspace(état.Workspace ?? _espace);
+        // v9.7.5 : l'espace quitte le centre du hub (parité web, aucun texte au centre)
+        // et se reflète en barre de titre, à côté du statut moteur.
+        EspaceTitre.Text = "· " + NomEspace(état.Workspace ?? _espace);
         if (état.Status == "error")
             StatusBannerText.Text = "Aven n'a pas démarré. " + (état.Error ?? "");
         else if (état.Status == "starting")
@@ -3244,6 +3255,25 @@ public sealed partial class MainWindow : Window
         catch (Exception erreur) { System.Diagnostics.Debug.WriteLine("notif : " + erreur.Message); }
     }
 
+    /// <summary>Bouton vocal central du hub (v9.7.5, parité .voice-core du web) : même
+    /// bascule que le composeur ; sans clé Groq, avis du hub immédiat et aucune capture
+    /// lancée pour rien (le pointerDown du web vérifie keys.groq de la même façon). Un
+    /// clic pendant la dictée demande l'arrêt sans exiger la clé.</summary>
+    private void OnHubVoixCore(object sender, RoutedEventArgs e)
+    {
+        if (_voix is { } v && (v.Demandée || v.EnCours))
+        {
+            SurPushToTalk(); // clic pendant la dictée = arrêt → transcription
+            return;
+        }
+        if (VoiceRuntime.RésoudreCléGroq().Length == 0)
+        {
+            NotifierHub("Configure une clé Groq dans Paramètres pour dicter.");
+            return;
+        }
+        SurPushToTalk();
+    }
+
     /// <summary>Agent vocal (parité useDictation + routeAppAction du web) : démarre/arrête
     /// la dictée (hotkey Ctrl+Maj+V ou bouton Dicter), exécute les intentions d'app PUIS
     /// pose le texte dicté dans le COMPOSEUR — jamais directement chez l'agent ; depuis
@@ -3256,6 +3286,11 @@ public sealed partial class MainWindow : Window
         if (_voixTranscriptionEnCours) return;
         try
         {
+            // v9.7.5 : label immédiat (parité setState("recording") synchrone du web)
+            // — la demande précède l'await : le bouton bascule pendant
+            // l'initialisation matérielle, qui vit désormais hors du thread UI.
+            _voix!.Demander();
+            MajBoutonVoix();
             // v9.6.1 : filet de 35 s (parité setTimeout de voice-dictation.ts) — si la
             // transcription ne répond jamais, le bouton revient seul à « Dicter ».
             DispatcherTimer? filet = null;
@@ -3313,6 +3348,7 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception erreur)
         {
+            _voix?.Renoncer(); // v9.7.5 : jamais de « J'écoute… » orphelin si l'init échoue
             _voixTranscriptionEnCours = false; // v9.6.1 : jamais de 3e état orphelin
             MajBoutonVoix();
             PageHint.Text = "Micro indisponible : " + erreur.Message;
@@ -3324,20 +3360,33 @@ public sealed partial class MainWindow : Window
     /// comme le disabled={dictation.state === "transcribing"} du web).</summary>
     private void MajBoutonVoix()
     {
-        if (_voix is { } v && v.EnCours)
+        // v9.7.5 : pilote les DEUX boutons vocaux (composeur + noyau central du hub)
+        // — l'état « demandé » couvre la fenêtre d'initialisation matérielle, qui vit
+        // désormais hors du thread UI (parité setState("recording") synchrone du web).
+        var enVoix = _voix is { } v && (v.Demandée || v.EnCours);
+        if (enVoix)
         {
             BoutonVoix.Content = "\U0001F399 J'écoute…";
             BoutonVoix.IsEnabled = true; // on peut arrêter l'enregistrement
+            HubVoixCoreLabel.Text = "J'écoute…";
+            HubVoixCore.IsEnabled = true;
+            HubVoixFond.Stroke = BrushDe("AvenDangerBrush"); // parité .dictation-recording (rose)
         }
         else if (_voixTranscriptionEnCours)
         {
             BoutonVoix.Content = "\U0001F399 Transcription…";
             BoutonVoix.IsEnabled = false; // parité disabled={state === "transcribing"}
+            HubVoixCoreLabel.Text = "Transcription…";
+            HubVoixCore.IsEnabled = false;
+            HubVoixFond.Stroke = BrushDe("AvenAccentBorderBrush");
         }
         else
         {
             BoutonVoix.Content = "\U0001F399 Dicter";
             BoutonVoix.IsEnabled = true;
+            HubVoixCoreLabel.Text = "Dicter";
+            HubVoixCore.IsEnabled = true;
+            HubVoixFond.Stroke = BrushDe("AvenAccentBorderBrush");
         }
     }
 

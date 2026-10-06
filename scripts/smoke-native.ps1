@@ -390,6 +390,16 @@ foreach ($cheminZip in $zips) {
             }
             Write-Host "[smoke] ok hub : 4 cartes cliquables"
 
+            # 3bis. v9.7.5 : le noyau vocal central est PRESENT au hub (sans cliquer :
+            # demarrer le micro rendrait l'etape dependante du materiel de l'hote).
+            # Prefixe du nom UIA : "Dicter <em dash> bascule la dictee vocale" (U+2014).
+            $dicter = "Dicter " + [char]0x2014
+            if ($null -eq (Trouver-El -prefixe $dicter -attenteMs 8000 -Cliquable)) {
+                $attendu = "Dicter " + [char]0x2014 + "..."
+                Echec "noyau vocal central du hub introuvable (nom UIA '$attendu')."
+            }
+            Write-Host "[smoke] ok hub : noyau vocal central present"
+
             $retour = [char]0x2190 + " Retour au hub"
             $accueil = [char]0x2190 + " Accueil"
             $dossierParent = [char]0x2190 + " Dossier parent"
