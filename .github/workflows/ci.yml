@@ -1,4 +1,5 @@
 name: CI
+# v9.7.4 : actions en Node 24 (checkout v7, setup-node v7) — supprime l'avertissement de dépréciation Node 20
 
 on:
   push:
@@ -9,8 +10,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm

@@ -1,4 +1,5 @@
 name: CI native
+# v9.7.4 : actions en Node 24 (checkout v7, setup-node v7, setup-dotnet v6, upload-artifact v7) — supprime l'avertissement de dépréciation Node 20
 
 # Phase 0 du protocole MIGRATION-WINUI.md : le socle WinUI 3 se build en CI,
 # séparé du job Electron (ci.yml, inchangé). Déclenché quand native/ ou ce
@@ -21,10 +22,10 @@ jobs:
       run:
         working-directory: native # global.json (épinglage SDK) s'applique
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Node 22 (bundles Electron exigés par les tests d'intégration)
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -36,7 +37,7 @@ jobs:
         run: npm run build:electron
 
       - name: Setup .NET 8
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 8.0.x
 
@@ -54,7 +55,7 @@ jobs:
           -p:AppxPackageDir=${{ github.workspace }}\AppPackages\
 
       - name: Upload artefact MSIX
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Aven.Native-msix
           path: AppPackages/**/*.msix
