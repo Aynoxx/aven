@@ -102,13 +102,16 @@ test("anti-injection : un texte dicté qui ressemble à un ordre ne produit rien
 
 // ── classifyIntent : appel Groq bien formé ──
 
-test("classifyIntent : modèle, temperature 0 et prompt verrouillé", async () => {
+test("classifyIntent : modèle, temperature 0, effort bas et prompt verrouillé", async () => {
   const f = fakeFetch([{ match: "/chat/completions", body: { choices: [{ message: { content: '{"intent":"agent","target":"code"}' } }] } }])
   const intent = await classifyIntent("corrige le bug", KEY, f)
   assert.deepEqual(intent, { intent: "agent", target: "code" })
   const sent = JSON.parse(f.calls[0].init.body)
   assert.equal(sent.temperature, 0)
   assert.ok(sent.max_tokens <= 100) // réponse très courte : coût négligeable
+  // v9.7.6 : gpt-oss-20b raisonne DANS max_tokens (constaté : 45/60 → JSON tronqué) —
+  // la bascule reasoning_effort="low" est OBLIGATOIRE pour une réponse lisible.
+  assert.equal(sent.reasoning_effort, "low")
   assert.ok(sent.messages[0].content.includes("open-notes"))
 })
 
@@ -119,16 +122,40 @@ test("classifyIntent : 429 = erreur lisible (l'appelant dégradera)", async () =
 
 // ── Pipeline complet : parallélisme et dégradation gracieuse ──
 
-test("transcribeSpeech : le classifieur reste prioritaire sur le fallback (résultat normal)", async () => {
+// v9.7.6 : FILET D'ABORD — les motifs de commande sont stricts (verbe + nom d'interface,
+// garde anti-faux-positifs testée) et l'appel LLM peut échouer (quota, réseau) ou répondre
+// TRONQUÉ (raisonneur dont les jetons de pensée mangent max_tokens). Une commande dictée
+// doit s'exécuter sans dépendre de la santé du classifieur.
+test("transcribeSpeech : le filet déterministe décide pour une commande d'app, le classifieur n'écrase plus", async () => {
   const f = fakeFetch([
-    { match: "/audio/transcriptions", body: { text: "euh ouvre les paramètres stp" } },
-    { match: "/chat/completions", body: { choices: [{ message: { content: "Ouvre les paramètres." } }] }, left: 1 },
-    { match: "/chat/completions", body: { choices: [{ message: { content: '{"intent":"app","action":"open-settings"}' } }] } },
+    { match: "/audio/transcriptions", body: { text: "affiche mes notes" } },
+    { match: "/chat/completions", body: { choices: [{ message: { content: "Affiche tes notes." } }] }, left: 1 },
+    { match: "/chat/completions", body: { choices: [{ message: { content: '{"intent":"app","action":"open-settings"}' } }] } }, // dérive simulée
   ])
   const result = await transcribeSpeech(new Blob(["a"], { type: "audio/webm" }), f, KEY)
-  assert.equal(result.cleaned, "Ouvre les paramètres.")
-  assert.deepEqual(result.intent, { intent: "app", action: "open-settings" })
+  assert.equal(result.cleaned, "Affiche tes notes.")
+  assert.deepEqual(result.intent, { intent: "app", action: "open-notes" }) // le filet l'emporte (v9.7.6)
   assert.equal(f.calls.length, 3) // 1 STT + 2 passes texte
+})
+
+test("transcribeSpeech : réponse du classifieur tronquée (raisonneur) = la commande passe quand même", async () => {
+  const f = fakeFetch([
+    { match: "/audio/transcriptions", body: { text: "ouvre les paramètres" } },
+    { match: "/chat/completions", body: { choices: [{ message: { content: "Ouvre les paramètres." } }] }, left: 1 },
+    { match: "/chat/completions", body: { choices: [{ message: { content: '{"intent":"app","action":"' } }] } }, // tronqué : jetons de pensée dans max_tokens
+  ])
+  const result = await transcribeSpeech(new Blob(["a"], { type: "audio/webm" }), f, KEY)
+  assert.deepEqual(result.intent, { intent: "app", action: "open-settings" }) // filet de secours
+})
+
+test("transcribeSpeech : le classifieur reste prioritaire pour le reste (chat, agents)", async () => {
+  const f = fakeFetch([
+    { match: "/audio/transcriptions", body: { text: "passe sur l'agent recherche" } },
+    { match: "/chat/completions", body: { choices: [{ message: { content: "Passe sur recherche." } }] }, left: 1 },
+    { match: "/chat/completions", body: { choices: [{ message: { content: '{"intent":"agent","target":"recherche"}' } }] } },
+  ])
+  const result = await transcribeSpeech(new Blob(["a"], { type: "audio/webm" }), f, KEY)
+  assert.deepEqual(result.intent, { intent: "agent", target: "recherche" })
 })
 
 test("transcribeSpeech : reformage et intention arrivent ensemble dans le résultat", async () => {
@@ -152,7 +179,7 @@ test("transcribeSpeech : échec du classifieur = texte conservé, dictée utilis
   ])
   const result = await transcribeSpeech(new Blob(["a"], { type: "audio/webm" }), f, KEY)
   assert.equal(result.cleaned, "Ouvre les paramètres.")
-  // v9.1.3 : le filet de secours déterministe sauve la commande malgré l'échec du classifieur.
+  // v9.1.3 → v9.7.6 : le filet sauve la commande (désormais DÉCISIF, pas seulement secours).
   assert.deepEqual(result.intent, { intent: "app", action: "open-settings" })
   assert.equal(result.warning, undefined) // seule la passe qui échoue rapporte son warning
 })

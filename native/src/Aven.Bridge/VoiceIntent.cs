@@ -32,6 +32,12 @@ public static partial class VoiceIntent
 
     public const string IntentModel = "openai/gpt-oss-20b"; // miroir du défaut (env non lue en lib)
 
+    /// <summary>v9.7.6 : gpt-oss-20b RAISONNE — ses jetons de pensée consomment max_tokens
+    /// (constaté : 45/60, JSON tronqué → classification illisible sur chaque dictée).
+    /// Bascule API distincte du budget : "low" garde une pensée courte, réponse intacte
+    /// (finish_reason: stop, ~150 ms mesuré). Miroir de INTENT_REASONING_EFFORT.</summary>
+    public const string IntentReasoningEffort = "low";
+
     /// <summary>Descriptions sémantiques injectées dans le prompt (parité AGENT_HINTS).</summary>
     public static readonly IReadOnlyDictionary<string, string> AgentHints =
         new Dictionary<string, string>
@@ -219,6 +225,9 @@ public sealed class VoicePipeline(IVoiceHttp http)
                 ["model"] = VoiceIntent.IntentModel,
                 ["temperature"] = 0,
                 ["max_tokens"] = 60,
+                // v9.7.6 : parité electron/voice-intent.ts — sans cette bascule, les jetons
+                // de raisonnement consomment le budget max_tokens et tronquent le JSON.
+                ["reasoning_effort"] = VoiceIntent.IntentReasoningEffort,
                 ["messages"] = new JsonArray
                 {
                     new JsonObject { ["role"] = "system", ["content"] = VoiceIntent.IntentSystemPrompt() },
@@ -260,6 +269,12 @@ public sealed class VoicePipeline(IVoiceHttp http)
         var tâcheIntent = ClassifyIntentAsync(raw, apiKey, cancellation);
         var résultat = new DictationResult { Raw = raw };
 
+        // v9.7.6 : parité electron/voice.ts — FILET D'ABORD : les motifs de commande sont
+        // stricts (verbe + nom d'interface) et l'appel LLM peut échouer ou répondre tronqué
+        // (raisonneur). Les commandes courantes s'exécutent sans dépendre du classifieur.
+        var commande = VoiceIntent.FallbackIntent(raw);
+        if (commande is { Kind: "app" }) résultat.Intent = commande;
+
         // Parité Promise.allSettled : chaque passe dégrade indépendamment.
         try { var clean = await tâcheClean.ConfigureAwait(false); if (clean != raw) { résultat.Cleaned = clean; résultat.CleanedBy = CleanModel; } }
         catch (Exception e) { résultat.Warning = e.Message; }
@@ -270,9 +285,9 @@ public sealed class VoicePipeline(IVoiceHttp http)
 
         // v9.1.3 : filet — si la classification a échoué OU répond « chat » sur une
         // commande claire, l'intention est déduite du texte.
-        if (classifiée is { Kind: "chat" } || classifiée is null)
-            résultat.Intent = VoiceIntent.FallbackIntent(raw) ?? classifiée;
-        else
+        if (résultat.Intent is null && classifiée is { Kind: "chat" })
+            résultat.Intent = VoiceIntent.FallbackIntent(raw); // dernier recours : motif d'agent
+        else if (résultat.Intent is null)
             résultat.Intent = classifiée;
         return résultat;
     }

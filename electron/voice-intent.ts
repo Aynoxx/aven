@@ -27,6 +27,12 @@ export type DictationIntent =
   | { intent: "chat" } // dictée ordinaire pour l'agent courant
 
 export const INTENT_MODEL = process.env.AVEN_VOICE_INTENT_MODEL || "openai/gpt-oss-20b"
+// v9.7.6 : gpt-oss-20b est un modèle de RAISONNEMENT — ses jetons de pensée
+// consomment le budget max_tokens (constaté en prod : 45/60 brûlés, JSON tronqué à
+// {"intent":"app","action":" → classification illisible sur CHAQUE dictée). Il faut
+// une bascule API distincte de max_tokens : reasoning_effort="low" garde une pensée
+// courte mais laisse la réponse intacte (fin_reason: stop, ~150 ms mesuré).
+export const INTENT_REASONING_EFFORT = "low"
 
 // Descriptions sémantiques injectées dans le prompt : le classifieur route selon le SENS
 // de la tâche dictée, pas selon des mots-clés littéraux.
@@ -142,6 +148,7 @@ export async function classifyIntent(
       model: INTENT_MODEL,
       temperature: 0,
       max_tokens: 60,
+      reasoning_effort: INTENT_REASONING_EFFORT, // v9.7.6 : hors du budget de réponse (sinon JSON tronqué)
       messages: [
         { role: "system", content: INTENT_SYSTEM_PROMPT },
         { role: "user", content: text },

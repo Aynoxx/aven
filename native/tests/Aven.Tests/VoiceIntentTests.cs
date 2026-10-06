@@ -167,6 +167,9 @@ public class VoiceIntentTests
         var envoyé = JsonNode.Parse(http.Appels[0].Body!.ToJsonString())!;
         Assert.Equal(0, envoyé["temperature"]!.GetValue<int>());
         Assert.True(envoyé["max_tokens"]!.GetValue<int>() <= 100);
+        // v9.7.6 : gpt-oss-20b raisonne DANS max_tokens (constaté : 45/60 → JSON tronqué) —
+        // la bascule reasoning_effort="low" est OBLIGATOIRE pour une réponse lisible.
+        Assert.Equal(VoiceIntent.IntentReasoningEffort, envoyé["reasoning_effort"]!.GetValue<string>());
         Assert.Contains("open-notes", envoyé["messages"]![0]!["content"]!.GetValue<string>());
     }
 
@@ -175,17 +178,43 @@ public class VoiceIntentTests
     private static JsonObject RéponseTexte(string texte) =>
         new() { ["choices"] = new JsonArray { new JsonObject { ["message"] = new JsonObject { ["content"] = texte } } } };
 
+    // v9.7.6 : FILET D'ABORD — les motifs de commande sont stricts (verbe + nom
+    // d'interface, garde anti-faux-positifs testée) et l'appel LLM peut échouer (quota,
+    // réseau) ou répondre TRONQUÉ (raisonneur dont les jetons de pensée mangent
+    // max_tokens). Une commande dictée s'exécute sans dépendre du classifieur.
     [Fact]
-    public async Task Pipeline_le_classifieur_reste_prioritaire_sur_le_fallback()
+    public async Task Pipeline_le_filet_décide_pour_une_commande_le_classifieur_n_écrase_plus()
     {
         var http = new HttpFactice(
-            new HttpFactice.Route("/audio/transcriptions", new JsonObject { ["text"] = "euh ouvre les paramètres stp" }),
-            new HttpFactice.Route("/chat/completions", RéponseTexte("Ouvre les paramètres."), Left: 1),
-            new HttpFactice.Route("/chat/completions", RéponseTexte("{\"intent\":\"app\",\"action\":\"open-settings\"}")));
+            new HttpFactice.Route("/audio/transcriptions", new JsonObject { ["text"] = "affiche mes notes" }),
+            new HttpFactice.Route("/chat/completions", RéponseTexte("Affiche tes notes."), Left: 1),
+            new HttpFactice.Route("/chat/completions", RéponseTexte("{\"intent\":\"app\",\"action\":\"open-settings\"}"))); // dérive simulée
         var résultat = await Pipeline(http).TranscribeSpeechAsync([0x61], "audio/webm", Clé);
-        Assert.Equal("Ouvre les paramètres.", résultat.Cleaned);
-        Assert.Equal(("app", "open-settings"), (résultat.Intent!.Kind, résultat.Intent.Action));
+        Assert.Equal("Affiche tes notes.", résultat.Cleaned);
+        Assert.Equal(("app", "open-notes"), (résultat.Intent!.Kind, résultat.Intent.Action)); // le filet l'emporte (v9.7.6)
         Assert.Equal(3, http.Appels.Count); // 1 STT + 2 passes texte
+    }
+
+    [Fact]
+    public async Task Pipeline_réponse_tronquée_du_classifieur_la_commande_passe_quand_même()
+    {
+        var http = new HttpFactice(
+            new HttpFactice.Route("/audio/transcriptions", new JsonObject { ["text"] = "ouvre les paramètres" }),
+            new HttpFactice.Route("/chat/completions", RéponseTexte("Ouvre les paramètres."), Left: 1),
+            new HttpFactice.Route("/chat/completions", RéponseTexte("{\"intent\":\"app\",\"action\":\""))); // tronqué : jetons de pensée dans max_tokens
+        var résultat = await Pipeline(http).TranscribeSpeechAsync([0x61], "audio/webm", Clé);
+        Assert.Equal(("app", "open-settings"), (résultat.Intent!.Kind, résultat.Intent.Action)); // filet de secours
+    }
+
+    [Fact]
+    public async Task Pipeline_le_classifieur_reste_prioritaire_pour_le_reste_chat_et_agents()
+    {
+        var http = new HttpFactice(
+            new HttpFactice.Route("/audio/transcriptions", new JsonObject { ["text"] = "passe sur l'agent recherche" }),
+            new HttpFactice.Route("/chat/completions", RéponseTexte("Passe sur recherche."), Left: 1),
+            new HttpFactice.Route("/chat/completions", RéponseTexte("{\"intent\":\"agent\",\"target\":\"recherche\"}")));
+        var résultat = await Pipeline(http).TranscribeSpeechAsync([0x61], "audio/webm", Clé);
+        Assert.Equal(("agent", "recherche"), (résultat.Intent!.Kind, résultat.Intent.Target));
     }
 
     [Fact]
@@ -198,6 +227,7 @@ public class VoiceIntentTests
         var résultat = await Pipeline(http).TranscribeSpeechAsync([0x61], "audio/webm", Clé);
         Assert.Equal("Ouvre les paramètres.", résultat.Cleaned);
         Assert.Equal(("app", "open-settings"), (résultat.Intent!.Kind, résultat.Intent.Action));
+        // v9.1.3 → v9.7.6 : le filet sauve la commande (désormais DÉCISIF, pas seulement secours).
         Assert.Null(résultat.Warning); // seule la passe qui échoue rapporte son warning
     }
 
