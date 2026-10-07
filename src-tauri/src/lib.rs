@@ -387,6 +387,85 @@ fn boot_runtime(app: &AppHandle, state: &RuntimeState) -> Result<Value, String> 
     }
 }
 
+fn open_system_path(target: &Path) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        Command::new("explorer.exe")
+            .arg(target)
+            .spawn()
+            .map_err(|e| format!("Impossible d'ouvrir « {} » : {e}", target.display()))?;
+        return Ok(());
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .arg(target)
+            .spawn()
+            .map_err(|e| format!("Impossible d'ouvrir « {} » : {e}", target.display()))?;
+        return Ok(());
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        Command::new("xdg-open")
+            .arg(target)
+            .spawn()
+            .map_err(|e| format!("Impossible d'ouvrir « {} » : {e}", target.display()))?;
+        return Ok(());
+    }
+
+    #[cfg(not(any(windows, target_os = "macos", unix)))]
+    {
+        let _ = target;
+        Err("Ouverture système non supportée sur cette plateforme.".to_string())
+    }
+}
+
+fn open_url(url: &str) -> Result<(), String> {
+    if ![
+        "https://openrouter.ai/keys",
+        "https://console.groq.com/keys",
+    ]
+    .contains(&url)
+    {
+        return Err("URL externe refusée par la liste blanche Aven.".to_string());
+    }
+
+    #[cfg(windows)]
+    {
+        Command::new("cmd")
+            .args(["/C", "start", "", url])
+            .spawn()
+            .map_err(|e| format!("Impossible d'ouvrir le lien : {e}"))?;
+        return Ok(());
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .arg(url)
+            .spawn()
+            .map_err(|e| format!("Impossible d'ouvrir le lien : {e}"))?;
+        return Ok(());
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        Command::new("xdg-open")
+            .arg(url)
+            .spawn()
+            .map_err(|e| format!("Impossible d'ouvrir le lien : {e}"))?;
+        return Ok(());
+    }
+
+    #[cfg(not(any(windows, target_os = "macos", unix)))]
+    {
+        let _ = url;
+        Err("Ouverture de lien non supportée sur cette plateforme.".to_string())
+    }
+}
+
 fn runtime_call(state: &RuntimeState, method: &str, args: Vec<Value>) -> Result<Value, String> {
     let node = state
         .node
@@ -408,6 +487,50 @@ fn aven_call(
     args: Vec<Value>,
 ) -> Result<Value, String> {
     match method.as_str() {
+        "minimizeWindow" => {
+            let window = app
+                .get_webview_window("main")
+                .ok_or_else(|| "Fenêtre principale introuvable.".to_string())?;
+            window.minimize().map_err(|e| format!("Impossible de réduire la fenêtre : {e}"))?;
+            Ok(json!(true))
+        }
+
+        "toggleMaximize" => {
+            let window = app
+                .get_webview_window("main")
+                .ok_or_else(|| "Fenêtre principale introuvable.".to_string())?;
+            let maximized = window
+                .is_maximized()
+                .map_err(|e| format!("État de fenêtre indisponible : {e}"))?;
+            if maximized {
+                window.unmaximize().map_err(|e| format!("Impossible de restaurer la fenêtre : {e}"))?;
+            } else {
+                window.maximize().map_err(|e| format!("Impossible de maximiser la fenêtre : {e}"))?;
+            }
+            Ok(json!(true))
+        }
+
+        "closeWindow" => {
+            let window = app
+                .get_webview_window("main")
+                .ok_or_else(|| "Fenêtre principale introuvable.".to_string())?;
+            window.close().map_err(|e| format!("Impossible de fermer la fenêtre : {e}"))?;
+            Ok(json!(true))
+        }
+
+        "openWorkspace" => {
+            let workspace = active_workspace()?
+                .ok_or_else(|| "Aucun espace de travail actif.".to_string())?;
+            open_system_path(Path::new(&workspace))?;
+            Ok(Value::String(workspace))
+        }
+
+        "openExternal" => {
+            let url = args.first().and_then(Value::as_str).unwrap_or_default();
+            open_url(url)?;
+            Ok(Value::Null)
+        }
+
         "state" => {
             let active = active_workspace()?;
             let booted = state
