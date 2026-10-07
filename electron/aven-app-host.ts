@@ -150,6 +150,140 @@ function saveKey(provider: string, key: string) {
   writeFileSync(settingsPath(), JSON.stringify(next, null, 2) + "\n", "utf8")
 }
 
+const execFileAsync = promisify(execFile)
+
+let ptyBatch = ""
+let ptyBatchTimer: ReturnType<typeof setTimeout> | null = null
+
+function flushPtyBatch() {
+  if (ptyBatchTimer) {
+    clearTimeout(ptyBatchTimer)
+    ptyBatchTimer = null
+  }
+  if (!ptyBatch) return
+  const chunk = ptyBatch
+  ptyBatch = ""
+  push({ type: "freebuff.pty.data", data: { chunk } })
+}
+
+function queuePtyData(chunk: string) {
+  ptyBatch += chunk
+  if (ptyBatch.length >= 8 * 1024) flushPtyBatch()
+  else if (!ptyBatchTimer) ptyBatchTimer = setTimeout(flushPtyBatch, 30)
+}
+
+async function checkFreebuffCli() {
+  if (process.platform !== "win32") return { installed: false }
+  try {
+    const result = await execFileAsync("cmd.exe", ["/d", "/s", "/c", "freebuff --version"], {
+      timeout: 8_000,
+      windowsHide: true,
+      maxBuffer: 256 * 1024,
+    })
+    return parseVersionOutput(String(result.stdout ?? ""), String(result.stderr ?? ""))
+  } catch (error: any) {
+    return parseVersionOutput(String(error?.stdout ?? ""), String(error?.stderr ?? ""))
+  }
+}
+
+async function checkNpm() {
+  if (process.platform !== "win32") return false
+  try {
+    await execFileAsync("cmd.exe", ["/d", "/s", "/c", "npm --version"], {
+      timeout: 8_000,
+      windowsHide: true,
+    })
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function isFreebuffProcessRunning() {
+  if (process.platform !== "win32") return false
+  try {
+    const result = await execFileAsync("powershell.exe", [
+      "-NoProfile",
+      "-NonInteractive",
+      "-Command",
+      "Get-CimInstance Win32_Process -Filter \"name='freebuff.exe'\" | Where-Object { $_.ExecutablePath -like '*\\.config\\manicode*' } | Select-Object -First 1 ProcessId | ForEach-Object { $_.ProcessId }",
+    ], { timeout: 10_000, windowsHide: true })
+    const pids = String(result.stdout ?? "").split(/\r?\n/).map((line) => line.trim()).filter((line) => /^\d+$/.test(line))
+    return pids.some((pid) => Number(pid) !== freebuffPtyPid())
+  } catch {
+    return false
+  }
+}
+
+async function isFreebuffDesktopRunning() {
+  if (process.platform !== "win32") return false
+  try {
+    const result = await execFileAsync("powershell.exe", [
+      "-NoProfile",
+      "-NonInteractive",
+      "-Command",
+      "Get-CimInstance Win32_Process -Filter \"name='freebuff.exe'\" | Where-Object { $_.ExecutablePath -like '*codebufffreebuff-desktop*' } | Select-Object -First 1 -ExpandProperty ProcessId",
+    ], { timeout: 10_000, windowsHide: true })
+    return /\d+/.test(String(result.stdout ?? ""))
+  } catch {
+    return false
+  }
+}
+
+async function launchFreebuff(action: "launch" | "login" | "install", cols?: number, rows?: number) {
+  if (process.platform !== "win32") {
+    throw new Error("Le terminal Freebuff n'est pris en charge que sous Windows.")
+  }
+
+  if (action !== "install") {
+    const status = await checkFreebuffCli()
+    if (!status.installed) throw new Error(freebuffMissingMessage())
+    if (!isFreebuffPtyActive() && await isFreebuffProcessRunning()) throw new Error(freebuffBusyMessage())
+  } else if (!(await checkNpm())) {
+    throw new Error("npm est introuvable sur cet ordinateur. Installe Node.js avec npm, puis réessaie.")
+  }
+
+  if (action === "launch") {
+    if (await isFreebuffDesktopRunning()) {
+      throw new Error("L'application Freebuff Desktop est ouverte : elle tient la session du compte. Ferme-la avant de lancer le terminal intégré.")
+    }
+
+    const runtimeDir = dirname(fileURLToPath(import.meta.url))
+    await loadPtyModule(true, runtimeDir)
+
+    const result = startFreebuffPty({
+      cwd: requireWorkspace(),
+      cols: cols ?? DEFAULT_PTY_COLS,
+      rows: rows ?? DEFAULT_PTY_ROWS,
+      trustAgents: existsSync(path.join(requireWorkspace(), ".agents", "aven-code.ts")),
+      resume: loadPrefs().freebuffResume === true,
+      handlers: {
+        onData: queuePtyData,
+        onStatus: (state) => {
+          flushPtyBatch()
+          push({ type: "freebuff.pty.status", data: { state } })
+        },
+        onExit: (code, signal) => {
+          flushPtyBatch()
+          push({ type: "freebuff.pty.exit", data: { code, signal } })
+        },
+        onError: (message) => {
+          flushPtyBatch()
+          push({ type: "freebuff.pty.error", data: { message } })
+        },
+      },
+    })
+
+    if (result.replay) push({ type: "freebuff.pty.replay", data: { buffer: result.replay } })
+    return true
+  }
+
+  const cmd = buildLaunchCommand(requireWorkspace(), action)
+  const child = spawn(cmd.command, cmd.args, { detached: true, stdio: "ignore", windowsHide: false })
+  child.unref()
+  return true
+}
+
 function prefsPath() {
   const root = process.env.AVEN_USER_DATA_DIR || path.join(process.env.APPDATA || process.cwd(), "Aven")
   mkdirSync(root, { recursive: true })
