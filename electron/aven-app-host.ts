@@ -528,6 +528,30 @@ async function dispatch(method: string, params: any): Promise<unknown> {
       return savePrefs({ notifications: params?.[0] === true })
     case "setFreebuffResume":
       return savePrefs({ freebuffResume: params?.[0] === true })
+    case "freebuffCliStatus":
+      return checkFreebuffCli()
+    case "freebuffCliLaunch":
+      return launchFreebuff(
+        (params?.[0] ?? "launch") as "launch" | "login" | "install",
+        params?.[1] === undefined ? undefined : Number(params[1]),
+        params?.[2] === undefined ? undefined : Number(params[2]),
+      )
+    case "freebuffPtyInput":
+      writeFreebuffPty(String(params?.[0] ?? ""))
+      return null
+    case "freebuffPtyResize":
+      resizeFreebuffPty(Number(params?.[0] ?? DEFAULT_PTY_COLS), Number(params?.[1] ?? DEFAULT_PTY_ROWS))
+      return null
+    case "freebuffPtySignal":
+      signalFreebuffPty("SIGINT")
+      return null
+    case "freebuffPtyRestart":
+      restartFreebuffPty()
+      return null
+    case "freebuffPtyActive":
+      return isFreebuffPtyActive()
+    case "freebuffDesktopRunning":
+      return isFreebuffDesktopRunning()
     case "voiceTranscribe": {
       const bytes = Array.isArray(params?.[0])
         ? new Uint8Array(params[0].map((value: unknown) => Number(value) & 255))
