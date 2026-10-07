@@ -30,7 +30,8 @@
     "verify:v9.6.0": "node scripts/verify-v9.6.0.mjs",
     "vendor:xterm": "node scripts/vendor-xterm.mjs",
     "tauri:dev": "tauri dev",
-    "tauri:build": "npm run build:web && tauri build"
+    "tauri:build": "npm run build:electron && node scripts/prepare-tauri-runtime.mjs && tauri build",
+    "tauri:check": "npm run build:electron && npm run build:web && tauri build --debug"
   },
   "dependencies": {
     "@lydell/node-pty": "^1.1.0",
