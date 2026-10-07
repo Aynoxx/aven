@@ -42,7 +42,10 @@
       "../.opencode/": "runtime/template/.opencode/",
       "../opencode.jsonc": "runtime/template/opencode.jsonc",
       "../model-priorities.json": "runtime/template/model-priorities.json",
-      "../aven-mcp-server.mjs": "runtime/template/aven-mcp-server.mjs"
+      "../aven-mcp-server.mjs": "runtime/template/aven-mcp-server.mjs",
+      "resources/nodejs/node.exe": "runtime/node.exe",
+      "../node_modules/@lydell/node-pty": "runtime/node_modules/@lydell/node-pty",
+      "../node_modules/@lydell/node-pty-win32-x64": "runtime/node_modules/@lydell/node-pty-win32-x64"
     }
   }
 }
