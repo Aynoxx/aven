@@ -249,7 +249,7 @@ async function launchFreebuff(action: "launch" | "login" | "install", cols?: num
     }
 
     const runtimeDir = dirname(fileURLToPath(import.meta.url))
-    await loadPtyModule(true, runtimeDir)
+    await loadPtyModule(false, runtimeDir)
 
     const result = startFreebuffPty({
       cwd: requireWorkspace(),
