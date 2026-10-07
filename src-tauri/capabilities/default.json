@@ -4,6 +4,7 @@
   "description": "Permissions de base de la fenêtre principale Aven pendant la migration.",
   "windows": ["main"],
   "permissions": [
-    "core:default"
+    "core:default",
+    "dialog:default"
   ]
 }
