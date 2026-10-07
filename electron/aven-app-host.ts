@@ -15,6 +15,13 @@ import { buildAgentsDir, readTemplateAgents } from "./agents-bridge.js"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { createInterface } from "node:readline"
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import path from "node:path"
+import { listNotes, getNote, saveNote, notesDir } from "./notes.js"
+import { loadPinned, loadTags, setTags, togglePin } from "./notes-meta.js"
+import { listWorkspaceDir, readWorkspaceFile, breadcrumbOf } from "./workspace-files.js"
+import { aggregateStats, readDictationStats } from "./stats.js"
+import { buildDiagnostic } from "./diagnostic.js"
 
 type RpcMessage = { jsonrpc: "2.0"; id?: string | number; method?: string; params?: any }
 
@@ -57,6 +64,39 @@ const push = (event: EngineEvent) => send({ jsonrpc: "2.0", method: "app.event",
 function requireReady() {
   if (!ops) throw new Error("Le runtime Aven n'est pas prêt.")
   return ops
+}
+
+function requireWorkspace() {
+  if (!workspace) throw new Error("Choisis d'abord un espace de travail.")
+  return workspace
+}
+
+function prefsPath() {
+  const root = process.env.AVEN_USER_DATA_DIR || path.join(process.env.APPDATA || process.cwd(), "Aven")
+  mkdirSync(root, { recursive: true })
+  return path.join(root, "prefs.json")
+}
+
+function loadPrefs() {
+  try {
+    const raw = JSON.parse(readFileSync(prefsPath(), "utf8")) as { notifications?: unknown; freebuffResume?: unknown }
+    return {
+      notifications: raw.notifications !== false,
+      freebuffResume: raw.freebuffResume === true,
+    }
+  } catch {
+    return { notifications: true, freebuffResume: false }
+  }
+}
+
+function savePrefs(next: { notifications?: boolean; freebuffResume?: boolean }) {
+  const current = loadPrefs()
+  const value = {
+    notifications: next.notifications ?? current.notifications,
+    freebuffResume: next.freebuffResume ?? current.freebuffResume,
+  }
+  writeFileSync(prefsPath(), JSON.stringify(value, null, 2) + "\n", "utf8")
+  return value
 }
 
 async function shutdown() {
@@ -232,6 +272,63 @@ async function dispatch(method: string, params: unknown): Promise<unknown> {
       return api.formCancel(String(params?.[0] ?? ""), String(params?.[1] ?? ""))
     case "exportChat":
       return api.exportMarkdown(String(params?.[0] ?? ""))
+    case "notesList":
+      return listNotes(requireWorkspace())
+    case "noteGet":
+      return getNote(requireWorkspace(), String(params?.[0] ?? ""))
+    case "noteSave":
+      return saveNote(requireWorkspace(), String(params?.[0] ?? ""), String(params?.[1] ?? ""), String(params?.[2] ?? ""))
+    case "noteTogglePin":
+      return togglePin(requireWorkspace(), String(params?.[0] ?? ""))
+    case "notePins":
+      return loadPinned(requireWorkspace())
+    case "noteSetTags":
+      return setTags(requireWorkspace(), String(params?.[0] ?? ""), Array.isArray(params?.[1]) ? params[1].map(String) : [])
+    case "noteTags":
+      return loadTags(requireWorkspace(), String(params?.[0] ?? ""))
+    case "noteDir":
+      return notesDir(requireWorkspace())
+    case "filesList":
+      return listWorkspaceDir(requireWorkspace(), String(params?.[0] ?? ""))
+    case "filesRead":
+      return readWorkspaceFile(requireWorkspace(), String(params?.[0] ?? ""))
+    case "filesBreadcrumb":
+      return breadcrumbOf(String(params?.[0] ?? ""))
+    case "prefs":
+      return loadPrefs()
+    case "setNotifications":
+      return savePrefs({ notifications: params?.[0] === true })
+    case "setFreebuffResume":
+      return savePrefs({ freebuffResume: params?.[0] === true })
+    case "diagnostic": {
+      const s = appState
+      return buildDiagnostic({
+        versions: { node: process.versions.node },
+        platform: process.platform + " " + process.arch,
+        status: s.status,
+        opencodeVersion: s.version,
+        cli: s.cli,
+        keyIds: Object.entries(s.keys).filter(([, present]) => present).map(([id]) => id),
+        assignments: s.assignments,
+        warning: s.warning,
+        keyWarnings: s.keyWarnings,
+        workspace: s.workspace,
+        workspaces: [],
+        log: [],
+      })
+    }
+    case "getStats": {
+      const chats = await api.chats(undefined, true).catch(() => [])
+      const modelCounters: Record<string, number> = {}
+      for (const chat of chats) {
+        if (chat.model) modelCounters[String(chat.model)] = (modelCounters[String(chat.model)] ?? 0) + 1
+      }
+      return aggregateStats({
+        chats,
+        dictations: readDictationStats(requireWorkspace()),
+        modelCounters,
+      }, ["projet", "code", "recherche", "analyse"])
+    }
     default:
       throw new Error(`Méthode runtime inconnue : ${method}`)
   }
