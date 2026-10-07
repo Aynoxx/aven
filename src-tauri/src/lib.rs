@@ -18,6 +18,11 @@ use tauri::{
     AppHandle, Emitter, Manager, State,
 };
 
+#[cfg(desktop)]
+use tauri_plugin_global_shortcut::{
+    Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState,
+};
+
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
 
 #[derive(Default)]
@@ -759,12 +764,15 @@ pub fn run() {
             }),
         );
 
+            let global_shortcut = Shortcut::new(
+            Some(Modifiers::CONTROL | Modifiers::SHIFT),
+            Code::KeyO,
+        );
+
         builder = builder.plugin(
             tauri_plugin_global_shortcut::Builder::new()
-                .with_handler(|app, shortcut, event| {
-                    use tauri_plugin_global_shortcut::ShortcutState;
-
-                    if shortcut.id == 0 && event.state() == ShortcutState::Pressed {
+                .with_handler(move |app, shortcut, event| {
+                    if shortcut == &global_shortcut && event.state() == ShortcutState::Pressed {
                         if let Some(window) = app.get_webview_window("main") {
                             let _ = window.unminimize();
                             let _ = window.show();
@@ -777,6 +785,7 @@ pub fn run() {
     }
 
     builder
+        .plugin(tauri_plugin_dialog::init())
         .manage(RuntimeState::default())
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
@@ -836,7 +845,7 @@ pub fn run() {
                     })
                     .build(app)?;
 
-                app.global_shortcut().register("CmdOrCtrl+Shift+O")?;
+                app.global_shortcut().register(global_shortcut)?;
             }
 
             Ok(())
