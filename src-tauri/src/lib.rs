@@ -590,6 +590,37 @@ fn aven_call(
             Ok(Value::String(workspace))
         }
 
+        "openPath" => {
+            let target = args
+                .first()
+                .and_then(Value::as_str)
+                .ok_or_else(|| "Chemin absent.".to_string())?;
+            let path = PathBuf::from(target)
+                .canonicalize()
+                .map_err(|_| "Le chemin choisi n'existe pas.".to_string())?;
+            open_system_path(&path)?;
+            Ok(Value::String(path.to_string_lossy().into_owned()))
+        }
+
+        "writeTextFile" => {
+            let target = args
+                .first()
+                .and_then(Value::as_str)
+                .ok_or_else(|| "Chemin de sortie absent.".to_string())?;
+            let content = args
+                .get(1)
+                .and_then(Value::as_str)
+                .ok_or_else(|| "Contenu de sortie absent.".to_string())?;
+            let path = PathBuf::from(target);
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent)
+                    .map_err(|e| format!("Impossible de préparer le dossier de sortie : {e}"))?;
+            }
+            std::fs::write(&path, content)
+                .map_err(|e| format!("Impossible d'écrire le fichier : {e}"))?;
+            Ok(Value::String(path.to_string_lossy().into_owned()))
+        }
+
         "openExternal" => {
             let url = args.first().and_then(Value::as_str).unwrap_or_default();
             open_url(url)?;
