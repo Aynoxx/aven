@@ -768,11 +768,12 @@ pub fn run() {
             Some(Modifiers::CONTROL | Modifiers::SHIFT),
             Code::KeyO,
         );
+        let handler_shortcut = global_shortcut.clone();
 
         builder = builder.plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(move |app, shortcut, event| {
-                    if shortcut == &global_shortcut && event.state() == ShortcutState::Pressed {
+                    if shortcut == &handler_shortcut && event.state() == ShortcutState::Pressed {
                         if let Some(window) = app.get_webview_window("main") {
                             let _ = window.unminimize();
                             let _ = window.show();
