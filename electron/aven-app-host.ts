@@ -12,7 +12,8 @@ import { resolveOpenCodeBin } from "./opencode-bridge.js"
 import { PROVIDERS } from "./providers.js"
 import { seedWorkspace } from "./workspace-seed.js"
 import { buildAgentsDir, readTemplateAgents } from "./agents-bridge.js"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
+import { fileURLToPath } from "node:url"
 import { createInterface } from "node:readline"
 
 type RpcMessage = { jsonrpc: "2.0"; id?: string | number; method?: string; params?: any }
@@ -72,6 +73,8 @@ async function initialize(params: {
   env?: Record<string, string>
   openRouterUsable?: boolean
   keyWarnings?: Record<string, string>
+  binPath?: string
+  binShell?: boolean
 }) {
   const nextWorkspace = join(String(params?.workspace || ""))
   if (!nextWorkspace) throw new Error("workspace requis")
@@ -91,9 +94,12 @@ async function initialize(params: {
     // Le pont agents est best effort comme dans l'implémentation Electron.
   }
 
-  const bin = resolveOpenCodeBin()
+  const bin = params.binPath
+    ? { command: String(params.binPath), shell: Boolean(params.binShell), source: "Tauri resource" }
+    : resolveOpenCodeBin()
+  const runtimeDir = dirname(fileURLToPath(import.meta.url))
   engine = new EngineClient({
-    hostPath: join(process.cwd(), "aven-engine-host.mjs"),
+    hostPath: join(runtimeDir, "aven-engine-host.mjs"),
     runAsNode: false,
     nodeExecPath: process.execPath,
     cwd: workspace,
