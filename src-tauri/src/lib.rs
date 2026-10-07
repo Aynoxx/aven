@@ -295,6 +295,19 @@ fn runtime_command(app: &AppHandle) -> Result<(String, PathBuf, PathBuf), String
     Ok((node.to_string_lossy().into_owned(), host, cwd))
 }
 
+fn bundled_opencode(app: &AppHandle) -> Option<PathBuf> {
+    #[cfg(debug_assertions)]
+    {
+        let _ = app;
+        return None;
+    }
+
+    app.path()
+        .resolve("runtime/opencode-bin/opencode.exe", BaseDirectory::Resource)
+        .ok()
+        .filter(|path| path.is_file())
+}
+
 fn provider_env() -> serde_json::Map<String, Value> {
     let mut env = serde_json::Map::new();
 
@@ -348,7 +361,9 @@ fn boot_runtime(app: &AppHandle, state: &RuntimeState) -> Result<Value, String> 
             "workspace": workspace,
             "templateDir": template,
             "env": provider_env(),
-            "openRouterUsable": true
+            "openRouterUsable": true,
+            "binPath": bundled_opencode(app).map(|path| path.to_string_lossy().into_owned()),
+            "binShell": false
         })],
     );
 
