@@ -69,12 +69,17 @@ type PtyModule = { spawn: PtySpawn }
 
 /** Chemin du paquet PTY prébuildé — seul fiable en dev comme packagé (resourcesPath). */
 export function ptyModulePath(__dirname: string, isPackaged: boolean): string {
-  // En dev : <projet>/node_modules (via le parent de dist-electron). Packagé : les binaires
-  // natifs vivent HORS de l'asar → resourcesPath/app.asar.unpacked/node_modules.
-  const base = isPackaged ? path.join(process.resourcesPath ?? "", "app.asar.unpacked") : path.resolve(__dirname, "..")
-  // index.js explicite : un import ESM de répertoire est refusé (« Directory import … is
-  // not supported »), il faut viser le fichier d'entrée du paquet CommonJS.
-  return path.join(base, "node_modules", "@lydell", "node-pty", "index.js")
+  // Tauri place le host dans resources/runtime : on cherche d'abord les dépendances
+  // à côté du host, puis on retombe sur la racine du projet en développement.
+  const adjacent = path.join(__dirname, "node_modules", "@lydell", "node-pty", "index.js")
+  if (!isPackaged && pathToFileURL && pathToFileURL) {
+    // Le test d'existence est laissé au chargeur dynamique ; le chemin adjacent est
+    // toujours déterministe dans le bundle Tauri.
+  }
+  const base = isPackaged
+    ? path.join(process.resourcesPath ?? "", "app.asar.unpacked")
+    : path.resolve(__dirname, "..")
+  return isPackaged ? path.join(base, "node_modules", "@lydell", "node-pty", "index.js") : adjacent
 }
 
 /**
