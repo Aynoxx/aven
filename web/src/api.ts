@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core"
 import { listen } from "@tauri-apps/api/event"
-import { open as openDialog } from "@tauri-apps/plugin-dialog"
+import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog"
 import type { OpenCodeApi } from "./types"
 
 // Electron expose toujours window.opencode via le preload.
@@ -59,6 +59,68 @@ const tauriApi = new Proxy({} as OpenCodeApi, {
           method: "workspace:add",
           args: [selected, String(name ?? "")],
         })
+      }
+    }
+
+    if (property === "exportChat") {
+      return async (id: string) => {
+        const data = await invoke<{ title: string; markdown: string }>("aven_call", {
+          method: "exportChat",
+          args: [String(id)],
+        })
+        if (!data) return null
+        const safeName = String(data.title || "conversation")
+          .replace(/[\\/:*?"<>|]/g, "_")
+          .slice(0, 80) || "conversation"
+        const selected = await saveDialog({
+          title: "Exporter la conversation",
+          defaultPath: safeName + ".md",
+          filters: [{ name: "Markdown", extensions: ["md"] }],
+        })
+        if (typeof selected !== "string" || !selected) return null
+        return invoke<string>("aven_call", {
+          method: "writeTextFile",
+          args: [selected, data.markdown],
+        })
+      }
+    }
+
+    if (property === "noteExport") {
+      return async (id: string) => {
+        const note = await invoke<{ title: string; markdown: string }>("aven_call", {
+          method: "noteGet",
+          args: [String(id)],
+        })
+        const safeName = String(note.title || "note")
+          .replace(/[\\/:*?"<>|]/g, "_")
+          .slice(0, 80) || "note"
+        const selected = await saveDialog({
+          title: "Exporter la note",
+          defaultPath: safeName + ".md",
+          filters: [{ name: "Markdown", extensions: ["md"] }],
+        })
+        if (typeof selected !== "string" || !selected) return null
+        return invoke<string>("aven_call", {
+          method: "writeTextFile",
+          args: [selected, note.markdown],
+        })
+      }
+    }
+
+    if (property === "filesOpen") {
+      return async (relative: string) => {
+        const selected = await invoke<string>("aven_call", {
+          method: "filesOpen",
+          args: [String(relative ?? "")],
+        })
+        return invoke<string>("aven_call", { method: "openPath", args: [selected] })
+      }
+    }
+
+    if (property === "noteOpenFolder") {
+      return async () => {
+        const selected = await invoke<string>("aven_call", { method: "noteOpenFolder", args: [] })
+        return invoke<string>("aven_call", { method: "openPath", args: [selected] })
       }
     }
 
