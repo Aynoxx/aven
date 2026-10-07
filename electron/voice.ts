@@ -8,7 +8,6 @@
 //   4. en cas d'échec (429, réseau, timeout) le texte BRUT est renvoyé : la dictée
 //      n'est jamais bloquante, et une passe manquante dégrade sans casser l'autre.
 // Sans dépendance à Electron : testable avec Node seul (fetch et clé injectables).
-import { loadKeys } from "./settings.js"
 import { classifyIntent, fallbackIntent, type DictationIntent } from "./voice-intent.js"
 
 const GROQ_BASE = "https://api.groq.com/openai/v1"
@@ -119,8 +118,9 @@ export async function transcribeSpeech(
   audio: Blob,
   fetchImpl: typeof fetch = fetch,
   apiKeyOverride?: string,
+  keyLoader: () => string | undefined = () => process.env.GROQ_API_KEY,
 ): Promise<DictationResult> {
-  const apiKey = (apiKeyOverride ?? loadKeys().groq)?.trim()
+  const apiKey = (apiKeyOverride ?? keyLoader())?.trim()
   if (!apiKey) throw new Error("Configure une clé Groq dans Paramètres pour dicter.")
 
   const raw = await transcribeWithGroq(audio, apiKey, fetchImpl)
