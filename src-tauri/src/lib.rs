@@ -940,3 +940,25 @@ pub fn run() {
             }
         });
 }
+
+#[cfg(test)]
+mod tests {
+    use super::workspace_name_valid;
+
+    #[test]
+    fn accepts_normal_workspace_names() {
+        assert!(workspace_name_valid("Projet Aven"));
+        assert!(workspace_name_valid("Royaume-01"));
+        assert!(workspace_name_valid("v10"));
+    }
+
+    #[test]
+    fn rejects_invalid_windows_names() {
+        assert!(!workspace_name_valid(""));
+        assert!(!workspace_name_valid(".."));
+        assert!(!workspace_name_valid("CON"));
+        assert!(!workspace_name_valid("LPT1"));
+        assert!(!workspace_name_valid("nom/invalide"));
+        assert!(!workspace_name_valid("nom:invalide"));
+    }
+}
