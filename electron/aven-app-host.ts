@@ -15,6 +15,7 @@ import { buildAgentsDir, readTemplateAgents } from "./agents-bridge.js"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { createInterface } from "node:readline"
+import { execFileSync } from "node:child_process"
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { listNotes, getNote, saveNote, notesDir } from "./notes.js"
@@ -69,6 +70,80 @@ function requireReady() {
 function requireWorkspace() {
   if (!workspace) throw new Error("Choisis d'abord un espace de travail.")
   return workspace
+}
+
+function settingsPath() {
+  const root = process.env.AVEN_USER_DATA_DIR || path.join(process.env.APPDATA || process.cwd(), "Aven")
+  mkdirSync(root, { recursive: true })
+  return path.join(root, "settings.json")
+}
+
+function protectWindows(value: string, unprotect: boolean): string | undefined {
+  if (process.platform !== "win32") return undefined
+  const script = unprotect
+    ? "$raw=[Console]::In.ReadToEnd();$data=[Convert]::FromBase64String($raw.Trim());$plain=[System.Security.Cryptography.ProtectedData]::Unprotect($data,$null,[System.Security.Cryptography.DataProtectionScope]::CurrentUser);[Console]::Out.Write([Text.Encoding]::UTF8.GetString($plain))"
+    : "$raw=[Console]::In.ReadToEnd();$data=[Text.Encoding]::UTF8.GetBytes($raw);$cipher=[System.Security.Cryptography.ProtectedData]::Protect($data,$null,[System.Security.Cryptography.DataProtectionScope]::CurrentUser);[Console]::Out.Write([Convert]::ToBase64String($cipher))"
+  try {
+    return String(execFileSync("powershell.exe", [
+      "-NoProfile",
+      "-NonInteractive",
+      "-Command",
+      script,
+    ], {
+      input: value,
+      encoding: "utf8",
+      timeout: 5000,
+      windowsHide: true,
+    })).trim()
+  } catch {
+    return undefined
+  }
+}
+
+function loadKeys() {
+  let stored: { keysEnc?: Record<string, string>; openrouterKeyEnc?: string } = {}
+  try {
+    stored = JSON.parse(readFileSync(settingsPath(), "utf8")) as typeof stored
+  } catch {}
+
+  const out: Record<string, string> = {}
+  for (const [id, envName] of [["openrouter", "OPENROUTER_API_KEY"], ["groq", "GROQ_API_KEY"]] as const) {
+    const encrypted = stored.keysEnc?.[id] || (id === "openrouter" ? stored.openrouterKeyEnc : undefined)
+    const value = encrypted ? protectWindows(encrypted, true) : undefined
+    const envValue = process.env[envName]
+    if (value) out[envName] = value
+    else if (envValue?.trim()) out[envName] = envValue
+  }
+  return out
+}
+
+function saveKey(provider: string, key: string) {
+  const envName = provider === "openrouter" ? "OPENROUTER_API_KEY" : provider === "groq" ? "GROQ_API_KEY" : undefined
+  if (!envName) throw new Error("Fournisseur inconnu.")
+  const clean = String(key ?? "").trim()
+  if (clean && process.platform !== "win32") {
+    throw new Error("Le stockage sécurisé des clés n'est disponible que sur Windows.")
+  }
+
+  let stored: { keysEnc?: Record<string, string>; openrouterKeyEnc?: string } = {}
+  try {
+    stored = JSON.parse(readFileSync(settingsPath(), "utf8")) as typeof stored
+  } catch {}
+
+  const keysEnc = { ...(stored.keysEnc ?? {}) }
+  if (clean) {
+    const encrypted = protectWindows(clean, false)
+    if (!encrypted) throw new Error("Le chiffrement Windows de la clé a échoué.")
+    keysEnc[provider] = encrypted
+  } else {
+    delete keysEnc[provider]
+  }
+
+  const next: typeof stored = { keysEnc }
+  if (provider !== "openrouter" && stored.openrouterKeyEnc && !keysEnc.openrouter) {
+    next.openrouterKeyEnc = stored.openrouterKeyEnc
+  }
+  writeFileSync(settingsPath(), JSON.stringify(next, null, 2) + "\n", "utf8")
 }
 
 function prefsPath() {
@@ -134,6 +209,12 @@ async function initialize(params: {
     // Le pont agents est best effort comme dans l'implémentation Electron.
   }
 
+  const storedEnv = loadKeys()
+  const effectiveEnv = { ...storedEnv, ...(params.env ?? {}) }
+  for (const [id, envName] of [["openrouter", "OPENROUTER_API_KEY"], ["groq", "GROQ_API_KEY"]] as const) {
+    if (storedEnv[envName]) effectiveEnv[envName] = storedEnv[envName]
+  }
+
   const bin = params.binPath
     ? { command: String(params.binPath), shell: Boolean(params.binShell), source: "Tauri resource" }
     : resolveOpenCodeBin()
@@ -150,7 +231,7 @@ async function initialize(params: {
 
   engineState = await engine.call("initialize", {
     workspace,
-    env: params.env ?? {},
+    env: effectiveEnv,
     prioritiesPath: join(workspace, "model-priorities.json"),
     templatePrioritiesPath: join(templateDir, "model-priorities.json"),
     excludeProvider: params.openRouterUsable === false ? "openrouter" : undefined,
@@ -188,7 +269,7 @@ async function initialize(params: {
   appState = {
     status: "ready",
     keys: Object.fromEntries(
-      PROVIDERS.map((p) => [p.id, !!params.env?.[p.env]]),
+      PROVIDERS.map((p) => [p.id, !!effectiveEnv[p.env]]),
     ),
     providers,
     workspace,
@@ -210,6 +291,15 @@ async function dispatch(method: string, params: unknown): Promise<unknown> {
       return { alive: true, initialized: !!ops }
     case "state":
       return appState
+    case "setKey": {
+      saveKey(String(params?.[0] ?? ""), String(params?.[1] ?? ""))
+      return initialize({
+        workspace,
+        templateDir,
+        env: loadKeys(),
+        openRouterUsable: true,
+      })
+    }
     case "initialize":
       return initialize(params as Parameters<typeof initialize>[0])
     case "shutdown":
