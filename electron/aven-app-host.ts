@@ -15,7 +15,8 @@ import { buildAgentsDir, readTemplateAgents } from "./agents-bridge.js"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { createInterface } from "node:readline"
-import { execFileSync } from "node:child_process"
+import { execFileSync, execFile, spawn } from "node:child_process"
+import { promisify } from "node:util"
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { listNotes, getNote, saveNote, notesDir } from "./notes.js"
@@ -24,6 +25,8 @@ import { listWorkspaceDir, readWorkspaceFile, breadcrumbOf } from "./workspace-f
 import { aggregateStats, readDictationStats } from "./stats.js"
 import { buildDiagnostic } from "./diagnostic.js"
 import { transcribeSpeech } from "./voice.js"
+import { buildLaunchCommand, freebuffBusyMessage, freebuffMissingMessage, parseVersionOutput } from "./freebuff-cli.js"
+import { DEFAULT_PTY_COLS, DEFAULT_PTY_ROWS, freebuffPtyPid, isFreebuffPtyActive, loadPtyModule, restartFreebuffPty, resizeFreebuffPty, signalFreebuffPty, startFreebuffPty, writeFreebuffPty } from "./freebuff-pty.js"
 
 type RpcMessage = { jsonrpc: "2.0"; id?: string | number; method?: string; params?: any }
 
