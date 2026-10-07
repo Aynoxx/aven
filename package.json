@@ -31,7 +31,8 @@
     "vendor:xterm": "node scripts/vendor-xterm.mjs",
     "tauri:dev": "npm run build:electron && tauri dev",
     "tauri:build": "npm run build:electron && node scripts/prepare-tauri-runtime.mjs && tauri build",
-    "tauri:check": "npm run build:electron && npm run build:web && tauri build --debug"
+    "tauri:check": "npm run build:electron && npm run build:web && tauri build --debug",
+    "test:app-host": "npm run build:electron && node scripts/test-app-host.mjs"
   },
   "dependencies": {
     "@lydell/node-pty": "^1.1.0",
