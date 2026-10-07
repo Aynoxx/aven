@@ -11,7 +11,7 @@ use std::{
         Arc, Mutex,
     },
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tauri::{
     path::BaseDirectory,
@@ -22,6 +22,9 @@ use tauri::{
 use tauri_plugin_global_shortcut::{
     Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState,
 };
+
+#[cfg(desktop)]
+use tauri_plugin_notification::NotificationExt;
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
 
@@ -83,6 +86,8 @@ impl NodeRuntime {
             thread::spawn(move || {
                 let reader = BufReader::new(stdout);
 
+                let mut turn_starts: HashMap<String, Instant> = HashMap::new();
+
                 for line in reader.lines().flatten() {
                     let Ok(message) = serde_json::from_str::<Value>(&line) else {
                         continue;
@@ -103,6 +108,7 @@ impl NodeRuntime {
                         }
                     } else if message.get("method").and_then(Value::as_str) == Some("app.event") {
                         if let Some(params) = message.get("params").cloned() {
+                            notify_from_event(&app, &mut turn_starts, &params);
                             let _ = app.emit("aven:event", params);
                         }
                     }
@@ -398,7 +404,7 @@ fn workspace_name_valid(name: &str) -> bool {
     if clean.is_empty() || clean == "." || clean == ".." {
         return false;
     }
-    if clean.chars().any(|c| "<>:"/\\|?*".contains(c)) {
+    if clean.chars().any(|c| "<>:\"/\\|?*".contains(c)) {
         return false;
     }
     ![
@@ -534,6 +540,75 @@ fn open_url(url: &str) -> Result<(), String> {
     {
         let _ = url;
         Err("Ouverture de lien non supportée sur cette plateforme.".to_string())
+    }
+}
+
+fn notifications_enabled() -> bool {
+    match user_data_dir()
+        .ok()
+        .map(|dir| dir.join("prefs.json"))
+        .and_then(|path| std::fs::read_to_string(path).ok())
+        .and_then(|raw| serde_json::from_str::<Value>(&raw).ok())
+    {
+        Some(value) => value
+            .get("notifications")
+            .and_then(Value::as_bool)
+            .unwrap_or(true),
+        None => true,
+    }
+}
+
+#[cfg(desktop)]
+fn notify_from_event(app: &AppHandle, turn_starts: &mut HashMap<String, Instant>, params: &Value) {
+    let Some(event_type) = params.get("type").and_then(Value::as_str) else {
+        return;
+    };
+    let data = params.get("data").cloned().unwrap_or(Value::Null);
+    let session_id = data.get("sessionID").and_then(Value::as_str).unwrap_or_default();
+
+    let Some(window) = app.get_webview_window("main") else {
+        return;
+    };
+    let focused = window.is_focused().unwrap_or(false) && window.is_visible().unwrap_or(false);
+    if !notifications_enabled() || focused {
+        return;
+    }
+
+    let message = match event_type {
+        "session.execution.started" if !session_id.is_empty() => {
+            turn_starts.insert(session_id.to_string(), Instant::now());
+            return;
+        }
+        "session.execution.succeeded" if !session_id.is_empty() => {
+            let duration = turn_starts
+                .remove(session_id)
+                .map(|started| started.elapsed());
+            if duration.map(|value| value <= Duration::from_secs(8)).unwrap_or(false) {
+                return;
+            }
+            ("Tour terminé", duration.map(|value| {
+                format!("Tour terminé en {} s.", value.as_secs().max(1))
+            }).unwrap_or_else(|| "Tour terminé.".to_string()))
+        }
+        "session.execution.failed" => {
+            if !session_id.is_empty() {
+                turn_starts.remove(session_id);
+            }
+            ("Aven", "Le tour de l'agent a échoué.".to_string())
+        }
+        "permission.asked" => {
+            ("Aven", "L'agent attend ta permission.".to_string())
+        }
+        "form.created" => {
+            ("Aven", "Un formulaire attend tes réponses.".to_string())
+        }
+        _ => return,
+    };
+
+    let (title, body) = message;
+    let result = app.notification().builder().title(title).body(body).show();
+    if let Err(error) = result {
+        eprintln!("[aven-notification] {error}");
     }
 }
 
@@ -764,7 +839,7 @@ pub fn run() {
             }),
         );
 
-            let global_shortcut = Shortcut::new(
+        let global_shortcut = Shortcut::new(
             Some(Modifiers::CONTROL | Modifiers::SHIFT),
             Code::KeyO,
         );
@@ -787,6 +862,7 @@ pub fn run() {
 
     builder
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(RuntimeState::default())
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
