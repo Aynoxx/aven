@@ -7,6 +7,7 @@ await build({
   entryPoints: [
     { in: "electron/engine-host.ts", out: "aven-engine-host" },
     { in: "electron/pty-host.ts", out: "aven-pty-host" },
+    { in: "electron/aven-app-host.ts", out: "aven-app-host" },
   ],
   outdir: "dist-electron",
   // Extension .mjs obligatoire : Node exécute un .js comme CommonJS et l'ESM
@@ -25,3 +26,5 @@ await build({
   banner: { js: "// Aven engine host — généré par scripts/build-engine-host.mjs, ne pas éditer." },
 })
 console.log("✓ dist-electron/aven-engine-host.mjs")
+console.log("✓ dist-electron/aven-pty-host.mjs")
+console.log("✓ dist-electron/aven-app-host.mjs")
