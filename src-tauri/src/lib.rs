@@ -6,7 +6,7 @@ use std::{
     path::{Path, PathBuf},
     process::{Child, ChildStdin, Command, Stdio},
     sync::{
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         mpsc,
         Arc, Mutex,
     },
@@ -24,6 +24,7 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
 struct RuntimeState {
     node: Mutex<Option<Arc<NodeRuntime>>>,
     booted_workspace: Mutex<Option<String>>,
+    quitting: AtomicBool,
 }
 
 struct NodeRuntime {
@@ -744,8 +745,102 @@ fn aven_call(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default();
+
+    #[cfg(desktop)]
+    {
+        builder = builder.plugin(
+            tauri_plugin_single_instance::init(|app, _args, _cwd| {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.unminimize();
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            }),
+        );
+
+        builder = builder.plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, shortcut, event| {
+                    use tauri_plugin_global_shortcut::ShortcutState;
+
+                    if shortcut.id == 0 && event.state() == ShortcutState::Pressed {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.unminimize();
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                    }
+                })
+                .build(),
+        );
+    }
+
+    builder
         .manage(RuntimeState::default())
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                let state = window.app_handle().state::<RuntimeState>();
+                if !state.quitting.load(Ordering::Relaxed) {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+        })
+        .setup(|app| {
+            #[cfg(desktop)]
+            {
+                use tauri::{
+                    menu::{Menu, MenuItem},
+                    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+                };
+                use tauri_plugin_global_shortcut::GlobalShortcutExt;
+
+                let show = MenuItem::with_id(app, "show", "Afficher", true, None::<&str>)?;
+                let quit = MenuItem::with_id(app, "quit", "Quitter", true, None::<&str>)?;
+                let menu = Menu::with_items(app, &[&show, &quit])?;
+
+                TrayIconBuilder::new()
+                    .icon(app.default_window_icon().ok_or("Icône Aven introuvable.")?.clone())
+                    .menu(&menu)
+                    .show_menu_on_left_click(false)
+                    .on_menu_event(|app, event| match event.id.as_ref() {
+                        "show" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.unminimize();
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
+                        }
+                        "quit" => {
+                            let state = app.state::<RuntimeState>();
+                            state.quitting.store(true, Ordering::Relaxed);
+                            app.exit(0);
+                        }
+                        _ => {}
+                    })
+                    .on_tray_icon_event(|tray, event| {
+                        if let TrayIconEvent::Click {
+                            button: MouseButton::Left,
+                            button_state: MouseButtonState::Up,
+                            ..
+                        } = event
+                        {
+                            let app = tray.app_handle();
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.unminimize();
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
+                        }
+                    })
+                    .build(app)?;
+
+                app.global_shortcut().register("CmdOrCtrl+Shift+O")?;
+            }
+
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![aven_call])
         .build(tauri::generate_context!())
         .expect("error while building Aven")
