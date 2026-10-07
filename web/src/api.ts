@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core"
 import { listen } from "@tauri-apps/api/event"
+import { open as openDialog } from "@tauri-apps/plugin-dialog"
 import type { OpenCodeApi } from "./types"
 
 // Electron expose toujours window.opencode via le preload.
@@ -38,6 +39,28 @@ const tauriApi = new Proxy({} as OpenCodeApi, {
     }
 
     if (typeof property !== "string") return undefined
+
+    if (property === "addExistingWorkspace") {
+      return async () => {
+        const selected = await openDialog({ directory: true, multiple: false })
+        if (typeof selected !== "string" || !selected) return null
+        return invoke<unknown>("aven_call", {
+          method: "workspace:add",
+          args: [selected, ""],
+        })
+      }
+    }
+
+    if (property === "createWorkspace") {
+      return async (name: string) => {
+        const selected = await openDialog({ directory: true, multiple: false })
+        if (typeof selected !== "string" || !selected) return null
+        return invoke<unknown>("aven_call", {
+          method: "workspace:add",
+          args: [selected, String(name ?? "")],
+        })
+      }
+    }
 
     return (...args: unknown[]) =>
       invoke<unknown>("aven_call", {
