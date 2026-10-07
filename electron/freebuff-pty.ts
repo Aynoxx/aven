@@ -20,6 +20,7 @@
 
 // Pur pour tout ce qui est décisionnel ; l'unique I/O est le spawn du process enfant.
 import type { ChildProcess } from "node:child_process"
+import { existsSync } from "node:fs"
 import path from "node:path"
 import { pathToFileURL } from "node:url"
 
@@ -69,17 +70,13 @@ type PtyModule = { spawn: PtySpawn }
 
 /** Chemin du paquet PTY prébuildé — seul fiable en dev comme packagé (resourcesPath). */
 export function ptyModulePath(__dirname: string, isPackaged: boolean): string {
-  // Tauri place le host dans resources/runtime : on cherche d'abord les dépendances
-  // à côté du host, puis on retombe sur la racine du projet en développement.
   const adjacent = path.join(__dirname, "node_modules", "@lydell", "node-pty", "index.js")
-  if (!isPackaged && pathToFileURL && pathToFileURL) {
-    // Le test d'existence est laissé au chargeur dynamique ; le chemin adjacent est
-    // toujours déterministe dans le bundle Tauri.
-  }
+  if (existsSync(adjacent)) return adjacent
+
   const base = isPackaged
     ? path.join(process.resourcesPath ?? "", "app.asar.unpacked")
     : path.resolve(__dirname, "..")
-  return isPackaged ? path.join(base, "node_modules", "@lydell", "node-pty", "index.js") : adjacent
+  return path.join(base, "node_modules", "@lydell", "node-pty", "index.js")
 }
 
 /**
