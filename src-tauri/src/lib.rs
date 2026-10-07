@@ -387,6 +387,71 @@ fn boot_runtime(app: &AppHandle, state: &RuntimeState) -> Result<Value, String> 
     }
 }
 
+fn workspace_name_valid(name: &str) -> bool {
+    let clean = name.trim();
+    if clean.is_empty() || clean == "." || clean == ".." {
+        return false;
+    }
+    if clean.chars().any(|c| "<>:"/\\|?*".contains(c)) {
+        return false;
+    }
+    ![
+        "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
+        "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+    ].iter().any(|reserved| {
+        clean.eq_ignore_ascii_case(reserved)
+            || clean
+                .strip_prefix(reserved)
+                .map(|rest| rest.starts_with('.'))
+                .unwrap_or(false)
+    })
+}
+
+fn add_workspace(path: &str, name: &str) -> Result<(Value, String), String> {
+    let clean = PathBuf::from(path)
+        .canonicalize()
+        .map_err(|_| "Le dossier de travail n'existe pas.".to_string())?;
+
+    if !clean.is_dir() {
+        return Err("Le chemin choisi n'est pas un dossier.".to_string());
+    }
+
+    let display_name = if name.trim().is_empty() {
+        clean
+            .file_name()
+            .and_then(|v| v.to_str())
+            .unwrap_or("Espace")
+            .to_string()
+    } else {
+        name.trim().to_string()
+    };
+
+    if !workspace_name_valid(&display_name) {
+        return Err("Nom d’espace de travail invalide.".to_string());
+    }
+
+    let (mut list, _) = read_workspace_store()?;
+    if list.iter().any(|item| {
+        item.get("path")
+            .and_then(Value::as_str)
+            .map(|value| Path::new(value) == clean)
+            .unwrap_or(false)
+    }) {
+        return Err("Ce dossier fait déjà partie des espaces de travail connus.".to_string());
+    }
+
+    let entry = json!({
+        "path": clean.to_string_lossy(),
+        "name": display_name
+    });
+
+    list.push(entry.clone());
+    let clean_string = clean.to_string_lossy().into_owned();
+    write_workspace_store(list, Some(clean_string.clone()))?;
+
+    Ok((entry, clean_string))
+}
+
 fn open_system_path(target: &Path) -> Result<(), String> {
     #[cfg(windows)]
     {
@@ -551,6 +616,29 @@ fn aven_call(
         }
 
         "workspace:list" => Ok(read_workspace_store()?.0.into()),
+
+        "workspace:add" => {
+            let path = args.first().and_then(Value::as_str).unwrap_or_default();
+            let name = args.get(1).and_then(Value::as_str).unwrap_or_default();
+            let (entry, clean) = add_workspace(path, name)?;
+
+            if let Ok(mut node) = state.node.lock() {
+                if let Some(runtime) = node.take() {
+                    runtime.stop();
+                }
+            }
+            *state
+                .booted_workspace
+                .lock()
+                .map_err(|_| "État runtime indisponible.".to_string())? = None;
+
+            let state_value = boot_runtime(&app, &state)?;
+            Ok(json!({
+                "entry": entry,
+                "state": state_value,
+                "workspace": clean
+            }))
+        }
 
         "workspace:switch" => {
             let wanted = PathBuf::from(
