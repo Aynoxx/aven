@@ -25,6 +25,8 @@ import { listWorkspaceDir, readWorkspaceFile, breadcrumbOf, safeResolve as safeR
 import { aggregateStats, readDictationStats } from "./stats.js"
 import { buildDiagnostic } from "./diagnostic.js"
 import { transcribeSpeech } from "./voice.js"
+import { Announcer } from "./announcer.js"
+import { countDictation } from "./stats.js"
 import { buildLaunchCommand, freebuffBusyMessage, freebuffMissingMessage, parseVersionOutput } from "./freebuff-cli.js"
 import { DEFAULT_PTY_COLS, DEFAULT_PTY_ROWS, freebuffPtyPid, isFreebuffPtyActive, loadPtyModule, restartFreebuffPty, resizeFreebuffPty, signalFreebuffPty, startFreebuffPty, writeFreebuffPty } from "./freebuff-pty.js"
 
@@ -54,6 +56,27 @@ let engine: EngineClient | null = null
 let engineState: Record<string, unknown> = {}
 let engineChains: Record<string, { ref: string; label: string }[]> = {}
 let ops: ReturnType<typeof makeOps> | null = null
+let lastUserActivity = 0
+
+async function speakWithSapi(text: string): Promise<void> {
+  if (process.platform !== "win32") return
+  const safe = String(text).slice(0, 240).replace(/'/g, "''")
+  await execFileAsync(
+    "powershell.exe",
+    [
+      "-NoProfile",
+      "-NonInteractive",
+      "-Command",
+      "Add-Type -AssemblyName System.Speech; (New-Object System.Speech.Synthesis.SpeechSynthesizer).Speak('" + safe + "')",
+    ],
+    { timeout: 20_000, windowsHide: true },
+  )
+}
+
+const announcer = new Announcer({
+  isMuted: () => Date.now() - lastUserActivity < 1_500,
+  speak: speakWithSapi,
+})
 
 let appState: AppState = {
   status: "starting",
@@ -64,7 +87,11 @@ let appState: AppState = {
 }
 
 const send = (message: Record<string, unknown>) => process.stdout.write(JSON.stringify(message) + "\n")
-const push = (event: EngineEvent) => send({ jsonrpc: "2.0", method: "app.event", params: event })
+const push = (event: EngineEvent) => {
+  send({ jsonrpc: "2.0", method: "app.event", params: event })
+  const candidate = event as unknown as { type?: string; data?: Record<string, unknown> }
+  if (candidate.type && candidate.data) announcer.handle({ type: candidate.type, data: candidate.data })
+}
 
 function requireReady() {
   if (!ops) throw new Error("Le runtime Aven n'est pas prêt.")
@@ -556,6 +583,15 @@ async function dispatch(method: string, params: any): Promise<unknown> {
       return isFreebuffPtyActive()
     case "freebuffDesktopRunning":
       return isFreebuffDesktopRunning()
+    case "announcerActivity":
+      lastUserActivity = Date.now()
+      return null
+    case "announcerSetEnabled":
+      announcer.setEnabled(Boolean(params?.[0]))
+      return announcer.isEnabled()
+    case "announcerTest":
+      await speakWithSapi(String(params?.[0] ?? "Annonce vocale activée.").slice(0, 200))
+      return null
     case "voiceTranscribe": {
       const bytes = Array.isArray(params?.[0])
         ? new Uint8Array(params[0].map((value: unknown) => Number(value) & 255))
@@ -567,6 +603,7 @@ async function dispatch(method: string, params: any): Promise<unknown> {
         fetch,
         loadKeys()["GROQ_API_KEY"],
       )
+      try { countDictation(requireWorkspace()) } catch {}
       return result
     }
     case "diagnostic": {
