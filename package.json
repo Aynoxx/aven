@@ -29,7 +29,7 @@
     "verify:v9.5.1": "node scripts/verify-v9.5.0.mjs",
     "verify:v9.6.0": "node scripts/verify-v9.6.0.mjs",
     "vendor:xterm": "node scripts/vendor-xterm.mjs",
-    "tauri:dev": "tauri dev",
+    "tauri:dev": "npm run build:electron && tauri dev",
     "tauri:build": "npm run build:electron && node scripts/prepare-tauri-runtime.mjs && tauri build",
     "tauri:check": "npm run build:electron && npm run build:web && tauri build --debug"
   },
