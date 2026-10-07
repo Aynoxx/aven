@@ -23,6 +23,7 @@ import { loadPinned, loadTags, setTags, togglePin } from "./notes-meta.js"
 import { listWorkspaceDir, readWorkspaceFile, breadcrumbOf } from "./workspace-files.js"
 import { aggregateStats, readDictationStats } from "./stats.js"
 import { buildDiagnostic } from "./diagnostic.js"
+import { transcribeSpeech } from "./voice.js"
 
 type RpcMessage = { jsonrpc: "2.0"; id?: string | number; method?: string; params?: any }
 
@@ -390,6 +391,19 @@ async function dispatch(method: string, params: any): Promise<unknown> {
       return savePrefs({ notifications: params?.[0] === true })
     case "setFreebuffResume":
       return savePrefs({ freebuffResume: params?.[0] === true })
+    case "voiceTranscribe": {
+      const bytes = Array.isArray(params?.[0])
+        ? new Uint8Array(params[0].map((value: unknown) => Number(value) & 255))
+        : new Uint8Array()
+      if (!bytes.length) throw new Error("Aucun audio reçu.")
+      const mimeType = String(params?.[1] || "audio/webm")
+      const result = await transcribeSpeech(
+        new Blob([bytes], { type: mimeType }),
+        fetch,
+        loadKeys()["GROQ_API_KEY"],
+      )
+      return result
+    }
     case "diagnostic": {
       const s = appState
       return buildDiagnostic({
