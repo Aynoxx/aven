@@ -285,7 +285,7 @@ async function initialize(params: {
   return appState
 }
 
-async function dispatch(method: string, params: unknown): Promise<unknown> {
+async function dispatch(method: string, params: any): Promise<unknown> {
   switch (method) {
     case "ping":
       return { alive: true, initialized: !!ops }
