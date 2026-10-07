@@ -21,3 +21,7 @@ tools/
 Thumbs.db
 .env
 .env.*
+
+# Tauri build output
+src-tauri/target/
+src-tauri/gen/
