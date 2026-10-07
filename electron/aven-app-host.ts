@@ -21,7 +21,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { listNotes, getNote, saveNote, notesDir } from "./notes.js"
 import { loadPinned, loadTags, setTags, togglePin } from "./notes-meta.js"
-import { listWorkspaceDir, readWorkspaceFile, breadcrumbOf } from "./workspace-files.js"
+import { listWorkspaceDir, readWorkspaceFile, breadcrumbOf, safeResolve as safeResolveWorkspacePath } from "./workspace-files.js"
 import { aggregateStats, readDictationStats } from "./stats.js"
 import { buildDiagnostic } from "./diagnostic.js"
 import { transcribeSpeech } from "./voice.js"
@@ -522,6 +522,10 @@ async function dispatch(method: string, params: any): Promise<unknown> {
       return readWorkspaceFile(requireWorkspace(), String(params?.[0] ?? ""))
     case "filesBreadcrumb":
       return breadcrumbOf(String(params?.[0] ?? ""))
+    case "filesOpen":
+      return safeResolveWorkspacePath(requireWorkspace(), String(params?.[0] ?? ""))
+    case "noteOpenFolder":
+      return notesDir(requireWorkspace())
     case "prefs":
       return loadPrefs()
     case "setNotifications":
