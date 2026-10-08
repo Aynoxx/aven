@@ -921,11 +921,10 @@ pub fn run() {
                     })
                     .build(app)?;
 
-                let global_shortcut = Shortcut::new(
+                app.global_shortcut().register(Shortcut::new(
                     Some(Modifiers::CONTROL | Modifiers::SHIFT),
                     Code::KeyO,
-                );
-                app.global_shortcut().register(global_shortcut)?;
+                ))?;
             }
 
             Ok(())
