@@ -2,13 +2,13 @@
 // extraite du monolithe lib.rs. C'est aussi ici que vit la reprise après crash :
 // l'enfant peut mourir (OOM, panic native, kill externe), et sans détection le
 // frontend recevait « Le runtime Aven s'est arrêté » pour toujours.
-use crate::workspaces::{active_workspace, read_workspace_store, user_data_dir};
+use crate::workspaces::{active_workspace, read_workspace_store};
 use serde_json::{json, Value};
 use std::{
     collections::HashMap,
     env,
     io::{BufRead, BufReader, Write},
-    path::{Path, PathBuf},
+    path::PathBuf,
     process::{Child, ChildStdin, Command, Stdio},
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
@@ -17,7 +17,17 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
-use tauri::{path::BaseDirectory, AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter};
+
+// v10.0.0 : imports scindés par profil — chaque corps de fonction n'existe que dans
+// UN mode (debug : manifeste compilé ; release : ressources bundlées), donc ces
+// symboles ne servent que là. Sans ce gate, cargo check signale un import inutilisé.
+#[cfg(debug_assertions)]
+use std::path::Path;
+#[cfg(not(debug_assertions))]
+use crate::workspaces::user_data_dir;
+#[cfg(not(debug_assertions))]
+use tauri::{path::BaseDirectory, Manager};
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
 
@@ -241,21 +251,26 @@ fn project_root() -> Result<PathBuf, String> {
 }
 
 pub(crate) fn template_dir(app: &AppHandle) -> Result<PathBuf, String> {
-    // Motif cfg de l'original : bloc debug qui retourne, puis corps release tel quel
-    // (le compilé des deux modes reste valide, le lint unreachable est supprimé par cfg).
+    // v10.0.0 : chaque profil n voit QUE sa branche (motif de shell.rs) — plus de
+    // code inatteignable ni de paramètre inutilisé : cargo check sans warning.
     #[cfg(debug_assertions)]
     {
+        let _ = app;
         return project_root();
     }
 
-    app.path()
-        .resolve("runtime/template", BaseDirectory::Resource)
-        .map_err(|_| "Ressources Aven introuvables.".to_string())
+    #[cfg(not(debug_assertions))]
+    {
+        app.path()
+            .resolve("runtime/template", BaseDirectory::Resource)
+            .map_err(|_| "Ressources Aven introuvables.".to_string())
+    }
 }
 
 pub(crate) fn runtime_command(app: &AppHandle) -> Result<(String, PathBuf, PathBuf), String> {
     #[cfg(debug_assertions)]
     {
+        let _ = app;
         let cwd = project_root()?;
         return Ok((
             "node".to_string(),
@@ -264,17 +279,20 @@ pub(crate) fn runtime_command(app: &AppHandle) -> Result<(String, PathBuf, PathB
         ));
     }
 
-    let node = app
-        .path()
-        .resolve("runtime/node.exe", BaseDirectory::Resource)
-        .map_err(|_| "Node embarqué introuvable.".to_string())?;
-    let host = app
-        .path()
-        .resolve("runtime/aven-app-host.mjs", BaseDirectory::Resource)
-        .map_err(|_| "Host Aven introuvable.".to_string())?;
-    let cwd = user_data_dir()?;
+    #[cfg(not(debug_assertions))]
+    {
+        let node = app
+            .path()
+            .resolve("runtime/node.exe", BaseDirectory::Resource)
+            .map_err(|_| "Node embarqué introuvable.".to_string())?;
+        let host = app
+            .path()
+            .resolve("runtime/aven-app-host.mjs", BaseDirectory::Resource)
+            .map_err(|_| "Host Aven introuvable.".to_string())?;
+        let cwd = user_data_dir()?;
 
-    Ok((node.to_string_lossy().into_owned(), host, cwd))
+        Ok((node.to_string_lossy().into_owned(), host, cwd))
+    }
 }
 
 pub(crate) fn bundled_opencode(app: &AppHandle) -> Option<PathBuf> {
@@ -284,10 +302,13 @@ pub(crate) fn bundled_opencode(app: &AppHandle) -> Option<PathBuf> {
         return None;
     }
 
-    app.path()
-        .resolve("runtime/opencode-bin/opencode.exe", BaseDirectory::Resource)
-        .ok()
-        .filter(|path| path.is_file())
+    #[cfg(not(debug_assertions))]
+    {
+        app.path()
+            .resolve("runtime/opencode-bin/opencode.exe", BaseDirectory::Resource)
+            .ok()
+            .filter(|path| path.is_file())
+    }
 }
 
 pub(crate) fn provider_env() -> serde_json::Map<String, Value> {

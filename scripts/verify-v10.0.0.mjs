@@ -93,4 +93,20 @@ for (const url of urls) {
   assert.ok(shell.includes(url), `URL providers.ts absente de la liste blanche Rust : ${url}`)
 }
 
+// H. Fumée Tauri : script branché, pilote la webview en CDP, lit la trace Rust.
+const smoke = read("scripts/smoke-tauri.mjs")
+assert.match(pkg.scripts["smoke:tauri"] ?? "", /smoke-tauri\.mjs/, "script npm smoke:tauri branché")
+assert.match(
+  smoke,
+  /WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS/,
+  "la fumée ouvre le débogueur CDP de WebView2"
+)
+assert.match(smoke, /reprise-crash/, "la fumée tue l'enfant Node et vérifie la reprise")
+const commands = read("src-tauri/src/commands.rs")
+assert.match(
+  commands,
+  /\[aven-call\] \{method\}/,
+  "aven_call trace sa méthode : preuve titlebar lue par la fumée (invoke webview gelé)"
+)
+
 console.log("v10.0.0 verification: OK")

@@ -14,6 +14,7 @@
     "package:win": "npm run build && electron-builder --win nsis portable --publish never",
     "postinstall": "node scripts/install-web.mjs && node scripts/ensure-binaries.mjs",
     "smoke:native": "powershell -NoProfile -File scripts/smoke-native.ps1",
+    "smoke:tauri": "node scripts/smoke-tauri.mjs",
     "verify:v8.7": "node scripts/verify-v8.7.mjs",
     "verify:v8.7.2": "node scripts/verify-v8.7.2.mjs",
     "verify:v8.7.4": "node scripts/verify-v8.7.4.mjs",

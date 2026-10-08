@@ -5,6 +5,8 @@ use serde_json::{json, Value};
 use std::{env, path::Path, path::PathBuf};
 
 pub(crate) fn user_data_dir() -> Result<PathBuf, String> {
+    // v10.0.0 : les deux OS portent leur propre cfg (motif de shell.rs) — le corps
+    // Unix n'existe plus dans un binaire Windows : plus de warning « unreachable ».
     #[cfg(windows)]
     {
         let root = env::var_os("APPDATA")
@@ -12,10 +14,13 @@ pub(crate) fn user_data_dir() -> Result<PathBuf, String> {
         return Ok(PathBuf::from(root).join("Aven"));
     }
 
-    let root = env::var_os("XDG_CONFIG_HOME")
-        .or_else(|| env::var_os("HOME"))
-        .ok_or_else(|| "Répertoire utilisateur introuvable.".to_string())?;
-    Ok(PathBuf::from(root).join("Aven"))
+    #[cfg(not(windows))]
+    {
+        let root = env::var_os("XDG_CONFIG_HOME")
+            .or_else(|| env::var_os("HOME"))
+            .ok_or_else(|| "Répertoire utilisateur introuvable.".to_string())?;
+        Ok(PathBuf::from(root).join("Aven"))
+    }
 }
 
 pub(crate) fn read_workspace_store() -> Result<(Vec<Value>, Option<String>), String> {

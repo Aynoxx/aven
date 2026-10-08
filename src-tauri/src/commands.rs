@@ -18,6 +18,10 @@ pub(crate) fn aven_call(
     method: String,
     args: Vec<Value>,
 ) -> Result<Value, String> {
+    // v10.0.0 : trace du RPC côté Rust — la fumée scripts/smoke-tauri.mjs prouve que
+    // la titlebar du renderer atteint bien ce point d'entrée (le webview fige
+    // window.__TAURI_INTERNALS__, impossible d'intercepter l'invoke côté page).
+    eprintln!("[aven-call] {method}");
     match method.as_str() {
         "minimizeWindow" => {
             let window = app
