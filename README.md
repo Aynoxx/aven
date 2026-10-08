@@ -1,36 +1,37 @@
-# Aven v9.7.2
+# Aven v10.0.0
 
-> ## Aven natif (v10.0, WinUI 3) — la suite
-> Une version **native Windows** d'Aven est en construction dans [`native/`](native/)
-> (protocole complet : [`MIGRATION-WINUI.md`](MIGRATION-WINUI.md)). Même moteur
-> (OpenCode en sidecar, même bundle), même format disque, UI Windows native
-> (Mica, hub, chat, terminal Freebuff, dictée vocale) :
+> ## v10.0.0 — 100 % Tauri (Electron et le natif retirés)
+> Aven est une **app Tauri 2** : la webview React parle à Rust (`src-tauri/`)
+> via la commande `aven_call`, qui route vers le moteur Node embarqué (`host/`,
+> JSON-RPC sur stdio). Le shell Electron, le socle natif WinUI exploré en
+> parallèle (`native/`, MIGRATION-WINUI.md) et leurs chaînes (electron-builder,
+> MSIX) ont été **supprimés** — une seule pile, un seul packaging :
 >
 > ```powershell
-> node scripts/install-dotnet-sdk.mjs   # SDK .NET 8 local, sans droits admin (une fois)
-> npm run test:native                   # 170 tests xUnit + build MSIX
-> powershell -NoProfile -File scripts/launch-native.ps1        # lancer l'app native
-> powershell -NoProfile -File scripts/package-native.ps1       # MSIX signé + zip portable
-> powershell -NoProfile -File scripts/package-native.ps1 -Smoke # idem + smoke UIA de chaque zip
-> npm run smoke:native                                          # smoke UIA seul (zip x64 récent)
-> npm run smoke:native -- -Archs x64,x86,arm64                   # multi-arch en une exécution
+> npm install          # dépendances + web/ + CLI OpenCode (aucun binaire Electron)
+> npm run dev          # développement : Tauri + webview + rechargement
+> npm run tauri:build  # installeurs Windows : NSIS + MSI
 > ```
->
-> État : phases 0-7 faites (socle, moteur, coquille, chat, services, terminal,
-> voix, packaging) ; l'Electron reste la version principale jusqu'à la bascule
-> (phase 8 du protocole).
 
 > ## Avant de modifier ce projet (IA ou humain)
 > Lis **`AGENTS.md`** puis **`RULES.md`** : ils fixent les règles universelles de
 > cohérence — typographie par tokens CSS, classes de boutons, bibliothèque d'icônes,
 > français partout, commentaires versionnés `// vX.Y.Z : raison`, architecture
-> main/renderer, secrets côté main, écritures atomiques, modules purs testés.
+> host/renderer (Tauri), secrets côté host, écritures atomiques, modules purs testés.
 > `npm run verify` commence par `scripts/verify-conventions.mjs`, qui fait échouer
 > toute contribution violant ces règles. En cas de doute : imite le fichier voisin.
 
-Application de bureau (Electron) : une chatbox avec **3 agents commutables** (code, recherche, analyse) et un
+Application de bureau (Tauri) : une chatbox avec **3 agents commutables** (code, recherche, analyse) et un
 sous-agent (code-reviewer), branchée sur **OpenCode 2.0.10** et un catalogue d’agents strictement gratuit (OpenRouter Free / OpenCode Zen).
 
+> **v10.0.0 — 100 % Tauri** : le shell **Electron est supprimé** (main, preload,
+electron-builder, ensure-binaries) ainsi que le socle **natif WinUI** suivi en
+parallèle (`native/`, MIGRATION-WINUI.md, workflows MSIX) — une seule pile :
+webview Tauri ⇄ Rust (`aven_call` : espaces de travail, notifications, ouverture
+externe) ⇄ moteur Node (`host/`, dispatch camelCase). Barre de titre native
+(suppression des boutons custom), CSP comme garde-fou sécurité, resources Tauri
+(host moteur, OpenCode, PTY, MCP), release NSIS + MSI au tag `v*`, et les 20
+sondes de `npm run verify` réalignées sur cette réalité.
 > **v9.6.0 — Projet = Freebuff, Tâches spécialisées, Groq au chat** : ① le raccourci
 « Espaces » quitte le hub (la gestion vit dans Réglages → Configuration) ; ② la carte
 « Projet » ouvre désormais l'**agent Freebuff** (page pleine, nom conservé) — le cerveau
@@ -86,12 +87,13 @@ bout en bout (preload/types/operations/main — 0 appel UI depuis v9.6.0 ; les n
 personnalisés enregistrés restent lus), `agent-names.ts` allégé, tombstones retirés.
 **Note découverte au smoke** : Windows « effets réduits » (`prefers-reduced-motion`)
 désactive tout le motion par conception — c'est la garde d'accessibilité voulue,
-prouvée active et respectée. Le protocole de migration native est aussi disponible :
-[MIGRATION-WINUI.md](MIGRATION-WINUI.md).
-> **→ Version native Windows (protocole)** : la feuille de route de migration vers
-**WinUI 3 + C# (.NET 8)** — moteur OpenCode en sidecar Node inchangé, pont JSON-RPC,
-9 phases avec critères d'acceptation mesurables, Electron en production jusqu'à la
-bascule — est détaillée dans [MIGRATION-WINUI.md](MIGRATION-WINUI.md).
+prouvée active et respectée.
+> **→ v10.0.0 — La bascule 100 % Tauri** : le shell Electron (main, preload,
+electron-builder) et le protocole WinUI/C# suivi en parallèle ont été retirés —
+la fenêtre est une webview Tauri, la barre de titre est native, les espaces de
+travail et les ouvertures système sont gérés en Rust, le dispatch IPC camelCase
+vient dans `host/aven-app-host.ts`, et les releases sortent en NSIS + MSI via
+`tauri build` (workflow Release au tag `v*`).
 > **v9.6.2 — Le gel avait une cause racine : le conflit de session** : le diagnostic
 (processus) a montré le CLI embarqué **s'exiter silencieusement** au premier message
 quand l'**app Freebuff Desktop** tient la session du compte (une seule session
@@ -239,22 +241,23 @@ se redimensionne en direct — plus de TUI figée 120×30 ou déformée après u
 > Le texte cité atterrit dans le composeur : tu complètes ta demande et tu valides avec Entrée.
 
 ```
-Interface React (web/)  ──IPC──►  Electron main (electron/)  ──HTTP local──►  opencode serve (CLI embarqué)  ──►  modèles
-   window.opencode.*               opencode-bridge.ts + operations.ts            mot de passe aléatoire, port libre
+Interface React (web/)  ──invoke("aven_call")──►  Rust Tauri (src-tauri/)  ──JSON-RPC stdio──►  host/aven-app-host.ts  ──HTTP local──►  opencode serve
+   api.* (web/src/types.ts)      workspace:* / openExternal en Rust,        moteur Node embarqué (engine, notes,      mot de passe aléatoire, port libre
+                                 reste dispatché en camelCase dans le host   PTY Freebuff, clés chiffrées DPAPI)
 ```
 
-## Installer et lancer (Windows) — Aven v9.x (Electron)
+## Installer et lancer (Windows) — Aven v10.x (Tauri)
 
-**Le plus simple : double-clique `demarrer.bat`** (il lance `npm install` — quelques secondes si rien n'a changé — puis l'app en mode développement). `construire.bat` fait la même chose puis produit les `.exe`. Pour mettre à jour le projet, copie les nouveaux fichiers **par-dessus** l'ancien dossier sans supprimer `node_modules`.
+**Le plus simple : double-clique `demarrer.bat`** (il lance `npm install` — quelques secondes si rien n'a changé — puis l'app en mode développement). `construire.bat` fait la même chose puis produit les installeurs. Pour mettre à jour le projet, copie les nouveaux fichiers **par-dessus** l'ancien dossier sans supprimer `node_modules`.
 
 À la main :
 
-Prérequis : **Node.js** uniquement. Le CLI OpenCode est embarqué (paquet `@opencode/cli`, même version que le client) : pas d'install globale.
+Prérequis : **Node.js** + un outillage **Rust** ([rustup.rs](https://rustup.rs)) pour compiler la coque Tauri. Le CLI OpenCode est embarqué (paquet `@opencode/cli`, même version que le client) : pas d'install globale, aucun binaire Electron.
 
 ```powershell
-npm install            # à la racine : installe aussi web/ automatiquement (télécharge Electron ~200 Mo + le CLI OpenCode)
-npm run dev            # développement : fenêtre Electron + rechargement
-npm run package:win    # produit release/dist : installeur NSIS + version portable (.exe)
+npm install            # à la racine : installe aussi web/ automatiquement (CLI OpenCode uniquement)
+npm run dev            # développement : Tauri + webview + rechargement
+npm run tauri:build    # installeurs Windows : NSIS + MSI (src-tauri/target/release/bundle)
 ```
 
 ## Modèles et clés
@@ -300,29 +303,30 @@ une conversation → tags d'agent sur les notes ; la page **Assistants** → tab
 
 ## Fichiers importants
 
-- `electron/opencode-bridge.ts` : lance/arrête `opencode serve`, attend que les agents soient chargés, relaie les événements. **Sans dépendance Electron** (testable avec Node).
-- `electron/operations.ts` : agents, conversations, messages, permissions.
-- `electron/settings.ts` : clés chiffrées par fournisseur (`safeStorage`) + création du dossier de travail.
-- `electron/providers.ts` : fournisseurs, variables d'environnement, pages pour obtenir une clé.
-- `electron/priorities.ts` (lecture/validation de la table, chaînes par agent) et `electron/router.ts` (choix du modèle, compteurs, bascule) : sans Electron, testables avec Node.
+- `host/opencode-bridge.ts` : lance/arrête `opencode serve`, attend que les agents soient chargés, relaie les événements. **Sans dépendance Electron** (testable avec Node).
+- `host/operations.ts` : agents, conversations, messages, permissions.
+- `host/aven-app-host.ts` : dispatch IPC `aven_call` (camelCase), clés chiffrées Windows (DPAPI), préférences, diagnostic, lancement Freebuff.
+- `host/engine-host.ts` : moteur OpenCode embarqué (boot, seed d'espace, événements) — sans dépendance Electron/Tauri, testable avec Node.
+- `host/providers.ts` : fournisseurs, variables d'environnement, pages pour obtenir une clé.
+- `host/priorities.ts` (lecture/validation de la table, chaînes par agent) et `host/router.ts` (choix du modèle, compteurs, bascule) : sans Electron, testables avec Node.
 - `model-priorities.json` : priorités par modèle et par agent (copié dans le dossier de travail au premier lancement).
-- `electron/preload.cts` : `.cts` = compilé en CommonJS (`preload.cjs`) — obligatoire pour un preload sandboxé.
+- `web/src/api.ts` + `web/src/api-tauri.ts` : l'API côté renderer (`invoke("aven_call")`) — contrat typé dans `web/src/types.ts` (`OpenCodeApi`).
 - `web/src/stream.ts` : réducteur pur des événements (texte en direct, outils, permissions, questions de l'agent, fin de tour).
 - `web/src/SettingsDialog.tsx` : écran des clés et attribution des modèles (lecture seule).
 - `web/src/FormDialog.tsx` : boîte de dialogue des questions de l'agent (outil `question`).
-- `build/icon.png` : icône de l'app (remplace-la par la tienne, 512×512 minimum).
+- `src-tauri/icons/icon.ico` : icône de l'app (remplace-la par la tienne, 512×512 minimum ; déclarée dans `tauri.conf.json`).
 - `.opencode/agents/*.md` + `opencode.jsonc` : agents (format V2 : `permissions:` = liste de règles, la dernière qui correspond gagne).
-- `electron/freebuff-pty.ts` : PTY embarqué du CLI Freebuff (agent intégré, v9.2.0 ; `--trust-agents`/`--continue` en v9.5.0). Sans dépendance Electron, testé.
-- `electron/agents-bridge.ts` : pont catalogue d'agents — convertit les agents OpenCode en définitions TypeScript du CLI Freebuff (`.agents/`), génère le `mcp.json` des notes (v9.5.0).
+- `host/freebuff-pty.ts` : PTY embarqué du CLI Freebuff (agent intégré, v9.2.0 ; `--trust-agents`/`--continue` en v9.5.0). Sans dépendance Electron, testé.
+- `host/agents-bridge.ts` : pont catalogue d'agents — convertit les agents OpenCode en définitions TypeScript du CLI Freebuff (`.agents/`), génère le `mcp.json` des notes (v9.5.0).
 - `aven-mcp-server.mjs` : serveur MCP embarqué (zéro dépendance) qui expose les notes de l'espace à Freebuff.
-- `electron/freebuff-cli.ts` : détection/lancement console externe du CLI (connexion, installation).
+- `host/freebuff-cli.ts` : détection/lancement console externe du CLI (connexion, installation).
 - `NOTES-VERIFIEES.md` : faits vérifiés sur OpenCode 2.0.10 (à lire avant de toucher au pont).
 
 ## Dépannage
 
 | Symptôme | Cause / solution |
 |---|---|
-| « Electron failed to install correctly » | npm 11 bloque les scripts d'installation. `npm install` relance maintenant `scripts/ensure-binaries.mjs`, qui télécharge Electron et prépare le CLI. À la main : `node node_modules/electron/install.js` puis `node node_modules/@opencode/cli/postinstall.mjs`. |
+| « OpenCode n'est pas installé » au premier lancement | `npm install` exécute `scripts/ensure-binaries.mjs` (postinstall) qui télécharge le binaire OpenCode. À la main : `node scripts/ensure-binaries.mjs`. |
 | « OpenCode n'a pas démarré » + message | Le message contient les dernières lignes du CLI. Vérifie Réglages (clé) et le dossier de travail. |
 | « Un terminal Freebuff est déjà ouvert » | Une seule session Freebuff par compte (takeover serveur). Ferme le terminal existant (ou l'app desktop Freebuff) puis relance. |
 | Écran blanc une fois packagé | `web/vite.config.ts` doit garder `base: "./"`. |

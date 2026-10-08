@@ -14,22 +14,15 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - name: Installation (télécharge aussi Electron et le CLI OpenCode)
+      - name: Installation (télécharge le CLI OpenCode)
         run: npm install
       - name: Tests unitaires
         run: npm test
-      - name: Typecheck electron
-        run: npm run typecheck:electron
+      - name: Typecheck host
+        run: npm run typecheck:host
       - name: Build web (inclut tsc -b)
         run: npm run build:web
-      - name: Build electron (inclut le bundle du host du moteur)
-        run: npm run build:electron
-      - name: Setup .NET 8 (bande 8.0.4xx exigée par native/global.json)
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 8.0.x
-      - name: Tests du socle natif (pont JSON-RPC C#)
-        run: dotnet test tests/Aven.Tests/Aven.Tests.csproj -c Release
-        working-directory: native
+      - name: Build hosts (inclut le bundle du moteur)
+        run: npm run build:host
       - name: Vérification v8.8.0 + fraîcheur du build
         run: npm run verify

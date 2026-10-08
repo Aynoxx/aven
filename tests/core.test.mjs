@@ -4,17 +4,17 @@ import { mkdtempSync, readdirSync as _readdirSync, readFileSync, rmSync, writeFi
 const fsModule = { readdirSync: _readdirSync }
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { parseRef, refOf } from "../electron/model-ref.ts"
+import { parseRef, refOf } from "../host/model-ref.ts"
 import {
   TASKS,
   addDiscoveredFreeModels,
   buildChains,
   isFreeModelRef,
   loadTable,
-} from "../electron/priorities.ts"
-import { mergeNewModels, prunePaidModels, syncTrackedFiles } from "../electron/workspace-sync.ts"
-import { writeTextAtomic, writeJsonAtomic, writeJsonAtomicPretty } from "../electron/atomic-file.ts"
-import { isArchived, listArchived, setArchived } from "../electron/archive.ts"
+} from "../host/priorities.ts"
+import { mergeNewModels, prunePaidModels, syncTrackedFiles } from "../host/workspace-sync.ts"
+import { writeTextAtomic, writeJsonAtomic, writeJsonAtomicPretty } from "../host/atomic-file.ts"
+import { isArchived, listArchived, setArchived } from "../host/archive.ts"
 import { emptyLive, applyEvent } from "../web/src/stream.ts"
 
 // ── model-ref ────────────────────────────────────────────────────────────────

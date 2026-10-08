@@ -1,7 +1,8 @@
-name: Release
+name: Release Tauri
 
-# Une release Windows (installeur NSIS + portable) est produite à chaque tag v*.
+# Une release Windows (installeur NSIS + MSI) est produite à chaque tag v*.
 # La release est créée en brouillon : publie-la depuis la page GitHub après vérification.
+# v10.0.0 : remplace l'ancienne chaîne electron-builder — la chaîne est100 % Tauri.
 on:
   push:
     tags: ["v*"]
@@ -12,23 +13,35 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
-      - name: Installation
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      - name: Cache Rust
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+      - name: Installation (télécharge le CLI OpenCode)
         run: npm install
       - name: Tests
         run: npm test
-      - name: Build complet
-        run: npm run build
-      - name: Packaging Windows (NSIS + portable)
-        run: npx electron-builder --win nsis portable --publish never
+      - name: Vérification des conventions
+        run: npm run verify
+      - name: Packaging Windows (NSIS + MSI)
+        run: npm run tauri:build
+        env:
+          CI: true
       - name: Publication de la release (brouillon)
         uses: softprops/action-gh-release@v2
         with:
-          files: release/*.exe
+          files: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/msi/*.msi
           draft: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

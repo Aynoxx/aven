@@ -39,11 +39,11 @@ export type ProviderLite = { id: string; label: string; url: string; note: strin
 export type WorkspaceEntry = { path: string; name: string }
 export type FileSyncResult = { file: string; status: "created" | "updated" | "unchanged" | "custom" }
 export type Note = { id: string; title: string; markdown: string; updated: number }
-// v9.3.0 : explorateur de fichiers de l'espace (miroir de electron/workspace-files.ts).
+// v9.3.0 : explorateur de fichiers de l'espace (miroir de host/workspace-files.ts).
 export type FileEntry = { name: string; path: string; kind: "dir" | "file"; size: number; modified: number }
 export type TextFile = { path: string; size: number; truncated: boolean; content: string }
 export type Breadcrumb = { label: string; path: string }[]
-// Miroir de electron/voice-intent.ts (contrat IPC identique, types dupliqués volontairement).
+// Miroir de host/voice-intent.ts (contrat IPC identique, types dupliqués volontairement).
 export type AppAction = "open-notes" | "open-settings" | "open-agents" | "open-projects" | "open-workspace" | "open-freebuff" | "open-stats" | "new-chat"
 export type DictationIntent =
   | { intent: "app"; action: AppAction } // commande d'application à exécuter
@@ -58,7 +58,7 @@ export type DictationResult = {
   intent?: DictationIntent // routage décidé par la passe d'intention (absent si elle a échoué)
 }
 
-// Miroir de electron/stats.ts (AgregatedStats) : chiffres affichables du panneau de stats.
+// Miroir de host/stats.ts (AgregatedStats) : chiffres affichables du panneau de stats.
 export type AggregatedStats = {
   totalChats: number
   archivedChats: number
@@ -91,7 +91,7 @@ export type AppState = {
   updatesConfigured: boolean
 }
 
-// API exposée par electron/preload.cts via contextBridge.
+// API exposée par host/preload.cts via contextBridge.
 export type OpenCodeApi = {
   apiVersion?: number
   state: () => Promise<AppState>
@@ -99,9 +99,6 @@ export type OpenCodeApi = {
   openExternal: (url: string) => Promise<void>
   openWorkspace: () => Promise<string>
   checkForUpdates: () => Promise<{ ok: boolean; message: string }>
-  minimizeWindow: () => Promise<boolean>
-  toggleMaximize: () => Promise<boolean>
-  closeWindow: () => Promise<boolean>
 
   workspaces: () => Promise<WorkspaceEntry[]>
   switchWorkspace: (dir: string) => Promise<AppState>
@@ -165,10 +162,4 @@ export type OpenCodeApi = {
   // le terminal intégré ne peut alors pas répondre : bannière + message explicite.)
   freebuffDesktopRunning: () => Promise<boolean>
   onEvent: (cb: (ev: { type: string; data: Record<string, any> }) => void) => () => void
-}
-
-declare global {
-  interface Window {
-    opencode: OpenCodeApi
-  }
 }

@@ -1,6 +1,6 @@
 node_modules/
 dist/
-dist-electron/
+dist-host/
 web/dist/
 web/node_modules/
 release/

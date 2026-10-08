@@ -46,7 +46,7 @@ Tauri 2 / Rust
 - Ajouter les flux streaming via Tauri Channels.
 
 ### 2 — Runtime Aven
-- Sortir la logique non-Electron de `electron/main.ts` vers un host Node autonome.
+- Sortir la logique non-Electron de `host/main.ts` vers un host Node autonome.
 - Garder `aven-engine-host.mjs` et `aven-pty-host.mjs` comme sidecars.
 
 ### 3 — Intégration Windows

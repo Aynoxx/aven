@@ -3,7 +3,7 @@ import { test } from "node:test"
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { loadPinned, matchQuery, normalizeForSearch, togglePin } from "../electron/notes-meta.ts"
+import { loadPinned, matchQuery, normalizeForSearch, togglePin } from "../host/notes-meta.ts"
 
 const temp = mkdtempSync(path.join(tmpdir(), "aven-notes-"))
 process.on("exit", () => { try { rmSync(temp, { recursive: true, force: true }) } catch { /* Windows peut retarder */ } })

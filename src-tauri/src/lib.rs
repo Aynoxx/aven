@@ -2,7 +2,7 @@
 // décisionnelle vit dans des modules purs testés (cargo test) :
 //   runtime   — enfant Node JSON-RPC, reprise après crash, boot, état initial
 //   workspaces — store workspaces.json, validation des noms Windows
-//   notify    — politique de notifications, miroir pur de electron/notify-policy.ts
+//   notify    — politique de notifications, miroir pur de host/notify-policy.ts
 //   shell     — ouverture système, liste blanche d'URLs, écriture de fichiers
 //   commands  — la commande unique aven_call (point d'entrée RPC du frontend)
 // Ce fichier ne garde que l'assemblage : plugins, tray, raccourcis, cycle de vie.
@@ -132,6 +132,13 @@ pub fn run() {
             if let tauri::RunEvent::Exit = event {
                 if let Ok(mut state) = app.state::<RuntimeState>().node.lock() {
                     if let Some(runtime) = state.take() {
+                        // v10.0.0 : arrêt GRÂCE du host (PTY freebuff compris) avant le
+                        // kill — borné à 3 s pour ne jamais bloquer la fermeture.
+                        let _ = runtime.call_with_timeout(
+                            "shutdown",
+                            vec![],
+                            std::time::Duration::from_secs(3),
+                        );
                         runtime.stop();
                     }
                 }

@@ -34,9 +34,9 @@
     "shortDescription": "Espace de travail IA",
     "longDescription": "Espace de travail IA pour agents, code, recherche, analyse, notes et voix",
     "resources": {
-      "../dist-electron/aven-app-host.mjs": "runtime/aven-app-host.mjs",
-      "../dist-electron/aven-engine-host.mjs": "runtime/aven-engine-host.mjs",
-      "../dist-electron/aven-pty-host.mjs": "runtime/aven-pty-host.mjs",
+      "../dist-host/aven-app-host.mjs": "runtime/aven-app-host.mjs",
+      "../dist-host/aven-engine-host.mjs": "runtime/aven-engine-host.mjs",
+      "../dist-host/aven-pty-host.mjs": "runtime/aven-pty-host.mjs",
       "../node_modules/@opencode/cli/bin/opencode.exe": "runtime/opencode-bin/opencode.exe",
       "../.opencode/": "runtime/template/.opencode/",
       "../opencode.jsonc": "runtime/template/opencode.jsonc",

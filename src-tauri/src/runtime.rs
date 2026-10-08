@@ -174,6 +174,17 @@ impl NodeRuntime {
     }
 
     pub(crate) fn call(&self, method: &str, args: Vec<Value>) -> Result<Value, String> {
+        self.call_with_timeout(method, args, REQUEST_TIMEOUT)
+    }
+
+    // v10.0.0 : variante à délai court pour l'arrêt de l'app — on ne bloque jamais
+    // la fermeture plus de quelques secondes si le host est déjà grippé.
+    pub(crate) fn call_with_timeout(
+        &self,
+        method: &str,
+        args: Vec<Value>,
+        timeout: Duration,
+    ) -> Result<Value, String> {
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         let request = json!({
             "jsonrpc": "2.0",
@@ -209,7 +220,7 @@ impl NodeRuntime {
             return Err(error);
         }
 
-        match rx.recv_timeout(REQUEST_TIMEOUT) {
+        match rx.recv_timeout(timeout) {
             Ok(result) => result,
             Err(_) => {
                 if let Ok(mut pending) = self.pending.lock() {
@@ -274,7 +285,7 @@ pub(crate) fn runtime_command(app: &AppHandle) -> Result<(String, PathBuf, PathB
         let cwd = project_root()?;
         return Ok((
             "node".to_string(),
-            cwd.join("dist-electron/aven-app-host.mjs"),
+            cwd.join("dist-host/aven-app-host.mjs"),
             cwd,
         ));
     }

@@ -1,11 +1,11 @@
-// Tests v9.3.0 : explorateur de fichiers de l'espace (electron/workspace-files.ts).
+// Tests v9.3.0 : explorateur de fichiers de l'espace (host/workspace-files.ts).
 // Accent sur safeResolve : c'est la barrière de sécurité qui cloisonne toute lecture
 // à la racine de l'espace. Node pur, pas de syntaxe TS dans les .mjs.
 import assert from "node:assert/strict"
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { breadcrumbOf, listWorkspaceDir, looksBinary, readWorkspaceFile, safeResolve } from "../electron/workspace-files.ts"
+import { breadcrumbOf, listWorkspaceDir, looksBinary, readWorkspaceFile, safeResolve } from "../host/workspace-files.ts"
 
 const makeWs = () => {
   const root = mkdtempSync(path.join(tmpdir(), "aven-ws-files-"))

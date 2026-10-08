@@ -9,7 +9,7 @@ use crate::workspaces::{
 };
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, State};
 
 #[tauri::command]
 pub(crate) fn aven_call(
@@ -18,42 +18,7 @@ pub(crate) fn aven_call(
     method: String,
     args: Vec<Value>,
 ) -> Result<Value, String> {
-    // v10.0.0 : trace du RPC côté Rust — la fumée scripts/smoke-tauri.mjs prouve que
-    // la titlebar du renderer atteint bien ce point d'entrée (le webview fige
-    // window.__TAURI_INTERNALS__, impossible d'intercepter l'invoke côté page).
-    eprintln!("[aven-call] {method}");
     match method.as_str() {
-        "minimizeWindow" => {
-            let window = app
-                .get_webview_window("main")
-                .ok_or_else(|| "Fenêtre principale introuvable.".to_string())?;
-            window.minimize().map_err(|e| format!("Impossible de réduire la fenêtre : {e}"))?;
-            Ok(json!(true))
-        }
-
-        "toggleMaximize" => {
-            let window = app
-                .get_webview_window("main")
-                .ok_or_else(|| "Fenêtre principale introuvable.".to_string())?;
-            let maximized = window
-                .is_maximized()
-                .map_err(|e| format!("État de fenêtre indisponible : {e}"))?;
-            if maximized {
-                window.unmaximize().map_err(|e| format!("Impossible de restaurer la fenêtre : {e}"))?;
-            } else {
-                window.maximize().map_err(|e| format!("Impossible de maximiser la fenêtre : {e}"))?;
-            }
-            Ok(json!(true))
-        }
-
-        "closeWindow" => {
-            let window = app
-                .get_webview_window("main")
-                .ok_or_else(|| "Fenêtre principale introuvable.".to_string())?;
-            window.close().map_err(|e| format!("Impossible de fermer la fenêtre : {e}"))?;
-            Ok(json!(true))
-        }
-
         "openWorkspace" => {
             let workspace = active_workspace()?
                 .ok_or_else(|| "Aucun espace de travail actif.".to_string())?;

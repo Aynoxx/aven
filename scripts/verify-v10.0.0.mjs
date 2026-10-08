@@ -7,8 +7,8 @@ import { fileURLToPath } from "node:url"
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const read = (p) => readFileSync(path.join(root, p), "utf8")
 
-// Sondes v10.0.0 : migration Electron → Tauri 2. ① les contrôles de fenêtre passent
-// par le façade `api` (plus de window.opencode direct) ; ② la fabrique Tauri est un
+// Sondes v10.0.0 : migration Electron → Tauri 2. ① barre Windows native (plus de
+// contrôles custom hérités d'Electron frameless) ; ② la fabrique Tauri est un
 // module pur testé ; ③ le repo ne versionne plus le Node embarqué mais verrouille
 // Cargo.lock et sonde le checksum ; ④ CSP non nulle ; ⑤ lib.rs découpé en modules
 // testés avec reprise après crash ; ⑥ parité des notifications avec notify-policy.ts ;
@@ -27,13 +27,26 @@ const conf = JSON.parse(read("src-tauri/tauri.conf.json"))
 const lib = read("src-tauri/src/lib.rs")
 const runtime = read("src-tauri/src/runtime.rs")
 const notify = read("src-tauri/src/notify.rs")
-const notifyPolicy = read("electron/notify-policy.ts")
-const providers = read("electron/providers.ts")
+const notifyPolicy = read("host/notify-policy.ts")
+const providers = read("host/providers.ts")
 
-// A. Titlebar : plus aucun accès direct à window.opencode hors du façade.
-assert.match(app, /api\.minimizeWindow\(\)/, "le bouton Réduire passe par api")
-assert.match(app, /api\.toggleMaximize\(\)/, "le bouton Agrandir passe par api")
-assert.match(app, /api\.closeWindow\(\)/, "le bouton Fermer passe par api")
+// A. Barre Windows native : la barre de fermeture custom (héritée d'Electron
+// frameless) a disparu du renderer comme du contrat d'API — Tauri garde ses
+// décorations, c'est la barre système qui minimise/agrandit/ferme.
+const types = read("web/src/types.ts")
+assert.ok(!app.includes("window-controls"), "App.tsx ne dessine plus de contrôles custom")
+assert.ok(
+  !/minimizeWindow|toggleMaximize|closeWindow/.test(app),
+  "aucune commande fenêtre dans le renderer (la barre native gère)"
+)
+assert.ok(
+  !/minimizeWindow|toggleMaximize|closeWindow/.test(types),
+  "types.ts ne déclare plus les contrôles de fenêtre"
+)
+assert.ok(
+  conf.app.windows?.[0]?.decorations !== false,
+  "décorations natives conservées : la barre Windows porte la fermeture"
+)
 assert.ok(
   !app.includes("window.opencode."),
   "App.tsx ne parle plus à window.opencode (inexistant sous Tauri)"
@@ -93,7 +106,8 @@ for (const url of urls) {
   assert.ok(shell.includes(url), `URL providers.ts absente de la liste blanche Rust : ${url}`)
 }
 
-// H. Fumée Tauri : script branché, pilote la webview en CDP, lit la trace Rust.
+// H. Fumée Tauri : script branché, pilote la webview en CDP, exerce la reprise
+// après crash sur un runtime Node réel.
 const smoke = read("scripts/smoke-tauri.mjs")
 assert.match(pkg.scripts["smoke:tauri"] ?? "", /smoke-tauri\.mjs/, "script npm smoke:tauri branché")
 assert.match(
@@ -102,11 +116,15 @@ assert.match(
   "la fumée ouvre le débogueur CDP de WebView2"
 )
 assert.match(smoke, /reprise-crash/, "la fumée tue l'enfant Node et vérifie la reprise")
-const commands = read("src-tauri/src/commands.rs")
-assert.match(
-  commands,
-  /\[aven-call\] \{method\}/,
-  "aven_call trace sa méthode : preuve titlebar lue par la fumée (invoke webview gelé)"
-)
+assert.match(smoke, /barre-native/, "la fumée vérifie l'absence de contrôles custom")
+
+// I. CI Windows : workflow dédié qui enchaîne la boucle complète ET la fumée.
+const ciWindows = read(".github/workflows/ci-windows.yml")
+assert.match(ciWindows, /runs-on: windows-latest/, "la CI Windows tourne bien sur windows-latest")
+assert.match(ciWindows, /npm run typecheck/, "la CI Windows typecheck")
+assert.match(ciWindows, /npm test/, "la CI Windows exécute les tests unitaires")
+assert.match(ciWindows, /npm run verify/, "la CI Windows exécute la chaîne verify")
+assert.match(ciWindows, /cargo test/, "la CI Windows exécute les tests Rust")
+assert.match(ciWindows, /npm run smoke:tauri/, "la CI Windows exécute la fumée Tauri")
 
 console.log("v10.0.0 verification: OK")

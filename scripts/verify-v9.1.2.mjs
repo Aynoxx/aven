@@ -8,9 +8,9 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const read = (p) => readFileSync(path.join(root, p), "utf8")
 
 const pkg = JSON.parse(read("package.json"))
-const cli = read("electron/freebuff-cli.ts")
-const main = read("electron/main.ts")
-const preload = read("electron/preload.cts")
+const cli = read("host/freebuff-cli.ts")
+const main = read("host/aven-app-host.ts") // v10.0.0 : remplace le main Electron
+const preload = read("web/src/types.ts") // v10.0.0 : remplace le preload (contrat OpenCodeApi)
 const types = read("web/src/types.ts")
 const app = read("web/src/App.tsx")
 const css = read("web/src/App.css")
@@ -28,8 +28,8 @@ assert.match(cli, /export function unsupportedPlatform/)
 assert.match(cli, /\/D/, "start /D doit définir le dossier de départ (pas de cd imbriqué)")
 
 // 2. IPC aux trois endroits.
-assert.match(main, /freebuff:status/)
-assert.match(main, /freebuff:launch/)
+assert.match(main, /case "freebuffCliStatus"/)
+assert.match(main, /case "freebuffCliLaunch"/)
 assert.match(main, /parseVersionOutput/)
 // v9.1.3 : les arguments verbatim (quoting cassé des chemins avec espaces) ont disparu.
 assert.match(main, /detached: true, stdio: "ignore"/)

@@ -8,8 +8,8 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const read = (p) => readFileSync(path.join(root, p), "utf8")
 
 const pkg = JSON.parse(read("package.json"))
-const cli = read("electron/freebuff-cli.ts")
-const main = read("electron/main.ts")
+const cli = read("host/freebuff-cli.ts")
+const main = read("host/aven-app-host.ts") // v10.0.0 : remplace le main Electron
 const settingsDialog = read("web/src/SettingsDialog.tsx")
 const app = read("web/src/App.tsx")
 const css = read("web/src/App.css")
@@ -25,7 +25,7 @@ assert.ok(!cli.includes('"start", "Freebuff"'), "le titre interprétable comme p
 // Garde npm avant installation + repli documenté.
 assert.match(main, /checkNpm/)
 assert.match(main, /npm est introuvable/)
-assert.match(main, /npx --yes freebuff/)
+assert.match(cli, /"npm", "install", "-g", "freebuff"/, "repli d'installation : npm -g freebuff")
 // L'installation est visible : bouton désactivé pendant le poll.
 assert.match(settingsDialog, /cliInstalling/)
 assert.match(settingsDialog, /Installation en cours/)

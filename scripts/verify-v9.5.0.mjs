@@ -17,12 +17,14 @@ const pkg = JSON.parse(read("package.json"))
 const [vMaj, vMin, vPatch] = pkg.version.split(".").map(Number)
 assert.ok(vMaj * 10000 + vMin * 100 + vPatch >= 90500, `version trop ancienne : ${pkg.version}`)
 
-const bridge = read("electron/agents-bridge.ts")
-const pty = read("electron/freebuff-pty.ts")
-const main = read("electron/main.ts")
-const preload = read("electron/preload.cts")
+const bridge = read("host/agents-bridge.ts")
+const pty = read("host/freebuff-pty.ts")
+// v10.0.0 : le main Electron/preload sont retirés — le dispatch IPC vit dans
+// aven-app-host.ts et le contrat d'appels dans web/src/types.ts (OpenCodeApi).
+const main = read("host/aven-app-host.ts")
+const preload = read("web/src/types.ts")
 const types = read("web/src/types.ts")
-const prefs = read("electron/prefs.ts")
+const prefs = read("host/prefs.ts")
 const dialog = read("web/src/FreebuffAgentPage.tsx")
 const css = read("web/src/App.css")
 const readme = read("README.md")
@@ -45,7 +47,7 @@ assert.match(main, /readTemplateAgents\(templateDir\)/, "les agents viennent du 
 
 // C. Préférence de reprise, de bout en bout.
 assert.match(prefs, /saveFreebuffResume/, "préférence persistée")
-assert.match(main, /prefs:setFreebuffResume/, "IPC de la préférence")
+assert.match(main, /case "setFreebuffResume"/, "IPC de la préférence")
 assert.match(preload, /setFreebuffResume/, "preload : setFreebuffResume exposé")
 assert.match(types, /freebuffResume/, "types : freebuffResume typé")
 
@@ -56,7 +58,8 @@ assert.match(server, /aven_notes_list/, "outil liste des notes")
 assert.match(server, /aven_notes_search/, "outil recherche dans les notes")
 assert.match(server, /--notes-dir/, "le dossier des notes est passé en argument (serveur hors espace)")
 assert.match(bridge, /aven-mcp-server\.mjs|mcpServers/, "le mcp.json généré pointe vers le serveur Aven")
-assert.ok(pkg.build.extraResources.some((e) => String(e.from).includes("aven-mcp-server.mjs")), "le serveur MCP est embarqué dans les resources packagées")
+const tauriConf95 = JSON.parse(read("src-tauri/tauri.conf.json"))
+assert.ok(Object.keys(tauriConf95.bundle?.resources ?? {}).some((f) => f.includes("aven-mcp-server.mjs")), "le serveur MCP est embarqué dans les resources Tauri")
 
 // E. La vue n'est plus un terminal : conversation d'agent.
 assert.match(dialog, /agent-chat/, "transcript conversation dérivé du buffer")

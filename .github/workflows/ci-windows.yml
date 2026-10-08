@@ -1,0 +1,134 @@
+# CI Windows — boucle de vérification complète + fumée Tauri.
+# Complète ci.yml (Linux) et tauri.yml (bundles de release) :
+# ici on exécute SUR WINDOWS la boucle obligatoire du projet (typecheck, tests,
+# verify, cargo check/test) puis la fumée scripts/smoke-tauri.mjs qui pilote la
+# webview réelle en CDP : rendu des assets, CSP de production bloquante, titlebar
+# routée par la façade api, reprise après crash du runtime Node.
+name: CI Windows (vérification + fumée)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src-tauri/**"
+      - "web/**"
+      - "host/**"
+      - "scripts/**"
+      - "tests/**"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig*.json"
+      - "opencode.jsonc"
+      - "model-priorities.json"
+      - ".github/workflows/ci-windows.yml"
+  pull_request:
+    paths:
+      - "src-tauri/**"
+      - "web/**"
+      - "host/**"
+      - "scripts/**"
+      - "tests/**"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig*.json"
+      - "opencode.jsonc"
+      - "model-priorities.json"
+      - ".github/workflows/ci-windows.yml"
+  # Exécution manuelle : la branche courante peut être validée avant merge.
+  workflow_dispatch:
+
+concurrency:
+  group: ci-windows-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify-smoke:
+    name: Typecheck, tests, verify, Rust, fumée Tauri
+    runs-on: windows-latest
+    # La fumée a ses propres timeouts internes ; 60 min couvrent un build froid
+    # (Rust + bundles debug) sans laisser un job suspendu indéfiniment.
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            web/package-lock.json
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Cache Rust
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Installation (télécharge le CLI OpenCode)
+        run: npm install --no-audit --no-fund
+
+      # ── Typecheck complet : host, tests, web ──────────────────────────────
+      - name: Typecheck host
+        run: npm run typecheck:host
+
+      - name: Typecheck tests
+        run: npm run typecheck:tests
+
+      - name: Typecheck web (tsc -b)
+        run: npx tsc -b
+        working-directory: web
+
+      # ── Tests unitaires (Node, y compris les 12 tests de la fabrique Tauri)
+      - name: Tests unitaires
+        run: npm test
+
+      # ── Builds puis chaîne verify (verify-build exige dist-host frais)
+      - name: Build web (inclut tsc -b)
+        run: npm run build:web
+
+      - name: Build hosts (inclut le bundle du moteur)
+        run: npm run build:host
+
+      - name: Vérification des conventions (sondes v8 → v10)
+        run: npm run verify
+
+      # ── Rust ──────────────────────────────────────────────────────────────
+      - name: Rust check
+        run: cargo check --manifest-path src-tauri/Cargo.toml
+
+      - name: Rust tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+
+      # ── Fumée Tauri ───────────────────────────────────────────────────────
+      # Les ressources du bundle embarquent resources/nodejs/node.exe
+      # (ignoré par git) : téléchargement vérifié par checksum SHA-256.
+      - name: Prepare bundled Node runtime
+        run: node scripts/prepare-tauri-runtime.mjs
+
+      # tauri:check produit target/debug/aven.exe en forme « protocole custom »
+      # (celle qui applique la CSP de production) — c'est elle que la fumée
+      # pilote en premier ; son étape dev relancera ensuite tauri:dev.
+      - name: Build Tauri debug (binaire forme prod pour la fumée)
+        run: npm run tauri:check
+        env:
+          CI: true
+
+      - name: Fumée Tauri (rendu, CSP, titlebar, reprise après crash)
+        run: npm run smoke:tauri
+
+      - name: Journaux de la fumée (échec uniquement)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: journaux-fumee-windows
+          if-no-files-found: ignore
+          path: |
+            smoke-tauri-*.log

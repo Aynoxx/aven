@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import { cleanTranscript, transcribeSpeech, transcribeWithGroq } from "../electron/voice.ts"
+import { cleanTranscript, transcribeSpeech, transcribeWithGroq } from "../host/voice.ts"
 
 /** Fabrique un fetch factice qui répond selon l'URL appelée. */
 function fakeFetch(routes) {

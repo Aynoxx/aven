@@ -4,8 +4,6 @@ where node >nul 2>nul || (echo Node.js est introuvable. Installe-le depuis https
 echo Verification des dependances (rapide si rien n'a change)...
 call npm install
 if errorlevel 1 (echo Echec de npm install. & pause & exit /b 1)
-echo Compilation Electron/preload...
-call npm run build:electron
-if errorlevel 1 (echo Echec de la compilation Electron. & pause & exit /b 1)
+rem v10.0.0 : plus d'Electron — "npm run dev" compile le host puis lance Tauri.
 call npm run dev
 if errorlevel 1 pause

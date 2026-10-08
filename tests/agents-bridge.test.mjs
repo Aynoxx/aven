@@ -14,7 +14,7 @@ import {
   buildAgentsDir,
   readTemplateAgents,
   toMcpConfig,
-} from "../electron/agents-bridge.ts"
+} from "../host/agents-bridge.ts"
 
 test("freeAgentId : préfixe aven-, ids sûrs (minuscules, tirets)", () => {
   assert.equal(freeAgentId("code"), "aven-code")

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import { makeOps } from "../electron/operations.ts"
+import { makeOps } from "../host/operations.ts"
 
 // v9.8.0 (phase 1) : makeOps parle au host du moteur via un BridgeHost — le SDK
 // est un proxy JSON-RPC. Le stub mime le host : seules session.switchModel/get

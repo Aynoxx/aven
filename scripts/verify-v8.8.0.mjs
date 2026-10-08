@@ -8,10 +8,10 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const read = (p) => readFileSync(path.join(root, p), "utf8")
 
 const pkg = JSON.parse(read("package.json"))
-const intent = read("electron/voice-intent.ts")
-const voice = read("electron/voice.ts")
-const main = read("electron/main.ts")
-const preload = read("electron/preload.cts")
+const intent = read("host/voice-intent.ts")
+const voice = read("host/voice.ts")
+const main = read("host/aven-app-host.ts") // v10.0.0 : remplace le main Electron
+const preload = read("web/src/types.ts") // v10.0.0 : remplace le preload (contrat OpenCodeApi)
 const app = read("web/src/App.tsx")
 const types = read("web/src/types.ts")
 const tests = read("tests/voice-intent.test.mjs")
@@ -36,8 +36,9 @@ assert.match(voice, /Promise\.allSettled/)
 assert.match(voice, /classifyIntent/)
 assert.match(voice, /intent\?: DictationIntent/) // absent si la passe a échoué
 
-// Branchement IPC : le canal dictée transporte l'intention (log main).
-assert.match(main, /intention: \$\{intent\}/)
+// v10.0.0 : le log d'intention du main Electron a disparu avec lui — la
+// classification reste couverte par host/voice-intent.ts (verify-build + tests).
+assert.match(main, /case "voiceTranscribe"/)
 assert.match(preload, /voiceTranscribe/) // contrat inchangé côté transport
 
 // Renderer : commandes app exécutées directement (mêmes handlers que le hub),

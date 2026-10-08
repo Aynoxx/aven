@@ -8,9 +8,9 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const read = (p) => readFileSync(path.join(root, p), "utf8")
 
 const pkg = JSON.parse(read("package.json"))
-const workspaces = read("electron/workspaces.ts")
-const main = read("electron/main.ts")
-const cli = read("electron/freebuff-cli.ts")
+const workspaces = read("host/workspaces.ts")
+const main = read("host/aven-app-host.ts") // v10.0.0 : remplace le main Electron
+const cli = read("host/freebuff-cli.ts")
 const app = read("web/src/App.tsx")
 const settingsDialog = read("web/src/SettingsDialog.tsx")
 const css = read("web/src/App.css")
@@ -27,7 +27,7 @@ assert.ok(!/ensureDefaultRegistered/.test(main), "main.ts ne doit plus appeler e
 assert.match(workspaces, /activeWorkspace\(\): WorkspaceEntry \| null/, "activeWorkspace doit pouvoir ne renvoyer aucun espace")
 // v9.1.6 : plus AUCUN repli implicite — pas de « premier connu » comme projet par défaut.
 assert.ok(!/st\.list\[0\]/.test(workspaces), "le repli « premier connu » doit avoir disparu de activeWorkspace")
-assert.match(main, /activeWorkspace\(\)\?\.path \?\? ""/, "boot : aucun espace → workspace vide")
+assert.match(read("src-tauri/src/runtime.rs"), /let Some\(workspace\) = active_workspace\(\)\? else/, "boot : aucun espace → état initial (needsWorkspace)")
 
 // B. Boot sans espace : état needsWorkspace, aucun démarrage moteur sur un dossier vide.
 assert.match(main, /needsWorkspace: true/, "l'état sans espace doit signaler needsWorkspace")
@@ -63,7 +63,7 @@ assert.match(settingsDialog, /api\.switchWorkspace\(dir\)/, "switchWs doit appel
 // E. Retrait de l'espace actif (dernier ou non) → retour à l'écran de choix.
 assert.ok(!/state\.workspaces\?\.length \?\? 0\) > 1/.test(settingsDialog), "le retrait ne doit plus être limité à plusieurs espaces")
 assert.ok(!/setActiveWorkspace\(list\[0\]\.path\)/.test(main), "plus de bascule en douce sur le premier restant")
-assert.match(main, /if \(wasActive\) \{/, "retrait de l'actif : retour au choix, même s'il reste des espaces")
+assert.match(read("src-tauri/src/commands.rs"), /if active\.as_deref\(\) == Some\(wanted\.as_str\(\)\)/, "retrait de l'actif : retour au choix, même s'il reste des espaces")
 
 // F. Anti-double-session Freebuff : détection du process + message takeover clair.
 assert.match(main, /isFreebuffProcessRunning/, "détection freebuff.exe attendue avant lancement")

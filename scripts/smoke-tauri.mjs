@@ -2,16 +2,16 @@
 //  1) binaire autonome (target/debug/aven.exe, protocole custom) : rendu des
 //     assets embarqués + CSP de production qui bloque RÉELLEMENT un fetch externe
 //     (preuve : rejet + message « Content Security Policy » capturé en console) ;
-//  2) npm run tauri:dev : titlebar routée par la façade api (jamais window.opencode),
-//     prouvée par la trace Rust [aven-call] (webview fige
-//     window.__TAURI_INTERNALS__ : impossible d'intercepter l'invoke côté page),
-//     puis reprise après CRASH RÉEL du runtime Node (on tue l'enfant, la requête
-//     suivante doit le relancer sous budget 3/min).
+//  2) npm run tauri:dev : contrôles custom absents (la barre Windows native porte
+//     la fermeture), puis reprise après CRASH RÉEL du runtime Node (on tue
+//     l'enfant, la requête suivante doit le relancer sous budget 3/min).
 // On pilote la webview par le débogueur CDP de WebView2
 // (WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port). Chenfils toujours
 // en fichiers/ignore : un exe GUI qui hérite du pipe du shell ne rend jamais la main.
 import { spawn, spawnSync } from "node:child_process"
-import { existsSync, openSync, readFileSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, openSync, rmSync, writeFileSync } from "node:fs"
+import os from "node:os"
+import path from "node:path"
 import { setTimeout as sleep } from "node:timers/promises"
 
 const CDP_PORT = 9333
@@ -164,15 +164,13 @@ async function waitForExpression(cdp, expression, timeoutMs) {
 // ── Scénarios injectés dans la page ──────────────────────────────────────────
 const EXPR_PATH = `({ href: location.href, opencode: typeof window.opencode, tauri: typeof (window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke) })`
 
-// Les vrais clics exécutent les commandes (minimize réel, fermeture = masquage
-// tray) : on clique en fin de parcours et on prouve la chaîne côté Rust, là où
-// la trace est garantie (la page ne peut pas l'intercepter).
-const EXPR_TITLEBAR = `(() => {
-  const buttons = Array.from(document.querySelectorAll(".window-controls button"))
-  const labels = buttons.map((b) => b.getAttribute("aria-label"))
-  buttons.slice(0, 3).forEach((b) => b.click())
-  return { labels, clicked: Math.min(buttons.length, 3) }
-})()`
+// La barre de fermeture custom (héritée d'Electron frameless) a été supprimée :
+// la fumée vérifie qu'aucun contrôle custom ne subsiste et que la chrome reste
+// montée — c'est la barre Windows native qui minimise/agrandit/ferme.
+const EXPR_BARRE = `({
+  chrome: document.querySelectorAll(".window-chrome").length,
+  controles: document.querySelectorAll(".window-controls").length
+})`
 
 const EXPR_CSP = `fetch("https://example.com/", { mode: "cors" })
   .then((r) => "ALLOWED:" + r.status, (e) => "BLOCKED:" + e.name + ":" + String(e.message).slice(0, 120))
@@ -187,7 +185,7 @@ const EXPR_STATE = `window.__TAURI_INTERNALS__
   : Promise.resolve({ ok: 0, error: "pas de __TAURI_INTERNALS__" })`
 
 async function checkPath(stage, cdp) {
-  await waitForExpression(cdp, `document.readyState === "complete" && document.querySelectorAll(".window-controls button").length >= 3`, 30_000)
+  await waitForExpression(cdp, `document.readyState === "complete" && document.querySelectorAll(".window-chrome").length >= 1`, 30_000)
   const path = await cdp.eval(EXPR_PATH)
   const sousTauri = path.opencode === "undefined" && path.tauri === "function"
   record(stage, "renderer-tauri", sousTauri, `window.opencode=${path.opencode}, __TAURI_INTERNALS__.invoke=${path.tauri}`)
@@ -206,34 +204,16 @@ async function checkCspBinary(cdp) {
   record("binaire", "csp-info", null, `header=${csp.header ? csp.header.slice(0, 100) : "non exposé par le protocole (le blocage console fait foi)"}`)
 }
 
-// Titlebar : lecture de la trace Rust — la preuve que le clic du renderer
-// atteint bien la commande aven_call (l'invoke webview est gelé côté page).
-// Ordre INDIFFÉRENT : l'IPC Tauri peut exécuter les commandes fenêtre hors ordre
-// d'arrivée (concurrence) — ce qui compte est que CHAQUE méthode atteigne Rust.
-async function checkTitlebar(stage, cdp, logFile) {
-  const titlebar = await cdp.eval(EXPR_TITLEBAR)
-  const labelsOk = JSON.stringify(titlebar.labels) === JSON.stringify(["Réduire", "Agrandir", "Fermer"])
-  record(stage, "titlebar-clics", titlebar.clicked === 3 && labelsOk, `labels=${JSON.stringify(titlebar.labels)}, clics=${titlebar.clicked}`)
-
-  const méthodes = ["minimizeWindow", "toggleMaximize", "closeWindow"]
-  const contenu = () => (existsSync(logFile) ? readFileSync(logFile, "utf8") : "")
-  const deadline = Date.now() + 6_000
-  let texte = ""
-  let complet = false
-  while (Date.now() < deadline) {
-    texte = contenu()
-    if (méthodes.every((m) => texte.includes(`[aven-call] ${m}`))) {
-      complet = true
-      break
-    }
-    await sleep(500)
-  }
-  const ordre = [...texte.matchAll(/\[aven-call\] (minimizeWindow|toggleMaximize|closeWindow)/g)]
-    .map((m) => m[1])
-    .join(" → ")
-  record(stage, "titlebar-facade", complet, complet
-    ? `traces Rust : ${ordre}`
-    : `traces incomplètes dans ${logFile} (attendu au moins : ${méthodes.join(", ")})`)
+// Barre native : plus de contrôles custom dans le DOM — la fermeture appartient
+// à la barre Windows de Tauri (décorations par défaut).
+async function checkBarreNative(stage, cdp) {
+  const barre = await cdp.eval(EXPR_BARRE)
+  record(
+    stage,
+    "barre-native",
+    barre.chrome >= 1 && barre.controles === 0,
+    `chrome=${barre.chrome}, contrôles custom=${barre.controles}`
+  )
 }
 
 // Reprise après crash : on tue l'enfant Node, la requête suivante doit le
@@ -287,7 +267,8 @@ async function stageBinary() {
   })
   let cdp
   try {
-    const page = await waitForPage(/./, 20_000)
+    // Ignorer about:blank (WebView2 en cours d'init) : on attend une VRAIE URL.
+    const page = await waitForPage(/^(?!about:)/, 20_000)
     if (!/tauri\.localhost/.test(page.url)) {
       record(stage, "rendu-assets", null, `exe en forme dev (${page.url}) — relancer npm run tauri:check avant l'étape binaire`)
       return
@@ -298,7 +279,7 @@ async function stageBinary() {
     await cdp.enable()
     await checkPath(stage, cdp)
     await checkCspBinary(cdp)
-    await checkTitlebar(stage, cdp, BIN_LOG)
+    await checkBarreNative(stage, cdp)
   } catch (error) {
     record(stage, "demarrage", false, String(error.message ?? error))
   } finally {
@@ -307,7 +288,7 @@ async function stageBinary() {
   }
 }
 
-// ── Étape 2 : npm run tauri:dev (titlebar + reprise après crash) ─────────────
+// ── Étape 2 : npm run tauri:dev (barre native + reprise après crash) ────────
 async function stageDev() {
   const stage = "dev"
   writeFileSync(DEV_LOG, `=== fumée dev ${new Date().toISOString()} ===\n`)
@@ -334,7 +315,7 @@ async function stageDev() {
     // jamais dans le HTML servi par Vite. On le constate sans le faire échouer.
     record(stage, "csp-dev", null, "devUrl externe : injection CSP impossible (limitation Tauri, le blocage est prouvé sur le binaire)")
     await stageCrash(stage, cdp)
-    await checkTitlebar(stage, cdp, DEV_LOG)
+    await checkBarreNative(stage, cdp)
   } catch (error) {
     record(stage, "demarrage", false, String(error.message ?? error))
   } finally {
@@ -350,6 +331,39 @@ async function stageDev() {
   }
 }
 
+// ── Store d'espaces (cas CI) ────────────────────────────────────────────────
+// Sans store actif, boot_runtime renvoie needsWorkspace : la reprise après crash
+// ne serait jamais exercée (SKIP). Sur un runner vierge (aucun workspaces.json),
+// on provisionne UN store temporaire — un store existant n'est jamais touché —
+// puis on le supprime au nettoyage. Format : celui de write_workspace_store
+// ({ list: [{ path, name }], active }) avec la MEME chaîne des deux côtés
+// (active_workspace exige l'égalité stricte + dossier existant).
+function provisionnerStore() {
+  if (!process.env.APPDATA) return null
+  const dossier = path.join(process.env.APPDATA, "Aven")
+  const store = path.join(dossier, "workspaces.json")
+  if (existsSync(store)) return null
+  const dossierCree = !existsSync(dossier)
+  const espace = mkdtempSync(path.join(os.tmpdir(), "aven-smoke-"))
+  mkdirSync(dossier, { recursive: true })
+  writeFileSync(
+    store,
+    JSON.stringify({ list: [{ path: espace, name: "Smoke" }], active: espace }, null, 2)
+  )
+  console.log(`Store d'espaces absent → provisionné pour la fumée : ${espace}`)
+  return { dossier, store, espace, dossierCree }
+}
+
+function nettoyerStore(provisionne) {
+  if (!provisionne) return
+  try { rmSync(provisionne.espace, { recursive: true, force: true }) } catch {}
+  try { rmSync(provisionne.store, { force: true }) } catch {}
+  if (provisionne.dossierCree) {
+    try { rmSync(provisionne.dossier, { recursive: true, force: true }) } catch {}
+  }
+  console.log("Store d'espaces temporaire de la fumée nettoyé.")
+}
+
 // ── Principal ────────────────────────────────────────────────────────────────
 console.log("Fumée Tauri v10.0.0 — CDP port " + CDP_PORT)
 
@@ -361,6 +375,7 @@ const port5173Pris = portOwner(5173) !== null
 if (port5173Pris) {
   console.warn("⚠ port 5173 déjà occupé — l'étape dev sera ignorée (serveur existant non touché).")
 }
+const provisionne = provisionnerStore()
 
 await stageBinary()
 
@@ -386,6 +401,7 @@ if (!port5173Pris) {
     record("nettoyage", "port-5173", null, `pid résiduel ${owner} éliminé`)
   }
 }
+nettoyerStore(provisionne)
 
 console.log("\n── Récapitulatif ──")
 const skips = results.filter((r) => r.ok === null).length

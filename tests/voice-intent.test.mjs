@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import { AGENT_IDS, APP_ACTIONS, INTENT_SYSTEM_PROMPT, classifyIntent, fallbackIntent, intentOfCompletion } from "../electron/voice-intent.ts"
-import { transcribeSpeech } from "../electron/voice.ts"
+import { AGENT_IDS, APP_ACTIONS, INTENT_SYSTEM_PROMPT, classifyIntent, fallbackIntent, intentOfCompletion } from "../host/voice-intent.ts"
+import { transcribeSpeech } from "../host/voice.ts"
 
 /** Fabrique un fetch factice qui répond selon l'URL appelée (même principe que voice.test.mjs).
     `left` : nombre d'utilisations d'une route avant de passer à la suivante (même URL). */

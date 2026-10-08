@@ -1,20 +1,11 @@
-// Résolveur pour les tests : les sources Electron s'importent avec l'extension ".js"
+// Résolveur pour les tests : les sources s'importent avec l'extension ".js"
 // (convention NodeNext/TypeScript), mais en mode --experimental-strip-types Node ne
 // réécrit pas ces spécificateurs vers les fichiers ".ts" réels. Ce hook fait la
 // correspondance ".js introuvable → .ts voisin", sans dépendance externe.
-// Le paquet npm "electron" (le binaire desktop, sans exports ESM utilisables sous Node)
-// est redirigé vers un stub local : certains modules testés (settings.ts, workspaces.ts…)
-// importent app/safeStorage ; seuls des appels réels en auraient besoin, jamais les
-// fonctions testées ici.
-import { fileURLToPath, pathToFileURL } from "node:url"
-
-// fileURLToPath (et non .pathname) : sous Windows, "/C:/…" n'est pas un chemin valide.
-const STUB_URL = pathToFileURL(fileURLToPath(new URL("./electron-stub.mjs", import.meta.url))).href
+// v10.0.0 (100 % Tauri) : le redirecteur « electron » a disparu avec le shell —
+// plus aucun module du projet n'importe "electron".
 
 export async function resolve(specifier, context, nextResolve) {
-  if (specifier === "electron") {
-    return { url: STUB_URL, shortCircuit: true }
-  }
   try {
     return await nextResolve(specifier, context)
   } catch (err) {

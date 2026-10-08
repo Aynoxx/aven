@@ -3,7 +3,7 @@ import { test } from "node:test"
 import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { aggregateStats, countDictation, readDictationStats } from "../electron/stats.ts"
+import { aggregateStats, countDictation, readDictationStats } from "../host/stats.ts"
 
 const temp = mkdtempSync(path.join(tmpdir(), "aven-stats-"))
 process.on("exit", () => { try { rmSync(temp, { recursive: true, force: true }) } catch { /* Windows peut retarder */ } })

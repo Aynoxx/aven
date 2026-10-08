@@ -1,6 +1,6 @@
 // v10.0.0 : actions système (ouverture de chemins, liens, écriture de fichiers)
 // extraites du monolithe lib.rs. La liste blanche des URLs double volontairement
-// celle de electron/providers.ts : elle est sonde-par-sonde (verify-v10.0.0.mjs)
+// celle de host/providers.ts : elle est sonde-par-sonde (verify-v10.0.0.mjs)
 // pour que toute nouvelle URL côté Electron exige aussi une décision Rust.
 use std::path::Path;
 use std::process::Command;

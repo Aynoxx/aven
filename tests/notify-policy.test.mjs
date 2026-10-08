@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import { shouldNotify, notifyContent } from "../electron/notify-policy.ts"
+import { shouldNotify, notifyContent } from "../host/notify-policy.ts"
 
 const KINDS = ["turn-done", "turn-error", "permission", "form"]
 

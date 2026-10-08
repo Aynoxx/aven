@@ -8,11 +8,11 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const read = (p) => readFileSync(path.join(root, p), "utf8")
 
 const pkg = JSON.parse(read("package.json"))
-const main = read("electron/main.ts")
-const notes = read("electron/notes.ts")
-const bridge = read("electron/opencode-bridge.ts")
-const priorities = read("electron/priorities.ts")
-const intent = read("electron/voice-intent.ts")
+const main = read("host/aven-app-host.ts") // v10.0.0 : remplace le main Electron
+const notes = read("host/notes.ts")
+const bridge = read("host/opencode-bridge.ts")
+const priorities = read("host/priorities.ts")
+const intent = read("host/voice-intent.ts")
 const app = read("web/src/App.tsx")
 const appearance = read("web/src/appearance.ts")
 const groups = read("web/src/chat-groups.ts")
@@ -27,15 +27,16 @@ const [vMaj] = pkg.version.split(".").map(Number)
 assert.ok(vMaj >= 9, `version trop ancienne : ${pkg.version}`)
 
 // 1. Nouvel espace : l'utilisateur choisit le dossier final dans le sélecteur natif.
-assert.match(main, /workspace:createNew/)
-assert.match(main, /createDirectory/)
-assert.match(main, /Utiliser ce dossier/)
-assert.match(main, /déjà partie des espaces de travail/) // garde-fou doublon
+// v10.0.0 : création en 2 temps (dialogue système puis workspace:add) — le
+// dialogue vit côté renderer (tauri-plugin-dialog), le registre côté Rust.
+assert.match(read("web/src/api-tauri.ts"), /property === "createWorkspace"/)
+assert.match(read("web/src/api-tauri.ts"), /method: "workspace:add"/)
+assert.match(read("src-tauri/src/workspaces.rs"), /déjà partie des espaces de travail/) // garde-fou doublon
 
 // 2. Notes = vrais fichiers : chemin + ouverture du dossier.
 assert.match(notes, /export const notesDir/)
-assert.match(main, /notes:dir/)
-assert.match(main, /notes:openFolder/)
+assert.match(main, /case "noteDir"/)
+assert.match(main, /case "noteOpenFolder"/)
 assert.match(dialog, /noteOpenFolder/)
 assert.match(dialog, /Ouvrir le dossier/)
 
@@ -74,9 +75,9 @@ assert.ok(!/freebuffOverride/.test(app), "l'override Freebuff du composeur doit 
 assert.ok(!/Freebuff comme moteur/.test(settings), "le réglage « Freebuff comme moteur » doit avoir disparu (v9.1.3)")
 
 // Régressions : les acquis v8.x restent en place.
-assert.match(read("electron/voice.ts"), /allSettled/)
+assert.match(read("host/voice.ts"), /allSettled/)
 assert.match(read("web/src/selection-actions.ts"), /SELECTION_MAX/)
-assert.match(read("electron/notes-meta.ts"), /normalizeForSearch/)
-assert.match(read("electron/stats.ts"), /aggregateStats/)
+assert.match(read("host/notes-meta.ts"), /normalizeForSearch/)
+assert.match(read("host/stats.ts"), /aggregateStats/)
 
 console.log("v9.0.0 verification: OK")

@@ -4,10 +4,10 @@ import { join } from "node:path"
 import { createInterface } from "node:readline"
 
 const root = process.cwd()
-const host = join(root, "dist-electron", "aven-app-host.mjs")
+const host = join(root, "dist-host", "aven-app-host.mjs")
 
 if (!existsSync(host)) {
-  throw new Error("Host applicatif introuvable. Lance d’abord npm run build:electron.")
+  throw new Error("Host applicatif introuvable. Lance d’abord npm run build:host.")
 }
 
 const child = spawn(process.execPath, [host], {
@@ -17,6 +17,8 @@ const child = spawn(process.execPath, [host], {
 })
 
 const rl = createInterface({ input: child.stdout })
+// v10.0.1 : le ping doit partir AVANT l'attente de la réponse — sinon le test
+// attend une ligne qui ne peut jamais arriver (verrou jusqu'au timeout).
 const response = await new Promise((resolve, reject) => {
   const timeout = setTimeout(() => {
     child.kill()
@@ -36,14 +38,14 @@ const response = await new Promise((resolve, reject) => {
     clearTimeout(timeout)
     reject(error)
   })
-})
 
-child.stdin.write(JSON.stringify({
-  jsonrpc: "2.0",
-  id: 1,
-  method: "ping",
-  params: [],
-}) + "\n")
+  child.stdin.write(JSON.stringify({
+    jsonrpc: "2.0",
+    id: 1,
+    method: "ping",
+    params: [],
+  }) + "\n")
+})
 
 if (response?.result?.alive !== true || response?.result?.initialized !== false) {
   child.kill()

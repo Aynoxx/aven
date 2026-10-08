@@ -1,4 +1,4 @@
-// v10.0.0 : politique de notifications alignée sur electron/notify-policy.ts.
+// v10.0.0 : politique de notifications alignée sur host/notify-policy.ts.
 // Deux divergences corrigées en comparant ligne à ligne avec la version Electron :
 //  1. le titre d'un tour terminé était « Tour terminé » en Rust mais « Aven » en TS ;
 //  2. une durée inconnue (aucun started mesuré) notifiait en Rust, jamais en TS —
@@ -17,7 +17,7 @@ pub(crate) enum NotifyKind {
     Form,
 }
 
-// Pur : miroir exact de shouldNotify(electron/notify-policy.ts), seuil 8000 ms inclus
+// Pur : miroir exact de shouldNotify(host/notify-policy.ts), seuil 8000 ms inclus
 // côté strictement supérieur — 8000 ms pile ne notifie pas, comme en TS.
 pub(crate) fn should_notify(
     window_focused: bool,
@@ -34,7 +34,7 @@ pub(crate) fn should_notify(
     }
 }
 
-// Pur : miroir exact de notifyContent(electron/notify-policy.ts), libellés FR identiques.
+// Pur : miroir exact de notifyContent(host/notify-policy.ts), libellés FR identiques.
 pub(crate) fn notify_content(kind: NotifyKind, turn_duration_ms: Option<u64>) -> (&'static str, String) {
     match kind {
         NotifyKind::TurnDone => {
@@ -69,7 +69,7 @@ pub(crate) fn notifications_enabled() -> bool {
 }
 
 // v9.1.0 : fenêtre au premier plan = tu vois déjà l'écran, jamais de toast.
-// Copié de notifyDesktop(electron/main.ts) : is_focused ET is_visible (cachée
+// Copié de notifyDesktop(host/main.ts) : is_focused ET is_visible (cachée
 // dans la tray ⇒ isVisible false, c'est voulu).
 #[cfg(desktop)]
 pub(crate) fn window_focused(app: &tauri::AppHandle) -> bool {

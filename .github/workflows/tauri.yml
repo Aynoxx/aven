@@ -5,7 +5,7 @@ on:
     paths:
       - "src-tauri/**"
       - "web/**"
-      - "electron/**"
+      - "host/**"
       - "scripts/**"
       - "tests/**"
       - "package.json"
@@ -19,7 +19,7 @@ on:
     paths:
       - "src-tauri/**"
       - "web/**"
-      - "electron/**"
+      - "host/**"
       - "scripts/**"
       - "tests/**"
       - "package.json"
@@ -64,11 +64,11 @@ jobs:
       - name: Unit tests
         run: npm test
 
-      - name: Electron-side Node typecheck
-        run: npm run typecheck:electron
+      - name: Host-side Node typecheck
+        run: npm run typecheck:host
 
       - name: Build Node runtime hosts
-        run: npm run build:electron
+        run: npm run build:host
 
       - name: Prepare bundled Node runtime
         run: node scripts/prepare-tauri-runtime.mjs

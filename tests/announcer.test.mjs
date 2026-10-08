@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import { Announcer, phraseFor } from "../electron/announcer.ts"
+import { Announcer, phraseFor } from "../host/announcer.ts"
 
 // ── Grammaire pure (phraseFor) ───────────────────────────────────────────────
 test("phraseFor : démarrage, succès et échec sont traduits", () => {
