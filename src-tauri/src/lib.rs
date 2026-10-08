@@ -839,11 +839,10 @@ pub fn run() {
             }),
         );
 
-        let global_shortcut = Shortcut::new(
+        let handler_shortcut = Shortcut::new(
             Some(Modifiers::CONTROL | Modifiers::SHIFT),
             Code::KeyO,
         );
-        let handler_shortcut = global_shortcut.clone();
 
         builder = builder.plugin(
             tauri_plugin_global_shortcut::Builder::new()
@@ -922,6 +921,10 @@ pub fn run() {
                     })
                     .build(app)?;
 
+                let global_shortcut = Shortcut::new(
+                    Some(Modifiers::CONTROL | Modifiers::SHIFT),
+                    Code::KeyO,
+                );
                 app.global_shortcut().register(global_shortcut)?;
             }
 
