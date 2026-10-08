@@ -44,6 +44,9 @@
       "resources/nodejs/node.exe": "runtime/node.exe",
       "../node_modules/@lydell/node-pty": "runtime/node_modules/@lydell/node-pty",
       "../node_modules/@lydell/node-pty-win32-x64": "runtime/node_modules/@lydell/node-pty-win32-x64"
-    }
+    },
+    "icon": [
+      "icons/icon.ico"
+    ]
   }
 }
