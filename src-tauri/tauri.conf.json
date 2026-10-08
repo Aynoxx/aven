@@ -30,7 +30,6 @@
       "nsis",
       "msi"
     ],
-    "identifier": "com.local.aven",
     "shortDescription": "Espace de travail IA",
     "longDescription": "Espace de travail IA pour agents, code, recherche, analyse, notes et voix",
     "resources": {
