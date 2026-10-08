@@ -53,7 +53,9 @@ assert.ok(!/label: "Agents"/.test(app), "l'ancien label « Agents » a disparu d
 
 // F. Agent central : le prompt projet délègue et ne code jamais lui-même.
 assert.match(agentProjet, /CERVEAU CENTRAL/, "rôle central affirmé")
-assert.match(agentProjet, /tu ne fais JAMAIS le\ntravail spécialisé toi-même/, "interdiction de coder soi-même")
+// v10.0.0 : \r?\n et non \n — sous Windows (autocrlf=true) le checkout est CRLF et
+// une regex \n-seul ne peut jamais matcher. Même exigence de texte, endings tolérés.
+assert.match(agentProjet, /tu ne fais JAMAIS le\r?\ntravail spécialisé toi-même/, "interdiction de coder soi-même")
 
 // G. Priorités refaites + Groq en chat.
 assert.ok(table.models["groq/openai/gpt-oss-120b"], "GPT-OSS 120B (Groq) dans le catalogue")

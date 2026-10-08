@@ -25,3 +25,6 @@ Thumbs.db
 # Tauri build output
 src-tauri/target/
 src-tauri/gen/
+# Node embarqué téléchargé par scripts/prepare-tauri-runtime.mjs (83 Mo,
+# jamais versionné : régénéré à la préparation, vérifié par checksum v10.0.0)
+src-tauri/resources/

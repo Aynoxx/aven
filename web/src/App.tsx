@@ -1323,10 +1323,12 @@ export default function App() {
           )}
         </div>
         {/* Contrôles locaux dessinés en SVG dans l’esprit des icônes Fluent UI de Microsoft (Windows 11). */}
+        {/* v10.0.0 : on passe par le façade `api` (et non window.opencode) — sous Tauri,
+            window.opencode n'existe pas : le Proxy de web/src/api.ts route vers l'IPC Rust. */}
         <div className="window-controls">
-          <button className="window-control" onClick={() => window.opencode.minimizeWindow()} aria-label="Réduire"><Icon name="minimize" size={16} /></button>
-          <button className="window-control" onClick={() => window.opencode.toggleMaximize()} aria-label="Agrandir"><Icon name="maximize" size={16} /></button>
-          <button className="window-control close" onClick={() => window.opencode.closeWindow()} aria-label="Fermer"><Icon name="close" size={16} /></button>
+          <button className="window-control" onClick={() => void api.minimizeWindow()} aria-label="Réduire"><Icon name="minimize" size={16} /></button>
+          <button className="window-control" onClick={() => void api.toggleMaximize()} aria-label="Agrandir"><Icon name="maximize" size={16} /></button>
+          <button className="window-control close" onClick={() => void api.closeWindow()} aria-label="Fermer"><Icon name="close" size={16} /></button>
         </div>
       </div>
 
