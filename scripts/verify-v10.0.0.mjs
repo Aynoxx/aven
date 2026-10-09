@@ -47,6 +47,11 @@ assert.ok(
   conf.app.windows?.[0]?.decorations !== false,
   "décorations natives conservées : la barre Windows porte la fermeture"
 )
+assert.strictEqual(
+  conf.app.windows?.[0]?.maximized,
+  true,
+  "la fenêtre démarre maximisée (convention figée v10.0.x)"
+)
 assert.ok(
   !app.includes("window.opencode."),
   "App.tsx ne parle plus à window.opencode (inexistant sous Tauri)"

@@ -452,7 +452,11 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
 .window-tab:hover { background: var(--accent-soft); border-color: var(--accent-border); color: var(--text); transform: translateY(-1px); }
 .window-tab:active { transform: translateY(0); }
 .window-tab-icon { color: var(--accent); }
-.window-chrome-home .window-bar-left { display: none; }
+/* v10.0.x : sur l'accueil la barre ne contient plus rien (contrôles custom
+   supprimés, le hub a sa toolbar) — on la retire plutôt que de laisser 44 px
+   vides sous la barre Windows native. L'élément reste dans le DOM : les sondes
+   fumée/visuel attendent .window-chrome, seule sa place disparaît. */
+.window-chrome.window-chrome-home { display: none; }
 
 .home-main {
   min-height: 0; flex: 1; overflow: hidden;

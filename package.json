@@ -29,7 +29,8 @@
     "tauri:dev": "npm run build:host && tauri dev",
     "tauri:build": "npm run build:host && node scripts/prepare-tauri-runtime.mjs && tauri build",
     "tauri:check": "npm run build:host && npm run build:web && tauri build --debug",
-    "test:app-host": "npm run build:host && node scripts/test-app-host.mjs"
+    "test:app-host": "npm run build:host && node scripts/test-app-host.mjs",
+    "visual:prod": "node scripts/visual-prod-tauri.mjs"
   },
   "dependencies": {
     "@lydell/node-pty": "^1.1.0",
