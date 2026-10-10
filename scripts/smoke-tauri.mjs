@@ -181,7 +181,18 @@ const EXPR_CSP = `fetch("https://example.com/", { mode: "cors" })
 
 const EXPR_STATE = `window.__TAURI_INTERNALS__
   ? window.__TAURI_INTERNALS__.invoke("aven_call", { method: "state", args: [] })
-      .then((s) => ({ ok: 1, status: s && s.status, needsWorkspace: !!(s && s.needsWorkspace), error: s && s.error }), (e) => ({ ok: 0, error: String(e).slice(0, 240) }))
+      .then((s) => ({
+        ok: 1,
+        status: s && s.status,
+        needsWorkspace: !!(s && s.needsWorkspace),
+        workspace: s && s.workspace,
+        workspaces: s && s.workspaces,
+        sync: s && s.sync,
+        newModels: s && s.newModels,
+        removedModels: s && s.removedModels,
+        agentsBridge: s && s.agentsBridge,
+        error: s && s.error,
+      }), (e) => ({ ok: 0, error: String(e).slice(0, 240) }))
   : Promise.resolve({ ok: 0, error: "pas de __TAURI_INTERNALS__" })`
 
 async function checkPath(stage, cdp) {
@@ -224,6 +235,24 @@ async function stageCrash(stage, cdp) {
     record(stage, "reprise-crash", null, `runtime non prêt : ${JSON.stringify(avant)}`)
     return
   }
+
+  // v10.0.0 : mêmes métadonnées que la v9 dans l'état consommé par App/SettingsDialog.
+  const actif = String(avant.workspace ?? "").replaceAll("\\\\", "/").toLowerCase()
+  const liste = Array.isArray(avant.workspaces) ? avant.workspaces : []
+  const listeContientActif = !!actif && liste.some((item) =>
+    String(item?.path ?? "").replaceAll("\\\\", "/").toLowerCase() === actif
+  )
+  const metadataArrays = ["sync", "newModels", "removedModels", "agentsBridge"]
+    .every((key) => Array.isArray(avant[key]))
+  const parite = listeContientActif && metadataArrays
+  record(
+    stage,
+    "state-parity",
+    parite,
+    `espace actif listé=${listeContientActif}, espaces=${liste.length}, sync=${Array.isArray(avant.sync)}, nouveaux modèles=${Array.isArray(avant.newModels)}, modèles retirés=${Array.isArray(avant.removedModels)}, agents pontés=${Array.isArray(avant.agentsBridge)}`
+  )
+  if (!parite) return
+
   const pidAvant = nodeHostPids()[0]
   if (!pidAvant) {
     record(stage, "reprise-crash", null, "aucun enfant node aven-app-host à tuer")
