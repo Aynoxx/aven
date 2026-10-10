@@ -11,6 +11,19 @@ use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, State};
 
+// v10.0.0 : Rust possède le registre des espaces ; chaque état exposé au frontend
+// doit donc le recharger, plutôt que d'attendre une copie obsolète du runtime Node.
+fn inject_workspaces(mut value: Value, workspaces: Vec<Value>) -> Value {
+    if let Some(object) = value.as_object_mut() {
+        object.insert("workspaces".to_string(), Value::Array(workspaces));
+    }
+    value
+}
+
+fn state_with_workspaces(value: Value) -> Result<Value, String> {
+    Ok(inject_workspaces(value, read_workspace_store()?.0))
+}
+
 #[tauri::command]
 pub(crate) fn aven_call(
     app: AppHandle,
@@ -69,10 +82,10 @@ pub(crate) fn aven_call(
             }
 
             if booted != active {
-                return boot_runtime(&app, &state);
+                return state_with_workspaces(boot_runtime(&app, &state)?);
             }
 
-            runtime_call(&app, &state, "state", args)
+            state_with_workspaces(runtime_call(&app, &state, "state", args)?)
         }
 
         "workspace:list" => Ok(read_workspace_store()?.0.into()),
@@ -92,7 +105,7 @@ pub(crate) fn aven_call(
                 .lock()
                 .map_err(|_| "État runtime indisponible.".to_string())? = None;
 
-            let state_value = boot_runtime(&app, &state)?;
+            let state_value = state_with_workspaces(boot_runtime(&app, &state)?)?;
             Ok(json!({
                 "entry": entry,
                 "state": state_value,
@@ -128,7 +141,7 @@ pub(crate) fn aven_call(
                 .lock()
                 .map_err(|_| "État runtime indisponible.".to_string())? = None;
 
-            boot_runtime(&app, &state)
+            state_with_workspaces(boot_runtime(&app, &state)?)
         }
 
         "workspace:remove" => {
@@ -168,5 +181,39 @@ pub(crate) fn aven_call(
         }
 
         _ => runtime_call(&app, &state, &method, args),
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::inject_workspaces;
+    use serde_json::json;
+
+    #[test]
+    fn state_keeps_runtime_fields_and_refreshes_workspace_list() {
+        let value = json!({
+            "status": "ready",
+            "workspace": "C:/dev/aven",
+            "workspaces": [{"path": "stale", "name": "Ancien"}],
+            "sync": []
+        });
+        let current = vec![
+            json!({"path": "C:/dev/aven", "name": "Aven"}),
+            json!({"path": "C:/dev/autre", "name": "Autre"})
+        ];
+
+        let updated = inject_workspaces(value, current.clone());
+
+        assert_eq!(updated["status"], "ready");
+        assert_eq!(updated["workspace"], "C:/dev/aven");
+        assert_eq!(updated["sync"], json!([]));
+        assert_eq!(updated["workspaces"], json!(current));
+    }
+
+    #[test]
+    fn state_can_represent_empty_workspace_registry() {
+        let updated = inject_workspaces(json!({"status": "starting"}), vec![]);
+        assert_eq!(updated["workspaces"], json!([]));
     }
 }
