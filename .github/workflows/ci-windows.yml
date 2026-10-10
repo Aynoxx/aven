@@ -103,8 +103,11 @@ jobs:
       - name: Rust tests
         run: cargo test --manifest-path src-tauri/Cargo.toml
 
+      # v10.0.0 : le workflow Tauri Windows valide déjà NSIS/MSI. Ici on ne
+      # refait pas les installateurs : on compile l'exécutable à protocole de
+      # production pour que la fumée exerce la CSP et le runtime réel.
       - name: Build Tauri debug (binaire forme prod pour la fumée)
-        run: npm run tauri:check
+        run: npm run tauri:check -- --no-bundle
         env:
           CI: true
 
