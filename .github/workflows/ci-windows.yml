@@ -67,25 +67,7 @@ jobs:
           workspaces: "./src-tauri -> target"
 
       - name: Installation (télécharge le CLI OpenCode)
-        run: npm install --no-audit --no-fund
-
-      # v10.0.0 : le verrou racine gardait encore Electron après son retrait du manifeste.
-      # Génération transitoire pour capturer les lockfiles réellement recalculés par npm.
-      - name: Regénérer les lockfiles Tauri-only
-        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
-
-      - name: Regénérer le lockfile web
-        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
-        working-directory: web
-
-      - name: Exporter les lockfiles régénérés (transitoire)
-        uses: actions/upload-artifact@v4
-        with:
-          name: aven-tauri-lockfiles
-          if-no-files-found: error
-          path: |
-            package-lock.json
-            web/package-lock.json
+        run: npm ci --no-audit --no-fund
 
       - name: Typecheck host
         run: npm run typecheck:host
