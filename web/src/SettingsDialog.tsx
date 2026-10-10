@@ -42,6 +42,7 @@ export default function SettingsDialog(props: {
   const [inputs, setInputs] = useState<Record<string, string>>({})
   const [newWsName, setNewWsName] = useState("")
   const [busy, setBusy] = useState(false)
+  const [diagnosticMsg, setDiagnosticMsg] = useState<string>()
   const [notifications, setNotifications] = useState<boolean | null>(null) // null = pas encore chargé
   useEffect(() => { api.prefs().then((p) => setNotifications(p.notifications)).catch(() => setNotifications(true)) }, [])
   // CLI Freebuff gratuit (v9.1.2) : statut chargé une fois, actions visibles.
@@ -84,7 +85,7 @@ export default function SettingsDialog(props: {
     try {
       const text = await api.diagnostic()
       await navigator.clipboard.writeText(text)
-      setUpdateMsg("Diagnostic copié dans le presse-papiers (sans aucune clé API).")
+      setDiagnosticMsg("Diagnostic copié dans le presse-papiers (sans aucune clé API).")
     } catch (e) { props.onError(e) }
   }
 
@@ -220,7 +221,7 @@ export default function SettingsDialog(props: {
       <h4>Notifications de bureau</h4>
       <p className="hint">Prévient quand un agent a besoin de toi : permission demandée, formulaire, tour terminé (s’il a duré plus de 8 s) ou échoué. Jamais quand la fenêtre est au premier plan.</p>
       <label className="toggle-row"><span>Activer les notifications</span><input type="checkbox" checked={notifications !== false} onChange={(e) => void changeNotifications(e.target.checked)} /></label>
-      <div className="row"><button className="button secondary" onClick={() => void copyDiagnostic()}>Copier le diagnostic</button><span className="hint">Versions, état du moteur, agents et derniers événements — sans aucune clé API.</span></div>
+      <div className="row"><button className="button secondary" onClick={() => void copyDiagnostic()}>Copier le diagnostic</button><span className="hint">Versions, état du moteur, agents et derniers événements — sans aucune clé API.</span>{diagnosticMsg && <span className="hint">{diagnosticMsg}</span>}</div>
       <h4>Freebuff CLI gratuit</h4>
       <p className="hint">Le free tier de Freebuff (sessions quotidiennes, financé par les pubs texte) vit dans son CLI interactif. v9.2.0 : il s'affiche DANS Aven (terminal intégré, session persistante) — la carte « Freebuff » de l'accueil ouvre la vue ; « Se connecter » reste une console externe (action courte, incompatible avec une session ouverte).</p>
       <div className="row">
