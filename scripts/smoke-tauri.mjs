@@ -18,6 +18,17 @@ const CDP_PORT = 9333
 const EXE = "src-tauri/target/debug/aven.exe"
 const DEV_LOG = "smoke-tauri-dev.log"
 const BIN_LOG = "smoke-tauri-bin.log"
+const WEBVIEW_PROFILE_ROOT = mkdtempSync(path.join(os.tmpdir(), "aven-webview2-smoke-"))
+const WEBVIEW_PROFILES = []
+function webviewEnv(port) {
+  const profile = mkdtempSync(path.join(WEBVIEW_PROFILE_ROOT, `profile-${port}-`))
+  WEBVIEW_PROFILES.push(profile)
+  return {
+    ...process.env,
+    WEBVIEW2_USER_DATA_FOLDER: profile,
+    WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port}`,
+  }
+}
 
 const results = []
 function record(stage, id, ok, detail) {
@@ -292,7 +303,7 @@ async function stageBinary() {
     detached: true,
     stdio: ["ignore", fd, fd],
     windowsHide: true,
-    env: { ...process.env, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${CDP_PORT}` },
+    env: webviewEnv(CDP_PORT),
   })
   let cdp
   try {
@@ -329,7 +340,7 @@ async function stageDev() {
   const dev = spawn("cmd.exe", ["/c", "npm run tauri:dev"], {
     stdio: ["ignore", fd, fd],
     windowsHide: true,
-    env: { ...process.env, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${CDP_PORT}` },
+    env: webviewEnv(CDP_PORT),
   })
   let cdp
   try {
@@ -431,6 +442,10 @@ if (!port5173Pris) {
   }
 }
 nettoyerStore(provisionne)
+for (const profile of WEBVIEW_PROFILES) {
+  try { rmSync(profile, { recursive: true, force: true }) } catch {}
+}
+try { rmSync(WEBVIEW_PROFILE_ROOT, { recursive: true, force: true }) } catch {}
 
 console.log("\n── Récapitulatif ──")
 const skips = results.filter((r) => r.ok === null).length
