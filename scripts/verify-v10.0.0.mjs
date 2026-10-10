@@ -57,8 +57,15 @@ const providers = read("host/providers.ts")
 // frameless) a disparu du renderer comme du contrat d'API — Tauri garde ses
 // décorations, c'est la barre système qui minimise/agrandit/ferme.
 const types = read("web/src/types.ts")
+const settings = read("web/src/SettingsDialog.tsx")
+const appHost = read("host/aven-app-host.ts")
 const apiFactoryTests = read("tests/tauri-api.test.mjs")
 assert.ok(!types.includes("checkForUpdates:"), "l'API ne doit pas exposer un updater non disponible avant publication")
+assert.ok(!settings.includes("checkForUpdates"), "les réglages ne doivent pas appeler un updater absent")
+assert.ok(!settings.includes("updatesConfigured"), "les réglages ne doivent pas exposer un statut updater")
+assert.ok(!types.includes("updatesConfigured"), "le contrat d'état ne doit pas exposer le flag updater")
+assert.ok(!appHost.includes("updatesConfigured"), "le runtime Node ne doit pas simuler un updater")
+assert.ok(!runtime.includes("updatesConfigured"), "Rust ne doit pas simuler un updater")
 assert.ok(!app.includes("window-controls"), "App.tsx ne dessine plus de contrôles custom")
 assert.ok(
   !/minimizeWindow|toggleMaximize|closeWindow/.test(app),
