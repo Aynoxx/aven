@@ -111,8 +111,34 @@ jobs:
         env:
           CI: true
 
+      # WebView2 Runtime 150 ignore les variables WEBVIEW2_* pour un hôte
+      # élevé. Les runners Windows GitHub lancent parfois les processus en
+      # intégrité élevée : la stratégie HKLM est alors le seul moyen de rendre
+      # CDP disponible. Cette valeur ne concerne que aven.exe et n'existe que
+      # durant ce job ; elle est supprimée même si le smoke échoue.
+      - name: Activer temporairement CDP WebView2 pour Aven
+        shell: pwsh
+        run: |
+          $policyPath = "HKLM:\SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments"
+          New-Item -Path $policyPath -Force | Out-Null
+          New-ItemProperty -Path $policyPath -Name "aven.exe" -PropertyType String -Value "--remote-debugging-port=9333" -Force | Out-Null
+          Write-Host "CDP WebView2 activé pour aven.exe sur le port 9333."
+
       - name: Fumée Tauri (rendu, CSP, titlebar, reprise après crash)
         run: npm run smoke:tauri
+
+      - name: Supprimer la stratégie CDP temporaire
+        if: always()
+        shell: pwsh
+        run: |
+          $policyPath = "HKLM:\SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments"
+          if (Test-Path $policyPath) {
+            Remove-ItemProperty -Path $policyPath -Name "aven.exe" -ErrorAction SilentlyContinue
+            $key = Get-Item $policyPath
+            if ($key.ValueCount -eq 0 -and $key.SubKeyCount -eq 0) {
+              Remove-Item -Path $policyPath -Force -ErrorAction SilentlyContinue
+            }
+          }
 
       - name: Journaux de la fumée (échec uniquement)
         if: failure()
