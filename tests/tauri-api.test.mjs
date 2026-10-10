@@ -214,3 +214,36 @@ test("serialize : Uint8Array récursif en tableaux de nombres", () => {
   assert.equal(serialize(null), null)
   assert.deepEqual(serialize({ z: 1, a: 2 }), { z: 1, a: 2 })
 })
+
+
+test("workspaces : lit le registre Rust workspace:list", async () => {
+  const entries = [{ path: "C:/dev/projet", name: "Projet" }]
+  const { deps, calls } = makeDeps({ invoke: async () => entries })
+  const api = createTauriApi(deps)
+
+  assert.deepEqual(await api.workspaces(), entries)
+  assert.deepEqual(calls[0].args, { method: "workspace:list", args: [] })
+})
+
+test("switchWorkspace : utilise le nom RPC workspace:switch", async () => {
+  const { deps, calls } = makeDeps({ invoke: async () => ({ status: "ready" }) })
+  const api = createTauriApi(deps)
+
+  await api.switchWorkspace("C:/dev/projet")
+  assert.deepEqual(calls[0].args, {
+    method: "workspace:switch",
+    args: ["C:/dev/projet"],
+  })
+})
+
+test("removeWorkspace : utilise le nom RPC workspace:remove", async () => {
+  const remaining = [{ path: "C:/dev/autre", name: "Autre" }]
+  const { deps, calls } = makeDeps({ invoke: async () => remaining })
+  const api = createTauriApi(deps)
+
+  assert.deepEqual(await api.removeWorkspace("C:/dev/projet"), remaining)
+  assert.deepEqual(calls[0].args, {
+    method: "workspace:remove",
+    args: ["C:/dev/projet"],
+  })
+})

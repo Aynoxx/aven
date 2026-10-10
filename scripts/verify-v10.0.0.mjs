@@ -15,8 +15,31 @@ const read = (p) => readFileSync(path.join(root, p), "utf8")
 // ⑦ liste blanche d'URLs identique des deux côtés.
 
 const pkg = JSON.parse(read("package.json"))
+const lock = JSON.parse(read("package-lock.json"))
 const [vMaj, vMin, vPatch] = pkg.version.split(".").map(Number)
 assert.ok(vMaj * 10000 + vMin * 100 + vPatch >= 10000, `version trop ancienne : ${pkg.version}`)
+
+// v10.0.0 : retrait total des piles Electron et WinUI — sources, packages et verrou compris.
+for (const section of ["dependencies", "devDependencies", "optionalDependencies"]) {
+  const names = Object.keys(pkg[section] ?? {})
+  assert.ok(
+    !names.some((name) => /^electron(?:-|$)/i.test(name) || /^@electron\//i.test(name)),
+    `package.json ne doit plus référencer Electron dans ${section}`,
+  )
+}
+assert.ok(
+  !Object.keys(lock.packages ?? {}).some((name) =>
+    /^node_modules\/(?:electron(?:-[^/]+)?|@electron\/)/i.test(name),
+  ),
+  "package-lock.json ne doit plus contenir de paquets Electron",
+)
+assert.ok(
+  !Object.keys(lock.packages?.[""]?.dependencies ?? {}).some((name) => /^electron/i.test(name)),
+  "les dépendances directes verrouillées ne doivent plus contenir Electron",
+)
+assert.ok(!existsSync(path.join(root, "electron")), "l'ancien dossier electron/ doit être supprimé")
+assert.ok(!existsSync(path.join(root, "native")), "l'ancien prototype WinUI native/ doit être supprimé")
+assert.ok(!existsSync(path.join(root, "MIGRATION-WINUI.md")), "l'ancien protocole WinUI doit être supprimé")
 
 const app = read("web/src/App.tsx")
 const api = read("web/src/api.ts")
@@ -34,6 +57,29 @@ const providers = read("host/providers.ts")
 // frameless) a disparu du renderer comme du contrat d'API — Tauri garde ses
 // décorations, c'est la barre système qui minimise/agrandit/ferme.
 const types = read("web/src/types.ts")
+const settings = read("web/src/SettingsDialog.tsx")
+const appHost = read("host/aven-app-host.ts")
+const commands = read("src-tauri/src/commands.rs")
+const apiFactoryTests = read("tests/tauri-api.test.mjs")
+assert.ok(!types.includes("checkForUpdates:"), "l'API ne doit pas exposer un updater non disponible avant publication")
+assert.ok(!settings.includes("checkForUpdates"), "les réglages ne doivent pas appeler un updater absent")
+assert.ok(!settings.includes("updatesConfigured"), "les réglages ne doivent pas exposer un statut updater")
+assert.ok(!types.includes("updatesConfigured"), "le contrat d'état ne doit pas exposer le flag updater")
+assert.ok(!appHost.includes("updatesConfigured"), "le runtime Node ne doit pas simuler un updater")
+assert.ok(!runtime.includes("updatesConfigured"), "Rust ne doit pas simuler un updater")
+assert.ok(appHost.includes("probeOpenRouterKey"), "le host conserve la validation de clé OpenRouter")
+assert.ok(appHost.includes("activeProviders"), "le host signale les clés sans modèle actif")
+assert.ok(appHost.includes("log: diagLog"), "le diagnostic conserve les derniers événements")
+assert.match(commands, /"diagnostic" =>/, "Rust fournit le registre des espaces au diagnostic")
+
+assert.ok(appHost.includes("sync: seed.sync"), "le démarrage doit restituer la synchronisation des fichiers")
+assert.ok(appHost.includes("newModels: seed.newModels"), "le démarrage doit restituer les nouveaux modèles")
+assert.ok(appHost.includes("removedModels: seed.removedModels"), "le démarrage doit restituer les modèles retirés")
+assert.ok(appHost.includes("agentsBridge: agentsBridgeWritten"), "le démarrage doit restituer les agents synchronisés")
+assert.match(commands, /state_with_workspaces\(runtime_call/, "l'état prêt doit être enrichi avec le registre Rust des espaces")
+assert.match(commands, /state_with_workspaces\(boot_runtime/, "le démarrage doit exposer la liste actuelle des espaces")
+assert.match(commands, /state_keeps_runtime_fields_and_refreshes_workspace_list/, "test Rust de parité de la liste des espaces")
+
 assert.ok(!app.includes("window-controls"), "App.tsx ne dessine plus de contrôles custom")
 assert.ok(
   !/minimizeWindow|toggleMaximize|closeWindow/.test(app),
@@ -66,6 +112,17 @@ assert.ok(
   existsSync(path.join(root, "tests/tauri-api.test.mjs")),
   "tests/tauri-api.test.mjs attendu (routage aven_call)"
 )
+
+// B2. Parité des appels : les méthodes frontend qui ont un nom RPC différent sont explicites et testées.
+for (const [apiName, rpcName] of [
+  ["workspaces", "workspace:list"],
+  ["switchWorkspace", "workspace:switch"],
+  ["removeWorkspace", "workspace:remove"],
+]) {
+  assert.ok(apiTauri.includes(`property === "${apiName}"`), `façade Tauri explicite pour ${apiName}`)
+  assert.ok(apiTauri.includes(`method: "${rpcName}"`), `RPC Rust correct pour ${apiName}`)
+  assert.ok(apiFactoryTests.includes(rpcName), `test de contrat présent pour ${rpcName}`)
+}
 
 // C. Repo : Node embarqué ignoré, Cargo.lock versionné, checksum exigé.
 assert.match(ignore, /src-tauri\/resources\//, "src-tauri/resources/ ignoré (node.exe 83 Mo)")
@@ -122,6 +179,7 @@ assert.match(
 )
 assert.match(smoke, /reprise-crash/, "la fumée tue l'enfant Node et vérifie la reprise")
 assert.match(smoke, /barre-native/, "la fumée vérifie l'absence de contrôles custom")
+assert.match(smoke, /state-parity/, "la fumée vérifie la parité des métadonnées espace/réglages")
 
 // I. CI Windows : workflow dédié qui enchaîne la boucle complète ET la fumée.
 const ciWindows = read(".github/workflows/ci-windows.yml")

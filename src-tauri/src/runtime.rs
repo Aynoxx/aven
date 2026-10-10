@@ -351,7 +351,6 @@ pub(crate) fn initial_state() -> Result<Value, String> {
             {"id":"groq","label":"Groq (chat + dictée)","url":"https://console.groq.com/keys","note":"Modèles gratuits pour le chat et la dictée."}
         ],
         "workspaces": workspaces,
-        "updatesConfigured": false
     }))
 }
 

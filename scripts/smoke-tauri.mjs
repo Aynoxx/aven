@@ -6,10 +6,10 @@
 //     la fermeture), puis reprise après CRASH RÉEL du runtime Node (on tue
 //     l'enfant, la requête suivante doit le relancer sous budget 3/min).
 // On pilote la webview par le débogueur CDP de WebView2
-// (WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port). Chenfils toujours
+// (variables locales ou stratégie HKLM temporaire sous CI). Les journaux restent
 // en fichiers/ignore : un exe GUI qui hérite du pipe du shell ne rend jamais la main.
 import { spawn, spawnSync } from "node:child_process"
-import { existsSync, mkdirSync, mkdtempSync, openSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, openSync, realpathSync, rmSync, writeFileSync } from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import { setTimeout as sleep } from "node:timers/promises"
@@ -18,6 +18,25 @@ const CDP_PORT = 9333
 const EXE = "src-tauri/target/debug/aven.exe"
 const DEV_LOG = "smoke-tauri-dev.log"
 const BIN_LOG = "smoke-tauri-bin.log"
+const WEBVIEW_PROFILE_ROOT = mkdtempSync(path.join(os.tmpdir(), "aven-webview2-smoke-"))
+const WEBVIEW_PROFILES = []
+const USE_WEBVIEW2_POLICY = process.env.AVEN_SMOKE_WEBVIEW2_POLICY === "1"
+function webviewEnv(port) {
+  const env = { ...process.env }
+  if (USE_WEBVIEW2_POLICY) {
+    // Elevated WebView2 hosts ignore WEBVIEW2_* environment overrides. The CI
+    // workflow supplies AdditionalBrowserArguments through HKLM policy instead.
+    // Leave these variables absent so WebView2 actually consults that policy.
+    delete env.WEBVIEW2_USER_DATA_FOLDER
+    delete env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS
+    return env
+  }
+  const profile = mkdtempSync(path.join(WEBVIEW_PROFILE_ROOT, `profile-${port}-`))
+  WEBVIEW_PROFILES.push(profile)
+  env.WEBVIEW2_USER_DATA_FOLDER = profile
+  env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = `--remote-debugging-port=${port}`
+  return env
+}
 
 const results = []
 function record(stage, id, ok, detail) {
@@ -181,7 +200,18 @@ const EXPR_CSP = `fetch("https://example.com/", { mode: "cors" })
 
 const EXPR_STATE = `window.__TAURI_INTERNALS__
   ? window.__TAURI_INTERNALS__.invoke("aven_call", { method: "state", args: [] })
-      .then((s) => ({ ok: 1, status: s && s.status, needsWorkspace: !!(s && s.needsWorkspace), error: s && s.error }), (e) => ({ ok: 0, error: String(e).slice(0, 240) }))
+      .then((s) => ({
+        ok: 1,
+        status: s && s.status,
+        needsWorkspace: !!(s && s.needsWorkspace),
+        workspace: s && s.workspace,
+        workspaces: s && s.workspaces,
+        sync: s && s.sync,
+        newModels: s && s.newModels,
+        removedModels: s && s.removedModels,
+        agentsBridge: s && s.agentsBridge,
+        error: s && s.error,
+      }), (e) => ({ ok: 0, error: String(e).slice(0, 240) }))
   : Promise.resolve({ ok: 0, error: "pas de __TAURI_INTERNALS__" })`
 
 async function checkPath(stage, cdp) {
@@ -224,6 +254,38 @@ async function stageCrash(stage, cdp) {
     record(stage, "reprise-crash", null, `runtime non prêt : ${JSON.stringify(avant)}`)
     return
   }
+
+  // v10.0.0 : mêmes métadonnées que la v9 dans l'état consommé par App/SettingsDialog.
+  // Windows peut présenter un même dossier via son alias court (ex. RUNNER~1)
+  // et son chemin long. realpathSync.native compare l'identité du dossier plutôt
+  // que l'orthographe du chemin, sans accepter un espace de travail différent.
+  const normalizeWorkspacePath = (value) => {
+    const raw = String(value ?? "")
+    let canonical = raw
+    try { canonical = realpathSync.native(raw) } catch {}
+    return canonical
+      .replaceAll(String.fromCharCode(92), "/")
+      .replace(/^\/\/\?\//, "")
+      .replace(/\/+/, "/")
+      .toLowerCase()
+  }
+  const actif = normalizeWorkspacePath(avant.workspace)
+  const liste = Array.isArray(avant.workspaces) ? avant.workspaces : []
+  const listeContientActif = !!actif && liste.some((item) =>
+    normalizeWorkspacePath(item?.path) === actif
+  )
+  const cheminsEspaces = liste.map((item) => String(item?.path ?? ""))
+  const metadataArrays = ["sync", "newModels", "removedModels", "agentsBridge"]
+    .every((key) => Array.isArray(avant[key]))
+  const parite = listeContientActif && metadataArrays
+  record(
+    stage,
+    "state-parity",
+    parite,
+    `espace actif listé=${listeContientActif}, espaces=${liste.length}, workspace=${String(avant.workspace ?? "")}, chemins=${JSON.stringify(cheminsEspaces)}, sync=${Array.isArray(avant.sync)}, nouveaux modèles=${Array.isArray(avant.newModels)}, modèles retirés=${Array.isArray(avant.removedModels)}, agents pontés=${Array.isArray(avant.agentsBridge)}`
+  )
+  if (!parite) return
+
   const pidAvant = nodeHostPids()[0]
   if (!pidAvant) {
     record(stage, "reprise-crash", null, "aucun enfant node aven-app-host à tuer")
@@ -263,7 +325,7 @@ async function stageBinary() {
     detached: true,
     stdio: ["ignore", fd, fd],
     windowsHide: true,
-    env: { ...process.env, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${CDP_PORT}` },
+    env: webviewEnv(CDP_PORT),
   })
   let cdp
   try {
@@ -300,7 +362,7 @@ async function stageDev() {
   const dev = spawn("cmd.exe", ["/c", "npm run tauri:dev"], {
     stdio: ["ignore", fd, fd],
     windowsHide: true,
-    env: { ...process.env, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${CDP_PORT}` },
+    env: webviewEnv(CDP_PORT),
   })
   let cdp
   try {
@@ -402,6 +464,10 @@ if (!port5173Pris) {
   }
 }
 nettoyerStore(provisionne)
+for (const profile of WEBVIEW_PROFILES) {
+  try { rmSync(profile, { recursive: true, force: true }) } catch {}
+}
+try { rmSync(WEBVIEW_PROFILE_ROOT, { recursive: true, force: true }) } catch {}
 
 console.log("\n── Récapitulatif ──")
 const skips = results.filter((r) => r.ok === null).length

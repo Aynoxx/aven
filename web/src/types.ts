@@ -96,7 +96,6 @@ export type AppState = {
   assignments?: Record<string, { ref: string; label: string }[]> // agent → modèles par ordre de priorité (lecture seule)
   warning?: string
   versionWarning?: string // version du serveur OpenCode ≠ version attendue par le client
-  updatesConfigured: boolean
 }
 
 // API exposée par host/preload.cts via contextBridge.
@@ -106,7 +105,6 @@ export type OpenCodeApi = {
   setKey: (provider: string, key: string) => Promise<AppState>
   openExternal: (url: string) => Promise<void>
   openWorkspace: () => Promise<string>
-  checkForUpdates: () => Promise<{ ok: boolean; message: string }>
 
   workspaces: () => Promise<WorkspaceEntry[]>
   switchWorkspace: (dir: string) => Promise<AppState>

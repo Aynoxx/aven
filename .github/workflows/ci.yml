@@ -15,7 +15,7 @@ jobs:
           node-version: 22
           cache: npm
       - name: Installation (télécharge le CLI OpenCode)
-        run: npm install
+        run: npm ci
       - name: Tests unitaires
         run: npm test
       - name: Typecheck host

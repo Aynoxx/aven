@@ -9,7 +9,7 @@ import type { Bridge } from "./opencode-bridge.js"
 import { loadNames } from "./agent-names.js"
 import { listArchived } from "./archive.js"
 import { resolveOpenCodeBin } from "./opencode-bridge.js"
-import { PROVIDERS } from "./providers.js"
+import { probeOpenRouterKey, PROVIDERS } from "./providers.js"
 import { seedWorkspace } from "./workspace-seed.js"
 import { buildAgentsDir, readTemplateAgents } from "./agents-bridge.js"
 import { dirname, join } from "node:path"
@@ -32,6 +32,7 @@ import { buildDiagnostic } from "./diagnostic.js"
 import { transcribeSpeech } from "./voice.js"
 import { Announcer } from "./announcer.js"
 import { countDictation } from "./stats.js"
+import { rpcObjectParam } from "./rpc-params.js"
 import { buildLaunchCommand, freebuffBusyMessage, freebuffMissingMessage, parseVersionOutput } from "./freebuff-cli.js"
 import { DEFAULT_PTY_COLS, DEFAULT_PTY_ROWS, freebuffPtyPid, isFreebuffPtyActive, loadPtyModule, restartFreebuffPty, resizeFreebuffPty, signalFreebuffPty, startFreebuffPty, stopFreebuffPty, writeFreebuffPty } from "./freebuff-pty.js"
 
@@ -47,13 +48,23 @@ type AppState = {
   version?: string
   cli?: string
   workspace?: string
+  sync?: { file: string; status: "created" | "updated" | "unchanged" | "custom" }[]
+  newModels?: string[]
+  removedModels?: string[]
+  agentsBridge?: string[]
   assignments?: Record<string, { ref: string; label: string }[]>
   warning?: string
   versionWarning?: string
-  updatesConfigured: boolean
 }
 
 const providers = PROVIDERS.map(({ id, label, url, note }) => ({ id, label, url, note }))
+// v10.0.0 : diagnostic copiable — 30 derniers types d'événements seulement, sans contenu utilisateur.
+const diagLog: string[] = []
+function trace(line: string) {
+  diagLog.push(`${new Date().toISOString()} ${line}`)
+  if (diagLog.length > 30) diagLog.shift()
+}
+trace("démarrage du runtime applicatif")
 
 let workspace = ""
 let templateDir = ""
@@ -88,13 +99,13 @@ let appState: AppState = {
   keys: Object.fromEntries(PROVIDERS.map((p) => [p.id, false])),
   providers,
   needsWorkspace: true,
-  updatesConfigured: false,
 }
 
 const send = (message: Record<string, unknown>) => process.stdout.write(JSON.stringify(message) + "\n")
 const push = (event: EngineEvent) => {
   send({ jsonrpc: "2.0", method: "app.event", params: event })
   const candidate = event as unknown as { type?: string; data?: Record<string, unknown> }
+  if (candidate.type) trace(candidate.type)
   if (candidate.type && candidate.data) announcer.handle({ type: candidate.type, data: candidate.data })
 }
 
@@ -368,9 +379,11 @@ async function initialize(params: {
 
   await shutdown()
 
-  seedWorkspace(workspace, templateDir)
+  // v10.0.0 : conserver les retours de synchronisation que l'ancien boot Electron transmettait aux réglages.
+  const seed = seedWorkspace(workspace, templateDir)
+  let agentsBridgeWritten: string[] = []
   try {
-    buildAgentsDir(
+    agentsBridgeWritten = buildAgentsDir(
       workspace,
       readTemplateAgents(templateDir),
       join(templateDir, "aven-mcp-server.mjs"),
@@ -383,6 +396,19 @@ async function initialize(params: {
   const effectiveEnv = { ...storedEnv, ...(params.env ?? {}) }
   for (const [id, envName] of [["openrouter", "OPENROUTER_API_KEY"], ["groq", "GROQ_API_KEY"]] as const) {
     if (storedEnv[envName]) effectiveEnv[envName] = storedEnv[envName]
+  }
+
+  // v10.0.0 : préserver le contrôle de clé OpenRouter de la version Electron.
+  const keyWarnings: Record<string, string> = { ...(params.keyWarnings ?? {}) }
+  let openRouterUsable = params.openRouterUsable !== false
+  if (storedEnv.OPENROUTER_API_KEY) {
+    const probe = await probeOpenRouterKey(storedEnv.OPENROUTER_API_KEY)
+    if (probe.status === "invalid") {
+      openRouterUsable = false
+      keyWarnings.openrouter = `Clé OpenRouter refusée : ${probe.message} Remplace-la dans Paramètres.`
+    } else if (probe.status === "unknown") {
+      keyWarnings.openrouter = probe.message
+    }
   }
 
   const bin = params.binPath
@@ -404,12 +430,23 @@ async function initialize(params: {
     env: effectiveEnv,
     prioritiesPath: join(workspace, "model-priorities.json"),
     templatePrioritiesPath: join(templateDir, "model-priorities.json"),
-    excludeProvider: params.openRouterUsable === false ? "openrouter" : undefined,
+    excludeProvider: openRouterUsable ? undefined : "openrouter",
     binPath: bin.command,
     binShell: bin.shell,
   })
 
   engineChains = (engineState.assignments ?? {}) as typeof engineChains
+
+  // v10.0.0 : avertir aussi quand une clé existe mais qu'aucun modèle du fournisseur n'est actif.
+  const activeProviders = new Set(
+    Array.isArray(engineState.activeProviders) ? engineState.activeProviders.map(String) : [],
+  )
+  for (const provider of PROVIDERS) {
+    if (provider.openCodeEnv === false) continue
+    if (effectiveEnv[provider.env] && !keyWarnings[provider.id] && !activeProviders.has(provider.id)) {
+      keyWarnings[provider.id] = "Clé enregistrée, mais aucun modèle actif détecté pour ce fournisseur — vérifie qu'elle est valide."
+    }
+  }
 
   const sdk = sdkProxy(() => engine!) as unknown as Bridge["client"]
   const engineBridge = {
@@ -443,13 +480,16 @@ async function initialize(params: {
     ),
     providers,
     workspace,
+    sync: seed.sync,
+    newModels: seed.newModels,
+    removedModels: seed.removedModels,
+    agentsBridge: agentsBridgeWritten,
     assignments: engineState.assignments as AppState["assignments"],
     version: String(engineState.version ?? ""),
     cli: String(engineState.binSource ?? ""),
     warning: engineState.warning as string | undefined,
     versionWarning: engineState.versionWarning as string | undefined,
-    updatesConfigured: false,
-    keyWarnings: params.keyWarnings,
+    keyWarnings,
   }
 
   return appState
@@ -471,7 +511,7 @@ async function dispatch(method: string, params: any): Promise<unknown> {
       })
     }
     case "initialize":
-      return initialize(params as Parameters<typeof initialize>[0])
+      return initialize(rpcObjectParam<Parameters<typeof initialize>[0]>(params))
     case "shutdown":
       await shutdown()
       stopFreebuffPty()
@@ -480,16 +520,15 @@ async function dispatch(method: string, params: any): Promise<unknown> {
         keys: Object.fromEntries(PROVIDERS.map((p) => [p.id, false])),
         providers,
         needsWorkspace: true,
-        updatesConfigured: false,
       }
       return { stopped: true }
     case "workspace:seed": {
-      const p = params as { workspace?: string; templateDir?: string }
+      const p = rpcObjectParam<{ workspace?: string; templateDir?: string }>(params)
       if (!p?.workspace || !p?.templateDir) throw new Error("workspace et templateDir requis")
       return seedWorkspace(join(p.workspace), join(p.templateDir))
     }
     case "agents:bridge": {
-      const p = params as { workspace?: string; templateDir?: string }
+      const p = rpcObjectParam<{ workspace?: string; templateDir?: string }>(params)
       if (!p?.workspace || !p?.templateDir) throw new Error("workspace et templateDir requis")
       return {
         written: buildAgentsDir(
@@ -663,8 +702,8 @@ async function dispatch(method: string, params: any): Promise<unknown> {
         warning: s.warning,
         keyWarnings: s.keyWarnings,
         workspace: s.workspace,
-        workspaces: [],
-        log: [],
+        workspaces: Array.isArray(params?.[0]) ? params[0] : [],
+        log: diagLog,
       })
     }
     case "getStats": {
