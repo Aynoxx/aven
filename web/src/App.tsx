@@ -74,7 +74,7 @@ export default function App() {
   const [live, setLive] = useState<Live>(emptyLive)
   const [input, setInput] = useState("")
   const [error, setError] = useState<string>()
-  const [appState, setAppState] = useState<AppState>({ status: "starting", keys: {}, providers: [], updatesConfigured: false })
+  const [appState, setAppState] = useState<AppState>({ status: "starting", keys: {}, providers: [] })
   const [showSettings, setShowSettings] = useState(false)
   const [settingsSection, setSettingsSection] = useState<"general" | "appearance" | "usage">("general")
   const [notices, setNotices] = useState<Notice[]>([])
