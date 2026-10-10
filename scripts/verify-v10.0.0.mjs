@@ -67,6 +67,11 @@ assert.ok(!settings.includes("updatesConfigured"), "les réglages ne doivent pas
 assert.ok(!types.includes("updatesConfigured"), "le contrat d'état ne doit pas exposer le flag updater")
 assert.ok(!appHost.includes("updatesConfigured"), "le runtime Node ne doit pas simuler un updater")
 assert.ok(!runtime.includes("updatesConfigured"), "Rust ne doit pas simuler un updater")
+assert.ok(appHost.includes("probeOpenRouterKey"), "le host conserve la validation de clé OpenRouter")
+assert.ok(appHost.includes("activeProviders"), "le host signale les clés sans modèle actif")
+assert.ok(appHost.includes("log: diagLog"), "le diagnostic conserve les derniers événements")
+assert.match(commands, /"diagnostic" =>/, "Rust fournit le registre des espaces au diagnostic")
+
 assert.ok(appHost.includes("sync: seed.sync"), "le démarrage doit restituer la synchronisation des fichiers")
 assert.ok(appHost.includes("newModels: seed.newModels"), "le démarrage doit restituer les nouveaux modèles")
 assert.ok(appHost.includes("removedModels: seed.removedModels"), "le démarrage doit restituer les modèles retirés")
