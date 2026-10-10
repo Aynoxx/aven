@@ -52,6 +52,13 @@ type AppState = {
 }
 
 const providers = PROVIDERS.map(({ id, label, url, note }) => ({ id, label, url, note }))
+// v10.0.0 : diagnostic copiable — 30 derniers types d'événements seulement, sans contenu utilisateur.
+const diagLog: string[] = []
+function trace(line: string) {
+  diagLog.push(`${new Date().toISOString()} ${line}`)
+  if (diagLog.length > 30) diagLog.shift()
+}
+trace("démarrage du runtime applicatif")
 
 let workspace = ""
 let templateDir = ""
@@ -92,6 +99,7 @@ const send = (message: Record<string, unknown>) => process.stdout.write(JSON.str
 const push = (event: EngineEvent) => {
   send({ jsonrpc: "2.0", method: "app.event", params: event })
   const candidate = event as unknown as { type?: string; data?: Record<string, unknown> }
+  if (candidate.type) trace(candidate.type)
   if (candidate.type && candidate.data) announcer.handle({ type: candidate.type, data: candidate.data })
 }
 
@@ -650,8 +658,8 @@ async function dispatch(method: string, params: any): Promise<unknown> {
         warning: s.warning,
         keyWarnings: s.keyWarnings,
         workspace: s.workspace,
-        workspaces: [],
-        log: [],
+        workspaces: Array.isArray(params?.[0]) ? params[0] : [],
+        log: diagLog,
       })
     }
     case "getStats": {
