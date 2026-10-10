@@ -92,6 +92,17 @@ assert.ok(
   "tests/tauri-api.test.mjs attendu (routage aven_call)"
 )
 
+// B2. Parité des appels : les méthodes frontend qui ont un nom RPC différent sont explicites et testées.
+for (const [apiName, rpcName] of [
+  ["workspaces", "workspace:list"],
+  ["switchWorkspace", "workspace:switch"],
+  ["removeWorkspace", "workspace:remove"],
+]) {
+  assert.ok(apiTauri.includes(`property === "${apiName}"`), `façade Tauri explicite pour ${apiName}`)
+  assert.ok(apiTauri.includes(`method: "${rpcName}"`), `RPC Rust correct pour ${apiName}`)
+  assert.ok(apiFactoryTests.includes(rpcName), `test de contrat présent pour ${rpcName}`)
+}
+
 // C. Repo : Node embarqué ignoré, Cargo.lock versionné, checksum exigé.
 assert.match(ignore, /src-tauri\/resources\//, "src-tauri/resources/ ignoré (node.exe 83 Mo)")
 assert.ok(existsSync(path.join(root, "src-tauri/Cargo.lock")), "Cargo.lock doit être versionné")
