@@ -237,10 +237,10 @@ async function stageCrash(stage, cdp) {
   }
 
   // v10.0.0 : mêmes métadonnées que la v9 dans l'état consommé par App/SettingsDialog.
-  const actif = String(avant.workspace ?? "").replaceAll("\\\\", "/").toLowerCase()
+  const actif = String(avant.workspace ?? "").replaceAll(String.fromCharCode(92), "/").toLowerCase()
   const liste = Array.isArray(avant.workspaces) ? avant.workspaces : []
   const listeContientActif = !!actif && liste.some((item) =>
-    String(item?.path ?? "").replaceAll("\\\\", "/").toLowerCase() === actif
+    String(item?.path ?? "").replaceAll(String.fromCharCode(92), "/").toLowerCase() === actif
   )
   const metadataArrays = ["sync", "newModels", "removedModels", "agentsBridge"]
     .every((key) => Array.isArray(avant[key]))
