@@ -41,7 +41,6 @@ export default function SettingsDialog(props: {
   }, [props.focusWorkspaces])
   const [inputs, setInputs] = useState<Record<string, string>>({})
   const [newWsName, setNewWsName] = useState("")
-  const [updateMsg, setUpdateMsg] = useState<string>()
   const [busy, setBusy] = useState(false)
   const [notifications, setNotifications] = useState<boolean | null>(null) // null = pas encore chargé
   useEffect(() => { api.prefs().then((p) => setNotifications(p.notifications)).catch(() => setNotifications(true)) }, [])
@@ -130,7 +129,6 @@ export default function SettingsDialog(props: {
     setBusy(true)
     try { await api.removeWorkspace(dir); await refreshAfterRestart() } catch (e) { props.onError(e) } finally { setBusy(false) }
   }
-  const checkUpdates = async () => { setUpdateMsg("Vérification…"); const res = await api.checkForUpdates(); setUpdateMsg(res.message) }
 
   const moveBlock = (fromId: BlockId, targetId: BlockId) => {
     if (!fromId || fromId === targetId) return
@@ -228,7 +226,6 @@ export default function SettingsDialog(props: {
       <div className="row">
         <span className="hint">{cli === null ? "Vérification…" : cli.installed ? <b><Icon name="check" size={12} /> CLI installé{cli.version ? ` — v${cli.version}` : ""}</b> : "CLI non installé"}</span>
         {cli?.installed && <button className="button secondary" onClick={() => void cliAction("login")}>Se connecter</button>}
-        {cli?.installed && <button className="button secondary" onClick={() => void cliAction("login")}>Se connecter</button>}
         {!cli?.installed && <button className="button primary" disabled={cliInstalling} onClick={() => void cliAction("install")}>{cliInstalling ? "Installation en cours…" : "Installer le CLI (npm)"}</button>}
       </div>
       <h4>Priorité des modèles par agent</h4>
@@ -244,7 +241,7 @@ export default function SettingsDialog(props: {
       {!!state.sync?.length && <><h4>Fichiers de config du dossier de travail</h4>{state.sync.map((s) => <p key={s.file} className="hint"><code>{s.file}</code> : {SYNC_LABEL[s.status] ?? s.status}</p>)}</>}
       {state.versionWarning && <p className="err">{state.versionWarning}</p>}
       <p className="hint">OpenCode {state.version ?? "?"} · CLI : {state.cli ?? "?"}<br />Dossier de travail actif : {state.workspace ?? "?"}</p>
-      <div className="row"><button className="button secondary" onClick={() => api.openWorkspace()}>Ouvrir le dossier</button>{state.updatesConfigured ? <button className="button secondary" onClick={checkUpdates}>Vérifier les mises à jour</button> : <span className="hint">Mise à jour automatique non configurée (définis <code>build.publish.owner/repo</code>).</span>}{updateMsg && <span className="hint">{updateMsg}</span>}</div>
+      <div className="row"><button className="button secondary" onClick={() => api.openWorkspace()}>Ouvrir le dossier</button></div>
       <div className="row"><button className="button ghost" onClick={props.onClose}>Fermer</button></div>
     </div>
   )
