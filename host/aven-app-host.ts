@@ -42,6 +42,10 @@ type AppState = {
   version?: string
   cli?: string
   workspace?: string
+  sync?: { file: string; status: "created" | "updated" | "unchanged" | "custom" }[]
+  newModels?: string[]
+  removedModels?: string[]
+  agentsBridge?: string[]
   assignments?: Record<string, { ref: string; label: string }[]>
   warning?: string
   versionWarning?: string
@@ -361,9 +365,11 @@ async function initialize(params: {
 
   await shutdown()
 
-  seedWorkspace(workspace, templateDir)
+  // v10.0.0 : conserver les retours de synchronisation que l'ancien boot Electron transmettait aux réglages.
+  const seed = seedWorkspace(workspace, templateDir)
+  let agentsBridgeWritten: string[] = []
   try {
-    buildAgentsDir(
+    agentsBridgeWritten = buildAgentsDir(
       workspace,
       readTemplateAgents(templateDir),
       join(templateDir, "aven-mcp-server.mjs"),
@@ -436,6 +442,10 @@ async function initialize(params: {
     ),
     providers,
     workspace,
+    sync: seed.sync,
+    newModels: seed.newModels,
+    removedModels: seed.removedModels,
+    agentsBridge: agentsBridgeWritten,
     assignments: engineState.assignments as AppState["assignments"],
     version: String(engineState.version ?? ""),
     cli: String(engineState.binSource ?? ""),
