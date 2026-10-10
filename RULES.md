@@ -149,7 +149,7 @@ par les variables `:root` existantes, sinon thèmes et densités cassent.
   toute logique décisionnelle : politiques, parsing, routage, calculs.
   Précède-le du commentaire `// Pur : testable avec Node seul, sans Electron.`
 - Les modules purs ont leurs tests dans `tests/*.test.mjs` (runner `node --test`,
-  strip-types, stub Electron via `tests/electron-stub.mjs` + `tests/register.mjs`).
+  strip-types, résolveur TypeScript via `tests/hooks.mjs` + `tests/register.mjs`).
 - Un comportement à seuil (ex. « notifie si > 8 s ») vit dans une fonction pure
   exportée, pas enfoui dans un handler IPC.
 
