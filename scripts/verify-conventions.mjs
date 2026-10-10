@@ -199,4 +199,24 @@ assert.match(app, /onKeyDown=\{conversationsNav\.onKeyDown\}/,
 // v9.6.0 : le sélecteur d'espaces du hub est retiré (Réglages → Configuration) —
 // plus de liste projets à naviguer ici ; les modales restantes gardent leurs flèches.
 
+// ── Règle 10 : la resynchronisation ne peut jamais écraser du travail local ───
+// v10.2.0 : `npm run sync` (scripts/sync.mjs) enchaîne fetch → avance rapide →
+// npm ci conditionnel → tauri:check. Verrous figés ici : --ff-only obligatoire,
+// aucune commande de force ni de `git pull` nu, garde-fou instance unique.
+const sync = read("scripts/sync.mjs")
+assert.match(sync, /--ff-only/,
+  "sync.mjs : l'avance rapide doit rester en --ff-only (aucune avance forcée sur un dépôt partagé)")
+assert.ok(!/reset\s+--hard|push[^\n]*--force/.test(sync),
+  "sync.mjs : aucune commande de force/reset admise — le script ne doit rien détruire")
+assert.ok(!/\[\s*"(?:pull|reset|push)"|"--force"/.test(sync),
+  "sync.mjs : aucune commande pull/reset/push ni --force ne doit entrer dans un appel git")
+assert.match(sync, /tasklist/,
+  "sync.mjs : le garde-fou « Aven ouvert (instance unique) » doit rester")
+assert.match(sync, /tauri:check/,
+  "sync.mjs : la dernière étape doit rebuild le binaire — un pull seul ne change pas l'app")
+const pkgSync = JSON.parse(read("package.json"))
+assert.equal(pkgSync.scripts.sync, "node scripts/sync.mjs", "npm run sync doit rester exposé")
+assert.match(read("README.md"), /npm run sync/,
+  "README : la procédure de resynchronisation doit rester documentée")
+
 console.log("conventions (RULES.md) : OK")

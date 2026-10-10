@@ -12,6 +12,13 @@
 > npm run dev          # développement : Tauri + webview + rechargement
 > npm run tauri:build  # installeurs Windows : NSIS + MSI
 > ```
+>
+> **Resynchronisation — `npm run sync`** : quand un push distant arrive, une seule
+> commande fait `git fetch` + **avance rapide** (`--ff-only`, jamais de force ni de
+> reset), `npm ci` si les verrous ont bougé, puis `tauri:check`. Deux étapes parce
+> que le `.exe` que tu lances est un **artefact compilé** : avancer le code ne change
+> rien à l'app tant qu'on ne rebuild pas. Refuse de tourner si Aven est ouvert
+> (instance unique). Options : `npm run sync -- --sans-build` et `-- --sans-ci`.
 
 > ## Avant de modifier ce projet (IA ou humain)
 > Lis **`AGENTS.md`** puis **`RULES.md`** : ils fixent les règles universelles de
