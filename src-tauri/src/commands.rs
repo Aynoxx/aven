@@ -88,6 +88,12 @@ pub(crate) fn aven_call(
             state_with_workspaces(runtime_call(&app, &state, "state", args)?)
         }
 
+        // v10.0.0 : fournir les noms d'espaces au diagnostic sans exposer leurs chemins.
+        "diagnostic" => {
+            let workspaces = read_workspace_store()?.0;
+            runtime_call(&app, &state, "diagnostic", vec![json!(workspaces)])
+        }
+
         "workspace:list" => Ok(read_workspace_store()?.0.into()),
 
         "workspace:add" => {
