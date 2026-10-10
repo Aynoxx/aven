@@ -59,6 +59,7 @@ const providers = read("host/providers.ts")
 const types = read("web/src/types.ts")
 const settings = read("web/src/SettingsDialog.tsx")
 const appHost = read("host/aven-app-host.ts")
+const commands = read("src-tauri/src/commands.rs")
 const apiFactoryTests = read("tests/tauri-api.test.mjs")
 assert.ok(!types.includes("checkForUpdates:"), "l'API ne doit pas exposer un updater non disponible avant publication")
 assert.ok(!settings.includes("checkForUpdates"), "les réglages ne doivent pas appeler un updater absent")
@@ -66,6 +67,14 @@ assert.ok(!settings.includes("updatesConfigured"), "les réglages ne doivent pas
 assert.ok(!types.includes("updatesConfigured"), "le contrat d'état ne doit pas exposer le flag updater")
 assert.ok(!appHost.includes("updatesConfigured"), "le runtime Node ne doit pas simuler un updater")
 assert.ok(!runtime.includes("updatesConfigured"), "Rust ne doit pas simuler un updater")
+assert.ok(appHost.includes("sync: seed.sync"), "le démarrage doit restituer la synchronisation des fichiers")
+assert.ok(appHost.includes("newModels: seed.newModels"), "le démarrage doit restituer les nouveaux modèles")
+assert.ok(appHost.includes("removedModels: seed.removedModels"), "le démarrage doit restituer les modèles retirés")
+assert.ok(appHost.includes("agentsBridge: agentsBridgeWritten"), "le démarrage doit restituer les agents synchronisés")
+assert.match(commands, /state_with_workspaces\(runtime_call/, "l'état prêt doit être enrichi avec le registre Rust des espaces")
+assert.match(commands, /state_with_workspaces\(boot_runtime/, "le démarrage doit exposer la liste actuelle des espaces")
+assert.match(commands, /state_keeps_runtime_fields_and_refreshes_workspace_list/, "test Rust de parité de la liste des espaces")
+
 assert.ok(!app.includes("window-controls"), "App.tsx ne dessine plus de contrôles custom")
 assert.ok(
   !/minimizeWindow|toggleMaximize|closeWindow/.test(app),
@@ -165,6 +174,7 @@ assert.match(
 )
 assert.match(smoke, /reprise-crash/, "la fumée tue l'enfant Node et vérifie la reprise")
 assert.match(smoke, /barre-native/, "la fumée vérifie l'absence de contrôles custom")
+assert.match(smoke, /state-parity/, "la fumée vérifie la parité des métadonnées espace/réglages")
 
 // I. CI Windows : workflow dédié qui enchaîne la boucle complète ET la fumée.
 const ciWindows = read(".github/workflows/ci-windows.yml")
