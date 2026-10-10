@@ -1,9 +1,6 @@
 # CI Windows — boucle de vérification complète + fumée Tauri.
-# Complète ci.yml (Linux) et tauri.yml (bundles de release) :
-# ici on exécute SUR WINDOWS la boucle obligatoire du projet (typecheck, tests,
-# verify, cargo check/test) puis la fumée scripts/smoke-tauri.mjs qui pilote la
-# webview réelle en CDP : rendu des assets, CSP de production bloquante, titlebar
-# routée par la façade api, reprise après crash du runtime Node.
+# Complète ci.yml (Linux) et tauri.yml (bundles de release) : ici on exécute
+# SUR WINDOWS la boucle obligatoire du projet puis la fumée de la vraie webview.
 name: CI Windows (vérification + fumée)
 
 on:
@@ -34,7 +31,6 @@ on:
       - "opencode.jsonc"
       - "model-priorities.json"
       - ".github/workflows/ci-windows.yml"
-  # Exécution manuelle : la branche courante peut être validée avant merge.
   workflow_dispatch:
 
 concurrency:
@@ -45,8 +41,6 @@ jobs:
   verify-smoke:
     name: Typecheck, tests, verify, Rust, fumée Tauri
     runs-on: windows-latest
-    # La fumée a ses propres timeouts internes ; 60 min couvrent un build froid
-    # (Rust + bundles debug) sans laisser un job suspendu indéfiniment.
     timeout-minutes: 60
 
     steps:
@@ -75,7 +69,6 @@ jobs:
       - name: Installation (télécharge le CLI OpenCode)
         run: npm install --no-audit --no-fund
 
-      # ── Typecheck complet : host, tests, web ──────────────────────────────
       - name: Typecheck host
         run: npm run typecheck:host
 
@@ -86,11 +79,9 @@ jobs:
         run: npx tsc -b
         working-directory: web
 
-      # ── Tests unitaires (Node, y compris les 12 tests de la fabrique Tauri)
       - name: Tests unitaires
         run: npm test
 
-      # ── Builds puis chaîne verify (verify-build exige dist-host frais)
       - name: Build web (inclut tsc -b)
         run: npm run build:web
 
@@ -100,22 +91,18 @@ jobs:
       - name: Vérification des conventions (sondes v8 → v10)
         run: npm run verify
 
-      # ── Rust ──────────────────────────────────────────────────────────────
+      # v10.0.0 : cargo tauri-build lit resources/nodejs/node.exe DÈS cargo check.
+      # Préparer le runtime avant toute commande Cargo évite l'échec à froid
+      # observé en CI ; le script contrôle le SHA-256 avant de promouvoir le binaire.
+      - name: Prepare bundled Node runtime
+        run: node scripts/prepare-tauri-runtime.mjs
+
       - name: Rust check
         run: cargo check --manifest-path src-tauri/Cargo.toml
 
       - name: Rust tests
         run: cargo test --manifest-path src-tauri/Cargo.toml
 
-      # ── Fumée Tauri ───────────────────────────────────────────────────────
-      # Les ressources du bundle embarquent resources/nodejs/node.exe
-      # (ignoré par git) : téléchargement vérifié par checksum SHA-256.
-      - name: Prepare bundled Node runtime
-        run: node scripts/prepare-tauri-runtime.mjs
-
-      # tauri:check produit target/debug/aven.exe en forme « protocole custom »
-      # (celle qui applique la CSP de production) — c'est elle que la fumée
-      # pilote en premier ; son étape dev relancera ensuite tauri:dev.
       - name: Build Tauri debug (binaire forme prod pour la fumée)
         run: npm run tauri:check
         env:
