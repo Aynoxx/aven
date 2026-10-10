@@ -9,7 +9,7 @@
 // (variables locales ou stratégie HKLM temporaire sous CI). Les journaux restent
 // en fichiers/ignore : un exe GUI qui hérite du pipe du shell ne rend jamais la main.
 import { spawn, spawnSync } from "node:child_process"
-import { existsSync, mkdirSync, mkdtempSync, openSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, openSync, realpathSync, rmSync, writeFileSync } from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import { setTimeout as sleep } from "node:timers/promises"
@@ -256,11 +256,25 @@ async function stageCrash(stage, cdp) {
   }
 
   // v10.0.0 : mêmes métadonnées que la v9 dans l'état consommé par App/SettingsDialog.
-  const actif = String(avant.workspace ?? "").replaceAll(String.fromCharCode(92), "/").toLowerCase()
+  // Windows peut présenter un même dossier via son alias court (ex. RUNNER~1)
+  // et son chemin long. realpathSync.native compare l'identité du dossier plutôt
+  // que l'orthographe du chemin, sans accepter un espace de travail différent.
+  const normalizeWorkspacePath = (value) => {
+    const raw = String(value ?? "")
+    let canonical = raw
+    try { canonical = realpathSync.native(raw) } catch {}
+    return canonical
+      .replaceAll(String.fromCharCode(92), "/")
+      .replace(/^\/\/\?\//, "")
+      .replace(/\/+/, "/")
+      .toLowerCase()
+  }
+  const actif = normalizeWorkspacePath(avant.workspace)
   const liste = Array.isArray(avant.workspaces) ? avant.workspaces : []
   const listeContientActif = !!actif && liste.some((item) =>
-    String(item?.path ?? "").replaceAll(String.fromCharCode(92), "/").toLowerCase() === actif
+    normalizeWorkspacePath(item?.path) === actif
   )
+  const cheminsEspaces = liste.map((item) => String(item?.path ?? ""))
   const metadataArrays = ["sync", "newModels", "removedModels", "agentsBridge"]
     .every((key) => Array.isArray(avant[key]))
   const parite = listeContientActif && metadataArrays
@@ -268,7 +282,7 @@ async function stageCrash(stage, cdp) {
     stage,
     "state-parity",
     parite,
-    `espace actif listé=${listeContientActif}, espaces=${liste.length}, sync=${Array.isArray(avant.sync)}, nouveaux modèles=${Array.isArray(avant.newModels)}, modèles retirés=${Array.isArray(avant.removedModels)}, agents pontés=${Array.isArray(avant.agentsBridge)}`
+    `espace actif listé=${listeContientActif}, espaces=${liste.length}, workspace=${String(avant.workspace ?? "")}, chemins=${JSON.stringify(cheminsEspaces)}, sync=${Array.isArray(avant.sync)}, nouveaux modèles=${Array.isArray(avant.newModels)}, modèles retirés=${Array.isArray(avant.removedModels)}, agents pontés=${Array.isArray(avant.agentsBridge)}`
   )
   if (!parite) return
 
