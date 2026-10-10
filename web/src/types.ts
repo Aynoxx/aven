@@ -98,7 +98,7 @@ export type OpenCodeApi = {
   setKey: (provider: string, key: string) => Promise<AppState>
   openExternal: (url: string) => Promise<void>
   openWorkspace: () => Promise<string>
-  checkForUpdates: () => Promise<{ ok: boolean; message: string }>
+  // v10.0.0 : la vérification de mise à jour attend la première release Tauri publiée.
 
   workspaces: () => Promise<WorkspaceEntry[]>
   switchWorkspace: (dir: string) => Promise<AppState>
