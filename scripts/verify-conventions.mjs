@@ -219,4 +219,17 @@ assert.equal(pkgSync.scripts.sync, "node scripts/sync.mjs", "npm run sync doit r
 assert.match(read("README.md"), /npm run sync/,
   "README : la procédure de resynchronisation doit rester documentée")
 
+// npm start : même discipline, plus le lancement. Trois verrous :
+//   · passe par sync (jamais de binaire périmé),
+//   · sort en erreur si sync échoue (le lancement est conditionnel),
+//   · spawn DÉTACHÉ + unref — sinon npm attend l'app et bloque le terminal.
+const start = read("scripts/start.mjs")
+assert.equal(pkgSync.scripts.start, "node scripts/start.mjs", "npm start doit rester exposé")
+assert.match(start, /scripts\/sync\.mjs/, "start.mjs : npm start doit passer par sync avant d'ouvrir l'app")
+assert.ok(/if \(code !== 0\)[\s\S]{0,300}process\.exit\(code\)/.test(start),
+  "start.mjs : un échec de sync doit interdire le lancement (aucun binaire périmé)")
+assert.match(start, /detached: true/, "start.mjs : le binaire doit être spawné détaché sinon npm bloque le terminal")
+assert.match(start, /\.unref\(\)/, "start.mjs : unref() obligatoire pour rendre la main au terminal")
+assert.match(read("README.md"), /npm start/, "README : npm start doit rester documenté")
+
 console.log("conventions (RULES.md) : OK")

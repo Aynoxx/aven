@@ -12,6 +12,7 @@
     "dev": "npm run tauri:dev",
     "postinstall": "node scripts/install-web.mjs && node scripts/ensure-binaries.mjs",
     "smoke:tauri": "node scripts/smoke-tauri.mjs",
+    "start": "node scripts/start.mjs",
     "sync": "node scripts/sync.mjs",
     "verify:v8.7": "node scripts/verify-v8.7.mjs",
     "verify:v8.7.2": "node scripts/verify-v8.7.2.mjs",

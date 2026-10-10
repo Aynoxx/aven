@@ -10,6 +10,7 @@
 > ```powershell
 > npm install          # dépendances + web/ + CLI OpenCode (aucun binaire Electron)
 > npm run dev          # développement : Tauri + webview + rechargement
+> npm start            # production : sync (fetch + rebuild) puis ouverture de l'app
 > npm run tauri:build  # installeurs Windows : NSIS + MSI
 > ```
 >
@@ -19,6 +20,9 @@
 > que le `.exe` que tu lances est un **artefact compilé** : avancer le code ne change
 > rien à l'app tant qu'on ne rebuild pas. Refuse de tourner si Aven est ouvert
 > (instance unique). Options : `npm run sync -- --sans-build` et `-- --sans-ci`.
+> **`npm start`** enchaîne cette même resynchronisation puis **ouvre l'app** (binaire
+> spawné détaché, le terminal reste libre) — et **n'ouvre rien si sync a échoué**,
+> pour ne jamais faire tourner un binaire périmé.
 
 > ## Avant de modifier ce projet (IA ou humain)
 > Lis **`AGENTS.md`** puis **`RULES.md`** : ils fixent les règles universelles de
