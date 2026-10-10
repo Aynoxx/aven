@@ -441,7 +441,6 @@ async function initialize(params: {
     cli: String(engineState.binSource ?? ""),
     warning: engineState.warning as string | undefined,
     versionWarning: engineState.versionWarning as string | undefined,
-    updatesConfigured: false,
     keyWarnings: params.keyWarnings,
   }
 
@@ -473,7 +472,6 @@ async function dispatch(method: string, params: any): Promise<unknown> {
         keys: Object.fromEntries(PROVIDERS.map((p) => [p.id, false])),
         providers,
         needsWorkspace: true,
-        updatesConfigured: false,
       }
       return { stopped: true }
     case "workspace:seed": {
