@@ -45,7 +45,6 @@ type AppState = {
   assignments?: Record<string, { ref: string; label: string }[]>
   warning?: string
   versionWarning?: string
-  updatesConfigured: boolean
 }
 
 const providers = PROVIDERS.map(({ id, label, url, note }) => ({ id, label, url, note }))
@@ -83,7 +82,6 @@ let appState: AppState = {
   keys: Object.fromEntries(PROVIDERS.map((p) => [p.id, false])),
   providers,
   needsWorkspace: true,
-  updatesConfigured: false,
 }
 
 const send = (message: Record<string, unknown>) => process.stdout.write(JSON.stringify(message) + "\n")
