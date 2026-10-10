@@ -27,6 +27,7 @@ import { buildDiagnostic } from "./diagnostic.js"
 import { transcribeSpeech } from "./voice.js"
 import { Announcer } from "./announcer.js"
 import { countDictation } from "./stats.js"
+import { rpcObjectParam } from "./rpc-params.js"
 import { buildLaunchCommand, freebuffBusyMessage, freebuffMissingMessage, parseVersionOutput } from "./freebuff-cli.js"
 import { DEFAULT_PTY_COLS, DEFAULT_PTY_ROWS, freebuffPtyPid, isFreebuffPtyActive, loadPtyModule, restartFreebuffPty, resizeFreebuffPty, signalFreebuffPty, startFreebuffPty, stopFreebuffPty, writeFreebuffPty } from "./freebuff-pty.js"
 
@@ -505,7 +506,7 @@ async function dispatch(method: string, params: any): Promise<unknown> {
       })
     }
     case "initialize":
-      return initialize(params as Parameters<typeof initialize>[0])
+      return initialize(rpcObjectParam<Parameters<typeof initialize>[0]>(params))
     case "shutdown":
       await shutdown()
       stopFreebuffPty()
@@ -517,12 +518,12 @@ async function dispatch(method: string, params: any): Promise<unknown> {
       }
       return { stopped: true }
     case "workspace:seed": {
-      const p = params as { workspace?: string; templateDir?: string }
+      const p = rpcObjectParam<{ workspace?: string; templateDir?: string }>(params)
       if (!p?.workspace || !p?.templateDir) throw new Error("workspace et templateDir requis")
       return seedWorkspace(join(p.workspace), join(p.templateDir))
     }
     case "agents:bridge": {
-      const p = params as { workspace?: string; templateDir?: string }
+      const p = rpcObjectParam<{ workspace?: string; templateDir?: string }>(params)
       if (!p?.workspace || !p?.templateDir) throw new Error("workspace et templateDir requis")
       return {
         written: buildAgentsDir(
