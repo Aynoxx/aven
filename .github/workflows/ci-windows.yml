@@ -126,6 +126,8 @@ jobs:
 
       - name: Fumée Tauri (rendu, CSP, titlebar, reprise après crash)
         run: npm run smoke:tauri
+        env:
+          AVEN_SMOKE_WEBVIEW2_POLICY: "1"
 
       - name: Supprimer la stratégie CDP temporaire
         if: always()
