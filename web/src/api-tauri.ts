@@ -74,6 +74,26 @@ export function createTauriApi(deps: TauriDeps): OpenCodeApi {
         }
       }
 
+      // v10.0.0 : les opérations de registre d'espaces appartiennent à Rust.
+      // Leurs noms historiques côté React ne sont pas les noms RPC du backend.
+      if (property === "workspaces") {
+        return () => invoke<unknown>("aven_call", { method: "workspace:list", args: [] })
+      }
+
+      if (property === "switchWorkspace") {
+        return (dir: string) => invoke<unknown>("aven_call", {
+          method: "workspace:switch",
+          args: [String(dir ?? "")],
+        })
+      }
+
+      if (property === "removeWorkspace") {
+        return (dir: string) => invoke<unknown>("aven_call", {
+          method: "workspace:remove",
+          args: [String(dir ?? "")],
+        })
+      }
+
       if (property === "exportChat") {
         return async (id: string) => {
           const data = await invoke<{ title: string; markdown: string }>("aven_call", {
