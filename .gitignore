@@ -35,3 +35,5 @@ artifacts/
 visual-prod-tauri*.log*
 # Journaux de la fumée Tauri (scripts/smoke-tauri.mjs)
 smoke-tauri-*.log
+# Journaux du parcours fonctionnel (scripts/test-features-tauri.mjs)
+test-features*.log*

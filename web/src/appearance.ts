@@ -99,6 +99,20 @@ export function saveAppearance(value: AppearanceConfig) {
   localStorage.setItem(APPEARANCE_KEY, JSON.stringify(value))
 }
 
+// v10.2.0 (M4) : fondu de bascule clair↔sombre — la classe .theme-easing (App.css)
+// autorise 320 ms de transition sur les couleurs, puis se retire. On ne l'applique
+// QUE si la valeur effective change : les autres réglages (accent, densité…) ne
+// gagnent aucune latence.
+let themeEasingTimer: ReturnType<typeof setTimeout> | undefined
+function applyTheme(next: "dark" | "light") {
+  const root = document.documentElement
+  if (root.dataset.theme !== next) {
+    root.classList.add("theme-easing")    clearTimeout(themeEasingTimer)
+    themeEasingTimer = setTimeout(() => root.classList.remove("theme-easing"), 340)
+  }
+  root.dataset.theme = next
+}
+
 export function useAppearance() {
   const [appearance, setAppearance] = useState<AppearanceConfig>(() => readAppearance())
 
@@ -107,7 +121,7 @@ export function useAppearance() {
     const root = document.documentElement
     const isDark = appearance.theme === "dark" ||
       (appearance.theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches)
-    root.dataset.theme = isDark ? "dark" : "light"
+    applyTheme(isDark ? "dark" : "light") // v10.2.0 (M4) : bascule en fondu
     root.style.setProperty("--accent", accentColor(appearance))
     root.style.setProperty("--sidebar-width", `${appearance.sidebarWidth}px`)
     root.style.setProperty("--message-width", `${appearance.messageWidth}px`)
@@ -119,7 +133,7 @@ export function useAppearance() {
     if (appearance.theme !== "system") return
     const media = window.matchMedia("(prefers-color-scheme: dark)")
     const update = () => {
-      document.documentElement.dataset.theme = media.matches ? "dark" : "light"
+      applyTheme(media.matches ? "dark" : "light") // v10.2.0 (M4) : bascule système en fondu
     }
     media.addEventListener("change", update)
     return () => media.removeEventListener("change", update)

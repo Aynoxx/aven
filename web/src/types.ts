@@ -39,6 +39,14 @@ export type ProviderLite = { id: string; label: string; url: string; note: strin
 export type WorkspaceEntry = { path: string; name: string }
 export type FileSyncResult = { file: string; status: "created" | "updated" | "unchanged" | "custom" }
 export type Note = { id: string; title: string; markdown: string; updated: number }
+// v10.1.0 : mode de tâche de l'orchestrateur (miroir de host/task-mode.ts).
+export type TaskMode = "auto" | "code" | "analyse" | "recherche"
+// v10.1.0 : arbre de notes façon Kortex (miroir de host/notes.ts).
+export type NoteTreeEntry =
+  | { type: "folder"; id: string; name: string; children: NoteTreeEntry[] }
+  | { type: "note"; id: string; name: string; title: string; updated: number }
+export type NoteLink = { target: string; resolved: string | null }
+export type NoteSearchHit = { id: string; title: string; snippet: string }
 // v9.3.0 : explorateur de fichiers de l'espace (miroir de host/workspace-files.ts).
 export type FileEntry = { name: string; path: string; kind: "dir" | "file"; size: number; modified: number }
 export type TextFile = { path: string; size: number; truncated: boolean; content: string }
@@ -139,6 +147,26 @@ export type OpenCodeApi = {
   noteExport: (id: string) => Promise<string | null>
   noteDir: () => Promise<string>
   noteOpenFolder: () => Promise<string>
+  // v10.1.0 : mode de tâche de l'orchestrateur.
+  taskMode: () => Promise<TaskMode>
+  setTaskMode: (mode: TaskMode) => Promise<TaskMode>
+  // v10.1.0 : notes façon Kortex — arbre, dossiers, poubelle, archive, liens, recherche, capture.
+  notesTree: () => Promise<NoteTreeEntry[]>
+  noteCreateFolder: (folder: string) => Promise<string>
+  noteRenameFolder: (from: string, to: string) => Promise<string>
+  noteDeleteFolder: (folder: string) => Promise<string>
+  noteMove: (id: string, folder: string) => Promise<string>
+  noteDelete: (id: string) => Promise<string>
+  noteRestore: (id: string) => Promise<string>
+  noteArchive: (id: string) => Promise<string>
+  noteUnarchive: (id: string) => Promise<string>
+  noteTrash: () => Promise<Note[]>
+  noteArchived: () => Promise<Note[]>
+  notePurge: (id: string) => Promise<string>
+  noteLinks: (id: string) => Promise<NoteLink[]>
+  noteBacklinks: (id: string) => Promise<string[]>
+  noteSearch: (query: string) => Promise<NoteSearchHit[]>
+  noteQuickCapture: (title: string, markdown: string) => Promise<Note>
   getStats: () => Promise<AggregatedStats>
   voiceTranscribe: (audio: Uint8Array, mimeType: string) => Promise<DictationResult>
   announcerActivity: () => Promise<void>

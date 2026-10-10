@@ -1,4 +1,4 @@
-# Aven v10.0.0
+# Aven v10.2.0
 
 > ## v10.0.0 — 100 % Tauri (Electron et le natif retirés)
 > Aven est une **app Tauri 2** : la webview React parle à Rust (`src-tauri/`)
@@ -30,8 +30,42 @@ parallèle (`native/`, MIGRATION-WINUI.md, workflows MSIX) — une seule pile :
 webview Tauri ⇄ Rust (`aven_call` : espaces de travail, notifications, ouverture
 externe) ⇄ moteur Node (`host/`, dispatch camelCase). Barre de titre native
 (suppression des boutons custom), CSP comme garde-fou sécurité, resources Tauri
-(host moteur, OpenCode, PTY, MCP), release NSIS + MSI au tag `v*`, et les 20
+(host moteur, OpenCode, PTY, MCP), release NSIS + MSI au tag `v*`, et les 21
 sondes de `npm run verify` réalignées sur cette réalité.
+> **v10.0.0 — fenêtre** : l'app démarre **maximisée** et **mémorise taille et
+position entre les lancements** (redimensionne, ferme, rouvre : tout est là) ;
+la barre de fenêtre vide a disparu de l'accueil (le hub commence par sa toolbar).
+> **v10.2.0 — Revue de design Apple (REVIEW-APPLE-DESIGN.md)** : le rapport E/M/F
+appliqué de bout en bout — ① **socle honnête** : pile système `system-ui` (aucune
+police à charger, rendue au premier pixel), micro-labels `xs` 11px, `--muted`
+verrouillé ≥ 4,5:1 dans les deux thèmes (calcul WCAG réel par la sonde) ; ② **focus
+structurel** : chaque champ incrusté porte un signaleur (`:focus-within` sur
+`.search-wrap`/`.composer`/`.home-command`, `:has(.ProseMirror-focused)` sur
+l'éditeur TipTap) et la sonde 9b exige la PAIRE racine + signal ; ③ **dialogues en
+View Transitions** (entrée `dialog-in`, sortie `dialog-out` jouable via
+`view-transition-name: dialog`, ressort `--ease-spring`) — fermetures de panneaux
+naviguées ; ④ **signaux d'accessibilité complets** : `prefers-reduced-transparency`,
+`prefers-contrast`, scroll lissé coupé sous `reduce`, bascule de thème en fondu
+(classe `.theme-easing`) ; ⑤ **gestes destructeurs en deux clics** (suppression de
+conversation, purge de note — armement 4 s, Échap désarme) et **push-to-talk qui suit
+le doigt** (le glisser hors bouton met la dictée en pause, le retour reprend, le
+relâchement transcrit quand même) ; ⑥ **clavier partout** : arbre Notes (↑↓ pour
+naviguer, Alt+↑↓ déplace la note vers le dossier affiché, racine au-dessus), listes
+triables des Réglages (↑↓ + Alt+↑↓, focus qui suit), cibles 24px, `overscroll
+contain`, état vide de la page Tâches, filtres de recherche à 120 ms. Les conventions
+sont figées par `scripts/verify-v10.2.0.mjs`.
+> **v10.1.0 — Orchestrateur à mode + Notes façon Kortex** : ① la page **Tâches**
+affiche **UNE carte d'orchestrateur** avec un switch segmenté **Auto / Code /
+Analyse / Recherche** (Auto = l'orchestrateur choisit le sous-agent ; un mode manuel
+**impose la délégation** via une instruction de session OpenCode — `host/task-mode.ts`,
+persisté par espace, rejoué à chaque envoi) ; le même switch vit dans le **bandeau
+de conversation** des sessions « projet ». ② Les **notes** passent à un vrai système
+de fichiers : arbre de dossiers (drag & drop), **poubelle** et archive, **liens
+`[[note]]`** cliquables avec backlinks, **recherche globale** (normalisée, côté host)
+et **capture rapide** `Ctrl+Shift+N` (raccourci global Rust → `Inbox`, façon Kortex).
+③ L'édition des notes utilise un **éditeur riche TipTap** (Markdown bidirectionnel) ;
+le rendu, lui, reste le `Markdown` maison (wikilinks cliquables). Les conventions sont
+figées par `scripts/verify-v10.1.0.mjs`.
 > **v9.6.0 — Projet = Freebuff, Tâches spécialisées, Groq au chat** : ① le raccourci
 « Espaces » quitte le hub (la gestion vit dans Réglages → Configuration) ; ② la carte
 « Projet » ouvre désormais l'**agent Freebuff** (page pleine, nom conservé) — le cerveau

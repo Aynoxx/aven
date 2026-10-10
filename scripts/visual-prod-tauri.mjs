@@ -111,6 +111,11 @@ let cdp
 try {
   const page = await waitForPage(45_000)
   say(`page : ${page.url}`)
+  // Garde-fou : `tauri dev` (étape dev de la fumée) recompile target/debug SANS
+  // custom-protocol → cfg(dev) → ce même exe pointe alors sur devUrl (5173), mort
+  // sans serveur Vite. On échoue vite avec la cause au lieu d'attendre 30 s après.
+  if (/127\.0\.0\.1:5173/.test(page.url))
+    fail("binaire en mode dev (tauri:dev a écrasé target/debug) — relancer npm run tauri:check")
   cdp = new Cdp(page.webSocketDebuggerUrl)
   await cdp.open()
   await cdp.send("Runtime.enable").catch(() => undefined)

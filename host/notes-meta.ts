@@ -6,6 +6,7 @@
 import { readFileSync } from "node:fs"
 import path from "node:path"
 import { writeJsonAtomicPretty } from "./atomic-file.js"
+import { cleanNoteId } from "./notes.js"
 
 export const MAX_PINNED = 20
 export const MAX_NOTE_TAGS = 6
@@ -21,10 +22,11 @@ function readMeta(workspace: string): NotesMeta {
     if (raw.tags && typeof raw.tags === "object") {
       for (const [id, list] of Object.entries(raw.tags)) {
         if (!Array.isArray(list)) continue
-        // Défense : jamais de traversée de chemin dans les identifiants (même règle que pinned).
-        const cleanId = path.basename(String(id).replace(/[\\/]+/g, "/"))
+        // Défense : ids en chemin relatif sûr (v10.1.0 : sous-dossiers supportés).
+        const cleanId = cleanNoteId(id)
+        if (!cleanId) continue
         const clean = list.filter((t) => typeof t === "string" && t.trim()).map((t) => String(t).trim().slice(0, 30))
-        if (cleanId && clean.length) tags[cleanId] = [...new Set(clean)].slice(0, MAX_NOTE_TAGS)
+        if (clean.length) tags[cleanId] = [...new Set(clean)].slice(0, MAX_NOTE_TAGS)
       }
     }
     return { pinned: Array.isArray(raw.pinned) ? raw.pinned.filter((id) => typeof id === "string") : [], tags }
@@ -35,14 +37,14 @@ function readMeta(workspace: string): NotesMeta {
 
 /** Tags par agent d'une note (liste vide si aucune). */
 export function loadTags(workspace: string, id: string): string[] {
-  const clean = path.basename(String(id || "").replace(/[\\/]+/g, "/"))
-  return readMeta(workspace).tags?.[clean] ?? []
+  const clean = cleanNoteId(id)
+  return clean ? readMeta(workspace).tags?.[clean] ?? [] : []
 }
 
 /** Remplace les tags d'une note. Normalisation : accents retirés, minuscules, tirets. */
 export function setTags(workspace: string, id: string, tags: string[]): string[] {
-  const clean = path.basename(String(id || "").replace(/[\\/]+/g, "/"))
-  if (!clean || clean !== String(id || "")) throw new Error("Note invalide")
+  const clean = cleanNoteId(id)
+  if (!clean) throw new Error("Note invalide")
   const normalized = normalizeTags(tags)
   const meta = readMeta(workspace)
   meta.tags = { ...(meta.tags ?? {}) }
@@ -68,9 +70,9 @@ export function loadPinned(workspace: string): string[] {
 /** Épingle ou détache une note. Retourne la nouvelle liste. */
 export function togglePin(workspace: string, id: string): string[] {
   const meta = readMeta(workspace)
-  // défense : jamais de traversée de chemin. Les \\ sont normalisés AVANT basename :
-  // sur Linux, path.basename ne les découpe pas (« ..\\evil\\note.md » resterait entier).
-  const clean = path.basename(String(id || "").replace(/[\\/]+/g, "/"))
+  // Défense (v10.1.0) : ids en chemin relatif sûr — jamais de traversée.
+  const clean = cleanNoteId(id)
+  if (!clean) throw new Error("Note invalide")
   const wasPinned = meta.pinned.includes(clean)
   if (wasPinned) meta.pinned = meta.pinned.filter((x) => x !== clean)
   else {

@@ -6,6 +6,7 @@ import { parseRef, refOf } from "./model-ref.js"
 // est sorti de l'UI depuis v9.6.0.
 import { TABS, type OpenCodeClient } from "./opencode-bridge.js"
 import { isArchived, setArchived } from "./archive.js"
+import { loadTaskMode, saveTaskMode, taskModeInstruction, TASK_MODE_INSTRUCTION_KEY, type TaskMode } from "./task-mode.js"
 
 export type ChatMsg = {
   id: string
@@ -112,6 +113,16 @@ export type BridgeHost = {
   }
 }
 
+/** Pose le mode de tâche en instruction de session (false = API refusée → fallback). */
+async function applyTaskModeInstruction(b: BridgeHost, sessionID: string, mode: TaskMode): Promise<boolean> {
+  try {
+    await b.client.session.instructions.entry.put({ sessionID, key: TASK_MODE_INSTRUCTION_KEY, value: taskModeInstruction(mode) })
+    return true
+  } catch {
+    return false
+  }
+}
+
 /** Toutes les opérations exposées à l'interface. Sans Electron : testable avec Node seul. */
 export function makeOps(current: () => BridgeHost) {
   const b = current()
@@ -166,6 +177,25 @@ export function makeOps(current: () => BridgeHost) {
         throw new Error(`L’agent « ${agent} » n’a pas pu recevoir le modèle « ${model} ». OpenCode a créé une session sans modèle explicite.`)
       }
       return { id: s.id, title: s.title, agent: fresh.agent ?? s.agent, model: resolved }
+    },
+
+    // v10.1.0 : mode de tâche de l'orchestrateur (Auto / Code / Analyse / Recherche).
+    async taskMode(): Promise<TaskMode> {
+      return loadTaskMode(b.workspace)
+    },
+
+    /** Change le mode et le pose (best-effort) sur toutes les sessions « projet » ouvertes. */
+    async setTaskMode(mode: unknown): Promise<TaskMode> {
+      const saved = saveTaskMode(b.workspace, mode)
+      try {
+        const page = await b.client.session.list({ directory: b.workspace, order: "desc", limit: 100 })
+        for (const s of page.data.filter((x) => x.agent === "projet" && !x.parentID)) {
+          await applyTaskModeInstruction(b, s.id, saved).catch(() => undefined)
+        }
+      } catch {
+        /* best effort : le mode est appliqué au prochain envoi */
+      }
+      return saved
     },
 
     /**
@@ -238,8 +268,10 @@ export function makeOps(current: () => BridgeHost) {
       if (!clean) throw new Error("Message vide")
 
       // Titre automatique au 1er message, SEULEMENT si le titre est encore celui par défaut (un renommage manuel n'est jamais écrasé).
+      let agent: string | undefined
       try {
         const info = await b.client.session.get({ sessionID: id })
+        agent = info.agent
         if ((info.title ?? DEFAULT_TITLE) === DEFAULT_TITLE) {
           const existing = await b.client.message.list({ sessionID: id, order: "asc", limit: 1 })
           if (existing.data.length === 0) await b.client.session.update({ sessionID: id, title: titleFrom(clean) })
@@ -248,7 +280,16 @@ export function makeOps(current: () => BridgeHost) {
         console.error("[titre auto]", err) // jamais bloquant pour l’envoi du message
       }
       await b.router.beforeSend(id, clean) // bascule éventuelle vers le meilleur modèle non saturé
-      await b.client.session.prompt({ sessionID: id, text: clean })
+      // v10.1.0 : mode de tâche de l'orchestrateur — l'instruction accompagne CHAQUE
+      // tour de la session « projet » ; si l'API d'instruction refuse, fallback en
+      // tête de message (jamais de navigation/prompt perdu).
+      let body = clean
+      if (agent === "projet") {
+        const mode = loadTaskMode(b.workspace)
+        const applied = await applyTaskModeInstruction(b, id, mode)
+        if (!applied && mode !== "auto") body = `${taskModeInstruction(mode)}\n\n${clean}`
+      }
+      await b.client.session.prompt({ sessionID: id, text: body })
       return { backend: "opencode" as const }
     },
 

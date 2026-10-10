@@ -36,8 +36,8 @@ par les variables `:root` existantes, sinon thèmes et densités cassent.
 
 | Usage | Variable | Valeur |
 |---|---|---|
-| Police | `var(--font-ui)` | Inter, sans-serif (jamais autre chose) |
-| Micro-labels, métadonnées | `var(--font-size-xs)` | 10px |
+| Police | `var(--font-ui)` | `system-ui, "Segoe UI", sans-serif` — pile système honnête, chargée au premier pixel (jamais autre chose, v10.2.0) |
+| Micro-labels, métadonnées | `var(--font-size-xs)` | 11px (10px était sous le seuil de lisibilité, v10.2.0) |
 | Libellés secondaires, hints | `var(--font-size-sm)` | 12px |
 | Texte courant, boutons | `var(--font-size-md)` | 14px |
 | Titres de section, h2/h3 | `var(--font-size-lg)` | 16px |
@@ -220,8 +220,11 @@ L'accessibilité d'Aven repose sur des pratiques déjà répandues dans le code 
   est le socle : **ne jamais poser un `outline: none` sans le remplacer** par un
   indice de focus équivalent (`box-shadow` accent, modèle de `.button:focus-visible`
   et des champs `.dialog input:focus`).
-- Un champ « incrusté » sans bordure (recherche, composeur) reste focusable et son
-  conteneur signale le focus (`:focus-within` sur `.home-command`).
+- Un champ « incrusté » sans bordure reste focusable et son conteneur signale le
+  focus : `:focus-within` sur `.search-wrap`, `.composer` et `.home-command`,
+  `:has(.ProseMirror-focused)` pour l'éditeur TipTap. La sonde 9b (durcie v10.2.0)
+  exige la PAIRE racine du sélecteur + règle compagne portant un signal `:focus*` :
+  un simple nom de classe en whitelist ne suffit plus.
 - L'ordre de tabulation suit l'ordre du DOM : pas de `tabIndex` positif. Les
   renvois de focus après action (ex. focus composeur via `requestAnimationFrame`)
   sont le modèle à imiter.
@@ -239,8 +242,9 @@ L'accessibilité d'Aven repose sur des pratiques déjà répandues dans le code 
 - Le texte n'exprime JAMAIS l'information par la couleur seule : état actif =
   `background` accentué + bordure (`--accent-border`) + éventuel badge textuel
   (modèle `.project-item.current` et `.hub-picker-item.active`).
-- Texte secondaire : `var(--muted)` sur `--panel`/`--bg` (paires déjà conformes
-  dans les deux thèmes). Ne crée pas de gris intermédiaire plus clair.
+- Texte secondaire : `var(--muted)` sur `--panel`/`--bg` — paires verrouillées à
+  ≥ 4,5:1 dans les deux thèmes par la sonde v10.2.0. Ne crée pas de gris
+  intermédiaire plus clair.
 - Surfaces translucides : le contenu texte vit sur `--panel-solid` ou un
   `color-mix` ≥ 90 % vers une couleur opaque — jamais du texte sur du verre seul.
 - Les accidents (`:hover`, `danger`) gardent leur signal non-coloriel : libellé,

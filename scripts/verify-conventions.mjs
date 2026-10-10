@@ -56,11 +56,12 @@ for (const r of radiusValues) {
     `Règle « Rayons » (RULES.md §3) : border-radius « ${r} » hors tokens --radius-* — utilise var(--radius-xs|sm|md|lg|xl|pill).`)
 }
 
-// Idem pour font-family : Inter ne se déclare que dans :root et sur body/boutons/champs.
+// Idem pour font-family : seule la pile système du token --font-ui se déclare
+// (v10.2.0 M1 : system-ui / Segoe UI — la pile Inter n'est plus la référence).
 const fontFamilies = [...css.matchAll(/font-family:\s*([^;]+);/g)].map((m) => m[1].trim())
 for (const f of fontFamilies) {
-  assert.ok(/var\(--font-ui\)|Inter, sans-serif/.test(f),
-    `Règle « Typographie par tokens » (RULES.md §2) : font-family non standard « ${f} ». Utilise var(--font-ui).`)
+  assert.ok(/var\(--font-ui\)|^system-ui/.test(f),
+    `Règle « Typographie par tokens » (RULES.md §2) : font-family non standard « ${f} ». Utilise var(--font-ui) (pile système : system-ui, "Segoe UI", sans-serif).`)
 }
 
 // ── Règle 3 : les icônes passent toutes par la bibliothèque centralisée ──────────
@@ -127,14 +128,24 @@ assert.match(css, /:focus-visible \{ outline: 2px solid var\(--accent\); outline
 assert.match(css, /@media \(prefers-reduced-motion: reduce\)/,
   "Règle « Mouvement » (RULES.md §12.4) : le bloc prefers-reduced-motion ne doit pas disparaître")
 
-// 9b. Aucun outline: none sans remplacement : chaque occurrence doit être sur un champ
-// « incrusté » dont le conteneur/signaleur gère :focus ou :focus-within.
-const outlineNoneContexts = [...css.matchAll(/([^{}\n]+)\{[^{}]*outline:\s*0;[^{}]*\}/g)]
+// 9b (durci v10.2.0 — E4) : aucun outline supprimé sans indice de focus STRUCTUREL.
+// Le simple test de nom de classe (« .composer », « .search »…) acceptait un champ
+// sans aucun signal de focus : la sonde exige désormais la PAIRE — soit le sélecteur
+// lui-même porte :focus*, soit le CSS contient une règle compagne partageant la même
+// racine (première classe) ET signalant le focus (:focus-within / :focus-visible /
+// :focus( / classe -focused). outline: none est couvert au même titre que outline: 0.
+const outlineNoneContexts = [...css.matchAll(/([^{}\n]+)\{[^{}]*outline:\s*(?:0|none);[^{}]*\}/g)]
+const cssSelectors = [...css.matchAll(/([^{}\n]+)\{/g)].map((m) => m[1].trim())
+const focusSignal = /:(?:focus-within|focus-visible|focus\()|-focused/
 for (const [, selector] of outlineNoneContexts) {
   const sel = selector.trim()
-  const ok = /input|textarea|\.search|\.composer/.test(sel)
-  assert.ok(ok,
-    `Règle « Focus visible » (RULES.md §12.2) : outline supprimé sur « ${sel} » sans champ incrusté justifié — remplace-le par un indice de focus (box-shadow accent).`)
+  if (/:focus/.test(sel)) continue // l'élément se signale lui-même (déclaration inline)
+  const root = sel.match(/\.[A-Za-z][\w-]*/)?.[0]
+  assert.ok(root,
+    `Règle « Focus visible » (RULES.md §12.2) : outline supprimé sur « ${sel} » sans classe racine à apparier — pose un signaleur :focus-within sur le conteneur.`)
+  const companion = cssSelectors.some((s) => s.includes(root) && focusSignal.test(s))
+  assert.ok(companion,
+    `Règle « Focus visible » (RULES.md §12.2) : outline supprimé sur « ${sel} » sans indice de focus associé — pose une règle compagne « ${root}:focus-within » (border/box-shadow accent), comme .composer et .search-wrap.`)
 }
 
 // 9c. Tout role="dialog" porte aria-modal et un aria-label nommant le contenu.

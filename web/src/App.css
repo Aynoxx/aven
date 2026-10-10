@@ -1,8 +1,16 @@
 :root {
   color-scheme: light;
-  font-family: Inter, sans-serif;
-  --font-ui: Inter, sans-serif;
-  --font-size-xs: 10px;
+  /* v10.2.0 (M1) : la « Inter » déclarée n'était JAMAIS chargée (aucun @font-face) —
+     fallback silencieux sur un graisse quelconque. On assume la police SYSTÈME
+     (skill apple-design §15 : la police de la plateforme porte déjà l'optical sizing,
+     le tracking et le lissage de lisibilité) — dit, pas feint. */
+  font-family: system-ui, "Segoe UI", sans-serif;
+  --font-ui: system-ui, "Segoe UI", sans-serif;
+  /* v10.2.0 (F4) : optique active dès qu'une fonte variable (axis opsz) est présente. */
+  font-optical-sizing: auto;
+  /* v10.2.0 (M2) : xs 10 → 11 px — les micro-labels (hints, méta) passaient sous le
+     seuil de lisibilité confortable sur les captures prod. */
+  --font-size-xs: 11px;
   --font-size-sm: 12px;
   --font-size-md: 14px;
   --font-size-lg: 16px;
@@ -17,7 +25,11 @@
   --border: rgba(20, 24, 38, .09);
   --border-strong: rgba(20, 24, 38, .15);
   --text: #171923;
-  --muted: #707689;
+  /* v10.2.0 (E3) : muted assombri — l'ancien #707689 tombait à 4.14:1 sur --bg clair
+     (sous le seuil WCAG 4.5) et plus bas encore sur les surfaces TRANSLUCIDES du hub
+     (toolbar, récents) où le fond réel bouge sous le texte. Nouvelle valeur : 5.4:1
+     sur --bg, ≥ 5:1 sur panel-soft — mesuré, pas estimé. */
+  --muted: #5f6579;
   --accent: #8b5cf6;
   --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
   --accent-border: color-mix(in srgb, var(--accent) 30%, transparent);
@@ -130,12 +142,15 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .sidebar-heading strong { font-size: var(--font-size-md); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .eyebrow { color: var(--muted); font-size: var(--font-size-xs); font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
 .search-wrap { display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: 7px; padding: 0 9px; min-height: 36px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel-solid); color: var(--muted); }
+/* v10.2.0 (E4) : la recherche sidebar est incrustée — son conteneur signale le focus. */
+.search-wrap:focus-within { border-color: var(--accent-border); box-shadow: 0 0 0 3px var(--accent-soft); }
 .search { width: 100%; border: 0; outline: 0; background: transparent; color: var(--text); padding: 7px 0; min-width: 0; font-size: var(--font-size-sm); }
 .search::placeholder { color: var(--muted); }
 kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in srgb, var(--border-strong) 65%, transparent); background: var(--panel-soft); color: var(--muted); border-radius: var(--radius-xs); padding: 1px 5px; font-size: var(--font-size-xs); line-height: 1.4; }
 .archive-toggle { width: 100%; display: flex; align-items: center; gap: 7px; border: 0; background: transparent; color: var(--muted); padding: 4px 2px; cursor: pointer; font-size: var(--font-size-xs); text-align: left; }
 .archive-toggle:hover, .archive-toggle.selected { color: var(--text); }
-.chat-list { flex: 1; min-height: 0; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 4px; }
+/* v10.2.0 (M10) : overscroll contain — une liste en butée ne fait plus défiler son parent (skill : frontières douces). */
+.chat-list { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 8px; display: flex; flex-direction: column; gap: 4px; }
 .chat { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 4px; padding: 4px; border: 1px solid transparent; border-radius: var(--radius-sm); transition: .16s ease; }
 .chat:hover { background: var(--panel-soft); border-color: var(--border); }
 .chat.active { background: var(--accent-soft); border-color: var(--accent-border); }
@@ -143,7 +158,10 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
 .chat-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-size-sm); font-weight: 600; }
 .chat-meta { font-size: var(--font-size-xs); color: var(--muted); }
 .chat-actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 2px; flex-shrink: 0; }
-.chat-actions button { width: 20px; height: 20px; border: 0; background: transparent; color: var(--muted); cursor: pointer; border-radius: var(--radius-xs); font-size: var(--font-size-xs); opacity: .15; transition: .16s ease; }
+/* v10.2.0 (M9) : cible 24 px minimum (l'ancien 20×20 passait sous le seuil du projet). */
+.chat-actions button { width: 24px; height: 24px; border: 0; background: transparent; color: var(--muted); cursor: pointer; border-radius: var(--radius-xs); font-size: var(--font-size-xs); opacity: .15; transition: .16s ease; }
+/* v10.2.0 (E1) : état armé de la suppression — le rouge et l'anneau SONT la confirmation (deux clics). */
+.chat-actions button.armed { opacity: 1; color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--danger) 40%, transparent); }
 .chat:hover .chat-actions button, .chat.active .chat-actions button { opacity: 1; }
 .chat-actions button:hover { color: var(--text); background: var(--panel-solid); }
 .sidebar-empty { flex: 1; min-height: 180px; display: grid; place-items: center; align-content: center; color: var(--muted); text-align: center; font-size: var(--font-size-sm); }
@@ -221,6 +239,10 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
 .composer { border: 1px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--panel-solid); box-shadow: var(--shadow); padding: 9px; }
 .composer textarea { display: block; width: 100%; min-height: 92px; max-height: 320px; resize: vertical; border: 0; outline: 0; background: transparent; color: var(--text); padding: 6px 7px; line-height: 1.5; font-size: var(--font-size-md); }
 .composer textarea::placeholder { color: var(--muted); }
+/* v10.2.0 (E4) : le composeur est un champ incrusté — `.composer textarea { outline: 0 }`
+   ÉCRASAIT `textarea:focus-visible` (spécificité égale, ordre source) : le focus clavier
+   y était invisible. Le conteneur prend le relais, comme .home-command (RULES.md §12.2). */
+.composer:focus-within { border-color: var(--accent-border); box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow); }
 .composer-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 5px 3px; }
 .composer-footer-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .composer-footer-left .composer-hint { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -231,7 +253,8 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
 
 /* Barre d'actions sur sélection (v8.9.0) : flottante, au-dessus du contenu. */
 .selbar { position: fixed; z-index: 90; display: flex; gap: 2px; padding: 3px; border-radius: var(--radius-sm);
-  background: var(--panel-solid, var(--panel)); border: 1px solid var(--border); box-shadow: 0 8px 24px color-mix(in srgb, black 35%, transparent); }
+  background: var(--panel-solid, var(--panel)); border: 1px solid var(--border); box-shadow: 0 8px 24px color-mix(in srgb, black 35%, transparent);
+  transform-origin: bottom center; animation: popover-in var(--dur-fast) var(--ease-spring) both; }
 .selbar button { display: grid; place-items: center; width: 30px; height: 30px; border: none; border-radius: var(--radius-xs);
   background: transparent; color: var(--text); cursor: pointer; }
 .selbar button:hover { background: color-mix(in srgb, var(--accent) 18%, transparent); }
@@ -253,7 +276,7 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
 .agent-card-chats .chat-main { justify-content: flex-start; padding: 6px 10px; border-radius: var(--radius-sm); }
 .dictation-button.dictation-recording { background: var(--rose); border-color: var(--rose); color: white; animation: dictation-pulse 1.2s ease-in-out infinite; }
 .dictation-button:disabled { opacity: .6; cursor: progress; }
-.dictation-toggle { font-size: var(--font-size-xs); padding: 2px 8px; min-height: 22px; }
+.dictation-toggle { font-size: var(--font-size-xs); padding: 2px 8px; min-height: 24px; }
 .dictation-toggle.showing-raw { color: var(--warning, #f59e0b); }
 @keyframes dictation-pulse { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--rose) 45%, transparent); } 50% { box-shadow: 0 0 0 7px transparent; } }
 
@@ -267,12 +290,17 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
 .voice-mic { position:relative; z-index:2; width:78px; height:78px; display:grid; place-items:center; border-radius: var(--radius-xl); background:linear-gradient(180deg,var(--accent),color-mix(in srgb,var(--accent) 64%,var(--panel-solid))); color:white; box-shadow:0 18px 42px color-mix(in srgb,var(--accent) 32%,transparent),inset 0 1px 0 color-mix(in srgb,white 35%,transparent); }
 .voice-core-label { position:absolute; bottom:34px; z-index:2; color:var(--muted); font-size:var(--font-size-xs); font-weight:700; letter-spacing:.04em; pointer-events:none; }
 .voice-core.dictation-recording { border-color:var(--rose); animation:dictation-pulse 1.2s ease-in-out infinite; }
+/* v10.2.0 (F6) : dictée en pause (doigt sorti du bouton) — le signal reste armé
+   mais le pulse s'arrête : on distingue nettement « en pause » de « en cours ». */
+.dictation-button.dictation-recording.dictation-paused,
+.voice-core.dictation-recording.dictation-paused { animation-play-state: paused; filter: saturate(.55); }
+.voice-core.dictation-paused .voice-ring { animation-play-state: paused; }
 .voice-core.dictation-recording .voice-mic { background:linear-gradient(180deg,var(--rose),color-mix(in srgb,var(--rose) 64%,var(--panel-solid))); }
 /* v9.1.4 : l'avis vit dans le coin bas-GAUCHE du hub — en bas au centre, il masquait
    la carte Statistiques ; le coin reste hors du cercle de cartes à toutes les tailles. */
 .home-notice { position:absolute; z-index:8; left:8px; bottom:8px; max-width:min(100%,480px); padding:8px 10px 8px 13px; border:1px solid var(--border); border-radius: var(--radius-lg); background:color-mix(in srgb,var(--panel-solid) 94%,transparent); color:var(--muted); font-size:var(--font-size-xs); box-shadow:var(--shadow); display:flex; align-items:center; gap:8px; }
 .home-notice-action { min-height:26px; padding:0 10px; font-size:var(--font-size-xs); border-radius: var(--radius-pill); }
-.home-notice-close { border:0; background:transparent; color:var(--muted); cursor:pointer; font-size:var(--font-size-sm); line-height:1; padding:3px 5px; border-radius: var(--radius-xs); }
+.home-notice-close { border:0; background:transparent; color:var(--muted); cursor:pointer; font-size:var(--font-size-sm); line-height:1; padding:3px 5px; min-width:24px; min-height:24px; border-radius: var(--radius-xs); }
 .home-notice-close:hover { color:var(--text); background:var(--panel-soft); }
 
 /* v9.1.5 : écran de premier choix d'espace de travail (plus de « Par défaut » imposé). */
@@ -309,6 +337,24 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
   background: color-mix(in srgb, var(--bg) 76%, transparent);
   backdrop-filter: blur(14px);
 }
+/* v10.2.0 (M3) : SYSTÈME UNIFIÉ d'entrée/sortie des panneaux (skill § « materialize,
+   don't just fade » + § chemins symétriques) — une seule chorégraphie pour tous les
+   dialogues : le scrim monte en fondu, le panneau « se pose » (translate + léger
+   dépassement --ease-spring). La SORTIE rejoue le chemin inversé via View Transition
+   (::view-transition-old(dialog) plus bas) — les fermetures sont wrappées dans
+   withViewTransition côté App. Les animations CSS de montée restent le fallback   (reduced-motion, navigateur sans VT) : même dégradé propre qu'avant. */
+@keyframes overlay-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes dialog-in { from { opacity: 0; transform: translateY(10px) scale(.97); } to { opacity: 1; transform: none; } }
+@keyframes dialog-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(6px) scale(.985); } }
+.overlay, .hub-picker-overlay, .home-modal-overlay { animation: overlay-in var(--dur-med) var(--ease-out) both; }
+.overlay > .dialog, .hub-picker-overlay > .hub-picker, .home-modal-overlay > .home-modal { animation: dialog-in var(--dur-med) var(--ease-spring) both; view-transition-name: dialog; }
+/* Sortie via View Transition : le panneau qui ferme suit le MÊME chemin inversé.
+   Un seul panneau porte le nom à la fois (cas nominal) ; deux panneaux simultanés
+   (permission sur Notes) → startViewTransition lève → filet v10.0.1 : mise à jour
+   appliquée sans animation, jamais de casse. */
+::view-transition-old(dialog), ::view-transition-new(dialog) { animation-duration: var(--dur-med); animation-timing-function: var(--ease-out); }
+::view-transition-old(dialog) { animation-name: dialog-out; }
+::view-transition-new(dialog) { animation-name: dialog-in; }
 .dialog {
   position: relative;
   width: min(460px, 100%);
@@ -340,8 +386,9 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
 .section-title { font-size: var(--font-size-sm); font-weight: 800; margin-bottom: 10px; }
 .section-hint { color: var(--muted); font-size: var(--font-size-xs); line-height: 1.45; margin: -4px 0 10px; }
 .segmented { display: flex; gap: 4px; padding: 3px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel); }
-.segmented button { flex: 1; border: 0; border-radius: var(--radius-xs); padding: 7px 5px; background: transparent; color: var(--muted); cursor: pointer; font-size: var(--font-size-xs); }
+.segmented button { flex: 1; border: 0; border-radius: var(--radius-xs); padding: 7px 5px; background: transparent; color: var(--muted); cursor: pointer; font-size: var(--font-size-xs); transition: transform var(--dur-fast) var(--ease-out), background var(--dur-fast) ease; }
 .segmented button:hover { background: var(--panel-soft); color: var(--text); }
+.segmented button:active { transform: scale(.98); }
 .segmented button.selected { background: var(--accent-soft); color: var(--text); box-shadow: inset 0 0 0 1px var(--accent-border), 0 3px 10px color-mix(in srgb, var(--accent) 8%, transparent); }
 .accent-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
 .accent-choice { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 9px; display: flex; align-items: center; gap: 8px; background: var(--panel); color: var(--muted); cursor: pointer; font-size: var(--font-size-xs); }
@@ -366,9 +413,10 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
 .range-control input[type="range"]::-moz-range-thumb { width: 11px; height: 11px; border: 3px solid var(--panel-solid); border-radius: 50%; background: var(--accent); box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 28%, transparent); }
 .toggle-row { padding: 7px 0; }
 .toggle-row input { appearance: none; width: 38px; height: 22px; margin: 0; border: 1px solid var(--border-strong); border-radius: var(--radius-pill); background: var(--panel-soft); cursor: pointer; position: relative; transition: .18s ease; }
-.toggle-row input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--muted); transition: .18s ease; }
+.toggle-row input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--muted); transition: transform .18s ease, background .18s ease; }
 .toggle-row input:checked { background: var(--accent); border-color: var(--accent); }
-.toggle-row input:checked::after { left: 19px; background: white; }
+/* v10.2.0 (M7) : la pastille anime un transform (GPU), plus un `left` (layout peint à chaque frame). */
+.toggle-row input:checked::after { transform: translateX(16px); background: white; }
 .toggle-row input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .sortable-list { display: grid; gap: 5px; }
 .sortable-item { display: flex; align-items: center; gap: 8px; padding: 8px 9px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel); cursor: grab; transition: .16s ease; }
@@ -389,14 +437,17 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
 .settings-callout b { font-size: var(--font-size-xs); }
 .settings-callout span { color: var(--muted); font-size: var(--font-size-xs); line-height: 1.5; }
 .settings-tabs { display: flex; gap: 6px; padding: 10px 24px 8px; border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--panel) 94%, transparent); }
-.settings-tabs button { border: 1px solid transparent; background: transparent; color: var(--muted); border-radius: var(--radius-sm); padding: 7px 13px; cursor: pointer; font-size: var(--font-size-xs); font-weight: 700; }
+.settings-tabs button { border: 1px solid transparent; background: transparent; color: var(--muted); border-radius: var(--radius-sm); padding: 7px 13px; cursor: pointer; font-size: var(--font-size-xs); font-weight: 700; transition: transform var(--dur-fast) var(--ease-out), background var(--dur-fast) ease, color var(--dur-fast) ease; }
 .settings-tabs button:hover { color: var(--text); background: var(--panel-soft); }
+.settings-tabs button:active { transform: scale(.98); }
 .settings-tabs button.selected { color: var(--text); background: var(--accent-soft); border-color: var(--accent-border); }
 .unified-settings-scroll { min-height: 0; overflow: auto; padding: 0 24px 20px; }
 .settings-pane { min-width: 0; padding-top: 4px; }
 .settings-pane > h4 { margin: 18px 0 7px; font-size: var(--font-size-md); }
 .settings-pane-appearance .settings-section { max-width: 820px; }
 .sortable-item.is-dragged { opacity: .55; transform: scale(.99); }
+/* v10.2.0 (M8) : les listes triables se déplacent aussi au clavier (flèches) — le focus doit se voir. */
+.sortable-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .codeblock { margin: 9px 0; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; background: var(--code-bg); color: var(--term-fg); }
 .codeblock-bar { display: flex; align-items: center; justify-content: space-between; padding: 5px 8px; background: color-mix(in srgb, white 5%, transparent); color: var(--term-muted); font-size: var(--font-size-xs); }
@@ -436,8 +487,12 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
   position: relative; z-index: 20; height: 44px; min-height: 44px;
   display: flex; align-items: center; justify-content: flex-end;
   padding: 0 8px 0 16px; background: var(--panel-solid); border-bottom: 1px solid var(--border);
-  -webkit-app-region: drag; backdrop-filter: blur(16px);
+  -webkit-app-region: drag;
 }
+/* v10.2.0 (F2) : un scrim de dialogue floute déjà tout l'arrière-plan (blur 14) — les
+   surfaces du hub derrière n'ont pas à cumuler leur propre flou (3 backdrop-filters → 1). */
+body:has(.overlay) .home-toolbar, body:has(.hub-picker-overlay) .home-toolbar, body:has(.home-modal-overlay) .home-toolbar,
+body:has(.overlay) .home-recent, body:has(.hub-picker-overlay) .home-recent, body:has(.home-modal-overlay) .home-recent { backdrop-filter: none; }
 .window-bar-left { display: flex; align-items: center; gap: 8px; min-width: 0; margin-right: auto; -webkit-app-region: no-drag; }
 .window-status {
   display: inline-flex; align-items: center; gap: 8px; min-height: 28px; padding: 0 12px;
@@ -524,13 +579,14 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
 .home-section-heading > div:first-child { display: grid; gap: 2px; min-width: 0; }
 .home-section-heading strong { font-size: var(--font-size-md); }
 .home-text-button { min-height: 30px; padding-inline: 10px; font-size: var(--font-size-sm); }
-.home-recent-list { min-height: 0; overflow: auto; display: grid; grid-template-columns: 1fr; gap: 7px; align-content: start; }
+.home-recent-list { min-height: 0; overflow: auto; overscroll-behavior: contain; display: grid; grid-template-columns: 1fr; gap: 7px; align-content: start; }
 .home-recent-item {
   min-width: 0; min-height: 64px; display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: 10px;
   padding: 10px 11px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--home-surface-soft); color: var(--text); text-align: left; cursor: pointer;
   transition: transform .16s ease, border-color .16s ease, background .16s ease, box-shadow .16s ease;
 }
 .home-recent-item:hover, .home-recent-item:focus-visible { border-color: var(--accent-border); background: var(--accent-soft); transform: translateY(-1px); box-shadow: 0 10px 26px color-mix(in srgb, var(--accent) 7%, transparent); }
+.home-recent-item:active { transform: translateY(0) scale(.985); transition-duration: var(--dur-fast); }
 /* v9.1.6 : navigation flèches — l'item focusé est traité comme survolé (liseré accent),
    le focus natif reste actif (accessibilité, RULES.md §12.2). */
 .home-recent-item:focus-visible { outline: none; }
@@ -573,6 +629,7 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
   border:1px solid color-mix(in srgb,var(--border-strong) 86%,transparent); border-radius: var(--radius-xl); background:var(--home-surface); color:var(--text);
   box-shadow:0 18px 40px color-mix(in srgb,var(--text) 7%,transparent),inset 0 1px 0 color-mix(in srgb,white 40%,transparent);
   display:grid; justify-items:center; align-content:center; gap:7px; cursor:pointer;
+  will-change: transform;
   transform:translate(-50%,-50%) rotate(var(--hub-angle)) translateY(calc(-1 * var(--hub-r))) rotate(calc(-1 * var(--hub-angle)));
   transition:transform .18s cubic-bezier(.2,.75,.25,1),box-shadow .18s ease,border-color .18s ease,background .18s ease;
 }
@@ -602,7 +659,7 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
 .stat-wide { grid-column:1 / -1; }
 
 
-.hub-picker-overlay,.home-modal-overlay { position:fixed; inset:0; z-index:90; display:grid; place-items:center; padding:24px; background:color-mix(in srgb,var(--bg) 76%,transparent); backdrop-filter:blur(14px); animation:fade-up .16s ease both; }
+.hub-picker-overlay,.home-modal-overlay { position:fixed; inset:0; z-index:90; display:grid; place-items:center; padding:24px; background:color-mix(in srgb,var(--bg) 76%,transparent); backdrop-filter:blur(14px); }
 .hub-picker,.home-modal { width:min(420px,100%); max-height:min(72vh,520px); overflow:auto; border:1px solid var(--border-strong); border-radius: var(--radius-xl); background:var(--panel-solid); box-shadow:var(--shadow); padding:16px; }
 .hub-picker-header,.home-modal-header { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:12px; }
 .hub-picker-header > div,.home-modal-header > div { display:grid; gap:3px; }
@@ -635,7 +692,7 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
 .agents-main { flex:1; min-height:0; overflow:auto; background:var(--bg); }
 .agents-page { width:min(1180px,calc(100% - 40px)); margin:0 auto; padding:30px 0 42px; }
 .agents-page-header { display:flex; align-items:flex-start; justify-content:space-between; gap:24px; margin-bottom:24px; }
-.agents-page-header h1 { margin:4px 0 6px; font-size:clamp(var(--font-size-2xl),3vw,var(--font-size-3xl)); letter-spacing:-.035em; }
+.agents-page-header h1 { margin:4px 0 6px; font-size:clamp(var(--font-size-2xl),3vw,var(--font-size-3xl)); line-height: 1.08; letter-spacing:-.035em; }
 .agents-page-header p { margin:0; max-width:640px; color:var(--muted); font-size:var(--font-size-sm); line-height:1.55; }
 /* v9.1.4 : grille fluide — 3 à 4 colonnes sur grand écran au lieu de 2 fixes. */
 .agents-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(340px, 1fr)); gap:14px; }
@@ -707,6 +764,10 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
 }
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; }
+  /* v10.2.0 (M6) : le défilement lissé reste une animation — coupé ici (le bloc * ne
+     touche pas scroll-behavior). */
+  html { scroll-behavior: auto; }
+  .main-scroll, .home-modal-list, .home-recent-list { scroll-behavior: auto; }
 }
 
 /* Assistant vocal */
@@ -714,13 +775,43 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
 /* Notes */
 .notes-dialog { width: var(--panel-workspace-w); height: var(--panel-workspace-h); padding: 0; overflow: hidden; display: grid; grid-template-rows: auto 1fr; }
 .notes-layout { display: grid; grid-template-columns: 300px 1fr; min-height: 0; }
-.notes-list-panel { border-right: 1px solid var(--border); padding: 14px; overflow: auto; }
+.notes-list-panel { border-right: 1px solid var(--border); padding: 14px; overflow: auto; overscroll-behavior: contain; }
 .notes-list-panel > .settings-input { margin-bottom: 10px; width: 100%; box-sizing: border-box; }
 .notes-item { display: grid; width: 100%; text-align: left; gap: 3px; border: 1px solid transparent; background: transparent; color: var(--text); padding: 10px 12px; border-radius: var(--radius-md); cursor: pointer; margin-bottom: 4px; }
 .notes-item span { color: var(--muted); font-size: var(--font-size-xs); }
 .notes-item:hover, .notes-item.selected { background: var(--accent-soft); border-color: var(--accent-border); }
 .notes-preview { min-width: 0; overflow: auto; padding: 20px 22px; }
 .notes-preview h4 { margin: 5px 0 14px; font-size: var(--font-size-xl); }
+/* v10.1.0 : arbre de notes façon Kortex (drag&drop), éditeur riche, liens. */
+.notes-tree { margin-top: 10px; display: flex; flex-direction: column; gap: 2px; }
+.notes-tree-folder { display: flex; flex-direction: column; gap: 2px; }
+.notes-tree-row { display: flex; align-items: center; gap: 2px; border-radius: var(--radius-sm); }
+.notes-tree-row.selected { background: var(--accent-soft); }
+.notes-tree-item { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; text-align: left; background: transparent; border: 1px solid transparent; color: var(--text); padding: 5px 8px; border-radius: var(--radius-sm); cursor: pointer; font-size: var(--font-size-sm); transition: outline-color var(--dur-fast) var(--ease-out), background var(--dur-fast) ease, box-shadow var(--dur-fast) ease; }
+.notes-tree-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.notes-tree-item:hover { background: var(--accent-soft); }
+.notes-tree-item.folder { color: var(--muted); }
+.notes-tree-folder.drop-target > .notes-tree-item { outline: 2px dashed var(--accent-border); outline-offset: -1px; transition: outline-color var(--dur-fast) var(--ease-out), background var(--dur-fast) ease; background: var(--accent-soft); }
+/* v10.2.0 (M8) : la cible de dépôt se RÉVÈLE (transition d'outline+background) au lieu
+   d'apparaître en dur — telegraphie le geste sans saut (skill § hint directionnel). */
+.note-row-action { padding: 2px 6px; }
+/* v10.2.0 (E2) : la purge est armée au premier clic (2e clic = destruction) —
+   le bouton passe en rouge avertissement le temps de la confirmation. */
+.note-row-action.armed { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--danger) 40%, transparent); }
+.note-editor { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--panel-soft); min-height: 300px; display: flex; flex-direction: column; }
+.note-editor-toolbar { margin: 8px; }
+.note-tool.active { background: var(--accent-soft); color: var(--accent); }
+.note-editor-content .ProseMirror { min-height: 260px; padding: 12px 16px; outline: none; line-height: 1.6; }
+/* v10.2.0 (E4) : l'éditeur TipTap est incrusté — le wrapper signale le focus quand
+   ProseMirror est actif (classe -focused posée par l'éditeur), comme .composer. */
+.note-editor-content:has(.ProseMirror-focused) { box-shadow: 0 0 0 3px var(--accent-soft); border-radius: var(--radius-md); }
+.note-editor-content h1 { font-size: var(--font-size-xl); }
+.md-wikilink { color: var(--accent); background: none; border: none; padding: 0; cursor: pointer; text-decoration: underline dotted; font: inherit; }
+.notes-links { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.notes-links .eyebrow { width: 100%; }
+.notes-tag.broken { opacity: .5; text-decoration: line-through; }
+.notes-search-hits { margin-top: 8px; }
+.notes-tree-sections { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 8px; display: flex; flex-direction: column; gap: 2px; }
 .notes-preview pre { white-space: pre-wrap; word-break: break-word; font: inherit; line-height: 1.6; color: var(--text); }
 
 
@@ -760,10 +851,8 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
 .freebuff-pill { display:inline-flex; align-items:center; gap:7px; height:34px; padding:0 13px; border-radius: var(--radius-pill); border:1px solid var(--border); background:var(--panel-soft); color:var(--muted); cursor:pointer; }
 .freebuff-pill:hover { border-color:var(--accent-border); color:var(--text); }
 .freebuff-pill-dot { width:8px; height:8px; border-radius:50%; background:var(--muted); }
-.freebuff-pill.ready .freebuff-pill-dot { background:var(--success); box-shadow:0 0 0 3px color-mix(in srgb,var(--success) 18%,transparent); }
-.freebuff-pill.active .freebuff-pill-dot { background:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); animation:freebuff-pulse 2s infinite; }
-.freebuff-pill.active .freebuff-pill-label { color:var(--accent); font-weight: 600; }
-@keyframes freebuff-pulse { 50% { box-shadow:0 0 0 6px color-mix(in srgb,var(--accent) 10%,transparent); } }
+.freebuff-pill.ready .freebuff-pill-dot { background:var(--success); box-shadow:0 0 0 3px color-mix(in srgb,var(--success) 18%,transparent); }.freebuff-pill.active .freebuff-pill-dot { background:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
+.freebuff-pill.active .freebuff-pill-label { color:var(--accent); font-weight:600; }
 .freebuff-pill-label { font-size:var(--font-size-sm); font-weight:600; }
 
 /* Badge agent dans les conversations récentes du hub. */
@@ -791,8 +880,7 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
 .files-crumbs { display:flex; flex-wrap:wrap; align-items:center; gap:2px; margin-top:4px; }
 .files-crumb { display:inline-flex; align-items:center; gap:2px; }
 .files-crumb-button { min-height:26px; padding:0 8px; }
-.files-layout { display:grid; grid-template-columns:300px 1fr; min-height:0; }
-.files-list-panel { border-right:1px solid var(--border); padding:14px; overflow:auto; }
+.files-layout { display:grid; grid-template-columns:300px 1fr; min-height:0; }.files-list-panel { border-right: 1px solid var(--border); padding: 14px; overflow:auto; overscroll-behavior: contain; }
 .files-item { display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:9px; width:100%; text-align:left; border:1px solid transparent; background:transparent; color:var(--text); padding:10px 12px; border-radius: var(--radius-md); cursor:pointer; margin-bottom:4px; }
 .files-item:hover, .files-item.selected { background:var(--accent-soft); border-color:var(--accent-border); }
 .files-item-icon { display:grid; place-items:center; color:var(--accent); }
@@ -808,7 +896,10 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
 /* v9.4.0 : sélecteur de modèle interactif — la chaîne du routeur devient un menu. */
 .model-select { position: relative; flex-shrink: 0; }
 .model-select-button { gap: 6px; }
-.model-select-menu { position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 30; min-width: 260px; max-height: 300px; overflow: auto; padding: 6px; display: grid; gap: 2px; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--panel); box-shadow: 0 18px 44px color-mix(in srgb, black 24%, transparent); }
+.model-select-menu { position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 30; min-width: 260px; max-height: 300px; overflow: auto; padding: 6px; display: grid; gap: 2px; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--panel); box-shadow: 0 18px 44px color-mix(in srgb, black 24%, transparent); transform-origin: bottom right; animation: popover-in var(--dur-fast) var(--ease-spring) both; }
+/* v10.2.0 (M13) : les popovers se DÉPLOIENT depuis leur déclencheur (origine ancrée,
+   skill § chemins/origines) — menu modèle depuis le bas-droit, selbar depuis le centre. */
+@keyframes popover-in { from { opacity: 0; transform: scale(.94) translateY(4px); } to { opacity: 1; transform: none; } }
 .model-select-item { text-align: left; padding: 8px 10px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text); font-size: var(--font-size-sm); cursor: pointer; }
 .model-select-item:hover { background: var(--panel-soft); }
 .model-select-item[aria-selected="true"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
@@ -835,10 +926,10 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
 /* Présence (point d'état à côté du libellé « En ligne »). */
 .agent-presence { display: inline-flex; align-items: center; gap: 8px; font-size: var(--font-size-sm); color: var(--muted); font-weight: 600; }
 .agent-presence-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex: none; }
-.agent-presence-dot.online { background: var(--success); box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 18%, transparent); animation: freebuff-pulse 2s infinite; }
+.agent-presence-dot.online { background: var(--success); box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 18%, transparent); }
 
 /* Transcript conversation : dérivé du buffer, lisible, sans spinner ni bordures. */
-.agent-chat { height: min(52vh, 460px); overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--panel-soft); padding: 14px 16px; display: flex; flex-direction: column; gap: 7px; }
+.agent-chat { height: min(52vh, 460px); overflow: auto; overscroll-behavior: contain; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--panel-soft); padding: 14px 16px; display: flex; flex-direction: column; gap: 7px; }
 .agent-line { margin: 0; white-space: pre-wrap; word-break: break-word; line-height: 1.5; font-size: var(--font-size-sm); color: var(--text); }
 .agent-line-user { color: var(--accent); font-weight: 600; }
 .agent-chat-empty { margin: auto 0; text-align: center; }
@@ -888,13 +979,11 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
 .tasks-principal-card h2 { margin: 2px 0 4px; }
 .tasks-principal-actions { display: flex; gap: 10px; margin-top: 10px; }
 
-/* Modes : 4 cartes (code, analyse, recherche, tâche complexe) en grille régulière. */
-.tasks-modes { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
-.tasks-mode-card { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--panel-soft); }
-.tasks-mode-card h2 { margin: 0; font-size: var(--font-size-md); }
-.tasks-mode-card p { margin: 0; color: var(--muted); font-size: var(--font-size-sm); }
-.tasks-mode-card .agent-card-actions { margin-top: auto; }
-.tasks-mode-lastchat { border: 1px solid var(--border); border-radius: var(--radius-sm); background: transparent; }
+/* v10.1.0 : UNE carte orchestrateur ; les modes vivent dans le switch segmenté ci-dessous. */
+/* v10.1.0 : switch de mode de l'orchestrateur (carte Tâches + bandeau conversation). */
+.tasks-mode-switch { display: inline-flex; align-items: center; gap: 4px; padding: 3px; border: 1px solid var(--border); border-radius: var(--radius-pill); background: var(--panel-soft); }
+.tasks-mode-option { border-radius: var(--radius-pill); }
+.tasks-mode-hint { margin: 6px 0 0; max-width: 62ch; }
 
 /* Mode indisponible (moteur arrêté, agent absent de l'espace) : grisé mais cliquable-sobre. */
 .tasks-card-off { opacity: .55; }
@@ -902,6 +991,11 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
 
 /* Le tableau v9.4.0 « qui fait quoi » disparaît : les modes PORTENT l'orientation. */
 .assistants-map { display: none; }
+
+/* v10.2.0 (M11) : état vide de la page Tâches — même maille pointillée que le hub
+   (« où suis-je, quoi ici, comment j'en sors » du skill § wayfinding). */
+.tasks-empty { margin-top: 16px; padding: 24px 16px; border: 1px dashed var(--border-strong); border-radius: var(--radius-lg); background: var(--panel); color: var(--muted); text-align: center; font-size: var(--font-size-sm); line-height: 1.5; }
+.tasks-empty strong { color: var(--text); }
 
 /* ── v9.7.0 : MOTION DESIGN — transitions de vue, chorégraphie, micro-interactions ──
    Règles du projet : N'animer que transform/opacity (composités GPU) — jamais de
@@ -931,24 +1025,49 @@ kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in 
    (décalage par --stagger-i posé en inline style). Transform/opacity uniquement. */
 @keyframes card-in { from { opacity: 0; transform: translateY(14px) scale(.97); } to { opacity: 1; transform: none; } }
 .hub-card { animation: card-in var(--dur-slow) var(--ease-out) both; animation-delay: calc(var(--stagger-i, 0) * 45ms); }
-.tasks-mode-card, .tasks-principal-card { animation: card-in var(--dur-slow) var(--ease-out) both; animation-delay: calc(var(--stagger-i, 0) * 45ms); }
+.tasks-principal-card { animation: card-in var(--dur-slow) var(--ease-out) both; animation-delay: calc(var(--stagger-i, 0) * 45ms); }
 
 /* Micro-interactions : press enfoncé, hover qui soulève (translateZ nul = GPU). */
-.hub-card:active, .tasks-mode-card:active, .tasks-principal-card:active { transform: scale(.98); transition: transform var(--dur-fast) var(--ease-out); }
+/* v10.0.1 : `.hub-card:active` RETIRÉ de cette règle — son transform positionnel
+   (translate(-50%,-50%) rotate/translateY sur l'orbite) serait écrasé par le simple
+   scale(.98) : la carte quittait son orbite au clic (« glitch »), le relâchement
+   tombait sur le fond du hub et le click React ne se déclenchait jamais. Les cartes
+   du hub gardent leur propre :active positionnel (voir .hub-card:active ci-dessus). */
+.tasks-principal-card:active { transform: scale(.98); transition: transform var(--dur-fast) var(--ease-out); }
 .button:active { transform: translateY(1px) scale(.99); transition: transform var(--dur-fast) var(--ease-out); }
-.agent-card, .tasks-mode-card { transition: box-shadow var(--dur-med) var(--ease-out), border-color var(--dur-med) var(--ease-out); }.tasks-mode-card:hover { border-color:var(--accent-border); box-shadow: 0 8px 24px color-mix(in srgb, var(--text) 8%, transparent); }
+.agent-card, .tasks-principal-card { transition: box-shadow var(--dur-med) var(--ease-out), border-color var(--dur-med) var(--ease-out); }.tasks-principal-card:hover { border-color:var(--accent-border); box-shadow: 0 8px 24px color-mix(in srgb, var(--text) 8%, transparent); }
 
 /* Pastille de présence Freebuff : respiration discrète quand la session est active. */
 @keyframes presence-breathe { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+/* v10.2.0 (F5) : un seul foyer vivant par écran — le point de présence respire (seul
+   loop infinie de sa vue), le point de la pilule du hub reste statique (deux boucles
+   infinies simultanées = bruit visuel, contre la « restraint » du skill). */
 .agent-presence-dot.online { animation: presence-breathe 2.4s ease-in-out infinite; }
 
 /* Skeleton shimmer pendant le chargement des agents (page Tâches). */
 @keyframes shimmer { from { background-position: -200% 0; } to { background-position: 200% 0; } }
 .hint[aria-busy="true"] { background: linear-gradient(90deg, var(--panel-soft) 25%, var(--accent-soft) 50%, var(--panel-soft) 75%); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; border-radius: var(--radius-sm); }
 
+/* v10.2.0 (M4/M5) : les TROIS signaux d'accessibilité du skill sont couverts —
+   reduced-motion (bloc ci-dessus), reduced-transparency (surfaces opaques ci-dessous)
+   et prefers-contrast (bordures/texte renforcés). */
+@media (prefers-reduced-transparency: reduce) {
+  .overlay, .hub-picker-overlay, .home-modal-overlay, .home-toolbar, .home-recent, .sidebar,
+  .model-select-menu, .selbar, .dialog, .hub-picker, .home-modal { background: var(--panel-solid); backdrop-filter: none; }
+}
+@media (prefers-contrast: more) {
+  :root { --border: color-mix(in srgb, var(--text) 30%, transparent); --border-strong: color-mix(in srgb, var(--text) 48%, transparent); }
+  .button { border-width: 1.5px; }
+}
+/* v10.2.0 (M4) : la bascule de thème s'adoucit (skill « ease abrupt brightness jumps ») —
+   la classe est posée par appearance.ts pendant la transition, et retire le fondu en   fin de course. Coupée sous reduced-motion par le bloc * global. */
+.theme-easing *, .theme-easing *::before, .theme-easing *::after {
+  transition: background-color .25s ease, border-color .25s ease, color .25s ease, fill .25s ease !important;
+}
+
 /* Accessibilité : TOUT le motion s'arrête si l'OS le demande. */
 @media (prefers-reduced-motion: reduce) {
-  .hub-card, .tasks-mode-card, .tasks-principal-card, .agents-page { animation: none; }
+  .hub-card, .tasks-principal-card, .agents-page { animation: none; }
   .agent-presence-dot.online { animation: none; }
   .hint[aria-busy="true"] { animation: none; }
   ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }

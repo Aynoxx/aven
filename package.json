@@ -1,6 +1,6 @@
 {
   "name": "aven",
-  "version": "10.0.0",
+  "version": "10.2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -17,11 +17,13 @@
     "verify:v8.7.4": "node scripts/verify-v8.7.4.mjs",
     "verify:v8.7.5": "node scripts/verify-v8.7.5.mjs",
     "verify:v8.7.6": "node scripts/verify-v8.7.6.mjs",
-    "verify": "node scripts/verify-conventions.mjs && node scripts/verify-v10.0.0.mjs && node scripts/verify-v9.5.0.mjs && node scripts/verify-v9.6.0.mjs && node scripts/verify-v9.4.0.mjs && node scripts/verify-v9.3.0.mjs && node scripts/verify-v9.2.0.mjs && node scripts/verify-v9.1.5.mjs && node scripts/verify-v9.1.4.mjs && node scripts/verify-v9.1.3.mjs && node scripts/verify-v9.1.2.mjs && node scripts/verify-v9.1.1.mjs && node scripts/verify-v9.1.0.mjs && node scripts/verify-v9.0.1.mjs && node scripts/verify-v9.0.0.mjs && node scripts/verify-v8.11.0.mjs && node scripts/verify-v8.10.0.mjs && node scripts/verify-v8.9.0.mjs && node scripts/verify-v8.8.0.mjs && node scripts/verify-build.mjs",
+    "verify": "node scripts/verify-conventions.mjs && node scripts/verify-v10.2.0.mjs && node scripts/verify-v10.1.0.mjs && node scripts/verify-v10.0.0.mjs && node scripts/verify-v9.5.0.mjs && node scripts/verify-v9.6.0.mjs && node scripts/verify-v9.4.0.mjs && node scripts/verify-v9.3.0.mjs && node scripts/verify-v9.2.0.mjs && node scripts/verify-v9.1.5.mjs && node scripts/verify-v9.1.4.mjs && node scripts/verify-v9.1.3.mjs && node scripts/verify-v9.1.2.mjs && node scripts/verify-v9.1.1.mjs && node scripts/verify-v9.1.0.mjs && node scripts/verify-v9.0.1.mjs && node scripts/verify-v9.0.0.mjs && node scripts/verify-v8.11.0.mjs && node scripts/verify-v8.10.0.mjs && node scripts/verify-v8.9.0.mjs && node scripts/verify-v8.8.0.mjs && node scripts/verify-build.mjs",
     "test": "node --import ./tests/register.mjs --experimental-strip-types --no-warnings --test \"tests/*.test.mjs\"",
     "typecheck:host": "tsc --noEmit -p tsconfig.host.json",
     "typecheck:tests": "tsc --noEmit -p tsconfig.test.json",
     "verify:v10.0.0": "node scripts/verify-v10.0.0.mjs",
+    "verify:v10.1.0": "node scripts/verify-v10.1.0.mjs",
+    "verify:v10.2.0": "node scripts/verify-v10.2.0.mjs",
     "verify:v9.4.0": "node scripts/verify-v9.4.0.mjs",
     "verify:v9.5.0": "node scripts/verify-v9.5.0.mjs",
     "verify:v9.5.1": "node scripts/verify-v9.5.0.mjs",
@@ -30,7 +32,9 @@
     "tauri:build": "npm run build:host && node scripts/prepare-tauri-runtime.mjs && tauri build",
     "tauri:check": "npm run build:host && npm run build:web && tauri build --debug",
     "test:app-host": "npm run build:host && node scripts/test-app-host.mjs",
-    "visual:prod": "node scripts/visual-prod-tauri.mjs"
+    "visual:prod": "node scripts/visual-prod-tauri.mjs",
+    "test:window-state": "node scripts/test-window-state.mjs",
+    "test:features": "node scripts/test-features-tauri.mjs"
   },
   "dependencies": {
     "@lydell/node-pty": "^1.1.0",

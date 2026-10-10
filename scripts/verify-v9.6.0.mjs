@@ -109,13 +109,14 @@ assert.ok(!types921.includes("renameAgent"), "types : renameAgent supprimé")
 assert.ok(!operations921.includes("async renameAgent"), "operations : renameAgent supprimé (les noms enregistrés restent lus)")
 
 // I. Page « Tâches » : agent principal + 4 modes.
+// v10.1.0 : UNE carte orchestrateur + switch Auto/Code/Analyse/Recherche ; les
+// cartes de modes ont quitté la page (convention figée par verify-v10.1.0.mjs).
 assert.match(app, /tasks-principal-card/, "carte de l'agent principal (orchestrateur)")
 assert.match(app, /agent principal/, "l'orchestrateur est présenté comme agent principal")
-assert.match(app, /tasks-mode-card/, "cartes de modes attendues")
-assert.match(app, /MODES\.map\(/, "les modes sont dérivés de la constante MODES")
-assert.ok((app.match(/fallbackName/g) ?? []).length >= 5, "4 modes + usage dans le rendu")
-assert.match(app, /fallbackName: "Tâche complexe"/, "le mode tâche complexe (orchestrateur) est présent")
-assert.match(css, /\.tasks-modes \{ display: grid/, "grille des modes")
+assert.ok(!app.includes("tasks-mode-card"), "v10.1.0 : plus de cartes de modes séparées")
+assert.match(app, /TASK_MODES_UI\.map\(/, "les modes sont dérivés de la constante TASK_MODES_UI")
+assert.match(app, /tasks-mode-switch/, "switch de mode présent (carte orchestrateur + conversation)")
+assert.match(css, /\.tasks-mode-switch \{/, "styles du switch de mode")
 assert.ok(!app.includes("renamingAgent"), "renommage d'agents retiré de la page")
 
 console.log("v9.6.0 verification: OK")

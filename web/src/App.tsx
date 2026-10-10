@@ -4,7 +4,7 @@ import { api } from "./api"
 import Markdown from "./Markdown"
 import MessageBubble from "./MessageBubble"
 import { applyEvent, emptyLive, type Live } from "./stream"
-import type { Agent, AppAction, AppState, Chat, Decision, FormAnswer, Msg, StreamEvent } from "./types"
+import type { Agent, AppAction, AppState, Chat, Decision, FormAnswer, Msg, StreamEvent, TaskMode } from "./types"
 import FormDialog from "./FormDialog"
 import SettingsDialog from "./SettingsDialog"
 // v9.3.0 : vue Notes complète (rendu Markdown, édition, tags par agent) remplaçant le modal.
@@ -47,11 +47,15 @@ function orderAgents(agents: Agent[], order: string[]) {
 // v9.4.0 : orientation rapide — chaque besoin courant pointe vers le bon assistant.
 // v9.6.0 : la page Tâches = un agent principal (orchestrateur « projet ») et des modes.
 // « Tâche complexe » ouvre l’orchestrateur lui-même : il délègue aux trois autres via subagents.
-const MODES = [
-  { id: "code", icon: "wrench", fallbackName: "Code", desc: "Écrire, corriger, exécuter du code et des commandes." },
-  { id: "analyse", icon: "sparkle", fallbackName: "Analyse", desc: "Données, chiffres, statistiques, rapports." },
-  { id: "recherche", icon: "search", fallbackName: "Recherche", desc: "Documentation, comparaisons, veille, explications." },
-  { id: "projet", icon: "agent", fallbackName: "Tâche complexe", desc: "Orchestre code + analyse + recherche, puis synthétise." },
+// v10.1.0 : la page Tâches = UNE carte orchestrateur avec switch de mode.
+// Auto : l'orchestrateur choisit le meilleur sous-agent pour chaque tâche.
+// Mode manuel : délégation imposée au spécialiste choisi (instruction de session,
+// host/task-mode.ts — appliquée à chaque envoi sur les conversations « projet »).
+const TASK_MODES_UI = [
+  { id: "auto", icon: "agent", label: "Auto", hint: "L'orchestrateur choisit le meilleur sous-agent pour chaque tâche." },
+  { id: "code", icon: "wrench", label: "Code", hint: "Délégation imposée au spécialiste code (l'orchestrateur coordonne et synthétise)." },
+  { id: "analyse", icon: "sparkle", label: "Analyse", hint: "Délégation imposée au spécialiste analyse (l'orchestrateur coordonne et synthétise)." },
+  { id: "recherche", icon: "search", label: "Recherche", hint: "Délégation imposée au spécialiste recherche (l'orchestrateur coordonne et synthétise)." },
 ] as const
 
 export default function App() {
@@ -160,6 +164,19 @@ export default function App() {
   // composeur (jamais chez l'agent directement) avec son badge de reformage ; l'utilisateur
   // valide toujours avec Entrée.
   const fail = (e: unknown) => setError(e instanceof Error ? e.message : String(e))
+  // v10.1.0 : mode de tâche de l'orchestrateur (persisté par espace côté host).
+  const [taskMode, setTaskModeState] = useState<TaskMode>("auto")
+  useEffect(() => { api.taskMode().then(setTaskModeState).catch(() => undefined) }, [])
+  const changeTaskMode = (mode: TaskMode) => {
+    api.setTaskMode(mode).then(setTaskModeState).catch(fail)
+  }
+  // v10.1.0 : capture rapide façon Kortex — raccourci global Ctrl+Shift/N (Rust)
+  // restaure la fenêtre et demande l'ouverture de la capture (note dans Inbox/).
+  const [captureRequested, setCaptureRequested] = useState(false)
+  useEffect(() => {
+    const off = api.onEvent((ev) => { if (ev.type === "quick-capture") setCaptureRequested(true) })
+    return off
+  }, [])
   const showHomeRef = useRef(true) // miroir de showHome pour les callbacks non recréés
 
   // Exécution d'une commande d'application dictée : mêmes handlers que les cartes du hub.
@@ -332,7 +349,14 @@ export default function App() {
     setLive(next)
   }
 
-  const closeNotesToHome = useCallback(() => {
+  // v10.2.0 (E1) : suppression de conversation à deux clics — le premier arme
+  // (4 s), le second confirme. Échap ou un autre armement désarme.
+  const [deleteArmed, setDeleteArmed] = useState<string | null>(null)
+  const deleteArmTimer = useRef<number | undefined>(undefined)
+
+  // v10.2.0 (M3) : fermeture de panneau en View Transition — le panneau porte un
+  // view-transition-name: dialog (App.css), sa sortie joue ::view-transition-old(dialog).
+  const closeNotesToHome = useCallback(() => withViewTransition(() => {
     setShowNotes(false)
     setShowFiles(false)
     setNotesInitialId(undefined)
@@ -341,7 +365,7 @@ export default function App() {
     setShowConversationPicker(false)
     setShowProjectPicker(false)
     setShowHome(true)
-  }, [])
+  }), [])
 
   // ── Vues Notes et Fichiers (v9.3.0) ──────────────────────────────────────────
   // Ouvertures centralisées : les deux vues RECOURVENT l'écran courant (comme le
@@ -560,13 +584,14 @@ export default function App() {
           dictationRef.current.cancel()
           return
         }
-        if (showConversationPicker) setShowConversationPicker(false)
-        else if (showProjectPicker) setShowProjectPicker(false) // v9.1.6 : le modal projet suit Échap
-        else if (showFreebuffAgent) { setShowAgentsPage(false); setShowSettings(false); setShowNotes(false); setShowConversationPicker(false); setShowProjectPicker(false); setShowFreebuffAgent(false); setShowHome(true) } // v9.5.0 : page agent — Échap revient à l'accueil (session maintenue)
+        if (deleteArmed) { setDeleteArmed(null); return } // v10.2.0 (E1) : Échap désarme la suppression
+        if (showConversationPicker) withViewTransition(() => setShowConversationPicker(false))
+        else if (showProjectPicker) withViewTransition(() => setShowProjectPicker(false)) // v9.1.6 : le modal projet suit Échap
+        else if (showFreebuffAgent) withViewTransition(() => { setShowAgentsPage(false); setShowSettings(false); setShowNotes(false); setShowConversationPicker(false); setShowProjectPicker(false); setShowFreebuffAgent(false); setShowHome(true) }) // v9.5.0 : page agent — Échap revient à l'accueil (session maintenue)
         else if (showFiles) closeNotesToHome() // v9.3.0 : Échap ferme l'explorateur intégré
-        else if (showAgentsPage) { setShowAgentsPage(false); setShowHome(true) }
+        else if (showAgentsPage) withViewTransition(() => { setShowAgentsPage(false); setShowHome(true) })
         else if (showNotes) closeNotesToHome()
-        else if (showSettings) setShowSettings(false)
+        else if (showSettings) withViewTransition(() => setShowSettings(false))
         else if (live.forms[0]) void api.cancelForm(live.forms[0].sessionID, live.forms[0].id).catch(fail)
         else if (live.busy && chatId) void api.interrupt(chatId).catch(fail)
       }
@@ -585,7 +610,7 @@ export default function App() {
       window.removeEventListener("keydown", onKey)
       window.removeEventListener("keyup", onKeyUp)
     }
-  }, [live.busy, live.forms, chatId, showSettings, showAgentsPage, showConversationPicker, showProjectPicker, showFreebuffAgent, showHome, showNotes, showFiles, tab, closeNotesToHome])
+  }, [live.busy, live.forms, chatId, showSettings, showAgentsPage, showConversationPicker, showProjectPicker, showFreebuffAgent, showHome, showNotes, showFiles, tab, closeNotesToHome, deleteArmed])
 
   const newChat = async () => {
     if (!tab) return
@@ -615,6 +640,38 @@ export default function App() {
       fail(e)
     }
   }
+
+  // v10.2.0 (E1) : première pression = armer (4 s), seconde = supprimer — on ne peut
+  // plus détruire une conversation d'un seul clic.
+  const armDelete = (id: string) => {
+    window.clearTimeout(deleteArmTimer.current)
+    if (deleteArmed === id) { setDeleteArmed(null); void removeChat(id); return }
+    setDeleteArmed(id)
+    deleteArmTimer.current = window.setTimeout(() => setDeleteArmed(null), 4000)
+  }
+
+  // v10.2.0 (F6) : le push-to-talk suit le doigt. Le doigt sort du bouton → pause
+  // (le clip continue), le doigt revient → reprise ; le relâchement — même hors
+  // bouton — transcrit. pointercancel (geste volé par le navigateur) annule le clip.
+  const dictationPointerRef = useRef(false)
+  const releaseDictation = () => {
+    if (!dictationPointerRef.current) return
+    dictationPointerRef.current = false
+    if (dictationRef.current.state === "recording") dictationRef.current.stop()
+  }
+  const cancelDictationPointer = () => {
+    if (!dictationPointerRef.current) return
+    dictationPointerRef.current = false
+    if (dictationRef.current.state === "recording") dictationRef.current.cancel()
+  }
+  useEffect(() => {
+    window.addEventListener("pointerup", releaseDictation)
+    window.addEventListener("pointercancel", cancelDictationPointer)
+    return () => {
+      window.removeEventListener("pointerup", releaseDictation)
+      window.removeEventListener("pointercancel", cancelDictationPointer)
+    }
+  }, [])
 
   const toggleArchive = async (id: string, archived: boolean) => {
     try {
@@ -1048,10 +1105,11 @@ export default function App() {
                     Maintenir pour parler, relâcher pour transcrire → le texte atterrit dans
                     le composeur de la conversation (créée si besoin) pour validation. */}
                 <button
-                  className={`voice-core ${dictation.state === "recording" ? "dictation-recording" : ""}`}
+                  className={`voice-core ${dictation.state === "recording" ? "dictation-recording" : ""}${dictation.paused ? " dictation-paused" : ""}`}
                   onPointerDown={(e) => {
                     e.preventDefault()
                     if (!appState.keys.groq) { setHomeNotice("Configure une clé Groq dans Paramètres pour dicter."); return }
+                    dictationPointerRef.current = true // v10.2.0 (F6) : doigt engagé sur le push-to-talk
                     if (dictation.state === "error") { dictation.resetError(); return }
                     if (dictation.state === "idle") {
                       void (async () => {
@@ -1062,8 +1120,9 @@ export default function App() {
                       })()
                     }
                   }}
-                  onPointerUp={(e) => { e.preventDefault(); if (dictation.state === "recording") dictation.stop() }}
-                  onPointerLeave={() => { if (dictation.state === "recording") dictation.stop() }}
+                  onPointerUp={(e) => { e.preventDefault(); releaseDictation() }}
+                  onPointerLeave={() => { if (dictationPointerRef.current && dictation.state === "recording") dictation.pause() }} // v10.2.0 (F6) : doigt sorti = pause
+                  onPointerEnter={() => { if (dictationPointerRef.current && dictation.paused) dictation.resume() }} // v10.2.0 (F6) : doigt revenu = reprise
                   aria-label={appState.keys.groq ? "Dicter — maintiens le bouton, relâche pour transcrire" : "Dictée indisponible : configure une clé Groq dans Paramètres"}
                   type="button"
                 >
@@ -1071,7 +1130,7 @@ export default function App() {
                   <span className="voice-ring voice-ring-inner" aria-hidden="true" />
                   <span className="voice-mic"><Icon name="microphone" size={30} /></span>
                   <span className="voice-core-label">
-                    {dictation.state === "recording" ? "J’écoute…" : dictation.state === "transcribing" ? "Transcription…" : "Dicter"}
+                    {dictation.state === "recording" ? (dictation.paused ? "En pause" : "J’écoute…") : dictation.state === "transcribing" ? "Transcription…" : "Dicter"}
                   </span>
                 </button>
 
@@ -1103,7 +1162,7 @@ export default function App() {
             <div className="home-modal">
               <div className="home-modal-header">
                 <div><span className="eyebrow">CONVERSATIONS</span><h2>Toutes les conversations</h2></div>
-                <button className="button button-icon dialog-close" onClick={() => setShowConversationPicker(false)} aria-label="Fermer" type="button"><Icon name="close" size={17} /></button>
+                <button className="button button-icon dialog-close" onClick={() => withViewTransition(() => setShowConversationPicker(false))} aria-label="Fermer" type="button"><Icon name="close" size={17} /></button>
               </div>
               {/* v9.1.6 : flèches Haut/Bas naviguent, Entrée ouvre la conversation focusée. */}
               <div className="home-modal-list" ref={conversationsListRef} onKeyDown={conversationsNav.onKeyDown}>
@@ -1238,20 +1297,22 @@ export default function App() {
           <div className="composer-footer-left">
             {appState.keys.groq && (
               <button
-                className={`button button-icon dictation-button ${dictation.state === "recording" ? "dictation-recording" : "secondary"}`}
+                className={`button button-icon dictation-button ${dictation.state === "recording" ? "dictation-recording" : "secondary"}${dictation.paused ? " dictation-paused" : ""}`}
                 type="button"
                 disabled={dictation.state === "transcribing"}
-                onPointerDown={(e) => { e.preventDefault(); if (dictation.state === "error") dictation.resetError(); else if (dictation.state === "idle") void dictation.start() }}
-                onPointerUp={(e) => { e.preventDefault(); if (dictation.state === "recording") dictation.stop() }}
-                onPointerLeave={() => { if (dictation.state === "recording") dictation.stop() }}
-                aria-label={dictation.state === "recording" ? "Relâcher pour transcrire" : "Dicter (maintenir, ou Ctrl+Maj+V)"}
+                onPointerDown={(e) => { e.preventDefault(); dictationPointerRef.current = true; if (dictation.state === "error") dictation.resetError(); else if (dictation.state === "idle") void dictation.start() }} // v10.2.0 (F6)
+                onPointerUp={(e) => { e.preventDefault(); releaseDictation() }}
+                onPointerLeave={() => { if (dictationPointerRef.current && dictation.state === "recording") dictation.pause() }} // v10.2.0 (F6) : doigt sorti = pause
+                onPointerEnter={() => { if (dictationPointerRef.current && dictation.paused) dictation.resume() }} // v10.2.0 (F6) : doigt revenu = reprise
+                aria-label={dictation.paused ? "Reprendre la dictée — repose le doigt" : dictation.state === "recording" ? "Relâcher pour transcrire" : "Dicter (maintenir, ou Ctrl+Maj+V)"}
                 title="Dicter (maintenir le clic, ou Ctrl+Maj+V). Le texte arrive dans le composeur : relis-le avant d’envoyer."
               >
                 <Icon name="microphone" size={16} />
               </button>
             )}
             <span className="composer-hint">
-              {dictation.state === "recording" ? "J’écoute… relâche pour transcrire (Échap pour annuler)."
+              {dictation.paused ? "Dictée en pause — repose le doigt sur le micro pour reprendre."
+                : dictation.state === "recording" ? "J’écoute… relâche pour transcrire (Échap pour annuler)."
                 : dictation.state === "transcribing" ? "Transcription…"
                 : dictationMeta.cleaned && !dictationMeta.showRaw && input ? "Texte dicté éclairci — clique pour voir le brut."
                 : dictationMeta.warning ? `Dictée non reformée : ${dictationMeta.warning}`
@@ -1389,13 +1450,22 @@ export default function App() {
             {/* v9.6.0 : l’orchestrateur « projet » est l’AGENT PRINCIPAL ; le mode
                 « Tâche complexe » l’ouvre directement, les modes simples pointent les
                 spécialistes (code / analyse / recherche). */}
+            {/* v10.1.0 : UNE carte orchestrateur + switch de mode (Auto par défaut). */}
             <div className="tasks-principal">
               <article className={`agent-card tasks-principal-card ${agents.some((a) => a.id === "projet") ? "agent-card-orchestrator" : "tasks-card-off"}`}>
                 <div className="agent-card-icon"><Icon name="sparkle" size={24} /></div>
                 <div className="agent-card-body">
                   <span className="agent-card-id">projet <em className="orchestrator-badge">agent principal</em></span>
                   <h2>{agentName("projet")}</h2>
-                  <p>Comprend la demande, la découpe, délègue à code / analyse / recherche, puis synthétise.</p>
+                  <p>Comprend la demande, la découpe, délègue aux spécialistes, puis synthétise.</p>
+                  <div className="tasks-mode-switch" role="group" aria-label="Mode de l'orchestrateur">
+                    {TASK_MODES_UI.map((m) => (
+                      <button key={m.id} className={`button ${taskMode === m.id ? "primary" : "ghost"} tasks-mode-option`} onClick={() => changeTaskMode(m.id)} type="button" title={m.hint} aria-pressed={taskMode === m.id}>
+                        <Icon name={m.icon} size={13} />{m.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="hint tasks-mode-hint">{TASK_MODES_UI.find((m) => m.id === taskMode)?.hint}</p>
                   <div className="tasks-principal-actions">
                     <button className="button primary" onClick={() => selectAgent("projet")} disabled={!agents.some((a) => a.id === "projet")} type="button">
                       <Icon name="agent" size={14} />Ouvrir une conversation
@@ -1404,33 +1474,6 @@ export default function App() {
                 </div>
               </article>
             </div>
-            <div className="tasks-modes">
-              {MODES.map((m, i) => {
-                const a = agents.find((x) => x.id === m.id)
-                const group = a ? groupChatsByAgent(chats, [a.id])[0] : undefined
-                const lastChat = group?.chats[0]
-                return (
-                  <article key={m.id} style={{ "--stagger-i": i + 1 } as React.CSSProperties} className={`tasks-mode-card ${a ? "" : "tasks-card-off"}`}>
-                    <div className="agent-card-icon"><Icon name={m.icon} size={20} /></div>
-                    <div className="agent-card-body">
-                      <span className="agent-card-id">{m.id}</span>
-                      <h2>{a?.name ?? m.fallbackName}</h2>
-                      <p>{m.desc}</p>
-                      {lastChat && (
-                        <button className="chat-main tasks-mode-lastchat" onClick={() => openConversationFromSidebar(lastChat)} type="button" title="Ouvrir la dernière conversation de ce mode">
-                          <span className="chat-title">{lastChat.title}</span>
-                        </button>
-                      )}
-                    </div>
-                    <div className="agent-card-actions">
-                      <button className="button secondary" onClick={() => selectAgent(m.id)} disabled={!a} type="button">
-                        Ouvrir
-                      </button>
-                    </div>
-                  </article>
-                )
-              })}
-            </div>
             {agentsLoading && <p className="hint">Chargement des agents…</p>}
             {agentsError && (
               <div className="agents-empty agents-empty-error">
@@ -1438,6 +1481,12 @@ export default function App() {
                 <h2>Impossible de charger les agents</h2>
                 <p>{agentsError}</p>
                 <button className="button primary" type="button" onClick={() => { setAgentsLoading(true); setAgentsError(undefined); api.agents().then((a) => { setAgents(a); setTab((cur) => cur || a[0]?.id || "") }).catch((e) => setAgentsError(e instanceof Error ? e.message : String(e))).finally(() => setAgentsLoading(false)) }}>Réessayer</button>
+              </div>
+            )}
+            {/* v10.2.0 (M11) : la page Tâches dit ce qu'elle contient quand elle est vide. */}
+            {!agentsLoading && !agentsError && !agents.length && (
+              <div className="tasks-empty">
+                <strong>Aucun agent disponible.</strong> Les spécialistes apparaîtront ici dès leur installation. En attendant, ouvre une conversation avec l'agent principal : il découpe la demande, délègue aux spécialistes puis synthétise.
               </div>
             )}
           </section>
@@ -1463,7 +1512,7 @@ export default function App() {
                           ) : (
                             <button className="chat-main" onClick={() => openConversationFromSidebar(c)} onDoubleClick={() => startRenameChat(c.id)} title="Ouvrir la conversation"><span className="chat-title">{c.title}</span><span className="chat-meta">{c.updated ? new Date(c.updated).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" }) : ""}</span></button>
                           )}
-                          <div className="chat-actions"><button onClick={() => startRenameChat(c.id)} title="Renommer" aria-label="Renommer"><Icon name="pencil" size={14} /></button><button onClick={() => exportChat(c.id)} title="Exporter" aria-label="Exporter"><Icon name="export" size={14} /></button><button onClick={() => toggleArchive(c.id, !showArchived)} title={showArchived ? "Désarchiver" : "Archiver"} aria-label={showArchived ? "Désarchiver" : "Archiver"}><Icon name={showArchived ? "restore" : "archive"} size={14} /></button><button onClick={() => removeChat(c.id)} title="Supprimer" aria-label="Supprimer"><Icon name="trash" size={14} /></button></div>
+                          <div className="chat-actions"><button onClick={() => startRenameChat(c.id)} title="Renommer" aria-label="Renommer"><Icon name="pencil" size={14} /></button><button onClick={() => exportChat(c.id)} title="Exporter" aria-label="Exporter"><Icon name="export" size={14} /></button><button onClick={() => toggleArchive(c.id, !showArchived)} title={showArchived ? "Désarchiver" : "Archiver"} aria-label={showArchived ? "Désarchiver" : "Archiver"}><Icon name={showArchived ? "restore" : "archive"} size={14} /></button><button className={deleteArmed === c.id ? "armed" : ""} onClick={() => armDelete(c.id)} title={deleteArmed === c.id ? "Confirmer la suppression définitive" : "Supprimer"} aria-label={deleteArmed === c.id ? "Confirmer la suppression définitive" : "Supprimer"}><Icon name="trash" size={14} /></button></div>
                         </div>
                       ))}
                     </div>
@@ -1474,7 +1523,7 @@ export default function App() {
                       ) : (
                         <button className="chat-main" onClick={() => setChatId(c.id)} onDoubleClick={() => startRenameChat(c.id)} title="Ouvrir la conversation"><span className="chat-title">{c.title}</span><span className="chat-meta">{c.updated ? new Date(c.updated).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" }) : ""}</span></button>
                       )}
-                      <div className="chat-actions"><button onClick={() => startRenameChat(c.id)} title="Renommer" aria-label="Renommer"><Icon name="pencil" size={14} /></button><button onClick={() => exportChat(c.id)} title="Exporter" aria-label="Exporter"><Icon name="export" size={14} /></button><button onClick={() => toggleArchive(c.id, !showArchived)} title={showArchived ? "Désarchiver" : "Archiver"} aria-label={showArchived ? "Désarchiver" : "Archiver"}><Icon name={showArchived ? "restore" : "archive"} size={14} /></button><button onClick={() => removeChat(c.id)} title="Supprimer" aria-label="Supprimer"><Icon name="trash" size={14} /></button></div>
+                      <div className="chat-actions"><button onClick={() => startRenameChat(c.id)} title="Renommer" aria-label="Renommer"><Icon name="pencil" size={14} /></button><button onClick={() => exportChat(c.id)} title="Exporter" aria-label="Exporter"><Icon name="export" size={14} /></button><button onClick={() => toggleArchive(c.id, !showArchived)} title={showArchived ? "Désarchiver" : "Archiver"} aria-label={showArchived ? "Désarchiver" : "Archiver"}><Icon name={showArchived ? "restore" : "archive"} size={14} /></button><button className={deleteArmed === c.id ? "armed" : ""} onClick={() => armDelete(c.id)} title={deleteArmed === c.id ? "Confirmer la suppression définitive" : "Supprimer"} aria-label={deleteArmed === c.id ? "Confirmer la suppression définitive" : "Supprimer"}><Icon name="trash" size={14} /></button></div>
                     </div>
                   ))}
                   {!visibleChats.length && <div className="sidebar-empty"><span><Icon name="sparkle" size={20} /></span><p>Rien à afficher ici.</p></div>}
@@ -1486,6 +1535,15 @@ export default function App() {
               <div className="chat-titlebar">
                 <div><span className="eyebrow">SESSION</span><strong>{chats.find((c) => c.id === chatId)?.title ?? "Nouvelle conversation"}</strong></div>
                 <div className="row">
+                  {tab === "projet" && (
+                    <div className="tasks-mode-switch" role="group" aria-label="Mode de l'orchestrateur">
+                      {TASK_MODES_UI.map((m) => (
+                        <button key={m.id} className={`button ${taskMode === m.id ? "primary" : "ghost"} tasks-mode-option`} onClick={() => changeTaskMode(m.id)} type="button" title={m.hint} aria-pressed={taskMode === m.id}>
+                          <Icon name={m.icon} size={13} />{m.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   <button className="button ghost back-home-button" onClick={() => { setShowHome(false); setShowAgentsPage(true) }} aria-label="Voir la page des agents" type="button"><Icon name="agent" size={15} />Agents</button>
                   <button className="button ghost back-home-button" onClick={() => setShowHome(true)} aria-label="Retour à l’accueil" type="button"><Icon name="arrow-left" size={15} />Accueil</button>
                 </div>
@@ -1513,6 +1571,8 @@ export default function App() {
           à la conversation ») — remplace l'ancien modal Notes de v8.x. */}
       {showNotes && (
         <NotesView
+          autoCapture={captureRequested}
+          onCaptureHandled={() => setCaptureRequested(false)}
           initialId={notesInitialId}
           agents={orderedAgents.map((a) => ({ id: a.id, name: a.name }))}
           currentAgent={tab}
@@ -1553,7 +1613,7 @@ export default function App() {
           focusWorkspaces={settingsFocus === "workspaces"}
           onAppearanceChange={updateAppearance}
           onAppearanceReset={resetAppearance}
-          onClose={() => { setShowSettings(false); setSettingsFocus(undefined) }}
+          onClose={() => { withViewTransition(() => setShowSettings(false)); setSettingsFocus(undefined) }} // v10.2.0 (M3) : fermeture en View Transition
           onError={fail}
           onAppStateChanged={(next) => {
             // Clé enregistrée ou espace de travail changé : le moteur a redémarré côté main.

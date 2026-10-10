@@ -39,12 +39,13 @@ const makeWs = () => mkdtempSync(path.join(tmpdir(), "aven-notes-tags-"))
   }
 }
 
-// Défense : identifiant avec traversée de chemin refusé.
+// Défense : identifiant avec traversée de chemin refusé ; le sous-dossier
+// légitime est accepté (v10.1.0 : ids = chemins relatifs sûrs).
 {
   const ws = makeWs()
   try {
     assert.throws(() => setTags(ws, "../evil.md", ["code"]), /Note invalide/)
-    assert.throws(() => setTags(ws, "a/b.md", ["code"]), /Note invalide/)
+    assert.deepEqual(setTags(ws, "dossier/note.md", ["code"]), ["code"])
   } finally {
     rmSync(ws, { recursive: true, force: true })
   }
