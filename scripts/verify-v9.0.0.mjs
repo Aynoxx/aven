@@ -46,7 +46,8 @@ assert.match(app, /openConversationFromSidebar/)
 assert.match(app, /chatGroups/)
 // v9.6.0 : la grille d'agents de la page (avec .agent-card-chats) laisse place aux modes
 // — le regroupement par agent reste testé via chatGroups et chat-groups.ts.
-assert.match(app, /tasks-mode-card/)
+// v10.1.0 : une seule carte orchestrateur + switch segmenté (plus de cartes de modes).
+assert.match(app, /tasks-mode-switch/)
 assert.match(appearance, /chatsGroupedByAgent/)
 // v9.1.3 : freebuffDefaultCode/freebuffAsEngine ont disparu (clé Codebuff retirée de l'app).
 assert.ok(!/freebuffDefaultCode|freebuffAsEngine/.test(appearance), "les champs Freebuff doivent avoir disparu de l'apparence")

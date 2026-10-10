@@ -1,6 +1,6 @@
 [package]
 name = "aven"
-version = "10.0.0"
+version = "10.2.0"
 description = "Aven — espace de travail IA"
 authors = ["Liam"]
 edition = "2021"
@@ -20,3 +20,4 @@ tauri-plugin-dialog = "2"
 tauri-plugin-single-instance = "2"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-notification = "2"
+tauri-plugin-window-state = "2"

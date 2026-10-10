@@ -19,7 +19,12 @@ import { execFileSync, execFile, spawn } from "node:child_process"
 import { promisify } from "node:util"
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
-import { listNotes, getNote, saveNote, notesDir } from "./notes.js"
+import {
+  archiveNote, backlinks, createFolder, deleteFolder, deleteNote, getNote,
+  listArchived as listArchivedNotes,
+  listNotes, listTrash, moveNote, noteLinks, notesDir, notesTree, purgeNote, quickCapture,
+  renameFolder, restoreNote, saveNote, searchNotes, unarchiveNote,
+} from "./notes.js"
 import { loadPinned, loadTags, setTags, togglePin } from "./notes-meta.js"
 import { listWorkspaceDir, readWorkspaceFile, breadcrumbOf, safeResolve as safeResolveWorkspacePath } from "./workspace-files.js"
 import { aggregateStats, readDictationStats } from "./stats.js"
@@ -593,6 +598,44 @@ async function dispatch(method: string, params: any): Promise<unknown> {
       return safeResolveWorkspacePath(requireWorkspace(), String(params?.[0] ?? ""))
     case "noteOpenFolder":
       return notesDir(requireWorkspace())
+    // v10.1.0 : mode de tâche de l'orchestrateur.
+    case "taskMode":
+      return api.taskMode()
+    case "setTaskMode":
+      return api.setTaskMode(params?.[0])
+    // v10.1.0 : notes façon Kortex — arbre, dossiers, poubelle, archive, liens, capture.
+    case "notesTree":
+      return notesTree(requireWorkspace())
+    case "noteCreateFolder":
+      return createFolder(requireWorkspace(), String(params?.[0] ?? ""))
+    case "noteRenameFolder":
+      return renameFolder(requireWorkspace(), String(params?.[0] ?? ""), String(params?.[1] ?? ""))
+    case "noteDeleteFolder":
+      return deleteFolder(requireWorkspace(), String(params?.[0] ?? ""))
+    case "noteMove":
+      return moveNote(requireWorkspace(), String(params?.[0] ?? ""), String(params?.[1] ?? ""))
+    case "noteDelete":
+      return deleteNote(requireWorkspace(), String(params?.[0] ?? ""))
+    case "noteRestore":
+      return restoreNote(requireWorkspace(), String(params?.[0] ?? ""))
+    case "noteArchive":
+      return archiveNote(requireWorkspace(), String(params?.[0] ?? ""))
+    case "noteUnarchive":
+      return unarchiveNote(requireWorkspace(), String(params?.[0] ?? ""))
+    case "noteTrash":
+      return listTrash(requireWorkspace())
+    case "noteArchived":
+      return listArchivedNotes(requireWorkspace())
+    case "notePurge":
+      return purgeNote(requireWorkspace(), String(params?.[0] ?? ""))
+    case "noteLinks":
+      return noteLinks(requireWorkspace(), String(params?.[0] ?? ""))
+    case "noteBacklinks":
+      return backlinks(requireWorkspace(), String(params?.[0] ?? ""))
+    case "noteSearch":
+      return searchNotes(requireWorkspace(), String(params?.[0] ?? ""))
+    case "noteQuickCapture":
+      return quickCapture(requireWorkspace(), String(params?.[0] ?? ""), String(params?.[1] ?? ""))
     case "prefs":
       return loadPrefs()
     case "setNotifications":

@@ -13,6 +13,7 @@ const main = read("host/aven-app-host.ts") // v10.0.0 : remplace le main Electro
 const preload = read("web/src/types.ts") // v10.0.0 : remplace le preload (contrat OpenCodeApi)
 const types = read("web/src/types.ts")
 const dialog = read("web/src/NotesView.tsx") // v9.3.0 : la vue Notes remplace le modal
+const notes = read("host/notes.ts") // v10.1.0 : la recherche globale vit côté host
 const tests = read("tests/notes-premium.test.mjs")
 const selection = read("web/src/selection-actions.ts") // régression v8.9.0
 const intent = read("host/voice-intent.ts") // régression v8.8.0
@@ -42,7 +43,10 @@ assert.match(dialog, /notePins\(\)/)
 assert.match(dialog, /Épingler|Détacher/)
 assert.match(dialog, /Exporter \.md/)
 assert.match(dialog, /mots/)
-assert.match(dialog, /n\.markdown/) // la recherche porte sur le contenu
+// v10.1.0 : la recherche est globale et côté host (searchNotes) — le critère
+// « la recherche porte sur le contenu » est vérifié là où il s'applique.
+assert.match(dialog, /noteSearch\(q\)/, "la vue interroge la recherche globale du host")
+assert.match(notes, /normalizeForSearch\(`\$\{n\.title\} \$\{n\.markdown\}`\)/, "la recherche porte sur titre + contenu")
 
 // Tests présents.
 assert.match(tests, /togglePin/)

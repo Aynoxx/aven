@@ -16,6 +16,9 @@ export function useDictation(options: {
   onEmpty?: () => void
 }) {
   const [state, setState] = useState<DictationState>("idle")
+  // v10.2.0 (F6) : micro en pause (doigt sorti du bouton) — le clip continue :
+  // pause/reprise ne perdent aucune parole, l'arrêt reste possible depuis l'état paused.
+  const [paused, setPaused] = useState(false)
   const recorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const streamRef = useRef<MediaStream | null>(null)
@@ -54,6 +57,7 @@ export function useDictation(options: {
       chunksRef.current = []
       recorder.ondataavailable = (e) => { if (e.data.size) chunksRef.current.push(e.data) }
       recorder.onstop = () => {
+        setPaused(false)
         if (cancellingRef.current) {
           cancellingRef.current = false
           cleanup()
@@ -85,6 +89,7 @@ export function useDictation(options: {
       }
       recorderRef.current = recorder
       recorder.start() // pas de timeslice : un seul blob à l'arrêt
+      setPaused(false)
       setState("recording")
     } catch (err) {
       cleanup()
@@ -97,14 +102,29 @@ export function useDictation(options: {
   }, [cleanup, onText, onError, onTooShort, onEmpty, state])
 
   const stop = useCallback(() => {
-    // L'arrêt déclenche onstop → envoi + transcription.
+    // L'arrêt déclenche onstop → envoi + transcription. Valide aussi depuis paused :
+    // MediaRecorder.stop() dans l'état « paused » libère le clip accumulé (F6).
+    setPaused(false)
     try { recorderRef.current?.stop() } catch { /* déjà arrêté */ }
   }, [])
+
+  // v10.2.0 (F6) : le doigt quitte le bouton → pause ; le doigt revient → reprise.
+  // Le micro reste ouvert : aucun mot prononcé entre les deux n'est perdu.
+  const pause = useCallback(() => {
+    if (state !== "recording" || paused) return
+    try { recorderRef.current?.pause(); setPaused(true) } catch { /* déjà arrêté */ }
+  }, [state, paused])
+
+  const resume = useCallback(() => {
+    if (!paused) return
+    try { recorderRef.current?.resume(); setPaused(false) } catch { /* déjà arrêté */ }
+  }, [paused])
 
   const cancel = useCallback(() => {
     // Marque l'annulation AVANT le stop : onstop saura que ce clip ne doit pas partir.
     chunksRef.current = []
     cancellingRef.current = true
+    setPaused(false)
     try { recorderRef.current?.stop() } catch { /* déjà arrêté */ }
     setState("idle")
     cleanup()
@@ -120,5 +140,5 @@ export function useDictation(options: {
 
   const resetError = useCallback(() => setState((s) => (s === "error" ? "idle" : s)), [])
 
-  return { state, start, stop, cancel, resetError }
+  return { state, paused, start, stop, pause, resume, cancel, resetError }
 }

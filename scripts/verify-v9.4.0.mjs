@@ -43,7 +43,9 @@ assert.match(css, /.model-select-menu/, "CSS du menu modèle attendu")
 // v9.6.0 : la page devient « Tâches » — agent principal (orchestrateur) + modes.
 // ASSISTANT_MAP → MODES ; le tableau .assistants-map est masqué (CSS) ; le panneau
 // .assistants-freebuff quitte la page (Freebuff : pastille hub + carte Projet).
-assert.match(app, /const MODES = \[/, "v9.6.0 : la constante MODES remplace ASSISTANT_MAP")
+// v10.1.0 : la constante TASK_MODES_UI (switch de mode de l'orchestrateur) a
+// repris le rôle de MODES (cartes de modes séparées retirées de la page).
+assert.match(app, /const TASK_MODES_UI = \[/, "v10.1.0 : la constante TASK_MODES_UI porte les modes")
 assert.match(css, /\.assistants-map \{ display: none; \}/, "v9.6.0 : le tableau v9.4.0 est masqué (sondes d'origine honorées)")
 assert.ok(!/key: "freebuff", label: "Freebuff"/.test(app), "la carte Freebuff a quitté le cercle du hub")
 assert.match(css, /--hub-angle:90deg/, "4 cartes à 90° attendues")

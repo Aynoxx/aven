@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from "react"
+import { useEffect, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from "react"
 import { api } from "./api"
 import { Icon } from "./icons"
 import type { Agent, AppState, AggregatedStats } from "./types"
@@ -151,6 +151,36 @@ export default function SettingsDialog(props: {
     props.onAppearanceChange({ agentOrder: current })
   }
 
+  // v10.2.0 (M8) : les listes triables se pilotent au clavier (skill « mode pour chaque
+  // geste ») — ↑↓ déplacent le focus d'une rangée à l'autre ; Alt+↑↓ déplacent
+  // l'élément (l'équivalent clavier du glisser-déposer), le focus le suit.
+  const sortableKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>, move: (fromId: string, toId: string) => void) => {
+    if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return
+    const items = Array.from(e.currentTarget.querySelectorAll<HTMLElement>(".sortable-item"))
+    if (!items.length) return
+    e.preventDefault()
+    const active = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const current = active ? items.indexOf(active) : -1
+    if (!e.altKey) {
+      const next = current < 0 ? items[0] : items[Math.min(items.length - 1, Math.max(0, current + (e.key === "ArrowDown" ? 1 : -1)))]
+      next.focus()
+      return
+    }
+    if (current < 0) return
+    const target = current + (e.key === "ArrowDown" ? 1 : -1)
+    if (target < 0 || target >= items.length) return
+    const fromId = items[current].dataset.sortId
+    const toId = items[target].dataset.sortId
+    if (!fromId || !toId) return
+    move(fromId, toId)
+    // Le réordonnancement régénère les rangées : on refocalise l'élément déplacé
+    // après la double frame (rendu React peint).
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const el = Array.from(document.querySelectorAll<HTMLElement>(".sortable-item")).find((n) => n.dataset.sortId === fromId)
+      el?.focus()
+    }))
+  }
+
   const accentChoices = [
     ["violet", "Violet", "#8b5cf6"],
     ["blue", "Bleu", "#3b82f6"],
@@ -193,19 +223,19 @@ export default function SettingsDialog(props: {
       </section>
       <section className="settings-section">
         <div className="section-title">Ordre des blocs</div>
-        <p className="section-hint">Réorganise les éléments de la conversation par glisser-déposer.</p>
-        <div className="sortable-list">
+        <p className="section-hint">Réorganise les éléments de la conversation par glisser-déposer, ou au clavier : ↑↓ pour naviguer, Alt+↑↓ pour déplacer.</p>
+        <div className="sortable-list" role="list" aria-label="Ordre des blocs de la conversation" aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown">
           {appearance.mainOrder.map((id) => {
             const labels: Record<BlockId, string> = { messages: "Messages", notices: "Événements modèle", model: "Modèle actif", composer: "Éditeur de message" }
-            return <div key={id} className={`sortable-item ${draggedBlock === id ? "is-dragged" : ""}`} draggable onDragStart={(e) => { setDraggedBlock(id); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", id) }} onDragEnd={() => setDraggedBlock(null)} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { moveBlock(e.dataTransfer.getData("text/plain") as BlockId, id); setDraggedBlock(null) }}><span className="drag-handle"><Icon name="grip" size={16} /></span><span><b>{labels[id]}</b><small>{id}</small></span></div>
+            return <div key={id} className={`sortable-item ${draggedBlock === id ? "is-dragged" : ""}`} role="listitem" tabIndex={0} data-sort-id={id} onKeyDown={(e) => sortableKeyDown(e, (from, to) => moveBlock(from as BlockId, to as BlockId))} draggable onDragStart={(e) => { setDraggedBlock(id); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", id) }} onDragEnd={() => setDraggedBlock(null)} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { moveBlock(e.dataTransfer.getData("text/plain") as BlockId, id); setDraggedBlock(null) }}><span className="drag-handle"><Icon name="grip" size={16} /></span><span><b>{labels[id]}</b><small>{id}</small></span></div>
           })}
         </div>
       </section>
       <section className="settings-section">
         <div className="section-title">Ordre des agents</div>
-        <p className="section-hint">Les identifiants restent inchangés : seul l’ordre d’affichage est modifié.</p>
-        <div className="sortable-list">
-          {props.agents.map((agent) => <div key={agent.id} className={`sortable-item ${draggedAgent === agent.id ? "is-dragged" : ""}`} draggable onDragStart={(e) => { setDraggedAgent(agent.id); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", agent.id) }} onDragEnd={() => setDraggedAgent(null)} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { moveAgent(e.dataTransfer.getData("text/plain"), agent.id); setDraggedAgent(null) }}><span className="drag-handle"><Icon name="grip" size={16} /></span><span><b>{agent.name}</b><small>{agent.description || agent.id}</small></span></div>)}
+        <p className="section-hint">Les identifiants restent inchangés : seul l’ordre d’affichage est modifié. Glisser-déposer, ou ↑↓ pour naviguer et Alt+↑↓ pour déplacer.</p>
+        <div className="sortable-list" role="list" aria-label="Ordre des agents" aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown">
+          {props.agents.map((agent) => <div key={agent.id} className={`sortable-item ${draggedAgent === agent.id ? "is-dragged" : ""}`} role="listitem" tabIndex={0} data-sort-id={agent.id} onKeyDown={(e) => sortableKeyDown(e, moveAgent)} draggable onDragStart={(e) => { setDraggedAgent(agent.id); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", agent.id) }} onDragEnd={() => setDraggedAgent(null)} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { moveAgent(e.dataTransfer.getData("text/plain"), agent.id); setDraggedAgent(null) }}><span className="drag-handle"><Icon name="grip" size={16} /></span><span><b>{agent.name}</b><small>{agent.description || agent.id}</small></span></div>)}
         </div>
       </section>
       <footer className="drawer-footer"><button className="button ghost" onClick={props.onAppearanceReset}>Réinitialiser</button><button className="button primary" onClick={props.onClose}>Terminé</button></footer>

@@ -38,6 +38,8 @@ export type IconName =
   | "terminal"
   | "slash"
   | "eye" // v9.4.0 : « Faire relire » (délégation à l'agent code-reviewer)
+  // v10.1.0 : barre d'outils de l'éditeur de notes (NoteEditor).
+  | "text" | "bold" | "italic" | "list" | "list-ordered" | "quote" | "link" | "inbox"
 
 export interface IconProps {
   name: IconName
@@ -97,6 +99,22 @@ function paths(name: IconName): ReactNode {
       return <><path d="M5 8V4l-3 3 3 3" /><path d="M5 7.5a7 7 0 1 1-1.2 8" /></>
     case "trash":
       return <><path d="M5 7h14" /><path d="M9 7V4h6v3M7 7l.8 13h8.4L17 7" /><path d="M10 11v5M14 11v5" /></>
+    case "text":
+      return <path d="M5 6.5V4.5h14v2M12 4.5V19M9 19h6" />
+    case "bold":
+      return <path d="M7 4.5h6a3.75 3.75 0 0 1 0 7.5H7zM7 12h7a4 4 0 0 1 0 8H7z" />
+    case "italic":
+      return <><path d="M10 4.5h8M6 19.5h8M14.5 4.5l-5 15" /></>
+    case "list":
+      return <><path d="M9 6h11M9 12h11M9 18h11" /><circle cx="4.5" cy="6" r="1" fill="currentColor" stroke="none" /><circle cx="4.5" cy="12" r="1" fill="currentColor" stroke="none" /><circle cx="4.5" cy="18" r="1" fill="currentColor" stroke="none" /></>
+    case "list-ordered":
+      return <><path d="M10 6h10M10 12h10M10 18h10M4 5h1.5v4M4 9h3M4 15.5c0-.8.7-1.3 1.4-1.3s1.3.5 1.3 1.2c0 1.3-2.7 1.6-2.7 3.1h3" /></>
+    case "quote":
+      return <path d="M5 5h14v6H9v6H5zM9 17h10" />
+    case "link":
+      return <><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 1 0-5.66-5.66l-1.5 1.5" /><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 1 0 5.66 5.66l1.5-1.5" /></>
+    case "inbox":
+      return <><path d="M4 13.5 6.5 5h11L20 13.5V19H4z" /><path d="M4 13.5h4.5l1 2.5h5l1-2.5H20" /></>
     case "menu":
       return <><path d="M6 6h12M6 12h12M6 18h12" /></>
     case "grip":

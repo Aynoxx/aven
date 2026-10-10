@@ -100,14 +100,16 @@ const agentsCard = await cdp.eval(`(() => {
 await sleep(600)
 // v9.6.0 : la page est devenue « Tâches » — agent principal + modes (le tableau v9.4.0
 // est masqué, le panneau Freebuff a quitté la page).
+// v10.1.0 : UNE carte orchestrateur + switch segmenté (4 modes : Auto, Code, Analyse,
+// Recherche) — les cartes de modes séparées ont quitté la page.
 const assistants = await cdp.eval(`(() => ({
   heading: [...document.querySelectorAll("h1")].map((h) => h.textContent).find((t) => /mode|agent|principal/i.test(t)) ?? "",
-  modes: document.querySelectorAll(".tasks-mode-card").length,
+  modes: document.querySelectorAll(".tasks-mode-option").length,
   principal: !!document.querySelector(".tasks-principal-card"),
   off: !!document.querySelector(".assistants-freebuff"),
 }))()`)
 check("page Tâches : en-tête + agent principal", agentsCard && assistants.principal, `h1="${assistants.heading}"`)
-check("page Tâches : 4 modes (code, analyse, recherche, tâche complexe)", assistants.modes === 4 && !assistants.off, `modes=${assistants.modes}`)
+check("page Tâches : switch à 4 modes (Auto, Code, Analyse, Recherche)", assistants.modes === 4 && !assistants.off, `modes=${assistants.modes}`)
 
 // Retour à l'accueil pour la suite.
 await cdp.eval(`(() => {

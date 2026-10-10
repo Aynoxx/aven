@@ -190,4 +190,41 @@ assert.match(ciWindows, /npm run verify/, "la CI Windows exécute la chaîne ver
 assert.match(ciWindows, /cargo test/, "la CI Windows exécute les tests Rust")
 assert.match(ciWindows, /npm run smoke:tauri/, "la CI Windows exécute la fumée Tauri")
 
+// J. Persistance de la fenêtre : plugin officiel, flags restreints à la
+// taille/position/maximisé (VISIBLE exclu — fermeture vers le tray), et
+// restauration reprise à la main dans .setup() car le plugin ne fait que
+// « maximize » : sans unmaximize, un état fenêtré sauvé serait écrasé par le
+// maximisé de tauri.conf.json.
+const cargo = read("src-tauri/Cargo.toml")
+assert.match(cargo, /tauri-plugin-window-state/, "plugin tauri-plugin-window-state déclaré")
+assert.match(lib, /tauri_plugin_window_state::Builder/, "plugin enregistré dans lib.rs")
+assert.match(
+  lib,
+  /skip_initial_state\("main"\)/,
+  "restauration explicite (skip_initial_state) : le plugin ne démaximise jamais"
+)
+assert.match(
+  lib,
+  /StateFlags::SIZE \| StateFlags::POSITION \| StateFlags::MAXIMIZED/,
+  "flags restreints à taille/position/maximisé (VISIBLE exclu)"
+)
+assert.match(lib, /\.unmaximize\(\)/, "unmaximize conditionné à un état sauvé")
+assert.match(lib, /DEFAULT_FILENAME/, "fichier d'état standard du plugin")
+assert.match(
+  pkg.scripts["test:window-state"] ?? "",
+  /test-window-state\.mjs/,
+  "script npm test:window-state branché (persistance de bout en bout)"
+)
+assert.match(
+  pkg.scripts["test:features"] ?? "",
+  /test-features-tauri\.mjs/,
+  "script npm test:features branché (parcours fonctionnel complet)"
+)
+const features = read("scripts/test-features-tauri.mjs")
+assert.ok(
+  features.includes("127\\.0\\.0\\.1:5173"),
+  "le parcours détecte un binaire laissé par tauri:dev"
+)
+assert.match(features, /CONTRASTE/, "le parcours mesure les contrastes des deux thèmes")
+
 console.log("v10.0.0 verification: OK")

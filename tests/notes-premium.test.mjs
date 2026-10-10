@@ -19,10 +19,13 @@ test("togglePin : épingle puis détache une note (persisté)", () => {
   assert.deepEqual(loadPinned(temp), [])
 })
 
-test("togglePin : id avec chemin = basename uniquement (anti-traversée)", () => {
-  const pinned = togglePin(temp, "..\\evil\\note.md")
-  assert.deepEqual(pinned, ["note.md"])
-  togglePin(temp, "note.md") // nettoyage
+test("togglePin : traversée de chemin REJETÉE (v10.1.0 : ids = chemins relatifs sûrs)", () => {
+  assert.throws(() => togglePin(temp, "..\\evil\\note.md"), /invalide/)
+  assert.throws(() => togglePin(temp, "../evil/note.md"), /invalide/)
+  // Le sous-dossier légitime reste accepté.
+  togglePin(temp, "projets/idee.md")
+  assert.ok(loadPinned(temp).includes("projets/idee.md"))
+  togglePin(temp, "projets/idee.md") // nettoyage
 })
 
 test("togglePin : au-delà du maximum, l'épinglage est refusé", () => {

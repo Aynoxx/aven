@@ -16,6 +16,15 @@ use runtime::RuntimeState;
 use std::sync::atomic::Ordering;
 use tauri::Manager;
 
+// v10.0.x : position/taille/état maximisé mémorisés entre les lancements.
+// Flags restreints : VISIBLE/DECORATIONS/FULLSCREEN sont exclus — notre
+// fermeture avale la fenêtre vers le tray, sauvegarder « visible=false »
+// rendrait le prochain démarrage muet. Voir restore dans .setup() ci-dessous.
+fn window_state_flags() -> tauri_plugin_window_state::StateFlags {
+    use tauri_plugin_window_state::StateFlags;
+    StateFlags::SIZE | StateFlags::POSITION | StateFlags::MAXIMIZED
+}
+
 #[cfg(desktop)]
 use tauri_plugin_global_shortcut::{Code, Modifiers, Shortcut, ShortcutState};
 
@@ -39,18 +48,46 @@ pub fn run() {
             Some(Modifiers::CONTROL | Modifiers::SHIFT),
             Code::KeyO,
         );
+        // v10.1.0 : capture rapide façon Kortex — Ctrl+Shift+N restaure la fenêtre
+        // ET demande l'ouverture de la capture (événement aven:event → renderer).
+        let capture_shortcut = Shortcut::new(
+            Some(Modifiers::CONTROL | Modifiers::SHIFT),
+            Code::KeyN,
+        );
 
         builder = builder.plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(move |app, shortcut, event| {
-                    if shortcut == &handler_shortcut && event.state() == ShortcutState::Pressed {
-                        if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.unminimize();
-                            let _ = window.show();
-                            let _ = window.set_focus();
+                    if event.state() != ShortcutState::Pressed {
+                        return;
+                    }
+                    if shortcut != &handler_shortcut && shortcut != &capture_shortcut {
+                        return;
+                    }
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.unminimize();
+                        let _ = window.show();
+                        let _ = window.set_focus();
+                        if shortcut == &capture_shortcut {
+                            use tauri::Emitter;
+                            let _ = window.emit(
+                                "aven:event",
+                                serde_json::json!({ "type": "quick-capture", "data": {} }),
+                            );
                         }
                     }
                 })
+                .build(),
+        );
+
+        // v10.0.x : persistance de la fenêtre. skip_initial_state("main") : la
+        // restauration est faite à la main dans .setup() — le plugin ne fait que
+        // « maximize » (jamais unmaximize) et la config ouvre maximisé, un état
+        // fenêtré sauvé serait sinon écrasé à chaque lancement.
+        builder = builder.plugin(
+            tauri_plugin_window_state::Builder::new()
+                .with_state_flags(window_state_flags())
+                .skip_initial_state("main")
                 .build(),
         );
     }
@@ -69,6 +106,25 @@ pub fn run() {
             }
         })
         .setup(|app| {
+            // v10.0.x : restauration explicite de la fenêtre. Si un état sauvé existe
+            // (.window-state.json), on repart fenêtré pour que le plugin replace
+            // taille/position puis re-maximise si l'état le dit ; sans état, le
+            // maximisé de tauri.conf.json fait foi (premier lancement).
+            {
+                use tauri_plugin_window_state::WindowExt;
+                let window = app
+                    .get_webview_window("main")
+                    .expect("fenêtre principale Aven introuvable");
+                let etat = app
+                    .path()
+                    .app_config_dir()?
+                    .join(tauri_plugin_window_state::DEFAULT_FILENAME);
+                if etat.exists() {
+                    let _ = window.unmaximize();
+                }
+                window.restore_state(window_state_flags())?;
+            }
+
             #[cfg(desktop)]
             {
                 use tauri::{
@@ -120,6 +176,10 @@ pub fn run() {
                 app.global_shortcut().register(Shortcut::new(
                     Some(Modifiers::CONTROL | Modifiers::SHIFT),
                     Code::KeyO,
+                ))?;
+                app.global_shortcut().register(Shortcut::new(
+                    Some(Modifiers::CONTROL | Modifiers::SHIFT),
+                    Code::KeyN,
                 ))?;
             }
 

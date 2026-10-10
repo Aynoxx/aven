@@ -45,7 +45,9 @@ assert.match(css, /--hub-r: clamp\(196px, 37cqw, 272px\)/)
 // v9.6.0 : la grille d'agents devient la page « Tâches » (orchestrateur + modes) ; les
 // cartes modes montrent la DERNIÈRE conversation de chaque mode, le badge lecture seule
 // quitte les cartes (les modes restent connus par leur description).
-assert.match(app, /tasks-mode-lastchat/, "dernière conversation affichée sur la carte du mode")
+// v10.1.0 : les cartes modes ont quitté la page — UNE carte orchestrateur porte un
+// switch segmenté (Auto par défaut), rejoué dans le bandeau de conversation.
+assert.match(app, /tasks-mode-switch/, "v10.1.0 : le switch de mode remplace les cartes de modes")
 assert.match(css, /repeat\(auto-fill, minmax\(340px, 1fr\)\)|repeat\(auto-fit, minmax\(230px, 1fr\)\)/)
 
 console.log("v9.1.4 verification: OK")
