@@ -6,7 +6,7 @@
 //     la fermeture), puis reprise après CRASH RÉEL du runtime Node (on tue
 //     l'enfant, la requête suivante doit le relancer sous budget 3/min).
 // On pilote la webview par le débogueur CDP de WebView2
-// (WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port). Chenfils toujours
+// (variables locales ou stratégie HKLM temporaire sous CI). Les journaux restent
 // en fichiers/ignore : un exe GUI qui hérite du pipe du shell ne rend jamais la main.
 import { spawn, spawnSync } from "node:child_process"
 import { existsSync, mkdirSync, mkdtempSync, openSync, rmSync, writeFileSync } from "node:fs"
@@ -20,14 +20,22 @@ const DEV_LOG = "smoke-tauri-dev.log"
 const BIN_LOG = "smoke-tauri-bin.log"
 const WEBVIEW_PROFILE_ROOT = mkdtempSync(path.join(os.tmpdir(), "aven-webview2-smoke-"))
 const WEBVIEW_PROFILES = []
+const USE_WEBVIEW2_POLICY = process.env.AVEN_SMOKE_WEBVIEW2_POLICY === "1"
 function webviewEnv(port) {
+  const env = { ...process.env }
+  if (USE_WEBVIEW2_POLICY) {
+    // Elevated WebView2 hosts ignore WEBVIEW2_* environment overrides. The CI
+    // workflow supplies AdditionalBrowserArguments through HKLM policy instead.
+    // Leave these variables absent so WebView2 actually consults that policy.
+    delete env.WEBVIEW2_USER_DATA_FOLDER
+    delete env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS
+    return env
+  }
   const profile = mkdtempSync(path.join(WEBVIEW_PROFILE_ROOT, `profile-${port}-`))
   WEBVIEW_PROFILES.push(profile)
-  return {
-    ...process.env,
-    WEBVIEW2_USER_DATA_FOLDER: profile,
-    WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port}`,
-  }
+  env.WEBVIEW2_USER_DATA_FOLDER = profile
+  env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = `--remote-debugging-port=${port}`
+  return env
 }
 
 const results = []
