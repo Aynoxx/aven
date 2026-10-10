@@ -9,7 +9,7 @@ import type { Bridge } from "./opencode-bridge.js"
 import { loadNames } from "./agent-names.js"
 import { listArchived } from "./archive.js"
 import { resolveOpenCodeBin } from "./opencode-bridge.js"
-import { PROVIDERS } from "./providers.js"
+import { probeOpenRouterKey, PROVIDERS } from "./providers.js"
 import { seedWorkspace } from "./workspace-seed.js"
 import { buildAgentsDir, readTemplateAgents } from "./agents-bridge.js"
 import { dirname, join } from "node:path"
@@ -384,6 +384,19 @@ async function initialize(params: {
     if (storedEnv[envName]) effectiveEnv[envName] = storedEnv[envName]
   }
 
+  // v10.0.0 : préserver le contrôle de clé OpenRouter de la version Electron.
+  const keyWarnings: Record<string, string> = { ...(params.keyWarnings ?? {}) }
+  let openRouterUsable = params.openRouterUsable !== false
+  if (storedEnv.OPENROUTER_API_KEY) {
+    const probe = await probeOpenRouterKey(storedEnv.OPENROUTER_API_KEY)
+    if (probe.status === "invalid") {
+      openRouterUsable = false
+      keyWarnings.openrouter = `Clé OpenRouter refusée : ${probe.message} Remplace-la dans Paramètres.`
+    } else if (probe.status === "unknown") {
+      keyWarnings.openrouter = probe.message
+    }
+  }
+
   const bin = params.binPath
     ? { command: String(params.binPath), shell: Boolean(params.binShell), source: "Tauri resource" }
     : resolveOpenCodeBin()
@@ -403,12 +416,23 @@ async function initialize(params: {
     env: effectiveEnv,
     prioritiesPath: join(workspace, "model-priorities.json"),
     templatePrioritiesPath: join(templateDir, "model-priorities.json"),
-    excludeProvider: params.openRouterUsable === false ? "openrouter" : undefined,
+    excludeProvider: openRouterUsable ? undefined : "openrouter",
     binPath: bin.command,
     binShell: bin.shell,
   })
 
   engineChains = (engineState.assignments ?? {}) as typeof engineChains
+
+  // v10.0.0 : avertir aussi quand une clé existe mais qu'aucun modèle du fournisseur n'est actif.
+  const activeProviders = new Set(
+    Array.isArray(engineState.activeProviders) ? engineState.activeProviders.map(String) : [],
+  )
+  for (const provider of PROVIDERS) {
+    if (provider.openCodeEnv === false) continue
+    if (effectiveEnv[provider.env] && !keyWarnings[provider.id] && !activeProviders.has(provider.id)) {
+      keyWarnings[provider.id] = "Clé enregistrée, mais aucun modèle actif détecté pour ce fournisseur — vérifie qu'elle est valide."
+    }
+  }
 
   const sdk = sdkProxy(() => engine!) as unknown as Bridge["client"]
   const engineBridge = {
@@ -451,7 +475,7 @@ async function initialize(params: {
     cli: String(engineState.binSource ?? ""),
     warning: engineState.warning as string | undefined,
     versionWarning: engineState.versionWarning as string | undefined,
-    keyWarnings: params.keyWarnings,
+    keyWarnings,
   }
 
   return appState
