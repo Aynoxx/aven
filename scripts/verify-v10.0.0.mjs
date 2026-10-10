@@ -15,8 +15,31 @@ const read = (p) => readFileSync(path.join(root, p), "utf8")
 // ⑦ liste blanche d'URLs identique des deux côtés.
 
 const pkg = JSON.parse(read("package.json"))
+const lock = JSON.parse(read("package-lock.json"))
 const [vMaj, vMin, vPatch] = pkg.version.split(".").map(Number)
 assert.ok(vMaj * 10000 + vMin * 100 + vPatch >= 10000, `version trop ancienne : ${pkg.version}`)
+
+// v10.0.0 : retrait total des piles Electron et WinUI — sources, packages et verrou compris.
+for (const section of ["dependencies", "devDependencies", "optionalDependencies"]) {
+  const names = Object.keys(pkg[section] ?? {})
+  assert.ok(
+    !names.some((name) => /^electron(?:-|$)/i.test(name) || /^@electron\//i.test(name)),
+    `package.json ne doit plus référencer Electron dans ${section}`,
+  )
+}
+assert.ok(
+  !Object.keys(lock.packages ?? {}).some((name) =>
+    /^node_modules\/(?:electron(?:-[^/]+)?|@electron\/)/i.test(name),
+  ),
+  "package-lock.json ne doit plus contenir de paquets Electron",
+)
+assert.ok(
+  !Object.keys(lock.packages?.[""]?.dependencies ?? {}).some((name) => /^electron/i.test(name)),
+  "les dépendances directes verrouillées ne doivent plus contenir Electron",
+)
+assert.ok(!existsSync(path.join(root, "electron")), "l'ancien dossier electron/ doit être supprimé")
+assert.ok(!existsSync(path.join(root, "native")), "l'ancien prototype WinUI native/ doit être supprimé")
+assert.ok(!existsSync(path.join(root, "MIGRATION-WINUI.md")), "l'ancien protocole WinUI doit être supprimé")
 
 const app = read("web/src/App.tsx")
 const api = read("web/src/api.ts")
@@ -34,6 +57,8 @@ const providers = read("host/providers.ts")
 // frameless) a disparu du renderer comme du contrat d'API — Tauri garde ses
 // décorations, c'est la barre système qui minimise/agrandit/ferme.
 const types = read("web/src/types.ts")
+const apiFactoryTests = read("tests/tauri-api.test.mjs")
+assert.ok(!types.includes("checkForUpdates:"), "l'API ne doit pas exposer un updater non disponible avant publication")
 assert.ok(!app.includes("window-controls"), "App.tsx ne dessine plus de contrôles custom")
 assert.ok(
   !/minimizeWindow|toggleMaximize|closeWindow/.test(app),
