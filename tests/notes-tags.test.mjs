@@ -1,11 +1,11 @@
-// Tests v9.3.0 : tags par agent des notes (electron/notes-meta.ts).
+// Tests v9.3.0 : tags par agent des notes (host/notes-meta.ts).
 // Node pur : pas de syntaxe TS dans les .mjs (piège connu), pas d'I/O partagées —
 // chaque cas travaille dans son propre répertoire temporaire.
 import assert from "node:assert/strict"
 import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { loadTags, normalizeTags, setTags } from "../electron/notes-meta.ts"
+import { loadTags, normalizeTags, setTags } from "../host/notes-meta.ts"
 
 const makeWs = () => mkdtempSync(path.join(tmpdir(), "aven-notes-tags-"))
 

@@ -37,7 +37,7 @@ function presenceOf(data: { state: "starting" | "running" | "restarting" }): { l
 
 // Lignes qui ne sont pas du discours : spinners braille, bordures de boîtes,
 // barres de progression, pubs et barres d'état — tout vit dans freebuff-transcript.ts (v9.6.0).
-export default function FreebuffAgentPage(props: { onHome: () => void; onError: (e: unknown) => void }) {
+export default function FreebuffAgentPage(props: { onError: (e: unknown) => void }) {
   const termHostRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<{ write: (s: string) => void; focus: () => void; dispose: () => void; buffer: { active: { length: number; getLine: (i: number) => { translateToString: (trim?: boolean) => string } | null } } } | null>(null)
   const fitRef = useRef<{ fit: () => void; dispose: () => void } | null>(null)
@@ -249,9 +249,8 @@ export default function FreebuffAgentPage(props: { onHome: () => void; onError: 
               conversation à la réouverture.
             </p>
           </div>
-          <button className="button ghost" onClick={props.onHome} type="button">
-            <Icon name="arrow-left" size={15} />Accueil
-          </button>
+          {/* v10.0.0 : le retour « Accueil » est porté par la barre de fenêtre
+              (window-tab global) — un second bouton dans le titre serait un doublon. */}
         </header>
 
         <div className="row bridge-status-row">

@@ -13,7 +13,7 @@ const app = read("web/src/App.tsx")
 const icons = read("web/src/icons/Icon.tsx")
 const css = read("web/src/App.css")
 const tests = read("tests/selection-actions.test.mjs")
-const intent = read("electron/voice-intent.ts") // régression : le routage vocal doit rester en place
+const intent = read("host/voice-intent.ts") // régression : le routage vocal doit rester en place
 
 // ── Version et périmètre v8.9.0 : actions sur sélection ──
 // Valable pour toute version ultérieure : « au moins 8.9.0 » (comparaison numérique).

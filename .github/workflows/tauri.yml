@@ -1,0 +1,114 @@
+name: Tauri Windows CI
+
+on:
+  pull_request:
+    paths:
+      - "src-tauri/**"
+      - "web/**"
+      - "host/**"
+      - "scripts/**"
+      - "tests/**"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig*.json"
+      - "opencode.jsonc"
+      - "model-priorities.json"
+      - ".github/workflows/tauri.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src-tauri/**"
+      - "web/**"
+      - "host/**"
+      - "scripts/**"
+      - "tests/**"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig*.json"
+      - "opencode.jsonc"
+      - "model-priorities.json"
+      - ".github/workflows/tauri.yml"
+
+concurrency:
+  group: tauri-windows-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tauri-windows:
+    name: Tauri Windows (tests + build)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Cache Rust
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Host-side Node typecheck
+        run: npm run typecheck:host
+
+      - name: Build Node runtime hosts
+        run: npm run build:host
+
+      - name: Prepare bundled Node runtime
+        run: node scripts/prepare-tauri-runtime.mjs
+
+      - name: Build web frontend
+        run: npm run build:web
+
+      - name: Rust check
+        run: cargo check --manifest-path src-tauri/Cargo.toml
+
+      - name: Rust tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+
+      - name: Build Tauri Windows bundles
+        run: npm run tauri:build
+        env:
+          CI: true
+
+      - name: Verify Tauri bundles
+        shell: pwsh
+        run: |
+          $nsis = Get-ChildItem "src-tauri/target/release/bundle/nsis/*.exe" -ErrorAction SilentlyContinue
+          $msi = Get-ChildItem "src-tauri/target/release/bundle/msi/*.msi" -ErrorAction SilentlyContinue
+
+          if (-not $nsis) {
+            throw "Aucun installeur NSIS Tauri n'a été généré."
+          }
+
+          if (-not $msi) {
+            throw "Aucun installeur MSI Tauri n'a été généré."
+          }
+
+          Write-Host "NSIS: $($nsis.FullName)"
+          Write-Host "MSI:  $($msi.FullName)"
+
+      - name: Upload Tauri bundles
+        uses: actions/upload-artifact@v4
+        with:
+          name: Aven-Tauri-Windows
+          if-no-files-found: error
+          path: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/msi/*.msi

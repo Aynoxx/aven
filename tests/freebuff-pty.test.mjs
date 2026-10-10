@@ -13,7 +13,7 @@ import {
   PTY_BOOT_GRACE_MS,
   DEFAULT_PTY_COLS,
   DEFAULT_PTY_ROWS,
-} from "../electron/freebuff-pty.ts"
+} from "../host/freebuff-pty.ts"
 
 // Contrat du protocole freebuff-pty (v9.2.0, revue v9.2.1) : commande PTY correcte,
 // backoff de boot, scrollback borné, singleton visible pour les garde-fous de main.ts.
@@ -66,9 +66,9 @@ test("singleton : aucun PTY actif hors session (garde mono-session v9.1.5)", () 
 })
 
 test("ptyModulePath : chemin dev (node_modules) vs packagé (app.asar.unpacked)", () => {
-  const dev = ptyModulePath("C:\\app\\dist-electron", false)
+  const dev = ptyModulePath("C:\\app\\dist-host", false)
   assert.ok(dev.includes("node_modules") && dev.includes("@lydell") && dev.includes("node-pty"))
-  const packed = ptyModulePath("C:\\app\\dist-electron", true)
+  const packed = ptyModulePath("C:\\app\\dist-host", true)
   assert.ok(packed.includes("app.asar.unpacked"), "les binaires natifs doivent vivre HORS de l'asar")
   assert.ok(packed.includes("@lydell"))
 })

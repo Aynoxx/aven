@@ -3,7 +3,7 @@ import { test } from "node:test"
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { seedWorkspace, trackedAgentFiles } from "../electron/settings.ts"
+import { seedWorkspace, trackedAgentFiles } from "../host/settings.ts"
 
 const temp = mkdtempSync(path.join(tmpdir(), "aven-agent-sync-"))
 process.on("exit", () => { try { rmSync(temp, { recursive: true, force: true }) } catch { /* Windows peut retarder */ } })

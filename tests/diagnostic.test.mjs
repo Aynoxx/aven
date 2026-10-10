@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import { buildDiagnostic, redactSecrets } from "../electron/diagnostic.ts"
+import { buildDiagnostic, redactSecrets } from "../host/diagnostic.ts"
 
 const FAKE_KEY = "sk-TEST-123456789abcdef"
 

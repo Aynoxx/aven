@@ -1,29 +1,29 @@
 // Détection de build périmé : les correctifs v8.7.6 ont déjà été livrés avec un
-// dist-electron/ antérieur aux sources (le vocal Gemini Live et la fusion de
+// dist-host/ antérieur aux sources (le vocal Gemini Live et la fusion de
 // l'historique Freebuff ne s'exécutaient pas). Les autres scripts verify ne lisent
 // que les sources : celui-ci vérifie que le BUILD correspond.
 //
 // Deux contrôles :
 //  1. tous les modules sources ont un fichier compilé PLUS RÉCENT (mtime) ;
 //  2. des sondes de contenu : les marqueurs du code courant sont présents dans le build.
-// Idempotent, sans dépendance externe. Échec (exit 1) = il faut relancer npm run build:electron.
+// Idempotent, sans dépendance externe. Échec (exit 1) = il faut relancer npm run build:host.
 import { existsSync, statSync, readFileSync, readdirSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 
 // fileURLToPath (et non .pathname) : sous Windows, "/C:/…" n'est pas un chemin valide.
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
-const srcDir = path.join(root, "electron")
-const outDir = path.join(root, "dist-electron")
+const srcDir = path.join(root, "host")
+const outDir = path.join(root, "dist-host")
 
 const problems = []
 
 if (!existsSync(outDir)) {
-  console.error(`✗ ${path.relative(root, outDir)} n'existe pas. Lance npm run build:electron.`)
+  console.error(`✗ ${path.relative(root, outDir)} n'existe pas. Lance npm run build:host.`)
   process.exit(1)
 }
 
-// 1. Fraîcheur : chaque .ts de electron/ doit avoir un .js compilé plus récent.
+// 1. Fraîcheur : chaque .ts de host/ doit avoir un .js compilé plus récent.
 const sources = readdirSync(srcDir).filter((f) => f.endsWith(".ts"))
 for (const src of sources) {
   const base = src.replace(/\.ts$/, "")
@@ -45,22 +45,22 @@ for (const src of sources) {
 const hostSrc = path.join(srcDir, "engine-host.ts")
 const hostOut = path.join(outDir, "aven-engine-host.mjs")
 if (!existsSync(hostOut)) {
-  problems.push("engine-host.ts : bundle aven-engine-host.mjs introuvable → npm run build:electron")
+  problems.push("engine-host.ts : bundle aven-engine-host.mjs introuvable → npm run build:host")
 } else if (statSync(hostOut).mtimeMs < statSync(hostSrc).mtimeMs - 1000) {
-  problems.push("engine-host.ts plus récent que aven-engine-host.mjs → npm run build:electron")
+  problems.push("engine-host.ts plus récent que aven-engine-host.mjs → npm run build:host")
 }
 
 // 2. Sondes de contenu : marqueurs du code v8.7.9 courant dans le build compilé.
 const probes = [
-  { file: "main.js", marker: "notes:list", why: "page Notes conservée" },
-  { file: "main.js", marker: "voice:transcribe", why: "dictée Groq branchée en IPC (v8.7.8)" },
-  { file: "main.js", marker: "announcer:setEnabled", why: "annonceur vocal branché en IPC (v8.7.9)" },
-  { file: "main.js", marker: "System.Speech", why: "voix SAPI Windows (annonceur)" },
+  { file: "aven-app-host.mjs", marker: "notesList", why: "page Notes conservée (dispatch host)" },
+  { file: "aven-app-host.mjs", marker: "voiceTranscribe", why: "dictée Groq branchée au dispatch host (v8.7.8)" },
+  { file: "aven-app-host.mjs", marker: "announcerSetEnabled", why: "annonceur vocal branché au dispatch host (v8.7.9)" },
+  { file: "aven-app-host.mjs", marker: "System.Speech", why: "voix SAPI Windows (annonceur)" },
   { file: "announcer.js", marker: "session.execution.interrupted", why: "grammaire d'événements annonceur complète" },
   { file: "voice.js", marker: "audio/transcriptions", why: "endpoint Whisper Groq présent" },
   { file: "voice.js", marker: "chat/completions", why: "passe de reformage présente" },
-  { file: "main.js", marker: "auth_tokens", absent: true, why: "l'ancien endpoint vocal duplex (retiré) doit rester absent" },
-  { file: "main.js", marker: "versionWarning", why: "avertissement d'écart de version OpenCode" },
+  { file: "aven-app-host.mjs", marker: "auth_tokens", absent: true, why: "l'ancien endpoint vocal duplex (retiré) doit rester absent" },
+  { file: "aven-app-host.mjs", marker: "versionWarning", why: "avertissement d'écart de version OpenCode" },
   // v9.1.6 : chemin SDK Freebuff purgé — le marqueur de fusion d'historique doit rester ABSENT du build.
   { file: "operations.js", marker: "getFreebuffMessages", absent: true, why: "chemin SDK Freebuff purgé (aucune fusion d'historique local)" },
   { file: "freebuff-pty.js", marker: "startFreebuffPty", why: "PTY embarqué du CLI freebuff (v9.2.0)" },
@@ -71,7 +71,8 @@ const probes = [
   { file: "notes.js", marker: "listNotes", why: "module notes autonome présent" },
   { file: "voice-intent.js", marker: "open-notes", why: "classification d'intention de la dictée compilée (v8.8.0)" },
   { file: "voice.js", marker: "allSettled", why: "classification en parallèle du reformage (v8.8.0)" },
-  { file: "main.js", marker: "intention:", why: "log d'intention de la dictée (v8.8.0)" },
+  // v10.0.0 : le marqueur « intention: » (log du main Electron) a disparu avec le
+  // shell — le classifieur lui-même est couvert par voice-intent.js ci-dessus.
 ]
 for (const probe of probes) {
   const p = path.join(outDir, probe.file)
@@ -89,7 +90,7 @@ for (const probe of probes) {
 if (problems.length) {
   console.error(`✗ Build périmé ou incomplet (${problems.length}) :`)
   for (const p of problems) console.error(`  - ${p}`)
-  console.error("→ Lance npm run build:electron puis relance la vérification.")
+  console.error("→ Lance npm run build:host puis relance la vérification.")
   process.exit(1)
 }
 console.log(`vérification du build : OK (${sources.length} modules, ${probes.length} sondes de contenu)`)

@@ -1,20 +1,20 @@
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
-import { isFreeModelRef } from "../electron/priorities.ts"
+import { isFreeModelRef } from "../host/priorities.ts"
 
 const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"))
 assert.equal(pkg.version, "8.7.4")
 const table = JSON.parse(readFileSync(new URL("../model-priorities.json", import.meta.url), "utf8"))
 for (const ref of Object.keys(table.models)) assert.equal(isFreeModelRef(ref), true, `Paid/non-free model remains: ${ref}`)
 assert.ok(Object.keys(table.models).length > 0)
-const providers = readFileSync(new URL("../electron/providers.ts", import.meta.url), "utf8")
+const providers = readFileSync(new URL("../host/providers.ts", import.meta.url), "utf8")
 assert.doesNotMatch(providers, /id:\s*"openai"/)
 assert.doesNotMatch(providers, /id:\s*"mistral"/)
 assert.doesNotMatch(providers, /id:\s*"groq"/)
 assert.doesNotMatch(providers, /id:\s*"cerebras"/)
-const workspaceSync = readFileSync(new URL("../electron/workspace-sync.ts", import.meta.url), "utf8")
+const workspaceSync = readFileSync(new URL("../host/workspace-sync.ts", import.meta.url), "utf8")
 assert.match(workspaceSync, /prunePaidModels/)
-const main = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8")
+const main = readFileSync(new URL("../host/main.ts", import.meta.url), "utf8")
 assert.doesNotMatch(main, /api\.openai\.com\/v1\/realtime/)
 assert.match(main, /mode gratuit uniquement/)
 assert.doesNotMatch(main, /openaiKey|gpt-realtime-2\.1|api\.openai\.com/)

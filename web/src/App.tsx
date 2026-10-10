@@ -74,7 +74,7 @@ export default function App() {
   const [live, setLive] = useState<Live>(emptyLive)
   const [input, setInput] = useState("")
   const [error, setError] = useState<string>()
-  const [appState, setAppState] = useState<AppState>({ status: "starting", keys: {}, providers: [], updatesConfigured: false })
+  const [appState, setAppState] = useState<AppState>({ status: "starting", keys: {}, providers: [] })
   const [showSettings, setShowSettings] = useState(false)
   const [settingsSection, setSettingsSection] = useState<"general" | "appearance" | "usage">("general")
   const [notices, setNotices] = useState<Notice[]>([])
@@ -1322,12 +1322,8 @@ export default function App() {
             </button>
           )}
         </div>
-        {/* Contrôles locaux dessinés en SVG dans l’esprit des icônes Fluent UI de Microsoft (Windows 11). */}
-        <div className="window-controls">
-          <button className="window-control" onClick={() => window.opencode.minimizeWindow()} aria-label="Réduire"><Icon name="minimize" size={16} /></button>
-          <button className="window-control" onClick={() => window.opencode.toggleMaximize()} aria-label="Agrandir"><Icon name="maximize" size={16} /></button>
-          <button className="window-control close" onClick={() => window.opencode.closeWindow()} aria-label="Fermer"><Icon name="close" size={16} /></button>
-        </div>
+{/* v10.0.0 : la barre de fermeture custom (héritée de la fenêtre Electron
+    sans cadre) a disparu — Tauri affiche la barre Windows native. */}
       </div>
 
       {/* v9.1.6 : aucun projet par défaut — même quand des espaces sont déjà connus, rien
@@ -1377,7 +1373,7 @@ export default function App() {
       ) : showFreebuffAgent ? (
         /* v9.5.0 : page pleine de l'agent Freebuff — même gabarit que la page Agents,
            PTY persistant (le boot de la session vit dans le composant). */
-        <FreebuffAgentPage onHome={goHome} onError={fail} />
+        <FreebuffAgentPage onError={fail} />
       ) : showAgentsPage ? (
         <main className="agents-main">
           <section className="agents-page" aria-label="Tâches et agents">
@@ -1387,9 +1383,8 @@ export default function App() {
                 <h1>Un agent principal, des modes par besoin</h1>
                 <p>Choisis un mode : l’orchestrateur délègue aux spécialistes du domaine et synthétise.</p>
               </div>
-              <button className="button ghost" onClick={() => { setShowAgentsPage(false); setShowHome(true) }} type="button">
-                <Icon name="arrow-left" size={15} />Accueil
-              </button>
+              {/* v10.0.0 : pas de doublon « Accueil » ici — la barre de fenêtre
+                  (window-tab global) porte déjà le retour vers l'accueil. */}
             </header>
             {/* v9.6.0 : l’orchestrateur « projet » est l’AGENT PRINCIPAL ; le mode
                 « Tâche complexe » l’ouvre directement, les modes simples pointent les

@@ -1,0 +1,54 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Aven",
+  "version": "10.0.0",
+  "identifier": "com.local.aven",
+  "build": {
+    "beforeDevCommand": "npm run dev:web",
+    "beforeBuildCommand": "npm run build:web",
+    "devUrl": "http://127.0.0.1:5173",
+    "frontendDist": "../web/dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Aven",
+        "width": 1200,
+        "height": 800,
+        "resizable": true,
+        "maximized": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' blob: data:; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost; object-src 'none'; base-uri 'self'; form-action 'self'; frame-src 'none'",
+      "devCsp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' blob: data:; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost ws://127.0.0.1:5173 http://127.0.0.1:5173; object-src 'none'; base-uri 'self'; form-action 'self'; frame-src 'none'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "nsis",
+      "msi"
+    ],
+    "shortDescription": "Espace de travail IA",
+    "longDescription": "Espace de travail IA pour agents, code, recherche, analyse, notes et voix",
+    "resources": {
+      "../dist-host/aven-app-host.mjs": "runtime/aven-app-host.mjs",
+      "../dist-host/aven-engine-host.mjs": "runtime/aven-engine-host.mjs",
+      "../dist-host/aven-pty-host.mjs": "runtime/aven-pty-host.mjs",
+      "../node_modules/@opencode/cli/bin/opencode.exe": "runtime/opencode-bin/opencode.exe",
+      "../.opencode/": "runtime/template/.opencode/",
+      "../opencode.jsonc": "runtime/template/opencode.jsonc",
+      "../model-priorities.json": "runtime/template/model-priorities.json",
+      "../aven-mcp-server.mjs": "runtime/template/aven-mcp-server.mjs",
+      "resources/nodejs/node.exe": "runtime/node.exe",
+      "../node_modules/@lydell/node-pty": "runtime/node_modules/@lydell/node-pty",
+      "../node_modules/@lydell/node-pty-win32-x64": "runtime/node_modules/@lydell/node-pty-win32-x64"
+    },
+    "icon": [
+      "icons/icon.ico"
+    ]
+  }
+}

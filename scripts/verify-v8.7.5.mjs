@@ -20,7 +20,7 @@ const discovered = [
   { ref: "openai/paid-model", label: "Paid" },
 ].filter((m) => isFree(m.ref))
 assert.deepEqual(discovered, [{ ref: "opencode/north-mini-code-free", label: "North Mini Code Free" }])
-const source = readFileSync(new URL("../electron/priorities.ts", import.meta.url), "utf8")
+const source = readFileSync(new URL("../host/priorities.ts", import.meta.url), "utf8")
 assert.match(source, /addDiscoveredFreeModels/)
-assert.match(readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8"), /addDiscoveredFreeModels/)
+assert.match(readFileSync(new URL("../host/main.ts", import.meta.url), "utf8"), /addDiscoveredFreeModels/)
 console.log("v8.7.5 free-model checks: OK")

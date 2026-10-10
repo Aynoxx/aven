@@ -19,8 +19,8 @@ const app = read("web/src/App.tsx")
 const page = read("web/src/FreebuffAgentPage.tsx")
 const dims = read("web/src/pty-dims.ts")
 const css = read("web/src/App.css")
-const providers = read("electron/providers.ts")
-const priorities = read("electron/priorities.ts")
+const providers = read("host/providers.ts")
+const priorities = read("host/priorities.ts")
 const table = JSON.parse(read("model-priorities.json"))
 const agentProjet = read(".opencode/agents/projet.md")
 const readme = read("README.md")
@@ -53,7 +53,9 @@ assert.ok(!/label: "Agents"/.test(app), "l'ancien label « Agents » a disparu d
 
 // F. Agent central : le prompt projet délègue et ne code jamais lui-même.
 assert.match(agentProjet, /CERVEAU CENTRAL/, "rôle central affirmé")
-assert.match(agentProjet, /tu ne fais JAMAIS le\ntravail spécialisé toi-même/, "interdiction de coder soi-même")
+// v10.0.0 : \r?\n et non \n — sous Windows (autocrlf=true) le checkout est CRLF et
+// une regex \n-seul ne peut jamais matcher. Même exigence de texte, endings tolérés.
+assert.match(agentProjet, /tu ne fais JAMAIS le\r?\ntravail spécialisé toi-même/, "interdiction de coder soi-même")
 
 // G. Priorités refaites + Groq en chat.
 assert.ok(table.models["groq/openai/gpt-oss-120b"], "GPT-OSS 120B (Groq) dans le catalogue")
@@ -76,11 +78,12 @@ assert.match(page, /buildTranscript\(raw\)/, "la page Freebuff délègue au modu
 assert.match(page, /isUserLine/, "les lignes utilisateur sont marquées")
 
 // J. v9.6.2 : conflit de session avec l'app Desktop Freebuff — détection + bannière.
-const mainTs = read("electron/main.ts")
+// v10.0.0 : le main Electron est retiré — la détection vit dans aven-app-host.ts.
+const mainTs = read("host/aven-app-host.ts")
 assert.match(mainTs, /isFreebuffDesktopRunning/, "détection de l'app Desktop Freebuff attendue")
 assert.match(mainTs, /codebufffreebuff-desktop/, "filtrage par chemin complet (comme isFreebuffProcessRunning)")
-assert.match(mainTs, /freebuff:desktop:running/, "canal IPC de détection attendu")
-assert.match(mainTs, /L'app Freebuff Desktop est ouverte/, "refus clair au lancement si l'app Desktop tient la session")
+assert.match(mainTs, /case "freebuffDesktopRunning"/, "canal IPC de détection attendu")
+assert.match(mainTs, /Freebuff Desktop est ouverte/, "refus clair au lancement si l'app Desktop tient la session")
 const page922 = read("web/src/FreebuffAgentPage.tsx")
 assert.match(page922, /freebuffDesktopRunning/, "la page interroge la détection")
 assert.match(page922, /freebuff-conflict/, "bannière de conflit rendue")
@@ -98,9 +101,9 @@ const vt921 = read("web/src/view-transitions.ts")
 assert.match(vt921, /finished\.finally/, "la source est retirée après finished (pas de nom orphelin)")
 assert.ok(!vt921.includes("transitionNameSelector"), "helper : fonction morte supprimée")
 // Canal mort retiré (0 caller UI depuis v9.6.0).
-const preload921 = read("electron/preload.cts")
+const preload921 = read("web/src/types.ts")
 const types921 = read("web/src/types.ts")
-const operations921 = read("electron/operations.ts")
+const operations921 = read("host/operations.ts")
 assert.ok(!preload921.includes("renameAgent"), "preload : canal renameAgent supprimé")
 assert.ok(!types921.includes("renameAgent"), "types : renameAgent supprimé")
 assert.ok(!operations921.includes("async renameAgent"), "operations : renameAgent supprimé (les noms enregistrés restent lus)")

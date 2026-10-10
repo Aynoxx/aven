@@ -9,17 +9,16 @@ import path from "node:path"
 // n'est pas vide, et l'écran de choix liste les projets connus. Ces tests verrouillent
 // ce contrat (l'ancien repli « premier connu » a été retiré).
 
-// workspaces.ts importe "electron" (stub) et lit/écrit workspaces.json dans
-// app.getPath("userData") : chaque test isole son registre dans un dossier temporaire.
-const { app } = await import(new URL("./electron-stub.mjs", import.meta.url).href)
-const { listWorkspaces, activeWorkspace, registerWorkspace, setActiveWorkspace, removeWorkspace, validateWorkspacePath } = await import("../electron/workspaces.ts")
+// v10.0.0 (100 % Tauri) : workspaces.ts lit/écrit workspaces.json dans
+// AVEN_USER_DATA_DIR — chaque test isole son registre dans un dossier temporaire.
+const { listWorkspaces, activeWorkspace, registerWorkspace, setActiveWorkspace, removeWorkspace, validateWorkspacePath } = await import("../host/workspaces.ts")
 
 /** Redirige le registre vers un dossier temporaire frais et y sème éventuellement un état initial. Renvoie { cleanup, base }. */
 function useTempRegistry(initial) {
   const base = mkdtempSync(path.join(tmpdir(), "aven-ws-test-"))
-  app.getPath = () => base
+  process.env.AVEN_USER_DATA_DIR = base
   if (initial) writeFileSync(path.join(base, "workspaces.json"), JSON.stringify(initial), "utf8")
-  return { cleanup: () => rmSync(base, { recursive: true, force: true }), base }
+  return { cleanup: () => { rmSync(base, { recursive: true, force: true }); delete process.env.AVEN_USER_DATA_DIR }, base }
 }
 
 test("registre absent : liste vide, aucun espace actif (plus de « Par défaut »)", () => {

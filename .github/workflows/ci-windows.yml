@@ -1,0 +1,152 @@
+# CI Windows — boucle de vérification complète + fumée Tauri.
+# Complète ci.yml (Linux) et tauri.yml (bundles de release) : ici on exécute
+# SUR WINDOWS la boucle obligatoire du projet puis la fumée de la vraie webview.
+name: CI Windows (vérification + fumée)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src-tauri/**"
+      - "web/**"
+      - "host/**"
+      - "scripts/**"
+      - "tests/**"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig*.json"
+      - "opencode.jsonc"
+      - "model-priorities.json"
+      - ".github/workflows/ci-windows.yml"
+  pull_request:
+    paths:
+      - "src-tauri/**"
+      - "web/**"
+      - "host/**"
+      - "scripts/**"
+      - "tests/**"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig*.json"
+      - "opencode.jsonc"
+      - "model-priorities.json"
+      - ".github/workflows/ci-windows.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ci-windows-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify-smoke:
+    name: Typecheck, tests, verify, Rust, fumée Tauri
+    runs-on: windows-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            web/package-lock.json
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Cache Rust
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Installation (télécharge le CLI OpenCode)
+        run: npm ci --no-audit --no-fund
+
+      - name: Typecheck host
+        run: npm run typecheck:host
+
+      - name: Typecheck tests
+        run: npm run typecheck:tests
+
+      - name: Typecheck web (tsc -b)
+        run: npx tsc -b
+        working-directory: web
+
+      - name: Tests unitaires
+        run: npm test
+
+      - name: Build web (inclut tsc -b)
+        run: npm run build:web
+
+      - name: Build hosts (inclut le bundle du moteur)
+        run: npm run build:host
+
+      - name: Vérification des conventions (sondes v8 → v10)
+        run: npm run verify
+
+      # v10.0.0 : cargo tauri-build lit resources/nodejs/node.exe DÈS cargo check.
+      # Préparer le runtime avant toute commande Cargo évite l'échec à froid
+      # observé en CI ; le script contrôle le SHA-256 avant de promouvoir le binaire.
+      - name: Prepare bundled Node runtime
+        run: node scripts/prepare-tauri-runtime.mjs
+
+      - name: Rust check
+        run: cargo check --manifest-path src-tauri/Cargo.toml
+
+      - name: Rust tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+
+      # v10.0.0 : le workflow Tauri Windows valide déjà NSIS/MSI. Ici on ne
+      # refait pas les installateurs : on compile l'exécutable à protocole de
+      # production pour que la fumée exerce la CSP et le runtime réel.
+      - name: Build Tauri debug (binaire forme prod pour la fumée)
+        run: npm run tauri:check -- --no-bundle
+        env:
+          CI: true
+
+      # WebView2 Runtime 150 ignore les variables WEBVIEW2_* pour un hôte
+      # élevé. Les runners Windows GitHub lancent parfois les processus en
+      # intégrité élevée : la stratégie HKLM est alors le seul moyen de rendre
+      # CDP disponible. Cette valeur ne concerne que aven.exe et n'existe que
+      # durant ce job ; elle est supprimée même si le smoke échoue.
+      - name: Activer temporairement CDP WebView2 pour Aven
+        shell: pwsh
+        run: |
+          $policyPath = "HKLM:\SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments"
+          New-Item -Path $policyPath -Force | Out-Null
+          New-ItemProperty -Path $policyPath -Name "aven.exe" -PropertyType String -Value "--remote-debugging-port=9333" -Force | Out-Null
+          Write-Host "CDP WebView2 activé pour aven.exe sur le port 9333."
+
+      - name: Fumée Tauri (rendu, CSP, titlebar, reprise après crash)
+        run: npm run smoke:tauri
+        env:
+          AVEN_SMOKE_WEBVIEW2_POLICY: "1"
+
+      - name: Supprimer la stratégie CDP temporaire
+        if: always()
+        shell: pwsh
+        run: |
+          $policyPath = "HKLM:\SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments"
+          if (Test-Path $policyPath) {
+            Remove-ItemProperty -Path $policyPath -Name "aven.exe" -ErrorAction SilentlyContinue
+            $key = Get-Item $policyPath
+            if ($key.ValueCount -eq 0 -and $key.SubKeyCount -eq 0) {
+              Remove-Item -Path $policyPath -Force -ErrorAction SilentlyContinue
+            }
+          }
+
+      - name: Journaux de la fumée (échec uniquement)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: journaux-fumee-windows
+          if-no-files-found: ignore
+          path: |
+            smoke-tauri-*.log

@@ -8,11 +8,11 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const read = (p) => readFileSync(path.join(root, p), "utf8")
 
 const pkg = JSON.parse(read("package.json"))
-const settings = read("electron/settings.ts")
+const settings = read("host/settings.ts")
 // v10.0.0 (parité native) : le seed a été extrait de settings.ts (couplé à Electron)
 // vers workspace-seed.ts — module pur bundlé dans le host moteur. Les assertions
 // de découverte dynamique suivent le code ; settings.ts garde la ré-exportation.
-const seed = read("electron/workspace-seed.ts")
+const seed = read("host/workspace-seed.ts")
 const readme = read("README.md")
 
 // ── Version ──

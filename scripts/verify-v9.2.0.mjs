@@ -14,10 +14,10 @@ const pkg = JSON.parse(read("package.json"))
 const [vMaj, vMin, vPatch] = pkg.version.split(".").map(Number)
 assert.ok(vMaj * 10000 + vMin * 100 + vPatch >= 90200, `version trop ancienne : ${pkg.version}`)
 
-const pty = read("electron/freebuff-pty.ts")
+const pty = read("host/freebuff-pty.ts")
 const dialog = read("web/src/FreebuffAgentPage.tsx")
-const main = read("electron/main.ts")
-const preload = read("electron/preload.cts")
+const main = read("host/aven-app-host.ts") // v10.0.0 : remplace le main Electron
+const preload = read("web/src/types.ts") // v10.0.0 : remplace le preload (contrat OpenCodeApi)
 const types = read("web/src/types.ts")
 const css = read("web/src/App.css")
 const readme = read("README.md")
@@ -28,7 +28,9 @@ const readme = read("README.md")
 assert.ok(!/from "electron"/.test(pty), "freebuff-pty.ts ne doit pas dépendre d'Electron")
 assert.match(pty, /@lydell\/node-pty/, "le transport doit être le ConPTY prébuildé (@lydell/node-pty)")
 assert.match(pty, /loadPtyModule/, "le module PTY est chargé explicitement au boot (chemin dev/packagé)")
-assert.match(pkg.build.files.join("|"), /node_modules\/@lydell/, "les binaires prébuildés doivent être packagés")
+// v10.0.0 : le packaging passe par les resources Tauri (plus electron-builder).
+const tauriConf92 = JSON.parse(read("src-tauri/tauri.conf.json"))
+assert.ok(Object.keys(tauriConf92.bundle?.resources ?? {}).some((f) => f.includes("@lydell/node-pty")), "les binaires prébuildés doivent être packagés")
 assert.ok(existsSync(path.join(root, "tests", "freebuff-pty.test.mjs")), "tests du PTY attendus")
 
 // B. Contrats du protocole : retry de boot borné, backoff, scrollback rejoué et borné.
@@ -45,10 +47,10 @@ assert.match(dialog, /freebuff\.pty\.replay/, "le scrollback rejoué est attendu
 assert.match(dialog, /agents-page/, "v9.5.0 : la vue est une PAGE pleine (plus de dialogue recouvrant)")
 
 // D. IPC complet des deux côtés (main + preload + types), convention domaine:action.
-assert.match(main, /freebuff:pty:input/)
-assert.match(main, /freebuff:pty:resize/)
-assert.match(main, /freebuff:pty:signal/)
-assert.match(main, /freebuff:pty:restart/)
+assert.match(main, /case "freebuffPtyInput"/)
+assert.match(main, /case "freebuffPtyResize"/)
+assert.match(main, /case "freebuffPtySignal"/)
+assert.match(main, /case "freebuffPtyRestart"/)
 assert.match(preload, /freebuffPtyInput/)
 assert.match(preload, /freebuffPtyRestart/)
 assert.match(types, /freebuffPtyInput: \(data: string\) => Promise<void>/)
@@ -57,13 +59,14 @@ assert.match(types, /freebuffPtyRestart: \(\) => Promise<void>/)
 // E. L'action « launch » démarre le PTY avec les mêmes garde-fous anti-takeover (v9.1.5,
 // affinés par l'E2E v9.2.1) : le CLI externe est refusé, NOTRE session existante est
 // réjointe (replay), la détection vérifie le chemin réel du CLI (pas l'app desktop).
-assert.match(main, /else if \(await isFreebuffProcessRunning\(\)\) \{\s*throw new Error\(freebuffBusyMessage\(\)\)/)
-assert.match(main, /if \(isFreebuffPtyActive\(\)\)/, "notre session existante doit être réjointe (replay), jamais bloquée")
+assert.match(main, /if \(!isFreebuffPtyActive\(\) && await isFreebuffProcessRunning\(\)\) throw new Error\(freebuffBusyMessage\(\)\)/)
+assert.match(main, /type: "freebuff\.pty\.replay"/, "notre session existante doit être réjointe (replay), jamais bloquée")
 assert.match(main, /ExecutablePath -like/, "la détection vérifie le chemin du CLI (.config\\manicode), pas seulement le nom")
 assert.match(main, /startFreebuffPty\(\{\s*cwd: requireWorkspace\(\)/, "le PTY démarre sur l'espace ACTIF (jamais un dossier vide)")
 
 // F. Arrêt propre : le PTY meurt avec l'app (pas de freebuff orphelin après quit).
-assert.match(main, /stopFreebuffPty\(\)/, "before-quit doit arrêter le PTY")
+assert.match(main, /stopFreebuffPty\(\)/, "le shutdown du host doit arrêter le PTY")
+assert.match(read("src-tauri/src/lib.rs"), /"shutdown"/, "la fermeture de l'app envoie shutdown au host avant le kill")
 
 // G. Le flux passe par IPC et les événements existants — AUCUN serveur WS local.
 assert.match(dialog, /freebuff\.pty\.data/, "le flux PTY arrive via onEvent (freebuff.pty.data)")

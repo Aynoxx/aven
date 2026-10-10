@@ -41,8 +41,8 @@ export default function SettingsDialog(props: {
   }, [props.focusWorkspaces])
   const [inputs, setInputs] = useState<Record<string, string>>({})
   const [newWsName, setNewWsName] = useState("")
-  const [updateMsg, setUpdateMsg] = useState<string>()
   const [busy, setBusy] = useState(false)
+  const [diagnosticMsg, setDiagnosticMsg] = useState<string>()
   const [notifications, setNotifications] = useState<boolean | null>(null) // null = pas encore chargé
   useEffect(() => { api.prefs().then((p) => setNotifications(p.notifications)).catch(() => setNotifications(true)) }, [])
   // CLI Freebuff gratuit (v9.1.2) : statut chargé une fois, actions visibles.
@@ -85,7 +85,7 @@ export default function SettingsDialog(props: {
     try {
       const text = await api.diagnostic()
       await navigator.clipboard.writeText(text)
-      setUpdateMsg("Diagnostic copié dans le presse-papiers (sans aucune clé API).")
+      setDiagnosticMsg("Diagnostic copié dans le presse-papiers (sans aucune clé API).")
     } catch (e) { props.onError(e) }
   }
 
@@ -130,7 +130,6 @@ export default function SettingsDialog(props: {
     setBusy(true)
     try { await api.removeWorkspace(dir); await refreshAfterRestart() } catch (e) { props.onError(e) } finally { setBusy(false) }
   }
-  const checkUpdates = async () => { setUpdateMsg("Vérification…"); const res = await api.checkForUpdates(); setUpdateMsg(res.message) }
 
   const moveBlock = (fromId: BlockId, targetId: BlockId) => {
     if (!fromId || fromId === targetId) return
@@ -222,12 +221,11 @@ export default function SettingsDialog(props: {
       <h4>Notifications de bureau</h4>
       <p className="hint">Prévient quand un agent a besoin de toi : permission demandée, formulaire, tour terminé (s’il a duré plus de 8 s) ou échoué. Jamais quand la fenêtre est au premier plan.</p>
       <label className="toggle-row"><span>Activer les notifications</span><input type="checkbox" checked={notifications !== false} onChange={(e) => void changeNotifications(e.target.checked)} /></label>
-      <div className="row"><button className="button secondary" onClick={() => void copyDiagnostic()}>Copier le diagnostic</button><span className="hint">Versions, état du moteur, agents et derniers événements — sans aucune clé API.</span></div>
+      <div className="row"><button className="button secondary" onClick={() => void copyDiagnostic()}>Copier le diagnostic</button><span className="hint">Versions, état du moteur, agents et derniers événements — sans aucune clé API.</span>{diagnosticMsg && <span className="hint">{diagnosticMsg}</span>}</div>
       <h4>Freebuff CLI gratuit</h4>
       <p className="hint">Le free tier de Freebuff (sessions quotidiennes, financé par les pubs texte) vit dans son CLI interactif. v9.2.0 : il s'affiche DANS Aven (terminal intégré, session persistante) — la carte « Freebuff » de l'accueil ouvre la vue ; « Se connecter » reste une console externe (action courte, incompatible avec une session ouverte).</p>
       <div className="row">
         <span className="hint">{cli === null ? "Vérification…" : cli.installed ? <b><Icon name="check" size={12} /> CLI installé{cli.version ? ` — v${cli.version}` : ""}</b> : "CLI non installé"}</span>
-        {cli?.installed && <button className="button secondary" onClick={() => void cliAction("login")}>Se connecter</button>}
         {cli?.installed && <button className="button secondary" onClick={() => void cliAction("login")}>Se connecter</button>}
         {!cli?.installed && <button className="button primary" disabled={cliInstalling} onClick={() => void cliAction("install")}>{cliInstalling ? "Installation en cours…" : "Installer le CLI (npm)"}</button>}
       </div>
@@ -244,7 +242,7 @@ export default function SettingsDialog(props: {
       {!!state.sync?.length && <><h4>Fichiers de config du dossier de travail</h4>{state.sync.map((s) => <p key={s.file} className="hint"><code>{s.file}</code> : {SYNC_LABEL[s.status] ?? s.status}</p>)}</>}
       {state.versionWarning && <p className="err">{state.versionWarning}</p>}
       <p className="hint">OpenCode {state.version ?? "?"} · CLI : {state.cli ?? "?"}<br />Dossier de travail actif : {state.workspace ?? "?"}</p>
-      <div className="row"><button className="button secondary" onClick={() => api.openWorkspace()}>Ouvrir le dossier</button>{state.updatesConfigured ? <button className="button secondary" onClick={checkUpdates}>Vérifier les mises à jour</button> : <span className="hint">Mise à jour automatique non configurée (définis <code>build.publish.owner/repo</code>).</span>}{updateMsg && <span className="hint">{updateMsg}</span>}</div>
+      <div className="row"><button className="button secondary" onClick={() => api.openWorkspace()}>Ouvrir le dossier</button></div>
       <div className="row"><button className="button ghost" onClick={props.onClose}>Fermer</button></div>
     </div>
   )

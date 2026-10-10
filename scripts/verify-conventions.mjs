@@ -19,7 +19,6 @@ const iconReadme = read("web/src/icons/README.md")
 const rules = read("RULES.md")
 const agents = read("AGENTS.md")
 const app = read("web/src/App.tsx")
-const main = read("electron/main.ts")
 
 // ── Règle 1 : la porte d'entrée existe et pointe au bon endroit ──────────────────
 assert.match(rules, /# Règles universelles du projet Aven/)
@@ -29,14 +28,33 @@ assert.match(rules, /## 2\. Typographie/)
 assert.match(agents, /Lis `RULES\.md` AVANT/)
 
 // ── Règle 2 : typographie par tokens (aucune px de police en dur) ────────────────
-// Les seules `font-size: Npx` tolérées sont celles qui DÉFINISSENT les tokens dans
-// :root (source de vérité). Aucune autre déclaration directe n'est permise.
-const fontSizeDeclarations = [...css.matchAll(/font-size:\s*([\d.]+px)/g)].map((m) => `font-size: ${m[1]}`)
-const tokenDefinitions = [...css.matchAll(/--font-size-\w+:\s*([\d.]+px)/g)].map((m) => `font-size: ${m[1]}`)
-const tolerated = new Set(tokenDefinitions)
-const offenders = fontSizeDeclarations.filter((d) => !tolerated.has(d))
-assert.equal(offenders.length, 0,
-  `Règle « Typographie par tokens » (RULES.md §2) : font-size en dur détecté hors définition des tokens : ${offenders.join(", ")}. Utilise var(--font-size-xs|sm|md|lg|xl|2xl).`)
+// Chaque déclaration font-size doit passer par var(--font-size-*), y compris comme
+// borne d'un clamp — un littéral px (même de valeur identique à un token) viole la
+// règle : seules les DÉFINITIONS de :root portent des px.
+const fontSizeValues = [...css.matchAll(/(?<![-\w])font-size:\s*([^;}]+)/g)].map((m) => m[1].trim())
+const fontSizeOffenders = fontSizeValues
+  .map((v) => ({ v, px: v.replace(/var\(--font-size-\w+\)/g, "").match(/\d+px/) }))
+  .filter((o) => o.px !== null)
+assert.equal(fontSizeOffenders.length, 0,
+  `Règle « Typographie par tokens » (RULES.md §2) : px en dur dans font-size : ${fontSizeOffenders.map((o) => `« ${o.v} »`).join(", ")}. Utilise var(--font-size-xs|sm|md|lg|xl|2xl|3xl).`)
+
+// ── Règle 2bis : graisses de l'échelle (RULES.md §2) ────────────────────────────
+// 400–500 courant, 600 semi-gras, 680 boutons, 700–800 titres — rien d'autre.
+const weightValues = [...css.matchAll(/(?<![-\w])font-weight:\s*([^;}]+)/g)].map((m) => m[1].trim())
+const allowedWeights = new Set(["400", "500", "600", "680", "700", "800"])
+for (const w of weightValues) {
+  assert.ok(allowedWeights.has(w),
+    `Règle « Typographie par tokens » (RULES.md §2) : font-weight « ${w} » hors échelle {400,500,600,680,700,800}.`)
+}
+
+// ── Règle 2ter : rayons par tokens (RULES.md §3) ────────────────────────────────
+// Seuls var(--radius-*) et 50% (cercles parfaits : pastilles, avatars) sont admis.
+const radiusValues = [...css.matchAll(/(?<![-\w])border-radius:\s*([^;}]+)/g)].map((m) => m[1].trim())
+for (const r of radiusValues) {
+  const rest = r.replace(/var\(--radius-\w+\)/g, "").trim()
+  assert.ok(rest === "" || rest === "50%",
+    `Règle « Rayons » (RULES.md §3) : border-radius « ${r} » hors tokens --radius-* — utilise var(--radius-xs|sm|md|lg|xl|pill).`)
+}
 
 // Idem pour font-family : Inter ne se déclare que dans :root et sur body/boutons/champs.
 const fontFamilies = [...css.matchAll(/font-family:\s*([^;]+);/g)].map((m) => m[1].trim())
@@ -66,11 +84,12 @@ for (const variant of ["primary", "secondary", "ghost", "danger"]) {
   assert.match(css, new RegExp(`^\\.button\\.${variant} \\{`, "m"), `variante .button.${variant} attendue (RULES.md §4)`)
 }
 
-// ── Règle 5 : les secrets ne quittent jamais le process main ─────────────────────
-// Le preload n'expose que des appels ; aucun champ de type clé ne doit y transiter.
-const preload = read("electron/preload.cts")
-assert.ok(!/(apiKey|api_key|secret|password)\s*[:=]/i.test(preload),
-  "Règle « Secrets » (RULES.md §7) : le preload ne doit contenir aucune valeur de clé/secret.")
+// ── Règle 5 : les secrets ne quittent jamais le host ni le renderer ─────────────
+// v10.0.0 : plus de preload — l'équivalent est l'API Tauri (web/src/api-tauri.ts),
+// qui ne fait que de l'invocation ; aucun champ de type clé ne doit y transiter.
+const bridge = read("web/src/api-tauri.ts")
+assert.ok(!/(apiKey|api_key|secret|password)\s*[:=]/i.test(bridge),
+  "Règle « Secrets » (RULES.md §7) : l'API Tauri ne doit contenir aucune valeur de clé/secret.")
 // Le renderer ne référence aucune clé littérale d'API.
 for (const f of jsxFiles) {
   const content = read(f)
@@ -81,13 +100,17 @@ for (const f of jsxFiles) {
 // ── Règle 6 : écritures de fichiers atomiques côté main ──────────────────────────
 // writeFileSync est réservé aux exports choisis PAR l'utilisateur (dialogue de
 // sauvegarde) et au fichier temporaire d'atomic-file.ts — pas aux données internes.
-const atomic = read("electron/atomic-file.ts")
+const atomic = read("host/atomic-file.ts")
 assert.match(atomic, /export function writeTextAtomic/, "atomic-file.ts doit rester la porte d'écriture (RULES.md §7)")
 
 // ── Règle 7 : sécurité de la fenêtre — ne jamais affaiblir ───────────────────────
-assert.match(main, /contextIsolation: true/)
-assert.match(main, /sandbox: true/)
-assert.ok(!/nodeIntegration: true/.test(main), "nodeIntegration doit rester désactivé (RULES.md §7)")
+// v10.0.0 : la fenêtre est une webview Tauri (contextIsolation/sandbox n'existent
+// plus) — l'équivalent verrouillé est la CSP de tauri.conf.json.
+const tauriConf = JSON.parse(read("src-tauri/tauri.conf.json"))
+const csp = tauriConf?.app?.security?.csp ?? ""
+assert.ok(csp.startsWith("default-src 'self';"),
+  "la CSP Tauri doit rester strictement « self » par défaut (RULES.md §7)")
+assert.ok(!/unsafe-eval/.test(csp), "unsafe-eval ne doit jamais entrer dans la CSP (RULES.md §7)")
 
 // ── Règle 8 : le module tool-guard du gabarit reste branché ──────────────────────
 // La discipline des outils agents (garde anti-boucle glob) est une convention du projet.

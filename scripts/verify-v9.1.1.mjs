@@ -11,7 +11,7 @@ const read = (p) => readFileSync(path.join(root, p), "utf8")
 const pkg = JSON.parse(read("package.json"))
 const app = read("web/src/App.tsx")
 const css = read("web/src/App.css")
-const operations = read("electron/operations.ts")
+const operations = read("host/operations.ts")
 
 // ── Version ──
 const [vMaj, vMin, vPatch] = pkg.version.split(".").map(Number)
@@ -26,7 +26,7 @@ assert.match(app, /key: "project", label: "Projet"/) // la carte orchestrateur r
 // v9.1.6 : le chemin SDK (et son repli facturation) est PURGÉ — l'envoi ne passe que par
 // OpenCode ; la sonde vérifie désormais l'absence du chemin, l'esprit v9.1.1 reste : aucun
 // tour ne doit dépendre d'un compte Codebuff.
-assert.ok(!existsSync3("electron/freebuff.ts"), "electron/freebuff.ts (SDK Codebuff) doit rester supprimé (purge v9.1.6)")
+assert.ok(!existsSync3("host/freebuff.ts"), "host/freebuff.ts (SDK Codebuff) doit rester supprimé (purge v9.1.6)")
 assert.ok(!/isBillingError|runFreebuff/.test(operations), "plus aucune trace du repli facturation dans operations")
 
 console.log("v9.1.1 verification: OK")

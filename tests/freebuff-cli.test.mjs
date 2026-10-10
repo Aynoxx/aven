@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import { buildLaunchCommand, freebuffBusyMessage, freebuffMissingMessage, parseVersionOutput, unsupportedPlatform } from "../electron/freebuff-cli.ts"
+import { buildLaunchCommand, freebuffBusyMessage, freebuffMissingMessage, parseVersionOutput, unsupportedPlatform } from "../host/freebuff-cli.ts"
 
 test("buildLaunchCommand : start /D sur l'espace, arguments séparés (spawn-safe)", () => {
   const cmd = buildLaunchCommand("C:\\Users\\Liam\\Documents\\Aven-workspace")

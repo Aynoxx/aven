@@ -12,7 +12,7 @@
 1. **Lire** les fichiers voisins de ce que tu veux modifier — imite leur style, leurs
    préfixes de commentaire versionnés (`// v9.1.6 : raison du changement`), leur langue.
 2. **Implémenter** en respectant les règles ci-dessous.
-3. **Vérifier** : `npm run typecheck:electron`, `npm test`, `npm run verify`
+3. **Vérifier** : `npm run typecheck:host`, `npm test`, `npm run verify`
    (et `cd web && npx tsc -b` si tu as touché au renderer).
 4. **Sonder** : si ton ajout introduit une convention nouvelle et stable (composant,
    IPC, module), ajoute une sonde dans le `verify-*` de la version courante — comme
@@ -43,9 +43,11 @@ par les variables `:root` existantes, sinon thèmes et densités cassent.
 | Titres de section, h2/h3 | `var(--font-size-lg)` | 16px |
 | Titres de vue | `var(--font-size-xl)` | 20px |
 | Chiffres clés, stats | `var(--font-size-2xl)` | 28px |
+| Grands titres de vue (plafond d'un `clamp`) | `var(--font-size-3xl)` | 32px |
 
-- **Graisse** : texte courant 400–500 ; boutons `font-weight: 680` (classe `.button`) ;
-  titres `700–800`. Ne définis jamais une graisse hors de cette plage sans raison forte.
+- **Graisse** : texte courant 400–500 ; semi-gras 600 (titres de liste, badges,
+  valeurs) ; boutons `font-weight: 680` (classe `.button`) ; titres `700–800`.
+  Ne définis jamais une graisse hors de cette échelle sans raison forte.
 - **Italique** : réservé aux `<em>` sémantiques (badges `orchestrator-badge` utilisent
   `font-style: normal` — un badge n'est pas une emphase).
 - **Surbrillance d'eyebrow** : les libellés de section majuscules utilisent la classe
@@ -63,8 +65,10 @@ par les variables `:root` existantes, sinon thèmes et densités cassent.
   jamais avec une valeur hexadécimale brute.
 - Espacements : réutilise `--density-gap` / `--density-pad` quand l'élément vit dans
   une vue à densité réglable ; sinon multiples de 2/4px cohérents avec les voisins.
-- Rayons : 10px (champs/boutons), 12–14px (tuiles/items), 20–22px (panneaux/dialogues),
-  999px (pilules et badges). Imité de l'existant, pas d'autre valeur.
+- Rayons : uniquement les tokens `--radius-*` de `:root` (App.css) — `xs` 6px (queues
+  de bulles, micro-contrôles), `sm` 10px (champs/boutons), `md` 12px (items de liste),
+  `lg` 14px (tuiles/cartes), `xl` 20px (panneaux/dialogues), `pill` 999px (pilules et
+  badges). Toute valeur hors échelle = une régression de cohérence.
 
 ## 4. Boutons (classes standard, aucune exception)
 
@@ -115,33 +119,37 @@ par les variables `:root` existantes, sinon thèmes et densités cassent.
 - **TypeScript strict** : types du domaine dans `web/src/types.ts` (miroirs des
   contrats IPC ; duplication volontaire et commentée). Pas de `any` neuf.
 
-## 7. Architecture main/renderer (Electron)
+## 7. Architecture host/renderer (Tauri)
 
-- **Le renderer ne voit JAMAIS de secret** : clés chiffrées côté main
+- **Le renderer ne voit JAMAIS de secret** : clés stockées côté host
   (`settings.ts`), seuls les booléens `keys[provider]` remontent. Toute nouvelle
   donnée sensible suit ce schéma.
-- **Nouvelle fonctionnalité main** = module autonome `electron/*.ts` si elle est
-  testable sans Electron (comme `workspaces.ts`, `notify-policy.ts`, `freebuff-cli.ts`),
-  branchée dans `main.ts` via un handler IPC minimal.
-- **IPC** : canal nommé `domaine:action` (`workspace:switch`, `notes:list`…),
-  exposé dans `preload.cts`, typé dans `web/src/types.ts` (`OpenCodeApi`), appelé
-  via `api.*` — jamais d'`ipcRenderer` direct dans un composant.
+- **Nouvelle fonctionnalité** = module autonome `host/*.ts` si elle est
+  testable sans Tauri (comme `workspaces.ts`, `notify-policy.ts`, `freebuff-cli.ts`),
+  branchée dans `host/aven-app-host.ts` via un `case` de dispatch minimal.
+- **IPC** : une seule commande Tauri `aven_call(method, args)` — les espaces de
+  travail (`workspace:add`, `workspace:switch`, `workspace:remove`…) sont traités
+  en Rust (`src-tauri/src/commands.rs`), le reste est dispatché en camelCase
+  (`notesList`, `setChatModel`…) dans `host/aven-app-host.ts`, typé dans
+  `web/src/types.ts` (`OpenCodeApi`), appelé via `api.*` — jamais d'`invoke`
+  direct dans un composant.
 - **Fichiers écrits** : toujours via `writeTextAtomic`/`writeJsonAtomic`
-  (`electron/atomic-file.ts`), jamais `writeFileSync` direct dans `userData` ni dans
+  (`host/atomic-file.ts`), jamais `writeFileSync` direct dans `userData` ni dans
   l'espace de travail.
 - **Process Windows** : `execFile`/`spawn` avec arguments séparés (Node quote lui-même),
   jamais de chaîne concaténée ni `windowsVerbatimArguments` (bug v9.1.3 documenté) ;
   `shell: true` uniquement pour les shims `.cmd` (npm, freebuff).
-- **Sécurité fenêtre** : `contextIsolation: true`, `sandbox: true`, navigation externe
-  via liste blanche `app:openExternal` — ne touche pas à ces réglages.
+- **Sécurité fenêtre** : la webview est verrouillée par la CSP de
+  `src-tauri/tauri.conf.json` (`default-src 'self'`, sans `unsafe-eval`),
+  navigation externe via la commande `openExternal` — ne touche pas à ces réglages.
 
 ## 8. Pureté et testabilité
 
-- Un module « pur » (aucune dépendance Electron, aucun I/O réseau) est la norme pour
+- Un module « pur » (aucune dépendance desktop, aucun I/O réseau) est la norme pour
   toute logique décisionnelle : politiques, parsing, routage, calculs.
-  Précède-le du commentaire `// Pur : testable avec Node seul, sans Electron.`
+  Précède-le du commentaire `// Pur : testable avec Node seul, sans dépendance desktop.`
 - Les modules purs ont leurs tests dans `tests/*.test.mjs` (runner `node --test`,
-  strip-types, stub Electron via `tests/electron-stub.mjs` + `tests/register.mjs`).
+  strip-types, résolveur TypeScript via `tests/hooks.mjs` + `tests/register.mjs`).
 - Un comportement à seuil (ex. « notifie si > 8 s ») vit dans une fonction pure
   exportée, pas enfoui dans un handler IPC.
 
@@ -286,5 +294,5 @@ L'accessibilité d'Aven repose sur des pratiques déjà répandues dans le code 
 - [ ] Échec propre sans espace de travail actif
 - [ ] Bouton icône nouveau → `aria-label` français ; `role`/`aria-modal` si dialogue
 - [ ] Aucun `outline: none` sans remplacement ; `prefers-reduced-motion` couvert
-- [ ] `npm run typecheck:electron` + `npm test` + `npm run verify` verts
-- [ ] Build régénéré (`npm run build:electron`, build web) si code compilé touché
+- [ ] `npm run typecheck:host` + `npm test` + `npm run verify` verts
+- [ ] Build régénéré (`npm run build:host`, build web) si code compilé touché
