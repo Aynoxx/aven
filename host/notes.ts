@@ -3,9 +3,10 @@
 // poubelle (.trash) et archive (.archive) sur disque. Les ids sont des chemins
 // RELATIFS au dossier notes (« projets/idee.md ») ; la racine reste valide.
 // Compat v9 : listNotes/getNote/saveNote continuent de servir (maintenant récursifs).
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, unlinkSync } from "node:fs"
 import path from "node:path"
 import { matchQuery, normalizeForSearch } from "./notes-meta.js"
+import { writeTextAtomic } from "./atomic-file.js"
 
 const NOTE_DIR = (workspace: string) => path.join(workspace, ".opencodeapp", "notes")
 export const notesDir = NOTE_DIR
@@ -79,11 +80,20 @@ export function getNote(workspace: string, id: string) {
   return rowOf(workspace, rel)
 }
 
+// v10.2.2 : tiptap-markdown ÉCHAPPE les crochets (« [[note]] » devient
+// « \\[\\[note\\]\\] ») — le fichier .md perdait ses wikilinks, donc les liens
+// sortants et les backlinks. L'éditeur reste libre d'échapper : on restaure les
+// paires à l'écriture, seul endroit qui décide du contenu sur disque.
+/** Restaure les paires « [[ ]] » échappées par l'éditeur Markdown. */
+export function restoreWikilinks(markdown: string): string {
+  return String(markdown ?? "").replace(/\\\[\\\[/g, "[[").replace(/\\\]\\\]/g, "]]")
+}
+
 /** Crée ou met à jour une note. `id` vide = création (id dérivé du titre dans `folder`). */
 export function saveNote(workspace: string, id: string, title: string, markdown: string, folder = "") {
   ensureNoteDir(workspace)
   const cleanTitleFinal = cleanTitle(title)
-  const body = String(markdown ?? "")
+  const body = restoreWikilinks(String(markdown ?? ""))
   const provided = String(id ?? "").trim()
   let rel = ""
   if (provided) {
@@ -102,7 +112,9 @@ export function saveNote(workspace: string, id: string, title: string, markdown:
   const abs = absOf(workspace, rel)
   ensureDir(path.dirname(abs))
   const content = /^#\s+/m.test(body) ? body : `# ${cleanTitleFinal}\n\n${body}`
-  writeFileSync(abs, content.endsWith("\n") ? content : `${content}\n`, "utf8")
+  // v10.2.1 : le contenu d'une note est irremplaçable — une coupure pendant
+  // l'écriture tronquait le .md en place. Temp + rename désormais.
+  writeTextAtomic(abs, content.endsWith("\n") ? content : `${content}\n`)
   return getNote(workspace, rel)
 }
 
@@ -274,6 +286,19 @@ export function notesTree(workspace: string): NoteTreeEntry[] {
     parent.children.push(node)
     return node
   }
+  // v10.2.2 : un dossier VIDE n'apparaissait pas (l'arbre ne dérivait que des chemins
+  // de notes) — « Nouveau dossier » créait un dossier invisible, impossible d'y
+  // glisser une note. On scanne les dossiers du disque, hors .trash/.archive.
+  const walkFolders = (rel: string) => {
+    for (const entry of readdirSync(absOf(workspace, rel || "."), { withFileTypes: true })) {
+      if (!entry.isDirectory() || entry.name.startsWith(".")) continue
+      const childRel = rel ? `${rel}/${entry.name}` : entry.name
+      ensureFolder(childRel)
+      walkFolders(childRel)
+    }
+  }
+  ensureNoteDir(workspace)
+  walkFolders("")
   for (const note of listNotes(workspace)) {
     const parentRel = note.id.includes("/") ? note.id.slice(0, note.id.lastIndexOf("/")) : ""
     ensureFolder(parentRel).children.push({ type: "note", id: note.id, name: path.basename(note.id), title: note.title, updated: note.updated })

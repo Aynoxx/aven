@@ -1,6 +1,6 @@
 // Navigation clavier des listes du hub (v9.1.6) : flèches Haut/Bas pour se déplacer
 // parmi les items, Entrée/Espace laissent le comportement natif du <button> agir.
-// Logique décisionnelle PURE (règle RULES.md §8) : le DOM reste dans App.tsx, ici on
+// Logique décisionnelle PURE (règle AGENTS.md §8) : le DOM reste dans App.tsx, ici on
 // ne fait que calculer l'index suivant — testable avec Node seul, sans React.
 
 export type ArrowKey = "ArrowDown" | "ArrowUp" | "Home" | "End"

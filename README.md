@@ -1,4 +1,4 @@
-# Aven v10.2.0
+# Aven v10.2.2
 
 > ## v10.0.0 — 100 % Tauri (Electron et le natif retirés)
 > Aven est une **app Tauri 2** : la webview React parle à Rust (`src-tauri/`)
@@ -14,12 +14,15 @@
 > ```
 
 > ## Avant de modifier ce projet (IA ou humain)
-> Lis **`AGENTS.md`** puis **`RULES.md`** : ils fixent les règles universelles de
+> Lis **`AGENTS.md`** : il fixe les règles universelles de
 > cohérence — typographie par tokens CSS, classes de boutons, bibliothèque d'icônes,
 > français partout, commentaires versionnés `// vX.Y.Z : raison`, architecture
 > host/renderer (Tauri), secrets côté host, écritures atomiques, modules purs testés.
-> `npm run verify` commence par `scripts/verify-conventions.mjs`, qui fait échouer
-> toute contribution violant ces règles. En cas de doute : imite le fichier voisin.
+> `npm run verify` commence par `scripts/verify-conventions.mjs` puis
+> `scripts/verify-docs.mjs` : le premier fait échouer toute contribution violant ces
+> règles, le second vérifie que cette documentation reste vraie (modules cités
+> réellement importés, références existantes, audits datés). En cas de doute : imite
+> le fichier voisin.
 
 Application de bureau (Tauri) : une chatbox avec **3 agents commutables** (code, recherche, analyse) et un
 sous-agent (code-reviewer), branchée sur **OpenCode 2.0.10** et un catalogue d’agents strictement gratuit (OpenRouter Free / OpenCode Zen).
@@ -35,7 +38,36 @@ sondes de `npm run verify` réalignées sur cette réalité.
 > **v10.0.0 — fenêtre** : l'app démarre **maximisée** et **mémorise taille et
 position entre les lancements** (redimensionne, ferme, rouvre : tout est là) ;
 la barre de fenêtre vide a disparu de l'accueil (le hub commence par sa toolbar).
-> **v10.2.0 — Revue de design Apple (REVIEW-APPLE-DESIGN.md)** : le rapport E/M/F
+> **v10.2.2 — La revue live corrigée (docs/audits/2026-10-19-test-live-features.md)** :
+> ① tes **liens `[[note]]`** survivent désormais à l'éditeur riche — TipTap échappait
+> les crochets et une note enregistrée perdait ses liens sortants et ses backlinks ;
+> ② le **menu du modèle** s'ouvre du côté qui a de la place (il sortait de la fenêtre
+> en haut de la vue) et une conversation sans modèle affiche « Auto — le routeur
+> choisit », plus jamais « null/ » ; ③ la **recherche du hub** filtre vraiment les
+> conversations (elle promettait « chercher » sans rien filtrer), et « Ouvrir la
+> conversation » ouvre bien la plus récente au lieu d'en créer une de plus ; ④ **la gestion des conversations
+> se trouve** : un onglet « Conversations » dans la barre de fenêtre, et F2 renomme
+> même barre latérale masquée ; ⑤ **Freebuff sans CLI** le dit (« CLI non installé »)
+> avec un bouton Installer, au lieu d'un « démarre… » qui ne démarre rien ;
+> ⑥ accessibilité et notes : composeur et champs de clés nommés, onglets `role=tab`,
+> barre de sélection à six `aria-label` refermable par Échap, option Auto
+> `aria-selected`, épingle en icône, titre non doublé dans l'aperçu, **dossiers vides
+> visibles** et purge qui oublie épinglage et tags. Les conventions sont figées par
+> `scripts/verify-v10.2.2.mjs`.
+> **v10.2.1 — Tes clés et tes notes à l'abri d'un crash** : les trois écritures qui
+> restaient « en place » (`settings.json` et tes clés chiffrées, `prefs.json`, le contenu
+> des notes) passent désormais par le même mécanisme que le reste de l'app — fichier
+> temporaire puis remplacement — et `settings.json` garde une copie `.bak` du dernier
+> état lisible. Si un fichier de configuration redevient illisible, l'app le dit dans son
+> journal au lieu de repartir silencieusement sur les valeurs par défaut (tu ne « perds »
+> plus tes clés sans explication). Et enregistrer une clé ne se solde plus par « Le
+> chiffrement Windows de la clé a échoué. » sur les postes où PowerShell n'importe pas
+> `System.Security` de lui-même : l'assembly est chargé explicitement (vérifié en
+> pilotant le host, pas seulement en relisant le code). Côté développement, `npm run dev` prépare le runtime
+> Node embarqué et contrôle l'outillage Rust **avant** de compiler : un clone frais ne
+> casse plus sur `node.exe` manquant ni sur un linker MSVC absent, et le message nomme
+> le prérequis exact. Les conventions sont figées par `scripts/verify-v10.2.1.mjs`.
+> **v10.2.0 — Revue de design Apple (docs/audits/2026-10-10-revue-design-apple.md)** : le rapport E/M/F
 appliqué de bout en bout — ① **socle honnête** : pile système `system-ui` (aucune
 police à charger, rendue au premier pixel), micro-labels `xs` 11px, `--muted`
 verrouillé ≥ 4,5:1 dans les deux thèmes (calcul WCAG réel par la sonde) ; ② **focus
@@ -286,7 +318,7 @@ Interface React (web/)  ──invoke("aven_call")──►  Rust Tauri (src-taur
 
 À la main :
 
-Prérequis : **Node.js** + un outillage **Rust** ([rustup.rs](https://rustup.rs)) pour compiler la coque Tauri. Le CLI OpenCode est embarqué (paquet `@opencode/cli`, même version que le client) : pas d'install globale, aucun binaire Electron.
+Prérequis : **Node.js 22+**, **Rust** ([rustup.rs](https://rustup.rs)) et, sous Windows, les **Visual Studio Build Tools 2022** avec le workload « Développement Desktop en C++ » — c'est le linker MSVC que Rust utilise par défaut. `npm run dev` contrôle les deux outillages et le dit clairement s'ils manquent (v10.2.1). Le CLI OpenCode est embarqué (paquet `@opencode/cli`, même version que le client) : pas d'install globale, aucun binaire Electron.
 
 ```powershell
 npm install            # à la racine : installe aussi web/ automatiquement (CLI OpenCode uniquement)
@@ -361,6 +393,8 @@ une conversation → tags d'agent sur les notes ; la page **Assistants** → tab
 | Symptôme | Cause / solution |
 |---|---|
 | « OpenCode n'est pas installé » au premier lancement | `npm install` exécute `scripts/ensure-binaries.mjs` (postinstall) qui télécharge le binaire OpenCode. À la main : `node scripts/ensure-binaries.mjs`. |
+| « cargo introuvable » au premier `npm run dev` | La coque Tauri n'a pas d'outillage Rust. Installe Rust via [rustup.rs](https://rustup.rs) **et** les Build Tools 2022 avec le workload C++ (linker MSVC), puis **rouvre le terminal** : le PATH n'est pas rafraîchi dans une session déjà ouverte. |
+| « resource path doesn't exist » (node.exe) au premier `npm run dev` | `tauri:dev` prépare désormais le runtime Node embarqué (`scripts/prepare-tauri-runtime.mjs`, SHA-256 vérifié). À la main : `node scripts/prepare-tauri-runtime.mjs`. |
 | « OpenCode n'a pas démarré » + message | Le message contient les dernières lignes du CLI. Vérifie Réglages (clé) et le dossier de travail. |
 | « Un terminal Freebuff est déjà ouvert » | Une seule session Freebuff par compte (takeover serveur). Ferme le terminal existant (ou l'app desktop Freebuff) puis relance. |
 | Écran blanc une fois packagé | `web/vite.config.ts` doit garder `base: "./"`. |

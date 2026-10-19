@@ -638,7 +638,7 @@ body:has(.overlay) .home-recent, body:has(.hub-picker-overlay) .home-recent, bod
 .hub-card-icon { width:48px; height:48px; display:grid; place-items:center; border-radius: var(--radius-lg); background:color-mix(in srgb,var(--accent) 9%,var(--panel-soft)); color:var(--accent); box-shadow:inset 0 0 0 1px var(--accent-border); }
 .hub-card-copy { display:grid; justify-items:center; gap:2px; min-width:0; text-align:center; }
 .hub-card-copy strong { font-size:var(--font-size-md); font-weight: 800; letter-spacing:.005em; }
-.hub-card-copy small { max-width:130px; color:var(--muted); font-size:var(--font-size-xs); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.hub-card-copy small { max-width:136px; color:var(--muted); font-size:var(--font-size-xs); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 /* v9.1.2 : 7 cartes réparties régulièrement (360/7 ≈ 51,43°). « Projet » (orchestrateur)
    en haut, « Freebuff » (CLI gratuit, terminal) juste à côté — libellés distincts. */
 /* v9.3.0 : 5 cartes réparties à 72° (Statistiques a rejoint les Réglages → Usage). */
@@ -791,6 +791,10 @@ body:has(.overlay) .home-recent, body:has(.hub-picker-overlay) .home-recent, bod
 .notes-tree-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .notes-tree-item:hover { background: var(--accent-soft); }
 .notes-tree-item.folder { color: var(--muted); }
+/* v10.2.2 : l'épingle est une icône (plus d'emoji) — discrète, non compressible. */
+.notes-pin { flex: none; color: var(--accent); }
+/* v10.2.2 : renommage depuis l'en-tête de conversation (F2, barre masquée). */
+.titlebar-rename { min-width: 220px; max-width: min(60vw, 480px); }
 .notes-tree-folder.drop-target > .notes-tree-item { outline: 2px dashed var(--accent-border); outline-offset: -1px; transition: outline-color var(--dur-fast) var(--ease-out), background var(--dur-fast) ease; background: var(--accent-soft); }
 /* v10.2.0 (M8) : la cible de dépôt se RÉVÈLE (transition d'outline+background) au lieu
    d'apparaître en dur — telegraphie le geste sans saut (skill § hint directionnel). */
@@ -897,6 +901,9 @@ body:has(.overlay) .home-recent, body:has(.hub-picker-overlay) .home-recent, bod
 .model-select { position: relative; flex-shrink: 0; }
 .model-select-button { gap: 6px; }
 .model-select-menu { position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 30; min-width: 260px; max-height: 300px; overflow: auto; padding: 6px; display: grid; gap: 2px; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--panel); box-shadow: 0 18px 44px color-mix(in srgb, black 24%, transparent); transform-origin: bottom right; animation: popover-in var(--dur-fast) var(--ease-spring) both; }
+/* v10.2.2 : le menu s'ouvre vers le bas quand la barre de modèle est en haut de la
+   vue (côté choisi en JS après mesure) — il restait hors écran sinon. */
+.model-select-menu.down { top: calc(100% + 6px); bottom: auto; transform-origin: top right; }
 /* v10.2.0 (M13) : les popovers se DÉPLOIENT depuis leur déclencheur (origine ancrée,
    skill § chemins/origines) — menu modèle depuis le bas-droit, selbar depuis le centre. */
 @keyframes popover-in { from { opacity: 0; transform: scale(.94) translateY(4px); } to { opacity: 1; transform: none; } }

@@ -20,6 +20,7 @@ import { buildPrompt, selectionWithin } from "./selection-actions"
 // La logique (bouclage, index) vit dans le module pur arrow-navigation.ts, testé.
 import { nextArrowIndex, type ArrowKey } from "./arrow-navigation"
 import { groupChatsByAgent } from "./chat-groups"
+import { AUTO_MODEL_LABEL, usableModelRef } from "./model-label"
 // v9.7.0 : transitions de vue natives (View Transitions API, Chromium embarqué).
 import { withViewTransition } from "./view-transitions"
 import { Icon, type IconName } from "./icons"
@@ -141,6 +142,10 @@ export default function App() {
   // pilotable par conversation (« Auto » = le routeur choisit ; un choix épingle le modèle).
   const [modelChain, setModelChain] = useState<{ ref: string; label: string }[]>([])
   const [modelMenuOpen, setModelMenuOpen] = useState(false)
+  // v10.2.2 : la bulle s'ancrait toujours vers le haut — en haut de la vue elle sortait
+  // de la fenêtre (66 px visibles). On mesure la place réelle et on choisit le côté.
+  const [modelMenuStyle, setModelMenuStyle] = useState<{ dir: "up" | "down"; maxHeight: number }>({ dir: "up", maxHeight: 300 })
+  const modelButtonRef = useRef<HTMLButtonElement>(null)
   const liveRef = useRef<Live>(emptyLive)
   const rafScheduled = useRef(false)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -571,7 +576,9 @@ export default function App() {
       } else if (mod && e.key.toLowerCase() === "k") {
         e.preventDefault()
         ;(showHome ? homeSearchRef.current : searchRef.current)?.focus()
-      } else if (e.key === "F2" && chatId) {
+      } else if (e.key === "F2" && chatId && !showHome) {
+        // v10.2.2 : F2 fonctionne même barre latérale masquée — le champ de renommage
+        // vit aussi dans l'en-tête de la conversation (le raccourci n'est plus inerte).
         e.preventDefault()
         startRenameChat(chatId)
       } else if (mod && e.shiftKey && e.key.toLowerCase() === "v") {
@@ -585,6 +592,9 @@ export default function App() {
           return
         }
         if (deleteArmed) { setDeleteArmed(null); return } // v10.2.0 (E1) : Échap désarme la suppression
+        // v10.2.2 : la barre de sélection est un popover : Échap la ferme avant tout
+        // autre effet (elle restait affichée par-dessus la conversation).
+        if (selBarRef.current) { setSelBar(null); return }
         if (showConversationPicker) withViewTransition(() => setShowConversationPicker(false))
         else if (showProjectPicker) withViewTransition(() => setShowProjectPicker(false)) // v9.1.6 : le modal projet suit Échap
         else if (showFreebuffAgent) withViewTransition(() => { setShowAgentsPage(false); setShowSettings(false); setShowNotes(false); setShowConversationPicker(false); setShowProjectPicker(false); setShowFreebuffAgent(false); setShowHome(true) }) // v9.5.0 : page agent — Échap revient à l'accueil (session maintenue)
@@ -745,16 +755,19 @@ export default function App() {
 
   const labelOf = useCallback(
     (ref?: string) => {
-      if (!ref) return "Aucun modèle assigné"
-      const known = Object.values(appState.assignments ?? {}).flat().find((m) => m.ref === ref)
+      // v10.2.2 : « null/… » persisté n'est pas un modèle — on ne l'affiche plus brut.
+      const usable = usableModelRef(ref)
+      if (!usable) return "Aucun modèle assigné"
+      const known = Object.values(appState.assignments ?? {}).flat().find((m) => m.ref === usable)
       if (known) return known.label
       // Session héritée d'une version antérieure : le modèle n'est (plus) dans le catalogue.
       // On l'affiche tel quel (traçabilité) plutôt que de masquer une information.
-      return ref
+      return usable
     },
     [appState.assignments],
   )
   const currentModel = chats.find((c) => c.id === chatId)?.model
+  const activeModelLabel = usableModelRef(currentModel) ? labelOf(currentModel) : AUTO_MODEL_LABEL
   // v9.4.0 : la chaîne du routeur pour l'agent actif alimente le sélecteur de la modelbar.
   useEffect(() => {
     let stop = false
@@ -767,7 +780,9 @@ export default function App() {
     if (!chatId) return
     setModelMenuOpen(false)
     api.setChatModel(chatId, ref).then((updated) => {
-      setChats((cs) => cs.map((c) => (c.id === updated.id ? { ...c, model: updated.model ?? c.model } : c)))
+      // v10.2.2 : une réponse « null/… » ne doit pas écraser le modèle affiché.
+      const next = usableModelRef(updated.model)
+      setChats((cs) => cs.map((c) => (c.id === updated.id ? { ...c, model: next ?? undefined } : c)))
     }).catch(fail)
   }
   // Ferme le menu du sélecteur au clic ailleurs.
@@ -832,7 +847,7 @@ export default function App() {
   // et l'ErrorBoundary masquait toute l'app. Les hooks ne vivent JAMAIS dans une
   // fonction de rendu. Ici : AUCUN état React — la sélection EST le focus DOM
   // (modèle ARIA : le focus suit la sélection, Entrée/Espace restent natifs) et le
-  // calcul reste dans arrow-navigation.ts (pur, testé, RULES.md §8).
+  // calcul reste dans arrow-navigation.ts (pur, testé, AGENTS.md §8).
   const arrowListNav = (listRef: { current: HTMLDivElement | null }) => ({
     onKeyDown: (e: ReactKeyboardEvent) => {
       const key = e.key as ArrowKey
@@ -966,10 +981,17 @@ export default function App() {
       { key: "files", label: "Fichiers", kind: "files", hint: "Explorer l'espace", action: openFilesView },
       { key: "notes", label: "Notes", kind: "notes", hint: "Notes Markdown par agent", action: () => openNotesView() },
     ]
-    const recent = chats.slice(0, 3)
+    // v10.2.2 : la barre promettait « chercher » mais ne filtrait rien (elle créait
+    // seulement une conversation à la validation). Elle filtre désormais les
+    // conversations par titre ; Entrée garde l'action « demander à l'agent ».
+    const command = homeCommand.trim()
+    const needle = command.toLowerCase()
+    const recent = (needle
+      ? chats.filter((c) => (c.title || "Conversation").toLowerCase().includes(needle))
+      : chats
+    ).slice(0, needle ? 6 : 3)
     const allConversations = chats
     const online = appState.status === "ready"
-    const command = homeCommand.trim()
 
     // v9.1.6 : flèches Haut/Bas dans les listes du hub (fabrique SANS hook — voir
     // le fix « Rendered fewer hooks » ci-dessus ; la sélection est le focus DOM).
@@ -1028,7 +1050,7 @@ export default function App() {
 
           <form className="home-command" onSubmit={submitHomeCommand}>
             <span className="home-command-icon" aria-hidden="true"><Icon name="search" size={17} /></span>
-            <input ref={homeSearchRef} value={homeCommand} onChange={(e) => setHomeCommand(e.target.value)} placeholder="Demander, chercher, créer…" aria-label="Rechercher ou commander" />
+            <input ref={homeSearchRef} value={homeCommand} onChange={(e) => setHomeCommand(e.target.value)} placeholder="Chercher une conversation, ou demander…" aria-label="Chercher une conversation ou demander à l’agent" />
             <kbd>Ctrl K</kbd>
           </form>
 
@@ -1054,8 +1076,8 @@ export default function App() {
             <aside className="home-recent" aria-label="Conversations récentes">
               <div className="home-section-heading">
                 <div>
-                  <span className="eyebrow">RÉCENTS</span>
-                  <strong>Reprendre rapidement</strong>
+                  <span className="eyebrow">{needle ? "RÉSULTATS" : "RÉCENTS"}</span>
+                  <strong>{needle ? `${recent.length} conversation${recent.length > 1 ? "s" : ""}` : "Reprendre rapidement"}</strong>
                 </div>
                 <button className="button ghost home-text-button" onClick={() => setShowConversationPicker(true)} type="button">Tout voir</button>
               </div>
@@ -1064,18 +1086,18 @@ export default function App() {
                   conversation (cohérent avec la page Agents et le regroupement v9.0.0). */}
               <div className="home-recent-list" ref={recentListRef} onKeyDown={recentNav.onKeyDown}>
                 {recent.map((chat) => (
-                  <button key={chat.id} className="home-recent-item" onClick={() => openConversation(chat)} type="button">
+                  <button key={chat.id} className="home-recent-item" onClick={() => openConversation(chat)} type="button" aria-label={`${chat.title || "Conversation"} — ${agentName(chat.agent || tab)}${usableModelRef(chat.model) ? ` · ${usableModelRef(chat.model)}` : ""}`}>
                     <span className="home-recent-icon"><HubIcon kind={chat.agent === tab ? "agent" : "notes"} /></span>
                     <span className="home-recent-copy">
                       <strong>{chat.title || "Conversation"}</strong>
-                      <small><em className="home-recent-agent">{agentName(chat.agent || tab)}</em>{chat.model ? ` · ${chat.model}` : ""}</small>
+                      <small><em className="home-recent-agent">{agentName(chat.agent || tab)}</em>{usableModelRef(chat.model) ? ` · ${usableModelRef(chat.model)}` : ""}</small>
                     </span>
                     <span className="home-recent-arrow"><Icon name="chevron-right" size={16} /></span>
                   </button>
                 ))}
                 {!recent.length && (
                   <button className="home-empty-recent" onClick={() => void newChat()} disabled={!tab} type="button">
-                    <span>Commencez une conversation pour la retrouver ici.</span>
+                    <span>{needle ? "Aucune conversation ne correspond — Entrée crée une conversation sur ce sujet." : "Commencez une conversation pour la retrouver ici."}</span>
                   </button>
                 )}
               </div>
@@ -1169,7 +1191,7 @@ export default function App() {
                 {allConversations.map((chat) => (
                   <button key={chat.id} className="home-modal-item" onClick={() => openConversation(chat)} type="button">
                     <span className="home-recent-icon"><HubIcon kind="notes" /></span>
-                    <span className="home-recent-copy"><strong>{chat.title || "Conversation"}</strong><small>{chat.model || agentName(chat.agent || tab)}{chat.updated ? ` · ${new Date(chat.updated).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" })}` : ""}</small></span>
+                    <span className="home-recent-copy"><strong>{chat.title || "Conversation"}</strong><small>{usableModelRef(chat.model) || agentName(chat.agent || tab)}{chat.updated ? ` · ${new Date(chat.updated).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" })}` : ""}</small></span>
                     <span className="home-recent-arrow"><Icon name="chevron-right" size={18} /></span>
                   </button>
                 ))}
@@ -1247,15 +1269,24 @@ export default function App() {
     <div className="modelbar block-card" key="model">
       <div>
         <span className="eyebrow">MODÈLE ACTIF</span>
-        <strong>{labelOf(currentModel)}</strong>
+        <strong>{activeModelLabel}</strong>
         {/* v9.4.0 : le modèle devient un choix, pas une affiche — « Auto » rend la main au routeur. */}
         <div className="model-select" onClick={(e) => e.stopPropagation()}>
-          <button className="button secondary model-select-button" type="button" onClick={() => setModelMenuOpen(!modelMenuOpen)} aria-expanded={modelMenuOpen} aria-haspopup="listbox">
+          <button ref={modelButtonRef} className="button secondary model-select-button" type="button" onClick={() => {
+            if (modelMenuOpen) { setModelMenuOpen(false); return }
+            const rect = modelButtonRef.current?.getBoundingClientRect()
+            const above = rect ? rect.top : 0
+            const below = rect ? window.innerHeight - rect.bottom : 0
+            const dir: "up" | "down" = above >= 220 && above > below ? "up" : "down"
+            const available = (dir === "up" ? above : below) - 16
+            setModelMenuStyle({ dir, maxHeight: Math.max(120, Math.min(300, available)) })
+            setModelMenuOpen(true)
+          }} aria-expanded={modelMenuOpen} aria-haspopup="listbox">
             <Icon name="chevron-down" size={14} />Choisir le modèle
           </button>
           {modelMenuOpen && (
-            <div className="model-select-menu" role="listbox" aria-label="Modèles gratuits disponibles">
-              <button className="model-select-item" type="button" role="option" onClick={() => applyModelChoice(undefined)}>
+            <div className={`model-select-menu ${modelMenuStyle.dir}`} role="listbox" aria-label="Modèles gratuits disponibles" style={{ maxHeight: modelMenuStyle.maxHeight }}>
+              <button className="model-select-item" type="button" role="option" aria-selected={!usableModelRef(currentModel)} onClick={() => applyModelChoice(undefined)}>
                 Auto — le routeur choisit
               </button>
               {modelChain.map((m) => (
@@ -1268,7 +1299,7 @@ export default function App() {
           )}
         </div>
       </div>
-      <span className="model-assignment">{currentModel ? "Chaîne de l’agent · " + agentName(tab) : "Résolution du modèle…"}</span>
+      <span className="model-assignment">{usableModelRef(currentModel) ? "Chaîne de l’agent · " + agentName(tab) : "Le routeur choisit au prochain message"}</span>
     </div>
   )
 
@@ -1279,6 +1310,7 @@ export default function App() {
           ref={textareaRef}
           value={dictationMeta.showRaw && dictationMeta.cleaned ? dictationMeta.rawText : input}
           placeholder={dictation.state === "recording" ? "J’écoute…" : "Écris à l’agent… (ou maintiens le micro)"}
+          aria-label="Message à l’agent"
           disabled={!chatId}
           onChange={(e) => {
             // Toute édition manuelle repart du texte affiché et désactive la bascule brut/éclairci.
@@ -1377,10 +1409,19 @@ export default function App() {
             <span>Paramètres</span>
           </button>
           {!showHome && (
-            <button className="window-tab" onClick={goHome} aria-label="Retour à l’accueil">
-              <span className="window-tab-icon"><Icon name="arrow-left" size={14} /></span>
-              <span>Accueil</span>
-            </button>
+            <>
+              {/* v10.2.2 : la gestion des conversations vivait derrière un réglage
+                  d'apparence (barre masquée par défaut). Une entrée dédiée la rend
+                  trouvable en un clic, sans fouiller les paramètres. */}
+              <button className="window-tab" onClick={() => updateAppearance({ showSidebar: !appearance.showSidebar })} aria-label={appearance.showSidebar ? "Masquer la liste des conversations" : "Afficher la liste des conversations"} aria-pressed={appearance.showSidebar} title="Afficher ou masquer la liste des conversations">
+                <span className="window-tab-icon"><Icon name="list" size={14} /></span>
+                <span>Conversations</span>
+              </button>
+              <button className="window-tab" onClick={goHome} aria-label="Retour à l’accueil">
+                <span className="window-tab-icon"><Icon name="arrow-left" size={14} /></span>
+                <span>Accueil</span>
+              </button>
+            </>
           )}
         </div>
 {/* v10.0.0 : la barre de fermeture custom (héritée de la fenêtre Electron
@@ -1467,8 +1508,8 @@ export default function App() {
                   </div>
                   <p className="hint tasks-mode-hint">{TASK_MODES_UI.find((m) => m.id === taskMode)?.hint}</p>
                   <div className="tasks-principal-actions">
-                    <button className="button primary" onClick={() => selectAgent("projet")} disabled={!agents.some((a) => a.id === "projet")} type="button">
-                      <Icon name="agent" size={14} />Ouvrir une conversation
+                    <button className="button primary" onClick={() => selectAgent("projet")} disabled={!agents.some((a) => a.id === "projet")} type="button" title="Ouvre la conversation la plus récente de l’orchestrateur (une nouvelle seulement s’il n’en existe aucune), avec le mode choisi">
+                      <Icon name="agent" size={14} />Ouvrir la conversation
                     </button>
                   </div>
                 </div>
@@ -1498,8 +1539,8 @@ export default function App() {
               <aside className="sidebar">
                 <div className="sidebar-top">
                   <div className="sidebar-heading"><div><span className="eyebrow">CONVERSATIONS</span><strong>{showArchived ? "Archivées" : agentName(tab)}</strong></div><button className="button primary small" onClick={newChat} disabled={!tab} aria-label="Nouvelle conversation" title="Nouvelle conversation (Ctrl+N)"><Icon name="plus" size={16} /></button></div>
-                  <div className="search-wrap"><span><Icon name="search" size={16} /></span><input ref={searchRef} className="search" placeholder="Rechercher" value={search} onChange={(e) => setSearch(e.target.value)} /></div>
-                  <button className={`archive-toggle ${showArchived ? "selected" : ""}`} onClick={() => { setShowArchived((value) => !value); setChatId(null) }}><span><Icon name="archive-list" size={15} /></span>{showArchived ? "Revenir aux actives" : "Voir les archivées"}</button>
+                  <div className="search-wrap"><span><Icon name="search" size={16} /></span><input ref={searchRef} className="search" placeholder="Rechercher" aria-label="Rechercher une conversation" value={search} onChange={(e) => setSearch(e.target.value)} /></div>
+                  <button className={`archive-toggle ${showArchived ? "selected" : ""}`} type="button" onClick={() => { setShowArchived((value) => !value); setChatId(null) }}><span><Icon name="archive-list" size={15} /></span>{showArchived ? "Revenir aux actives" : "Voir les archivées"}</button>
                 </div>
                 <div className="chat-list">
                   {chatGroups ? chatGroups.map((group) => (
@@ -1533,7 +1574,16 @@ export default function App() {
             )}
             <main className="main">
               <div className="chat-titlebar">
-                <div><span className="eyebrow">SESSION</span><strong>{chats.find((c) => c.id === chatId)?.title ?? "Nouvelle conversation"}</strong></div>
+                <div><span className="eyebrow">SESSION</span>
+                  {/* v10.2.2 : F2 renomme ici même quand la barre latérale est masquée. */}
+                  {chatId && renamingChat === chatId && !appearance.showSidebar ? (
+                    <input className="settings-input titlebar-rename" autoFocus value={chatValue} maxLength={120} aria-label="Titre de la conversation"
+                      onFocus={(e) => e.target.select()} onChange={(e) => setChatValue(e.target.value)} onBlur={() => void commitChatRename(chatId)}
+                      onKeyDown={(e) => { if (e.key === "Enter") void commitChatRename(chatId); if (e.key === "Escape") { e.stopPropagation(); renameCancelled.current = true; setRenamingChat(null) } }} />
+                  ) : (
+                    <strong>{chats.find((c) => c.id === chatId)?.title ?? "Nouvelle conversation"}</strong>
+                  )}
+                </div>
                 <div className="row">
                   {tab === "projet" && (
                     <div className="tasks-mode-switch" role="group" aria-label="Mode de l'orchestrateur">
@@ -1595,12 +1645,12 @@ export default function App() {
 
       {selBar && (
         <div className="selbar" role="toolbar" aria-label="Actions sur la sélection" style={{ top: selBar.top, left: selBar.left }}>
-          <button type="button" title="Copier la sélection" onClick={() => { void navigator.clipboard.writeText(selBar.text); setSelBar(null) }}><Icon name="copy" size={15} /></button>
-          <button type="button" title="Corriger ce code (agent code)" onClick={() => applySelection("fix")}><Icon name="wrench" size={15} /></button>
-          <button type="button" title="Expliquer ce code (agent recherche)" onClick={() => applySelection("explain")}><Icon name="sparkle" size={15} /></button>
-          <button type="button" title="Faire relire ce code (agent code-reviewer)" onClick={() => applySelection("review")}><Icon name="eye" size={15} /></button>
-          <button type="button" title="Citer dans le composeur" onClick={() => applySelection("send")}><Icon name="chevron-right" size={15} /></button>
-          <button type="button" className="selbar-close" title="Fermer" onClick={() => setSelBar(null)}><Icon name="close" size={15} /></button>
+          <button type="button" title="Copier la sélection" aria-label="Copier la sélection" onClick={() => { void navigator.clipboard.writeText(selBar.text); setSelBar(null) }}><Icon name="copy" size={15} /></button>
+          <button type="button" title="Corriger ce code (agent code)" aria-label="Corriger ce code avec l’agent code" onClick={() => applySelection("fix")}><Icon name="wrench" size={15} /></button>
+          <button type="button" title="Expliquer ce code (agent recherche)" aria-label="Expliquer ce code avec l’agent recherche" onClick={() => applySelection("explain")}><Icon name="sparkle" size={15} /></button>
+          <button type="button" title="Faire relire ce code (agent code-reviewer)" aria-label="Faire relire ce code avec l’agent code-reviewer" onClick={() => applySelection("review")}><Icon name="eye" size={15} /></button>
+          <button type="button" title="Citer dans le composeur" aria-label="Citer la sélection dans le composeur" onClick={() => applySelection("send")}><Icon name="chevron-right" size={15} /></button>
+          <button type="button" className="selbar-close" title="Fermer" aria-label="Fermer les actions de sélection" onClick={() => setSelBar(null)}><Icon name="close" size={15} /></button>
         </div>
       )}
 

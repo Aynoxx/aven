@@ -17,7 +17,7 @@ import { fileURLToPath } from "node:url"
 import { createInterface } from "node:readline"
 import { execFileSync, execFile, spawn } from "node:child_process"
 import { promisify } from "node:util"
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs"
 import path from "node:path"
 import {
   archiveNote, backlinks, createFolder, deleteFolder, deleteNote, getNote,
@@ -25,7 +25,7 @@ import {
   listNotes, listTrash, moveNote, noteLinks, notesDir, notesTree, purgeNote, quickCapture,
   renameFolder, restoreNote, saveNote, searchNotes, unarchiveNote,
 } from "./notes.js"
-import { loadPinned, loadTags, setTags, togglePin } from "./notes-meta.js"
+import { forgetNote, loadPinned, loadTags, setTags, togglePin } from "./notes-meta.js"
 import { listWorkspaceDir, readWorkspaceFile, breadcrumbOf, safeResolve as safeResolveWorkspacePath } from "./workspace-files.js"
 import { aggregateStats, readDictationStats } from "./stats.js"
 import { buildDiagnostic } from "./diagnostic.js"
@@ -33,6 +33,7 @@ import { transcribeSpeech } from "./voice.js"
 import { Announcer } from "./announcer.js"
 import { countDictation } from "./stats.js"
 import { rpcObjectParam } from "./rpc-params.js"
+import { writeTextAtomic } from "./atomic-file.js"
 import { buildLaunchCommand, freebuffBusyMessage, freebuffMissingMessage, parseVersionOutput } from "./freebuff-cli.js"
 import { DEFAULT_PTY_COLS, DEFAULT_PTY_ROWS, freebuffPtyPid, isFreebuffPtyActive, loadPtyModule, restartFreebuffPty, resizeFreebuffPty, signalFreebuffPty, startFreebuffPty, stopFreebuffPty, writeFreebuffPty } from "./freebuff-pty.js"
 
@@ -127,9 +128,16 @@ function settingsPath() {
 
 function protectWindows(value: string, unprotect: boolean): string | undefined {
   if (process.platform !== "win32") return undefined
+  // v10.2.1 : `System.Security.Cryptography.ProtectedData` vit dans System.Security.dll,
+  // que Windows PowerShell n'importe PAS automatiquement sur certains postes. Sans ce
+  // Add-Type, l'enregistrement d'une clé échouait sur « Le chiffrement Windows de la
+  // clé a échoué. » (constaté en pilotant le host : type introuvable). Le format DPAPI
+  // et les clés déjà stockées ne changent pas — seul le chargement de l'assembly est
+  // désormais explicite.
+  const load = "Add-Type -AssemblyName System.Security;"
   const script = unprotect
-    ? "$raw=[Console]::In.ReadToEnd();$data=[Convert]::FromBase64String($raw.Trim());$plain=[System.Security.Cryptography.ProtectedData]::Unprotect($data,$null,[System.Security.Cryptography.DataProtectionScope]::CurrentUser);[Console]::Out.Write([Text.Encoding]::UTF8.GetString($plain))"
-    : "$raw=[Console]::In.ReadToEnd();$data=[Text.Encoding]::UTF8.GetBytes($raw);$cipher=[System.Security.Cryptography.ProtectedData]::Protect($data,$null,[System.Security.Cryptography.DataProtectionScope]::CurrentUser);[Console]::Out.Write([Convert]::ToBase64String($cipher))"
+    ? load + "$raw=[Console]::In.ReadToEnd();$data=[Convert]::FromBase64String($raw.Trim());$plain=[System.Security.Cryptography.ProtectedData]::Unprotect($data,$null,[System.Security.Cryptography.DataProtectionScope]::CurrentUser);[Console]::Out.Write([Text.Encoding]::UTF8.GetString($plain))"
+    : load + "$raw=[Console]::In.ReadToEnd();$data=[Text.Encoding]::UTF8.GetBytes($raw);$cipher=[System.Security.Cryptography.ProtectedData]::Protect($data,$null,[System.Security.Cryptography.DataProtectionScope]::CurrentUser);[Console]::Out.Write([Convert]::ToBase64String($cipher))"
   try {
     return String(execFileSync("powershell.exe", [
       "-NoProfile",
@@ -142,16 +150,52 @@ function protectWindows(value: string, unprotect: boolean): string | undefined {
       timeout: 5000,
       windowsHide: true,
     })).trim()
-  } catch {
+  } catch (error) {
+    // v10.2.1 : renvoyait undefined en silence — l'appelant n'avait qu'un message
+    // générique. On garde le repli, on laisse la cause réelle sur stderr.
+    console.error(`[aven] DPAPI ${unprotect ? "déchiffrement" : "chiffrement"} impossible :`, (error as Error).message.split("\n")[0])
     return undefined
   }
+}
+
+// v10.2.1 : settings.json porte les clés chiffrées DPAPI. Il était écrit par un
+// writeFileSync direct (troncature en place) : un crash pendant l'écriture laissait
+// un JSON partiel, que loadKeys avalait en silence — les clés « disparaissaient ».
+// Écriture atomique (temp + rename) et copie .bak du dernier état lisible.
+function writeSettings(value: unknown) {
+  const file = settingsPath()
+  if (existsSync(file)) {
+    // Ne jamais écraser un .bak par un fichier déjà illisible : la copie de secours
+    // ne doit contenir qu'un état qu'on peut réellement restaurer (sinon elle donne
+    // une fausse assurance au moment où on en a besoin).
+    let restorable = false
+    try {
+      JSON.parse(readFileSync(file, "utf8"))
+      restorable = true
+    } catch {}
+    if (restorable) {
+      try {
+        copyFileSync(file, `${file}.bak`)
+      } catch (error) {
+        // Une sauvegarde ratée ne doit pas empêcher l'enregistrement de la nouvelle clé.
+        console.error("[aven] copie .bak de settings.json impossible :", (error as Error).message)
+      }
+    }
+  }
+  writeTextAtomic(file, JSON.stringify(value, null, 2) + "\n")
 }
 
 function loadKeys() {
   let stored: { keysEnc?: Record<string, string>; openrouterKeyEnc?: string } = {}
   try {
     stored = JSON.parse(readFileSync(settingsPath(), "utf8")) as typeof stored
-  } catch {}
+  } catch (error) {
+    // v10.2.1 : le silence rendait la perte invisible. ENOENT = premier lancement,
+    // donc légitime ; tout le reste (JSON tronqué, droits) laisse une trace.
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      console.error("[aven] settings.json illisible, clés non rechargées :", (error as Error).message)
+    }
+  }
 
   const out: Record<string, string> = {}
   for (const [id, envName] of [["openrouter", "OPENROUTER_API_KEY"], ["groq", "GROQ_API_KEY"]] as const) {
@@ -190,7 +234,7 @@ function saveKey(provider: string, key: string) {
   if (provider !== "openrouter" && stored.openrouterKeyEnc && !keysEnc.openrouter) {
     next.openrouterKeyEnc = stored.openrouterKeyEnc
   }
-  writeFileSync(settingsPath(), JSON.stringify(next, null, 2) + "\n", "utf8")
+  writeSettings(next)
 }
 
 const execFileAsync = promisify(execFile)
@@ -340,7 +384,12 @@ function loadPrefs() {
       notifications: raw.notifications !== false,
       freebuffResume: raw.freebuffResume === true,
     }
-  } catch {
+  } catch (error) {
+    // v10.2.1 : même piège que settings.json — un prefs.json tronqué remettait
+    // notifications à ON sans le dire. Le repli reste, la trace aussi.
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      console.error("[aven] prefs.json illisible, préférences par défaut :", (error as Error).message)
+    }
     return { notifications: true, freebuffResume: false }
   }
 }
@@ -351,7 +400,8 @@ function savePrefs(next: { notifications?: boolean; freebuffResume?: boolean }) 
     notifications: next.notifications ?? current.notifications,
     freebuffResume: next.freebuffResume ?? current.freebuffResume,
   }
-  writeFileSync(prefsPath(), JSON.stringify(value, null, 2) + "\n", "utf8")
+  // v10.2.1 : écriture atomique, comme les autres métadonnées de l'app.
+  writeTextAtomic(prefsPath(), JSON.stringify(value, null, 2) + "\n")
   return value
 }
 
@@ -626,8 +676,13 @@ async function dispatch(method: string, params: any): Promise<unknown> {
       return listTrash(requireWorkspace())
     case "noteArchived":
       return listArchivedNotes(requireWorkspace())
-    case "notePurge":
-      return purgeNote(requireWorkspace(), String(params?.[0] ?? ""))
+    case "notePurge": {
+      // v10.2.2 : la purge oublie aussi l'épinglage et les tags de la note — sinon
+      // notes-meta.json gardait des ids fantômes après la suppression du fichier.
+      const rel = purgeNote(requireWorkspace(), String(params?.[0] ?? ""))
+      forgetNote(requireWorkspace(), rel)
+      return rel
+    }
     case "noteLinks":
       return noteLinks(requireWorkspace(), String(params?.[0] ?? ""))
     case "noteBacklinks":

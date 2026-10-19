@@ -4,6 +4,7 @@ import Markdown from "./Markdown"
 import NoteEditor from "./NoteEditor"
 import { Icon } from "./icons"
 import type { Note, NoteLink, NoteSearchHit, NoteTreeEntry } from "./types"
+import { stripLeadingTitle } from "./note-display"
 
 // v10.1.0 « façon Kortex » : arbre de dossiers (drag&drop natif), éditeur riche
 // TipTap, wikilinks [[note]] + backlinks, poubelle/archive sur disque, recherche
@@ -200,7 +201,9 @@ export default function NotesView(props: Props) {
       onDragStart={() => setDragId(entry.id)} onDragEnd={() => setDragId(null)}>
       <button className="notes-tree-item" onClick={() => open(entry.id)} type="button" title={entry.id}>
         <Icon name="file" size={13} />
-        <span>{pinned.includes(entry.id) ? "📌 " : ""}{entry.title}</span>
+        {/* v10.2.2 : l'emoji 📌 violait la règle « icônes = <Icon> » et brouillait la lecture. */}
+        {pinned.includes(entry.id) && <Icon name="pin" size={12} className="notes-pin" />}
+        <span>{entry.title}</span>
       </button>
     </div>
   )
@@ -358,7 +361,8 @@ export default function NotesView(props: Props) {
                   return <button key={a.id} type="button" className={`notes-tag ${active ? "selected" : ""}`} onClick={() => void commitTags(selected.id, active ? (tags[selected.id] ?? []).filter((t) => t !== a.id) : [...(tags[selected.id] ?? []), a.id])}>{a.name}</button>
                 })}
               </div>
-              <div className="notes-render"><Markdown text={selected.markdown} onWikilink={(target) => { const hit = links.find((l) => l.target === target)?.resolved; if (hit) open(hit) }} /></div>
+              {/* v10.2.2 : le H1 de tête répétait le titre déjà affiché en h4. */}
+              <div className="notes-render"><Markdown text={stripLeadingTitle(selected.markdown, selected.title)} onWikilink={(target) => { const hit = links.find((l) => l.target === target)?.resolved; if (hit) open(hit) }} /></div>
               {!!links.length && (
                 <div className="notes-links">
                   <span className="eyebrow">LIENS SORTANTS</span>

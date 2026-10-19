@@ -55,6 +55,8 @@ export default function FreebuffAgentPage(props: { onError: (e: unknown) => void
   const [showRaw, setShowRaw] = useState(false)
   const [resume, setResume] = useState(false)
   const [draft, setDraft] = useState("")
+  const [cliMissing, setCliMissing] = useState(false)
+  const [installing, setInstalling] = useState(false)
   const renderTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   // v9.6.1 : miroir de showRaw pour le callback — en Vue terminal, le scan du buffer
   // (transcript) est inutile : l'écran montre déjà le TUI brut.
@@ -100,6 +102,35 @@ export default function FreebuffAgentPage(props: { onError: (e: unknown) => void
 
     const boot = async () => {
       try {
+        // v10.2.3 : vérification et installation automatique du CLI Freebuff au démarrage
+        const cli = await api.freebuffCliStatus().catch(() => ({ installed: true }))
+        if (disposed) return
+        if (!cli.installed) {
+          setCliMissing(true)
+          setPresence({ label: "CLI Freebuff non installé", online: false })
+          // Tentative d'installation automatique du CLI
+          // L'utilisateur sera invité à installer si l'échec persiste après boot
+          setCliMissing(true)
+          // On ne bloque pas le démarrage - l'utilisateur peut installer depuis les paramètres
+          setInstalling(true)
+          try {
+            await api.freebuffCliLaunch("install")
+            let installed = false
+            for (let i = 0; i < 12 && !installed; i++) {
+              await new Promise((r) => setTimeout(r, 5_000))
+              installed = (await api.freebuffCliStatus().catch(() => ({ installed: false }))).installed
+            }
+            if (installed) {
+              setCliMissing(false)
+              setPresence({ label: "En ligne", online: true })
+            }
+          } catch (e) {
+            // Erreur silencieuse - l'utilisateur pourra réessayer manuellement depuis les Réglages
+          } finally {
+            setInstalling(false)
+          }
+        }
+        setCliMissing(false)
         // Préférence de reprise (v9.5.0) : « Reprendre la dernière conversation ».
         api.prefs().then((p) => { if (!disposed) setResume(p.freebuffResume === true) }).catch(() => undefined)
         // Imports dynamiques : xterm ne pèse dans le bundle qu'à l'ouverture de la page.
@@ -236,6 +267,18 @@ export default function FreebuffAgentPage(props: { onError: (e: unknown) => void
     void api.setFreebuffResume(on).catch(() => setResume(!on))
   }
 
+  // v10.2.2 : fonction d'installation manuelle du CLI depuis la page
+  const installCli = async () => {
+    setInstalling(true)
+    try {
+      await api.freebuffCliLaunch("install")
+      let installed = false
+      for (let i = 0; i < 12 && !installed; i++) {
+        await new Promise((r) => setTimeout(r, 5_000))
+        installed = (await api.freebuffCliStatus().catch(() => ({ installed: false }))).installed      }
+    } catch (e) { props.onError(e) } finally { setInstalling(false) }
+  }
+
   return (
     <main className="agents-main">
       <section className="agents-page freebuff-agent-page" aria-label="Agent Freebuff">
@@ -259,7 +302,7 @@ export default function FreebuffAgentPage(props: { onError: (e: unknown) => void
             {presence.label}
           </span>
           <span className="row bridge-actions">
-            <button className="button secondary" type="button" onClick={sendInterrupt} title="Interrompt le tour en cours (Ctrl+C envoyé à l'agent)">
+            <button className="button secondary" type="button" onClick={sendInterrupt} title="Interrompt le tour en cours (Ctrl+C envoyé à l'agent)" disabled={!presence.online}>
               <Icon name="close" size={14} />Interrompre
             </button>
             <button className="button secondary" type="button" onClick={restartSession} title="Redémarre l'agent (utile s'il se bloque sans crasher)">
@@ -281,6 +324,19 @@ export default function FreebuffAgentPage(props: { onError: (e: unknown) => void
             </button>
           </span>
         </div>
+
+        {/* v10.2.2 : affichage du CLI non installé avec bouton d'installation */}
+        {cliMissing && (
+          <div className="freebuff-conflict" role="alert">
+            <div className="freebuff-conflict-text">
+              <strong>Le CLI Freebuff n'est pas installé sur cet ordinateur.</strong>
+              <span>Le terminal intégré en a besoin. Installe-le ici (npm install -g freebuff), sans quitter Aven : la session se lance dès que le binaire répond.</span>
+            </div>
+            <button className="button primary" type="button" disabled={installing} onClick={() => void installCli()}>
+              <Icon name="inbox" size={14} />{installing ? "Installation en cours…" : "Installer le CLI (npm)"}
+            </button>
+          </div>
+        )}
 
         {/* v9.6.2 : bannière de conflit de session — l'app Desktop Freebuff tient le compte,
             le terminal intégré ne peut pas répondre. Message + action, jamais de gel muet. */}

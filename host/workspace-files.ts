@@ -1,5 +1,5 @@
 // Explorateur de fichiers de l'espace de travail (v9.3.0) — lecture seule.
-// Sans dépendance à Electron : testable avec Node seul (RULES.md §8).
+// Sans dépendance à Electron : testable avec Node seul (AGENTS.md §8).
 // Toute résolution de chemin passe par safeResolve() : le module ne peut JAMAIS
 // lire ni lister hors de la racine de l'espace (traversée « .. », chemins absolus,
 // racines Windows), quel que soit l'appelant.

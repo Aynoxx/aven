@@ -11,6 +11,32 @@ const NODE_EXE_SHA256 = "33b1bc1a8aca11fd5a4f2699e51019c63c0af30cf437701d07af69b
 const targetDir = join("src-tauri", "resources", "nodejs")
 const target = join(targetDir, "node.exe")
 
+// v10.2.1 : ce script est aussi appelé par `npm run dev`. `tauri dev` compile la
+// coque Rust : sans outillage, la première compilation échoue sur une sortie cargo
+// incompréhensible (ou, sous Windows, sur un « linker link.exe not found »).
+// On nomme les deux prérequis AVANT de télécharger quoi que ce soit.
+function assertCargo() {
+  try {
+    const version = execFileSync("cargo", ["--version"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      timeout: 10000,
+    }).trim()
+    console.log("✓ " + version)
+  } catch {
+    console.error(
+      [
+        "✗ cargo introuvable : la coque Tauri ne peut pas être compilée.",
+        "  Installe Rust (https://rustup.rs) puis, sous Windows, les Visual Studio Build Tools 2022",
+        "  avec le workload « Desktop development with C++ » (linker MSVC), et rouvre ton terminal.",
+      ].join("\n"),
+    )
+    process.exit(1)
+  }
+}
+
+assertCargo()
+
 if (process.platform !== "win32") {
   console.log("Tauri runtime preparation: Windows Node binary skipped on non-Windows.")
   process.exit(0)

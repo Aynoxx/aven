@@ -6,7 +6,7 @@ import path from "node:path"
 import {
   backlinks, cleanFolder, cleanNoteId, createFolder, deleteFolder, deleteNote, listArchived,
   listNotes, listTrash, moveNote, noteLinks, notesDir, notesTree, purgeNote, quickCapture,
-  renameFolder, resolveWikilink, restoreNote, saveNote, archiveNote, unarchiveNote, searchNotes,
+  renameFolder, resolveWikilink, restoreNote, restoreWikilinks, saveNote, archiveNote, unarchiveNote, searchNotes,
 } from "../host/notes.ts"
 
 const temp = mkdtempSync(path.join(tmpdir(), "aven-notes-v2-"))
@@ -36,7 +36,14 @@ test("sous-dossiers : création dans un dossier + titre depuis le H1", () => {
 test("arbre : dossiers et notes structurés façon Kortex", () => {
   const tree = notesTree(temp)
   const names = tree.map((n) => `${n.type}:${n.name}`).sort()
+  // v10.2.2 : un dossier vide doit rester visible (sinon « Nouveau dossier » est
+  // inutilisable — on ne peut pas glisser une note dedans).
+  assert.ok(!names.includes("folder:vide"))
+  createFolder(temp, "vide")
+  assert.ok(notesTree(temp).some((n) => n.type === "folder" && n.id === "vide"))
+  deleteFolder(temp, "vide") // dossier vide : retire simplement le dossier
   assert.deepEqual(names, ["folder:projets", "note:racine.md"])
+  assert.ok(!notesTree(temp).some((n) => n.id === "vide"))
   const projets = tree.find((n) => n.type === "folder" && n.id === "projets")
   assert.equal(projets.children.length, 1)
   assert.equal(projets.children[0].type, "note")
@@ -92,6 +99,17 @@ test("liens [[note]] : sortants résolus et backlinks", () => {
   assert.deepEqual(backs, ["racine.md"])
   assert.equal(resolveWikilink(temp, "Idée brillante"), "projets/idee-brillante.md")
   assert.equal(resolveWikilink(temp, "inexistante"), null)
+})
+
+// v10.2.2 : tiptap-markdown échappe les crochets ; le fichier .md doit retrouver
+// ses wikilinks pour que liens sortants et backlinks fonctionnent.
+test("wikilinks : l'échappement de l'éditeur est restauré à l'écriture", () => {
+  assert.equal(restoreWikilinks("Voir \\[\\[Racine\\]\\]."), "Voir [[Racine]].")
+  const note = saveNote(temp, "", "Liens échappés", "Voir \\[\\[racine\\]\\] et \\[\\[inconnue\\]\\].")
+  assert.match(note.markdown, /\[\[racine\]\]/)
+  assert.ok(!note.markdown.includes("\\["))
+  assert.deepEqual(noteLinks(temp, note.id).map((l) => l.target), ["racine", "inconnue"])
+  purgeNote(temp, note.id) // nettoyage : le fichier de test ne reste pas
 })
 
 test("recherche globale : titre + corps, accents neutralisés", () => {

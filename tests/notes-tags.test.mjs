@@ -5,7 +5,7 @@ import assert from "node:assert/strict"
 import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { loadTags, normalizeTags, setTags } from "../host/notes-meta.ts"
+import { forgetNote, loadPinned, loadTags, normalizeTags, setTags, togglePin } from "../host/notes-meta.ts"
 
 const makeWs = () => mkdtempSync(path.join(tmpdir(), "aven-notes-tags-"))
 
@@ -46,6 +46,30 @@ const makeWs = () => mkdtempSync(path.join(tmpdir(), "aven-notes-tags-"))
   try {
     assert.throws(() => setTags(ws, "../evil.md", ["code"]), /Note invalide/)
     assert.deepEqual(setTags(ws, "dossier/note.md", ["code"]), ["code"])
+  } finally {
+    rmSync(ws, { recursive: true, force: true })
+  }
+}
+
+// v10.2.2 : une note purgée quittait le disque mais gardait épinglage + tags dans
+// notes-meta.json — le fichier devenait une liste d'ids fantômes.
+{
+  const ws = makeWs()
+  try {
+    setTags(ws, "ancienne.md", ["projet"])
+    togglePin(ws, "ancienne.md")
+    assert.deepEqual(loadTags(ws, "ancienne.md"), ["projet"])
+    assert.ok(loadPinned(ws).includes("ancienne.md"))
+    // La purge transmet l'id de la poubelle : l'oubli doit viser le chemin d'origine.
+    forgetNote(ws, ".trash/ancienne.md")
+    assert.deepEqual(loadTags(ws, "ancienne.md"), [])
+    assert.ok(!loadPinned(ws).includes("ancienne.md"))
+    // Les autres notes ne sont pas touchées par l'oubli.
+    setTags(ws, "gardee.md", ["code"])
+    togglePin(ws, "gardee.md")
+    forgetNote(ws, "ancienne.md")
+    assert.deepEqual(loadTags(ws, "gardee.md"), ["code"])
+    assert.ok(loadPinned(ws).includes("gardee.md"))
   } finally {
     rmSync(ws, { recursive: true, force: true })
   }

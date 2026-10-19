@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url"
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const read = (p) => readFileSync(path.join(root, p), "utf8")
 
-// Sondes v10.2.0 : revue de design Apple (REVIEW-APPLE-DESIGN.md) —
+// Sondes v10.2.0 : revue de design Apple (docs/audits/2026-10-10-revue-design-apple.md) —
 //  ① socle typographique honnête (pile système, xs 11px) + contraste --muted ≥ 4,5:1
 //     calculé par WCAG réel dans les deux thèmes ;
 //  ② focus structurellement PAIRÉ (sonde 9b durcie dans verify-conventions) ;
@@ -29,22 +29,29 @@ const notesView = read("web/src/NotesView.tsx")
 const settings = read("web/src/SettingsDialog.tsx")
 const appearance = read("web/src/appearance.ts")
 const conventions = read("scripts/verify-conventions.mjs")
-const rules = read("RULES.md")
+// RULES.md a été fondu dans AGENTS.md (2026-10-18) : les trois assertions §2/§12.2
+// ci-dessous lisent le fichier fusionné, leur contenu exigé est inchangé.
+const rules = read("AGENTS.md")
 const readme = read("README.md")
 const tauriConf = JSON.parse(read("src-tauri/tauri.conf.json"))
 
 // ── A. Chaîne de versions : package, Tauri, Rust, README, npm run verify ──────
-assert.equal(pkg.version, "10.2.0", "package.json porte 10.2.0")
-assert.equal(tauriConf.version, "10.2.0", "tauri.conf.json aligné sur 10.2.0")
-assert.match(read("src-tauri/Cargo.toml"), /version = "10\.2\.0"/, "Cargo.toml aligné")
-assert.match(read("src-tauri/Cargo.lock"), /name = "aven"\r?\nversion = "10\.2\.0"/, "Cargo.lock aligné")
+// v10.2.1 : ce bloc épingle « 10.2.0 » en dur, en contradiction avec le plancher
+// >= 100200 de la ligne qui le précède. Résultat : la sonde cassait au premier
+// bump, alors que verify-docs exige justement une sonde verify-v<version>.mjs pour
+// chaque version. L'invariant réel n'est pas le numéro, c'est l'ACCORD entre les
+// manifestes — on le vérifie littéralement, sans figer la version.
+const versionLiteral = pkg.version.replace(/\./g, "\\.")
+assert.equal(tauriConf.version, pkg.version, "tauri.conf.json aligné sur package.json")
+assert.match(read("src-tauri/Cargo.toml"), new RegExp(`version = "${versionLiteral}"`), "Cargo.toml aligné sur package.json")
+assert.match(read("src-tauri/Cargo.lock"), new RegExp(`name = "aven"\\r?\\nversion = "${versionLiteral}"`), "Cargo.lock aligné sur package.json")
 assert.equal(pkg.scripts["verify:v10.2.0"], "node scripts/verify-v10.2.0.mjs", "script dédié exposé")
 assert.ok(pkg.scripts.verify.includes("verify-v10.2.0.mjs"), "la sonde entre dans la chaîne npm run verify (après verify-conventions)")
-assert.match(readme, /^# Aven v10\.2\.0/m, "README : titre de version")
-assert.match(readme, /v10\.2\.0 — Revue de design Apple/, "README : section v10.2.0")
+assert.match(readme, new RegExp(`^# Aven v${versionLiteral}`, "m"), "README : titre de version")
+assert.match(readme, /v10\.2\.0 — Revue de design Apple/, "README : section v10.2.0 (la note reste due)")
 assert.match(readme, /verify-v10\.2\.0\.mjs/, "README : la sonde est citée")
 
-// ── B. Typographie honnête (M1/M2/F4) + RULES.md aligné ───────────────────────
+// ── B. Typographie honnête (M1/M2/F4) + AGENTS.md aligné ───────────────────────
 assert.match(css, /font-family:\s*system-ui,\s*"Segoe UI",\s*sans-serif;/,
   "pile système déclarée : la police annoncée est réellement celle du système (aucun @font-face fantôme)")
 assert.match(css, /--font-size-xs:\s*11px;/, "micro-labels xs : 11px (10px sous le seuil de lisibilité)")
@@ -67,8 +74,8 @@ for (const sel of [/\.segmented button:active/, /\.settings-tabs button:active/,
 }
 // F5 : plus de boucle infinie décorative sur la pilule Freebuff (un seul foyer vivant).
 assert.ok(!/freebuff[^}]*animation[^}]*infinite/.test(css), "F5 : aucune boucle infinie sur la pilule Freebuff")
-assert.match(rules, /system-ui/, "RULES.md §2 : la table cite la pile système")
-assert.match(rules, /11px \(10px était sous le seuil/, "RULES.md §2 : xs 11px figé avec sa raison")
+assert.match(rules, /system-ui/, "AGENTS.md §2 : la table cite la pile système")
+assert.match(rules, /11px \(10px était sous le seuil/, "AGENTS.md §2 : xs 11px figé avec sa raison")
 
 // ── C. Contraste --muted ≥ 4,5:1 (E3) — calcul WCAG réel, deux thèmes ────────
 const relLum = (hex) => {
@@ -98,7 +105,7 @@ assert.ok(conventions.includes("(?:0|none)"), "sonde 9b : outline: none couvert 
 assert.ok(conventions.includes("focusSignal"), "sonde 9b : exige un signal :focus* structuré")
 assert.ok(conventions.includes("cssSelectors") && /paire|PAIRE/i.test(conventions),
   "sonde 9b : paire racine + règle compagne exigée (plus de whitelist par nom de classe)")
-assert.match(rules, /PAIRE racine du sélecteur/, "RULES.md §12.2 : le durcissement est documenté")
+assert.match(rules, /PAIRE racine du sélecteur/, "AGENTS.md §12.2 : le durcissement est documenté")
 
 // ── E. Dialogues en View Transitions (M3/M12/M13) ─────────────────────────────
 assert.match(css, /\.overlay > \.dialog[^\n]*view-transition-name: dialog/, "le panneau porte son nom de transition")

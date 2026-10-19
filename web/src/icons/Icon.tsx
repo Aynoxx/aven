@@ -40,6 +40,8 @@ export type IconName =
   | "eye" // v9.4.0 : « Faire relire » (délégation à l'agent code-reviewer)
   // v10.1.0 : barre d'outils de l'éditeur de notes (NoteEditor).
   | "text" | "bold" | "italic" | "list" | "list-ordered" | "quote" | "link" | "inbox"
+  // v10.2.2 : épingle des notes (remplace l'emoji 📌 de l'arbre).
+  | "pin"
 
 export interface IconProps {
   name: IconName
@@ -113,6 +115,8 @@ function paths(name: IconName): ReactNode {
       return <path d="M5 5h14v6H9v6H5zM9 17h10" />
     case "link":
       return <><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 1 0-5.66-5.66l-1.5 1.5" /><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 1 0 5.66 5.66l1.5-1.5" /></>
+    case "pin":
+      return <><path d="M9.5 3.5h5" /><path d="M10.5 3.5v5.2L8 11.2V13h8v-1.8l-2.5-2.5V3.5" /><path d="M12 13v7.5" /></>
     case "inbox":
       return <><path d="M4 13.5 6.5 5h11L20 13.5V19H4z" /><path d="M4 13.5h4.5l1 2.5h5l1-2.5H20" /></>
     case "menu":

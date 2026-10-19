@@ -11,7 +11,7 @@
 //
 // Pur : aucune dépendance Electron — testable avec Node seul (comme workspace-sync).
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs"
 import path from "node:path"
 import { writeTextAtomic } from "./atomic-file.js"
 import { isFreeModelRef } from "./priorities.js"

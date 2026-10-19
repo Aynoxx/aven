@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import { test } from "node:test"
 import { nextArrowIndex, initialArrowIndex } from "../web/src/arrow-navigation.ts"
 
-// Contrat de navigation clavier (RULES.md §12.2) : flèches avec bouclage, Home/End,
+// Contrat de navigation clavier (AGENTS.md §12.2) : flèches avec bouclage, Home/End,
 // toute autre touche = aucun changement (null), liste vide = null aussi.
 
 test("nextArrowIndex : ArrowDown avance et boucle vers le premier", () => {

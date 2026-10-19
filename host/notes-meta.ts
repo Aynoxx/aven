@@ -83,6 +83,29 @@ export function togglePin(workspace: string, id: string): string[] {
   return meta.pinned
 }
 
+// v10.2.2 : une note purgée laissait son épinglage et ses tags dans notes-meta.json.
+// Le fichier devenait une liste de fantômes (ids absents du disque) et le filtre par
+// agent proposait des tags pour des notes inexistantes. On oublie explicitement.
+/** Oublie épinglage et tags d'une note supprimée définitivement. */
+export function forgetNote(workspace: string, id: string): void {
+  const clean = cleanNoteId(id)
+  if (!clean) return
+  const meta = readMeta(workspace)
+  // v10.2.2 : la purge reçoit l'id de la POUBELLE (».trash/note.md»), alors que
+  // l'épinglage et les tags sont indexés sur le chemin d'origine (».note.md»).
+  // Sans cette normalisation, les métadonnées survivaient à la suppression.
+  const keys = new Set([clean, clean.replace(/^\.(?:trash|archive)\//, "")])
+  const pinned = meta.pinned.filter((x) => !keys.has(x))
+  const tags = { ...(meta.tags ?? {}) }
+  let hadTags = false
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(tags, key)) hadTags = true
+    delete tags[key]
+  }
+  if (pinned.length === meta.pinned.length && !hadTags) return
+  writeJsonAtomicPretty(file(workspace), { pinned, tags })
+}
+
 /** Normalise un texte pour la recherche : minuscules, sans accents, ponctuation → espace. */
 export function normalizeForSearch(value: string): string {
   return String(value || "")
