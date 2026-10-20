@@ -1,7 +1,8 @@
 import { useEffect, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from "react"
 import { api } from "./api"
 import { Icon } from "./icons"
-import type { Agent, AppState, AggregatedStats } from "./types"
+import PageShell from "./PageShell"
+import type { Agent, AppState, AggregatedStats, FreebuffCliStatus } from "./types"
 import type { AppearanceConfig, BlockId } from "./appearance"
 
 const SYNC_LABEL: Record<string, string> = {
@@ -46,7 +47,7 @@ export default function SettingsDialog(props: {
   const [notifications, setNotifications] = useState<boolean | null>(null) // null = pas encore chargé
   useEffect(() => { api.prefs().then((p) => setNotifications(p.notifications)).catch(() => setNotifications(true)) }, [])
   // CLI Freebuff gratuit (v9.1.2) : statut chargé une fois, actions visibles.
-  const [cli, setCli] = useState<{ installed: boolean; version?: string } | null>(null)
+  const [cli, setCli] = useState<FreebuffCliStatus | null>(null)
   // v9.1.4 : l'installation est visible — bouton « Installation en cours… » pendant le poll.
   const [cliInstalling, setCliInstalling] = useState(false)
   useEffect(() => { api.freebuffCliStatus().then(setCli).catch(() => setCli({ installed: false })) }, [])
@@ -61,14 +62,11 @@ export default function SettingsDialog(props: {
       if (action === "install") {
         setCliInstalling(true)
         try {
-          await api.freebuffCliLaunch(action)
-          // Après une installation, le statut est re-vérifié automatiquement (jusqu'à 60 s) :
-          // l'utilisateur n'a pas à fermer/rouvrir le panneau pour voir « CLI installé ».
-          for (let i = 0; i < 12; i++) {
-            await new Promise((r) => setTimeout(r, 5_000))
-            const status = await api.freebuffCliStatus()
-            if (status.installed) { setCli(status); break }
-          }
+          // v10.3.0 : installation par le gestionnaire unique (idempotent, vérifiée).
+          // La boucle de sondage locale a disparu : `ensure` ne résout qu'une fois
+          // l'installation terminée ET « freebuff --version » confirmé.
+          const status = await api.freebuffCliEnsure(true)
+          setCli({ installed: status.installed, version: status.version, state: status.state, cliError: status.error })
         } finally {
           setCliInstalling(false)
         }
@@ -298,5 +296,24 @@ export default function SettingsDialog(props: {
     </div>
   )
 
-  return <div className="overlay"><div className="dialog wide unified-settings"><header className="unified-settings-header"><div><span className="eyebrow">RÉGLAGES</span><h3>Configuration et apparence</h3><p className="hint">Un seul panneau commun pour les réglages techniques, l’apparence et l’usage de l’application.</p></div><button className="button button-icon dialog-close" onClick={props.onClose} aria-label="Fermer" type="button"><Icon name="close" size={17} /></button></header><nav className="settings-tabs" role="tablist" aria-label="Sections des paramètres"><button role="tab" type="button" aria-selected={section === "general"} className={section === "general" ? "selected" : ""} onClick={() => setSection("general")}>Configuration</button><button role="tab" type="button" aria-selected={section === "appearance"} className={section === "appearance" ? "selected" : ""} onClick={() => setSection("appearance")}>Apparence</button><button role="tab" type="button" aria-selected={section === "usage"} className={section === "usage" ? "selected" : ""} onClick={() => setSection("usage")}>Usage</button></nav><div className="unified-settings-scroll" role="tabpanel">{section === "appearance" ? renderAppearance() : section === "usage" ? renderUsage() : renderGeneral()}</div></div></div>
+  // v10.3.0 : les Réglages sont une PAGE pleine, pas un dialogue superposé — même
+  // charpente que Tâches et Projet, actions déclarées ici (Fermer). Les classes
+  // « unified-settings » / « unified-settings-scroll » restent (scripts de fumée).
+  return (
+    <PageShell
+      eyebrow="RÉGLAGES"
+      title="Configuration et apparence"
+      description="Un seul endroit pour les clés, les espaces, l’apparence et l’usage de l’application."
+      actions={[{ key: "close", label: "Fermer", icon: "close", variant: "ghost", onClick: props.onClose, className: "dialog-close", title: "Revenir à l'écran précédent (Échap)" }]}
+      toolbarLabel="Actions des réglages"
+      bodyClassName="unified-settings"
+    >
+      <nav className="settings-tabs" role="tablist" aria-label="Sections des paramètres">
+        <button role="tab" type="button" aria-selected={section === "general"} className={section === "general" ? "selected" : ""} onClick={() => setSection("general")}>Configuration</button>
+        <button role="tab" type="button" aria-selected={section === "appearance"} className={section === "appearance" ? "selected" : ""} onClick={() => setSection("appearance")}>Apparence</button>
+        <button role="tab" type="button" aria-selected={section === "usage"} className={section === "usage" ? "selected" : ""} onClick={() => setSection("usage")}>Usage</button>
+      </nav>
+      <div className="unified-settings-scroll" role="tabpanel">{section === "appearance" ? renderAppearance() : section === "usage" ? renderUsage() : renderGeneral()}</div>
+    </PageShell>
+  )
 }

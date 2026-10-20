@@ -24,6 +24,8 @@ import { AUTO_MODEL_LABEL, usableModelRef } from "./model-label"
 // v9.7.0 : transitions de vue natives (View Transitions API, Chromium embarqué).
 import { withViewTransition } from "./view-transitions"
 import { Icon, type IconName } from "./icons"
+// v10.3.0 : charpente de page commune (Tâches, Projet, Notes, Fichiers, Réglages).
+import PageShell from "./PageShell"
 import "./App.css"
 
 // Durée d'affichage d'un avis du hub (v9.1.4) : le bandeau s'efface tout seul au lieu de
@@ -122,12 +124,35 @@ export default function App() {
   const [showFreebuffAgent, setShowFreebuffAgent] = useState(false)
   // v9.3.0 : pastille d'état Freebuff du hub — "active" (session PTY vivante), "ready"
   // (CLI installé) ou "missing". Rechargée au montage et à chaque fermeture du terminal.
-  const [freebuffPillState, setFreebuffPillState] = useState<"active" | "ready" | "missing">("missing")
+  const [freebuffPillState, setFreebuffPillState] = useState<"active" | "ready" | "missing" | "installing">("missing")
+  const freebuffCliErrorRef = useRef("")
+  // v10.3.0 : le CLI Freebuff est vérifié — et installé si absent — AU DÉMARRAGE de
+  // l'app, pas à l'ouverture de la page Projet. `freebuffCliEnsure` est idempotent
+  // côté host : plusieurs ouvertures de page ne peuvent pas lancer deux installations.
+  useEffect(() => {
+    if (appState.status !== "ready") return
+    let stop = false
+    const off = api.onEvent((ev) => {
+      if (ev.type !== "freebuff.cli.state") return
+      const d = ev.data as { state?: string; installed?: boolean; error?: string }
+      if (stop) return
+      freebuffCliErrorRef.current = d.error ?? ""
+      setFreebuffPillState(d.installed ? "ready" : d.state === "installing" ? "installing" : "missing")
+    })
+    api.freebuffCliEnsure()
+      .then((status) => {
+        if (stop) return
+        freebuffCliErrorRef.current = status.error ?? ""
+        setFreebuffPillState(status.installed ? "ready" : "missing")
+      })
+      .catch(() => undefined)
+    return () => { stop = true; off() }
+  }, [appState.status])
   useEffect(() => {
     void (async () => {
       try {
         const [active, status] = await Promise.all([api.freebuffPtyActive(), api.freebuffCliStatus()])
-        setFreebuffPillState(active ? "active" : status.installed ? "ready" : "missing")
+        setFreebuffPillState(active ? "active" : status.installed ? "ready" : status.state === "installing" ? "installing" : "missing")
       } catch { setFreebuffPillState("missing") }
     })()
   }, [showFreebuffAgent])
@@ -361,35 +386,48 @@ export default function App() {
 
   // v10.2.0 (M3) : fermeture de panneau en View Transition — le panneau porte un
   // view-transition-name: dialog (App.css), sa sortie joue ::view-transition-old(dialog).
-  const closeNotesToHome = useCallback(() => withViewTransition(() => {
+  // v10.3.0 : fermer une page revient à l'ÉCRAN D'ORIGINE. Une page ouverte depuis le
+  // hub y retourne (`pageReturnHome`) ; ouverte depuis une conversation, elle y revient.
+  // Une page est une PAGE (showHome=false) et non un calque : sinon la barre de
+  // fenêtre restait masquée (`.window-chrome-home`) et Notes/Fichiers/Réglages
+  // n'avaient pas la même hauteur que Tâches/Projet.
+  const pageReturnHome = useRef(false)
+  const closePage = useCallback(() => withViewTransition(() => {
     setShowNotes(false)
     setShowFiles(false)
     setNotesInitialId(undefined)
     setShowSettings(false)
     setShowAgentsPage(false)
+    setShowFreebuffAgent(false)
     setShowConversationPicker(false)
     setShowProjectPicker(false)
-    setShowHome(true)
+    if (pageReturnHome.current) { pageReturnHome.current = false; setShowHome(true) }
   }), [])
 
   // ── Vues Notes et Fichiers (v9.3.0) ──────────────────────────────────────────
-  // Ouvertures centralisées : les deux vues RECOURVENT l'écran courant (comme le
-  // terminal Freebuff v9.2.1) — on ne masque plus showHome, la fermeture rend l'écran
-  // d'origine. Ouverture des Notes depuis une conversation : la note créée hérite de
-  // l'agent courant (pré-étiquetage).
+  // Ouvertures centralisées : les deux vues remplacent la surface principale comme
+  // Tâches et Projet (v10.3.0) et retiennent où revenir en les fermant. Ouverture des
+  // Notes depuis une conversation : la note créée hérite de l'agent courant
+  // (pré-étiquetage).
   const openNotesView = (initialId?: string) => {
+    pageReturnHome.current = pageReturnHome.current || showHome
+    setShowHome(false)
     setShowFiles(false)
     setShowSettings(false)
     setShowAgentsPage(false)
+    setShowFreebuffAgent(false)
     setShowConversationPicker(false)
     setShowProjectPicker(false)
     setNotesInitialId(initialId)
     setShowNotes(true)
   }
   const openFilesView = () => {
+    pageReturnHome.current = pageReturnHome.current || showHome
+    setShowHome(false)
     setShowNotes(false)
     setShowSettings(false)
     setShowAgentsPage(false)
+    setShowFreebuffAgent(false)
     setShowConversationPicker(false)
     setShowProjectPicker(false)
     setShowFiles(true)
@@ -569,6 +607,12 @@ export default function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // v10.3.0 : quand le terminal Freebuff a le focus, il possède le clavier.
+      // Les raccourcis de l'app (Ctrl+N, Ctrl+K, F2, Ctrl+Maj+V, Échap) volaient
+      // des touches au TUI — Entrée et Échap ne « faisaient » alors rien dans le
+      // terminal. Le TUI reste joignable par les boutons de la page et la barre.
+      const target = e.target as HTMLElement | null
+      if (target?.closest?.(".bridge-term-host")) return
       const mod = e.ctrlKey || e.metaKey
       if (mod && e.key.toLowerCase() === "n") {
         e.preventDefault()
@@ -597,11 +641,14 @@ export default function App() {
         if (selBarRef.current) { setSelBar(null); return }
         if (showConversationPicker) withViewTransition(() => setShowConversationPicker(false))
         else if (showProjectPicker) withViewTransition(() => setShowProjectPicker(false)) // v9.1.6 : le modal projet suit Échap
-        else if (showFreebuffAgent) withViewTransition(() => { setShowAgentsPage(false); setShowSettings(false); setShowNotes(false); setShowConversationPicker(false); setShowProjectPicker(false); setShowFreebuffAgent(false); setShowHome(true) }) // v9.5.0 : page agent — Échap revient à l'accueil (session maintenue)
-        else if (showFiles) closeNotesToHome() // v9.3.0 : Échap ferme l'explorateur intégré
+        // v10.3.0 : Tâches et Projet sont des PORTES ouvertes depuis le hub — Échap
+        // revient donc à l'accueil (session Freebuff maintenue). Notes/Fichiers/
+        // Réglages, eux, reviennent à l'écran d'origine (conversation comprise).
+        else if (showFreebuffAgent) withViewTransition(() => { setShowFreebuffAgent(false); setShowHome(true) })
+        else if (showFiles) closePage()
         else if (showAgentsPage) withViewTransition(() => { setShowAgentsPage(false); setShowHome(true) })
-        else if (showNotes) closeNotesToHome()
-        else if (showSettings) withViewTransition(() => setShowSettings(false))
+        else if (showNotes) closePage()
+        else if (showSettings) closePage()
         else if (live.forms[0]) void api.cancelForm(live.forms[0].sessionID, live.forms[0].id).catch(fail)
         else if (live.busy && chatId) void api.interrupt(chatId).catch(fail)
       }
@@ -620,7 +667,7 @@ export default function App() {
       window.removeEventListener("keydown", onKey)
       window.removeEventListener("keyup", onKeyUp)
     }
-  }, [live.busy, live.forms, chatId, showSettings, showAgentsPage, showConversationPicker, showProjectPicker, showFreebuffAgent, showHome, showNotes, showFiles, tab, closeNotesToHome, deleteArmed])
+  }, [live.busy, live.forms, chatId, showSettings, showAgentsPage, showConversationPicker, showProjectPicker, showFreebuffAgent, showHome, showNotes, showFiles, tab, closePage, deleteArmed])
 
   const newChat = async () => {
     if (!tab) return
@@ -919,6 +966,8 @@ export default function App() {
     setShowProjectPicker(false)
     setShowSettings(false)
     setShowNotes(false)
+    setShowFiles(false)
+    setShowFreebuffAgent(false)
     setShowHome(false)
     requestAnimationFrame(() => textareaRef.current?.focus())
   }
@@ -928,6 +977,7 @@ export default function App() {
     setShowHome(false)
     setShowSettings(false)
     setShowNotes(false)
+    setShowFiles(false)
     setShowConversationPicker(false)
     setShowProjectPicker(false)
     setShowFreebuffAgent(false)
@@ -940,6 +990,7 @@ export default function App() {
     setShowHome(false)
     setShowSettings(false)
     setShowNotes(false)
+    setShowFiles(false)
     setShowConversationPicker(false)
     setShowProjectPicker(false)
     setShowAgentsPage(false)
@@ -948,6 +999,7 @@ export default function App() {
 
   // v9.1.0 : retour accueil depuis la barre de fenêtre — ferme les panneaux ouverts.
   const goHome = () => withViewTransition(() => { // v9.7.1 : sans source = fondu root
+    pageReturnHome.current = false // v10.3.0 : le hub est l'écran d'origine
     setShowAgentsPage(false)
     setShowSettings(false)
     setShowNotes(false)
@@ -957,10 +1009,16 @@ export default function App() {
     setShowHome(true)
   })
 
-  const openConfiguration = (focus?: "workspaces") => {
+  const openConfiguration = (focus?: "workspaces", section: "general" | "appearance" | "usage" = "general") => {
+    // v10.3.0 : Réglages est une page comme les autres — la barre de fenêtre reste
+    // visible (Accueil, état) et la fermeture rend l'écran d'origine.
+    pageReturnHome.current = pageReturnHome.current || showHome
+    setShowHome(false)
     setShowAgentsPage(false)
     setShowNotes(false)
-    setSettingsSection("general")
+    setShowFiles(false)
+    setShowFreebuffAgent(false)
+    setSettingsSection(section)
     setSettingsFocus(focus)
     setShowSettings(true)
   }
@@ -1061,7 +1119,7 @@ export default function App() {
             </span>
             {/* v9.3.0 : pastille d'état Freebuff — le second assistant devient visible
                 d'un coup d'œil (CLI installé ? session active ?). Clic = ouvrir le terminal. */}
-            <button className={`freebuff-pill ${freebuffPillState}`} onClick={() => setHomeNotice(routeAppAction("open-freebuff"))} aria-label={`Freebuff : ${freebuffPillState === "active" ? "session active" : freebuffPillState === "ready" ? "CLI installé" : "CLI non installé"}`} title={freebuffPillState === "active" ? "Session Freebuff active — ouvrir le terminal" : freebuffPillState === "ready" ? "CLI Freebuff installé — ouvrir le terminal" : "CLI Freebuff non installé — voir comment l'installer"} type="button">
+            <button className={`freebuff-pill ${freebuffPillState}`} onClick={() => setHomeNotice(routeAppAction("open-freebuff"))} aria-label={`Freebuff : ${freebuffPillState === "active" ? "session active" : freebuffPillState === "ready" ? "CLI installé" : freebuffPillState === "installing" ? "installation du CLI en cours" : "CLI non installé"}`} title={freebuffPillState === "active" ? "Session Freebuff active — ouvrir le terminal" : freebuffPillState === "ready" ? "CLI Freebuff installé — ouvrir le terminal" : freebuffPillState === "installing" ? "Installation du CLI Freebuff en cours (au démarrage, sans bloquer l'app)" : freebuffCliErrorRef.current || "CLI Freebuff non installé — voir comment l'installer"} type="button">
               <span className="freebuff-pill-dot" aria-hidden="true" />
               <span className="freebuff-pill-label">Freebuff</span>
             </button>
@@ -1163,7 +1221,7 @@ export default function App() {
                       <button
                         className="button primary home-notice-action"
                         type="button"
-                        onClick={() => { api.freebuffCliLaunch("install").catch((e) => setHomeNotice(e instanceof Error ? e.message : String(e))) }}
+                        onClick={() => { api.freebuffCliEnsure(true).then((s) => { if (!s.installed) setHomeNotice(s.error ?? FREEBUFF_MISSING_NOTICE) }).catch((e) => setHomeNotice(e instanceof Error ? e.message : String(e))) }}
                       >
                         Installer
                       </button>
@@ -1402,26 +1460,29 @@ export default function App() {
           </div>
           <button
             className="window-tab"
-            onClick={() => { setSettingsSection("appearance"); setShowSettings(true) }}
+            onClick={() => openConfiguration(undefined, "appearance")}
             aria-label="Ouvrir les paramètres d’apparence"
           >
             <span className="window-tab-icon"><Icon name="settings" size={14} /></span>
             <span>Paramètres</span>
           </button>
+          {/* v10.3.0 : barre contextuelle — « Conversations » n'a de sens que devant
+              une conversation ; les pages (Tâches, Projet, Notes, Fichiers, Réglages)
+              portent leurs propres actions et ne montrent pas ce bouton. */}
+          {!showHome && !showFreebuffAgent && !showAgentsPage && !showNotes && !showFiles && !showSettings && (
+            // v10.2.2 : la gestion des conversations vivait derrière un réglage
+            // d'apparence (barre masquée par défaut). Une entrée dédiée la rend
+            // trouvable en un clic, sans fouiller les paramètres.
+            <button className="window-tab" onClick={() => updateAppearance({ showSidebar: !appearance.showSidebar })} aria-label={appearance.showSidebar ? "Masquer la liste des conversations" : "Afficher la liste des conversations"} aria-pressed={appearance.showSidebar} title="Afficher ou masquer la liste des conversations">
+              <span className="window-tab-icon"><Icon name="list" size={14} /></span>
+              <span>Conversations</span>
+            </button>
+          )}
           {!showHome && (
-            <>
-              {/* v10.2.2 : la gestion des conversations vivait derrière un réglage
-                  d'apparence (barre masquée par défaut). Une entrée dédiée la rend
-                  trouvable en un clic, sans fouiller les paramètres. */}
-              <button className="window-tab" onClick={() => updateAppearance({ showSidebar: !appearance.showSidebar })} aria-label={appearance.showSidebar ? "Masquer la liste des conversations" : "Afficher la liste des conversations"} aria-pressed={appearance.showSidebar} title="Afficher ou masquer la liste des conversations">
-                <span className="window-tab-icon"><Icon name="list" size={14} /></span>
-                <span>Conversations</span>
-              </button>
-              <button className="window-tab" onClick={goHome} aria-label="Retour à l’accueil">
-                <span className="window-tab-icon"><Icon name="arrow-left" size={14} /></span>
-                <span>Accueil</span>
-              </button>
-            </>
+            <button className="window-tab" onClick={goHome} aria-label="Retour à l’accueil">
+              <span className="window-tab-icon"><Icon name="arrow-left" size={14} /></span>
+              <span>Accueil</span>
+            </button>
           )}
         </div>
 {/* v10.0.0 : la barre de fermeture custom (héritée de la fenêtre Electron
@@ -1470,24 +1531,35 @@ export default function App() {
         <div className="status-banner subtle"><span className="status-dot" /> Aucun fournisseur avec clé API n’est configuré. Les modèles sans clé restent disponibles.</div>
       )}
 
-      {showHome ? (
+      {/* v10.3.0 : Notes, Fichiers et Réglages sont des PAGES pleines (AGENTS.md §6).
+          Quand l'une est ouverte, elle remplace la surface principale au lieu de la
+          recouvrir — les blocs sont rendus plus bas et occupent tout le corps. */}
+      {showNotes || showFiles || showSettings ? null : showHome ? (
         <main className="home-main">{renderHome()}</main>
       ) : showFreebuffAgent ? (
         /* v9.5.0 : page pleine de l'agent Freebuff — même gabarit que la page Agents,
            PTY persistant (le boot de la session vit dans le composant). */
         <FreebuffAgentPage onError={fail} />
       ) : showAgentsPage ? (
-        <main className="agents-main">
-          <section className="agents-page" aria-label="Tâches et agents">
-            <header className="agents-page-header">
-              <div>
-                <span className="eyebrow">TÂCHES</span>
-                <h1>Un agent principal, des modes par besoin</h1>
-                <p>Choisis un mode : l’orchestrateur délègue aux spécialistes du domaine et synthétise.</p>
-              </div>
-              {/* v10.0.0 : pas de doublon « Accueil » ici — la barre de fenêtre
-                  (window-tab global) porte déjà le retour vers l'accueil. */}
-            </header>
+        <PageShell
+          eyebrow="TÂCHES"
+          title="Un agent principal, des modes par besoin"
+          description="Choisis un mode : l’orchestrateur délègue aux spécialistes du domaine et synthétise."
+          toolbarLabel="Actions des tâches"
+          actions={[
+            {
+              key: "open",
+              label: "Ouvrir la conversation",
+              icon: "agent",
+              variant: "primary",
+              onClick: () => selectAgent("projet"),
+              disabled: !agents.some((a) => a.id === "projet"),
+              title: "Ouvre la conversation la plus récente de l’orchestrateur (une nouvelle seulement s’il n’en existe aucune), avec le mode choisi",
+            },
+          ]}
+          className="agents-main"
+          bodyClassName="agents-page tasks-page"
+        >
             {/* v9.6.0 : l’orchestrateur « projet » est l’AGENT PRINCIPAL ; le mode
                 « Tâche complexe » l’ouvre directement, les modes simples pointent les
                 spécialistes (code / analyse / recherche). */}
@@ -1507,11 +1579,6 @@ export default function App() {
                     ))}
                   </div>
                   <p className="hint tasks-mode-hint">{TASK_MODES_UI.find((m) => m.id === taskMode)?.hint}</p>
-                  <div className="tasks-principal-actions">
-                    <button className="button primary" onClick={() => selectAgent("projet")} disabled={!agents.some((a) => a.id === "projet")} type="button" title="Ouvre la conversation la plus récente de l’orchestrateur (une nouvelle seulement s’il n’en existe aucune), avec le mode choisi">
-                      <Icon name="agent" size={14} />Ouvrir la conversation
-                    </button>
-                  </div>
                 </div>
               </article>
             </div>
@@ -1530,8 +1597,7 @@ export default function App() {
                 <strong>Aucun agent disponible.</strong> Les spécialistes apparaîtront ici dès leur installation. En attendant, ouvre une conversation avec l'agent principal : il découpe la demande, délègue aux spécialistes puis synthétise.
               </div>
             )}
-          </section>
-        </main>
+        </PageShell>
       ) : (
         <>
           <div className="workspace-layout">
@@ -1627,7 +1693,7 @@ export default function App() {
           agents={orderedAgents.map((a) => ({ id: a.id, name: a.name }))}
           currentAgent={tab}
           onCompose={(text) => void composeIntoChat(text)}
-          onClose={closeNotesToHome}
+          onClose={closePage}
           onError={fail}
         />
       )}
@@ -1637,7 +1703,7 @@ export default function App() {
         <FilesView
           agents={orderedAgents.map((a) => ({ id: a.id, name: a.name }))}
           onCompose={(text) => void composeIntoChat(text)}
-          onClose={closeNotesToHome}
+          onClose={closePage}
           onError={fail}
         />
       )}

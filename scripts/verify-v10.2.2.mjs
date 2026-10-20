@@ -75,9 +75,11 @@ assert.match(css, /\.titlebar-rename/, "le champ de renommage de l'en-tête est 
 assert.match(app, /Ouvrir la conversation/, "le bouton principal dit qu'il ouvre la conversation existante")
 
 // ── E. Freebuff : un CLI absent est nommé, pas déguisé en démarrage ────────────
-assert.match(freebuff, /api\.freebuffCliStatus\(\)/, "la page vérifie le CLI avant de lancer")
+// v10.3.0 : la page lit le gestionnaire PARTAGÉ (vérification + installation au
+// démarrage) au lieu de sonder le CLI elle-même.
+assert.match(freebuff, /api\.freebuffCliEnsure\(\)/, "la page vérifie le CLI avant de lancer")
 assert.match(freebuff, /CLI Freebuff non installé/, "l'état nomme le CLI absent")
-assert.match(freebuff, /installCli/, "un bouton Installe le CLI depuis la page")
+assert.match(freebuff, /ensureCli/, "un bouton Installe le CLI depuis la page")
 assert.match(freebuff, /disabled=\{!presence\.online\}/, "« Interrompre » est désactivé sans session")
 
 // ── F. Accessibilité mesurée ───────────────────────────────────────────────────

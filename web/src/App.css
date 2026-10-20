@@ -629,12 +629,15 @@ body:has(.overlay) .home-recent, body:has(.hub-picker-overlay) .home-recent, bod
   border:1px solid color-mix(in srgb,var(--border-strong) 86%,transparent); border-radius: var(--radius-xl); background:var(--home-surface); color:var(--text);
   box-shadow:0 18px 40px color-mix(in srgb,var(--text) 7%,transparent),inset 0 1px 0 color-mix(in srgb,white 40%,transparent);
   display:grid; justify-items:center; align-content:center; gap:7px; cursor:pointer;
-  will-change: transform;
   transform:translate(-50%,-50%) rotate(var(--hub-angle)) translateY(calc(-1 * var(--hub-r))) rotate(calc(-1 * var(--hub-angle)));
-  transition:transform .18s cubic-bezier(.2,.75,.25,1),box-shadow .18s ease,border-color .18s ease,background .18s ease;
+  transition:box-shadow .18s ease,border-color .18s ease,background .18s ease;
 }
-.hub-card:hover { border-color:var(--accent-border); background:var(--home-surface-strong); box-shadow:0 22px 50px color-mix(in srgb,var(--accent) 13%,transparent),inset 0 1px 0 color-mix(in srgb,white 50%,transparent); transform:translate(-50%,-50%) rotate(var(--hub-angle)) translateY(calc(-1 * var(--hub-r))) rotate(calc(-1 * var(--hub-angle))) scale(1.025); }
-.hub-card:active { transform:translate(-50%,-50%) rotate(var(--hub-angle)) translateY(calc(-1 * var(--hub-r))) rotate(calc(-1 * var(--hub-angle))) scale(.985); }
+/* v10.3.0 : plus de `scale()` au survol — la carte était composée (will-change:
+   transform) puis rastérisée à 1.025, ce qui rendait son texte flou au passage de
+   la souris (constaté sur WebView2, rendu fractionnaire). L'élévation reste portée
+   par la bordure accent, la surface et l'ombre : mêmes signaux, texte net. */
+.hub-card:hover { border-color:var(--accent-border); background:var(--home-surface-strong); box-shadow:0 22px 50px color-mix(in srgb,var(--accent) 13%,transparent),inset 0 1px 0 color-mix(in srgb,white 50%,transparent); }
+.hub-card:active { box-shadow:0 10px 26px color-mix(in srgb,var(--accent) 16%,transparent),inset 0 2px 6px color-mix(in srgb,var(--text) 12%,transparent); }
 .hub-card-icon { width:48px; height:48px; display:grid; place-items:center; border-radius: var(--radius-lg); background:color-mix(in srgb,var(--accent) 9%,var(--panel-soft)); color:var(--accent); box-shadow:inset 0 0 0 1px var(--accent-border); }
 .hub-card-copy { display:grid; justify-items:center; gap:2px; min-width:0; text-align:center; }
 .hub-card-copy strong { font-size:var(--font-size-md); font-weight: 800; letter-spacing:.005em; }
@@ -691,6 +694,46 @@ body:has(.overlay) .home-recent, body:has(.hub-picker-overlay) .home-recent, bod
 /* Vue agents : page autonome et stable, au lieu d’un simple basculement vers un chat vide. */
 .agents-main { flex:1; min-height:0; overflow:auto; background:var(--bg); }
 .agents-page { width:min(1180px,calc(100% - 40px)); margin:0 auto; padding:30px 0 42px; }
+
+/* v10.3.0 : charpente de page commune (AGENTS.md §6). Toutes les sections
+   principales — Tâches, Projet/Freebuff, Notes, Fichiers, Réglages — partagent ces
+   classes : page pleine, barre supérieure contextuelle, corps sans défilement
+   global. Les anciennes racines de dialogue (notes-dialog, files-dialog,
+   unified-settings) restent comme surnoms pour les scripts de fumée, mais ne sont
+   plus des panneaux flottants. */
+.page-main { flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden; background:var(--bg); }
+.page-topbar { display:flex; align-items:flex-start; justify-content:space-between; gap:20px; padding:22px clamp(20px,3vw,34px) 16px; border-bottom:1px solid var(--border); background:var(--panel); }
+.page-heading { display:grid; gap:4px; min-width:0; }
+.page-heading h1 { margin:0; font-size:clamp(var(--font-size-xl),2.2vw,var(--font-size-2xl)); line-height:1.1; letter-spacing:-.03em; }
+.page-description { max-width:760px; color:var(--muted); font-size:var(--font-size-sm); line-height:1.55; }
+.page-description p { margin:0; }
+.page-description code { font-size:var(--font-size-xs); }
+.page-actions { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:8px; }
+/* v10.3.0 : dans une barre de page, « Fermer » porte un LIBELLÉ (la classe
+   `dialog-close` n'est conservée que pour les scripts de fumée). `.dialog-close`
+   fige 36×36 et une police de titre : le texte débordait et se faisait couper au
+   bord droit. On rend au bouton ses dimensions de bouton, sans toucher aux
+   dialogues où l'icône seule 36×36 reste correcte. */
+.page-actions .dialog-close { width:auto; height:auto; min-height:0; font-size:var(--font-size-md); line-height:inherit; }
+.page-action { min-height:34px; }
+.page-body { flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
+/* Les racines de page ne portent plus le panneau : ni bord, ni ombre, ni rayon —
+   elles remplissent simplement le corps de page. */
+.page-main .notes-dialog, .page-main .files-dialog, .page-main .unified-settings { width:100%; height:100%; padding:0; box-shadow:none; background:transparent; }
+.page-body .notes-layout, .page-body .files-layout { flex:1; min-height:0; height:100%; }
+/* Le corps garde le surnom historique « agents-page » (sondes) mais c'est le shell
+   qui décide des marges ; les pages centrales ne défilent pas (le contenu tient). */
+.page-body.agents-page { width:100%; margin:0; padding:24px clamp(20px,3vw,34px) 32px; overflow:hidden; }
+.page-body.agents-page.tasks-page { display:flex; flex-direction:column; gap:14px; }
+/* Réglages en page : les onglets appartiennent au corps, le défilement reste interne. */
+.page-body.unified-settings { display:grid; grid-template-rows:auto minmax(0,1fr); }
+.page-body.unified-settings .unified-settings-scroll { padding:0 clamp(20px,3vw,34px) 24px; }
+@media (max-width: 860px) {
+  .page-topbar { flex-direction:column; align-items:stretch; padding:16px; }
+  .page-actions { justify-content:flex-start; }
+  .page-body .notes-layout, .page-body .files-layout { grid-template-columns:1fr; grid-template-rows:minmax(180px,40%) minmax(0,1fr); }
+  .page-body .files-list-panel, .page-body .notes-list-panel { border-right:0; border-bottom:1px solid var(--border); }
+}
 .agents-page-header { display:flex; align-items:flex-start; justify-content:space-between; gap:24px; margin-bottom:24px; }
 .agents-page-header h1 { margin:4px 0 6px; font-size:clamp(var(--font-size-2xl),3vw,var(--font-size-3xl)); line-height: 1.08; letter-spacing:-.035em; }
 .agents-page-header p { margin:0; max-width:640px; color:var(--muted); font-size:var(--font-size-sm); line-height:1.55; }
@@ -721,9 +764,28 @@ body:has(.overlay) .home-recent, body:has(.hub-picker-overlay) .home-recent, bod
   .home-toolbar-actions { grid-column:2; }
   .home-project-button span { display:none; }
   .home-project-button { padding-inline:0; width:36px; justify-content:center; }
-  .home-workspace { grid-template-columns:1fr; grid-template-rows:minmax(0,1fr) auto; }
-  .home-hub-stage { min-height:420px; }
-  .home-hub { width:min(100%, 640px); --hub-r:clamp(150px, 42cqw, 260px); --hub-card-w:clamp(112px, 17vw, 140px); --hub-card-h:clamp(90px, 13vw, 108px); --hub-core:clamp(168px, 28vmin, 224px); }
+  /* v10.3.0 : empilement en flex (pas en grille) — dans une grille de hauteur fixe,
+     la ligne du cercle était compressée (230 px pour un hub de 320) et le cercle
+     débordait sur le panneau Récent. En flex, chaque bloc garde sa hauteur réelle et
+     `.home-content` défile s'il manque de la place. */
+  .home-workspace { display:flex; flex-direction:column; gap:clamp(14px, 2vw, 30px); }
+  .home-hub-stage, .home-recent { flex:0 0 auto; }
+  /* v10.3.0 : en une colonne, les cartes rétrécissent avec le cercle — le sous-titre
+     gardait 136 px de large et débordait sur la carte voisine. À cette taille il ne
+     tenait de toute façon plus (« Agent central… »), donc on ne garde que l'icône et
+     le libellé, comme en très petite largeur : moins de bruit, rien de tronqué. */
+  .hub-card-copy small { display:none; }
+  /* v10.3.0 : en une colonne, le cercle de 640 px + le panneau Récent ne tenaient pas
+     dès que la fenêtre descendait sous ~900 px de haut : la carte Fichiers sortait de
+     la fenêtre et « Projet » passait sous la barre. Le cercle est plafonné par la
+     hauteur RÉELLEMENT disponible et ses rayons/tailles suivent le conteneur (cqw),
+     donc tout rétrécit ensemble ; le contenu de l'accueil défile dans son propre
+     conteneur au lieu d'être coupé. */
+  .home-content { overflow-y:auto; overscroll-behavior:contain; }
+  .home-hub-stage { min-height:0; padding-block:8px; }
+  /* 380 px = barre + marges + panneau Récent à sa hauteur MAX (220 px) : le cercle
+     ne peut donc jamais chevaucher les conversations récentes, même plein. */
+  .home-hub { width:min(100%, clamp(320px, calc(100dvh - 380px), 640px)); --hub-r:clamp(96px, 38cqw, 260px); --hub-card-w:clamp(84px, 24cqw, 140px); --hub-card-h:clamp(70px, 20cqw, 108px); --hub-core:clamp(120px, 30cqw, 224px); }
   .home-recent { height:auto; max-height:220px; align-self:stretch; }
   .home-recent-list { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .home-recent-new { width:auto; align-self:flex-end; margin-top:10px; }
@@ -735,12 +797,12 @@ body:has(.overlay) .home-recent, body:has(.hub-picker-overlay) .home-recent, bod
   .project-modal-actions .button { flex:1; min-width:0; font-size:var(--font-size-xs); }
   .home-command { min-height:40px; }
   .home-content { padding:12px; }
-  .home-hub-stage { min-height:360px; }
-  .home-hub { width:min(100%, 520px); --hub-r:clamp(118px, 42cqw, 214px); --hub-card-w:clamp(92px, 22vw, 114px); --hub-card-h:clamp(78px, 18vw, 94px); --hub-core:clamp(128px, 36vmin, 164px); }
+  /* v10.3.0 : plancher de 360 px retiré (il recréait le débordement) et même plafond
+     par la hauteur que ≤860 px, échelle conservée : les tailles suivent le conteneur. */
+  .home-hub { width:min(100%, clamp(320px, calc(100dvh - 380px), 520px)); }
   .hub-card { border-radius: var(--radius-xl); padding:8px; gap:5px; }
   .hub-card-icon { width:40px; height:40px; border-radius: var(--radius-lg); }
   .hub-card-copy strong { font-size:var(--font-size-sm); }
-  .hub-card-copy small { max-width:84px; }
   .home-recent-list { grid-template-columns:1fr; }
   .home-recent-item { min-height:58px; }
   .home-recent-new { width:100%; align-self:stretch; }
@@ -758,10 +820,10 @@ body:has(.overlay) .home-recent, body:has(.hub-picker-overlay) .home-recent, bod
   .home-text-button { min-height:30px; }
   .home-section-heading strong { font-size:var(--font-size-sm); }
 }
-@media (max-height: 760px) and (min-width: 701px) {
-  .home-content { padding-block:10px; }
-  .home-hub { width:min(100%, calc(100vh - 126px)); --hub-r:clamp(180px, 42cqw, 278px); --hub-core:clamp(190px, 25vmin, 228px); }
-}
+/* v10.3.0 : l'ancien plafond « 100vh - 126px » ignorait le panneau Récent empilé et
+   dépassait de quelques pixels sous 760 px de haut (carte Fichiers coupée). Les
+   règles ≤860 px / ≤700 px ci-dessus plafonnent maintenant par la hauteur réelle,
+   dans les deux dispositions (côte à côte et empilée) : plus besoin de ce bloc. */
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; }
   /* v10.2.0 (M6) : le défilement lissé reste une animation — coupé ici (le bloc * ne
@@ -977,6 +1039,14 @@ body:has(.overlay) .home-recent, body:has(.hub-picker-overlay) .home-recent, bod
    dimensions (fit() et ptyDims() continuent de renvoyer la vraie géométrie). */
 .agent-stage { position: relative; }
 .agent-stage .agent-term-hidden { position: absolute; inset: 0; width: 100%; height: 100%; visibility: hidden; pointer-events: none; border: 0; }
+/* v10.3.0 : sur la page Freebuff, le terminal occupe TOUT le corps de page (il n'est
+   plus une vignette sous un transcript). La vue conversation reste une lecture
+   optionnelle ; le terminal monté garde ses dimensions pour l'émulateur. */
+.freebuff-stage { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; padding: 14px clamp(16px,2.4vw,26px) 18px; }
+.freebuff-term { flex: 1; min-height: 0; height: auto; }
+.freebuff-stage-inner { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.freebuff-stage .agent-chat { flex: 1; min-height: 0; height: auto; }
+.freebuff-hint { margin: 0; }
 
 /* ── v9.6.0 : page « Tâches » — agent principal + modes ───────────────────────── */
 

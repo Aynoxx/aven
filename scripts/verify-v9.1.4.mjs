@@ -19,8 +19,11 @@ const [vMaj, vMin, vPatch] = pkg.version.split(".").map(Number)
 assert.ok(vMaj * 10000 + vMin * 100 + vPatch >= 90104, `version trop ancienne : ${pkg.version}`)
 
 // A. Le titre de fenêtre `start` est vide et quoté (sinon « Windows ne trouve pas 'Freebuff' »).
-const quoted = 3 // launch, login, install
-assert.equal((cli.match(/"start", "\\"\\""/g) || []).length, quoted, "les 3 commandes doivent avoir un titre vide quoté après start")
+// v10.3.0 : l'installation n'ouvre plus de console (`start`) — elle est exécutée par le
+// gestionnaire vérifié. Les deux commandes console restantes (launch, login) gardent
+// le titre vide quoté.
+const quoted = 2 // launch, login
+assert.equal((cli.match(/"start", "\\"\\""/g) || []).length, quoted, "les 2 commandes console doivent avoir un titre vide quoté après start")
 assert.ok(!cli.includes('"start", "Freebuff"'), "le titre interprétable comme programme doit avoir disparu")
 // Garde npm avant installation + repli documenté.
 assert.match(main, /checkNpm/)

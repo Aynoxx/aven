@@ -35,6 +35,17 @@ export type Decision = "once" | "always" | "reject"
 // renderer (voir App.tsx) en comparant le sessionID à la conversation ouverte.
 export type StreamEvent = { type: string; child: boolean; data: Record<string, any> }
 
+// v10.3.0 : état du CLI Freebuff, produit par le gestionnaire unique du host
+// (miroir de host/freebuff-cli-manager.ts). `state` dit où en est l'installation.
+export type FreebuffCliState = "unknown" | "checking" | "installing" | "ready" | "failed"
+export type FreebuffCliStatus = {
+  installed: boolean
+  version?: string
+  state?: FreebuffCliState
+  error?: string
+  cliError?: string
+}
+
 export type ProviderLite = { id: string; label: string; url: string; note: string }
 export type WorkspaceEntry = { path: string; name: string }
 export type FileSyncResult = { file: string; status: "created" | "updated" | "unchanged" | "custom" }
@@ -174,8 +185,11 @@ export type OpenCodeApi = {
   setNotifications: (on: boolean) => Promise<{ notifications: boolean }>
   setFreebuffResume: (on: boolean) => Promise<{ notifications: boolean; freebuffResume?: boolean }>
   diagnostic: () => Promise<string>
-  freebuffCliStatus: () => Promise<{ installed: boolean; version?: string }>
-  freebuffCliLaunch: (action?: "launch" | "login" | "install", cols?: number, rows?: number) => Promise<boolean>
+  freebuffCliStatus: () => Promise<FreebuffCliStatus>
+  // v10.3.0 : vérifie/installe le CLI une seule fois pour toute l'app (idempotent).
+  // `force` = nouvelle tentative après un échec (bouton utilisateur).
+  freebuffCliEnsure: (force?: boolean) => Promise<FreebuffCliStatus>
+  freebuffCliLaunch: (action?: "launch" | "login", cols?: number, rows?: number) => Promise<boolean>
   // v9.2.0 : pont PTY freebuff — le port WS est local (127.0.0.1), reused = pont déjà actif.
   // v9.2.0 : PTY embarqué (protocole freebuff-pty) — pas de WebSocket, flux par IPC ;
   // les événements freebuff.pty.* transitent par onEvent.

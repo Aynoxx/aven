@@ -3,6 +3,7 @@ import { api } from "./api"
 import Markdown from "./Markdown"
 import NoteEditor from "./NoteEditor"
 import { Icon } from "./icons"
+import PageShell, { type PageAction } from "./PageShell"
 import type { Note, NoteLink, NoteSearchHit, NoteTreeEntry } from "./types"
 import { stripLeadingTitle } from "./note-display"
 
@@ -258,19 +259,26 @@ export default function NotesView(props: Props) {
     void moveNote(noteId, target)
   }
 
+  // v10.3.0 : la page déclare SES actions — plus de dialogue flottant par-dessus
+  // la conversation. Le bouton Fermer garde la classe `dialog-close` attendue par
+  // les scripts de fumée et ramène à l'écran d'origine (Échap fait de même).
+  const pageActions: PageAction[] = [
+    { key: "dir", label: "Ouvrir le dossier", icon: "folder", onClick: () => { api.noteOpenFolder().catch((e) => props.onError(e)) }, title: dir },
+    { key: "close", label: "Fermer", icon: "close", variant: "ghost", onClick: props.onClose, className: "dialog-close", title: "Revenir à l'écran précédent (Échap)" },
+  ]
+
   return (
-    <div className="overlay"><div className="dialog wide notes-dialog">
-      <header className="unified-settings-header">
-        <div>
-          <span className="eyebrow">NOTES</span>
-          <h3>Notes de l'espace</h3>
-          <p className="hint">De vrais fichiers Markdown sur ton PC — dossiers, liens [[note]], poubelle. Glisse une note sur un dossier, ou Alt+↑↓ au clavier.</p>
-          <div className="row notes-dir-row"><code className="hint">{dir || "…"}</code>
-            <button className="button secondary" type="button" onClick={() => api.noteOpenFolder().catch((e) => props.onError(e))}><Icon name="folder" size={14} />Ouvrir le dossier</button>
-          </div>
-        </div>
-        <button className="button button-icon dialog-close" onClick={props.onClose} aria-label="Fermer" type="button"><Icon name="close" size={17} /></button>
-      </header>
+    <PageShell
+      eyebrow="NOTES"
+      title="Notes de l'espace"
+      description={<>
+        <p>De vrais fichiers Markdown sur ton PC — dossiers, liens [[note]], poubelle. Glisse une note sur un dossier, ou Alt+↑↓ au clavier.</p>
+        <p><code className="hint">{dir || "…"}</code></p>
+      </>}
+      actions={pageActions}
+      toolbarLabel="Actions des notes"
+      bodyClassName="notes-body notes-dialog"
+    >
       <div className="notes-layout">
         <aside className="notes-list-panel">
           <div className="row notes-actions-row">
@@ -389,6 +397,6 @@ export default function NotesView(props: Props) {
           )}
         </article>
       </div>
-    </div></div>
+    </PageShell>
   )
 }

@@ -160,12 +160,31 @@ par les variables `:root` existantes, sinon thèmes et densités cassent.
 - Icône porteuse de sens seule → `aria-label` sur le bouton hôte ; icône décorative →
   laisse l'`aria-hidden` par défaut du composant.
 
-## 6. Composants React (renderer)
+## 6. Composants React et pages (renderer)
 
-- Un dialogue = un composant-fichier (`SettingsDialog.tsx`, `NotesView.tsx`,
-  `FormDialog.tsx`) ; une sur-structure d'interface partageant son état reste une
-  fonction de rendu dans `App.tsx`. Tout texte déjà affiché passe par
-  `Markdown`/`RichMarkdown`, jamais de HTML brut.
+> **Règle d'architecture (v10.3.0).** Toutes les sections principales d'Aven doivent
+> être implémentées comme des **pages** occupant l'intégralité de la surface de contenu
+> de la fenêtre principale, et utiliser le système commun de navigation supérieure avec
+> des **actions contextuelles**. Les fenêtres modales et les panneaux superposés sont
+> réservés aux véritables interactions ponctuelles et ne doivent pas servir de
+> structure principale aux pages. Les pages d'accueil et centrales ne doivent pas
+> défiler globalement ; tout défilement nécessaire doit être limité au conteneur
+> concerné. Toute exception doit être explicitement justifiée par le besoin fonctionnel.
+
+- **Une page = `PageShell`** (`web/src/PageShell.tsx`) : `eyebrow`, titre, description,
+  et **actions déclarées par la page** (`actions`), jamais une barre recopiée. Tâches,
+  Projet/Freebuff, Notes, Fichiers et Réglages passent tous par lui ; une nouvelle
+  section principale s'ajoute comme une page, pas comme un dialogue.
+- **La barre de fenêtre est contextuelle** : « Conversations » n'apparaît que devant
+  une conversation ; une page n'affiche que ses propres actions. Un bouton sans usage
+  sur la page où il figure est un bug.
+- **Pas de défilement global** : `body` et `.page-main` sont en `overflow: hidden`.
+  Le scroll vit dans le conteneur qui en a besoin (`.notes-preview`, `.files-list-panel`,
+  `.unified-settings-scroll`, l'émulateur de terminal).
+- **Un vrai dialogue ponctuel** = un composant-fichier (`FormDialog.tsx`, dialogue de
+  permission) ; une sur-structure d'interface partageant son état reste une fonction de
+  rendu dans `App.tsx`. Tout texte déjà affiché passe par `Markdown`/`RichMarkdown`,
+  jamais de HTML brut.
 - Les états de panneau sont fermés dans TOUTES les navigations (`selectAgent`,
   `goHome`, `openAgentsPage`, `closeNotesToHome`, Échap, effet `needsWorkspace`) —
   un modal oublié ouvert est un bug.
@@ -268,6 +287,8 @@ L'accessibilité d'Aven repose sur des pratiques déjà répandues dans le code
   nommant le contenu (« Changer de projet », « Statistiques ») + fermeture au clic
   sur le fond (`e.target === e.currentTarget`) et à Échap (gérée dans le listener
   global de `App.tsx`, dans l'ordre d'empilement des panneaux).
+  Une **page** (`PageShell`) n'est pas un dialogue : elle n'est ni superposée ni
+  modale, et n'annonce donc pas `aria-modal`.
 - **Groupes de contrôles** : une zone de navigation/outil porte un `role` et un nom
   (`aria-label="Sections des paramètres"`, `aria-label="Actions sur la sélection"`).
 - **Champs de formulaire** : label visible (`<label>` englobant, modèle de

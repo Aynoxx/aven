@@ -1,4 +1,4 @@
-# Aven v10.2.2
+# Aven v10.3.0
 
 > ## v10.0.0 — 100 % Tauri (Electron et le natif retirés)
 > Aven est une **app Tauri 2** : la webview React parle à Rust (`src-tauri/`)
@@ -38,6 +38,25 @@ sondes de `npm run verify` réalignées sur cette réalité.
 > **v10.0.0 — fenêtre** : l'app démarre **maximisée** et **mémorise taille et
 position entre les lancements** (redimensionne, ferme, rouvre : tout est là) ;
 la barre de fenêtre vide a disparu de l'accueil (le hub commence par sa toolbar).
+> **v10.3.0 — Freebuff vraiment interactif, et une seule façon d'être une page** :
+> ① **le CLI Freebuff s'installe tout seul au démarrage** — un seul gestionnaire
+> vérifie `freebuff --version`, installe si besoin (une seule fois, même si tu ouvres
+> la page Projet pendant l'installation), ne déclare « installé » qu'après une
+> vérification réelle et respecte un délai avant de réessayer après un échec ;
+> ② **le terminal Freebuff répond vraiment** : chaque frappe et chaque clic partent
+> vers le PTY (avant, xterm affichait la sortie et jetait les entrées), Entrée,
+> flèches, Tab, Ctrl+C et la souris agissent dans le TUI, et le redimensionnement
+> atteint le process — la barre de saisie maison a disparu ; ③ **plus de texte flou**
+> au survol des cartes du hub (`scale()` + `will-change` retirés, l'élévation reste),
+> et en fenêtre étroite le cercle se plafonne à la hauteur disponible : la carte
+> « Fichiers » n'est plus coupée et « Projet » ne passe plus sous la barre ;
+> ④ **Notes, Fichiers et Réglages sont des pages**, plus des fenêtres posées sur
+> l'interface : même barre supérieure déclarative que Tâches et Projet, actions
+> propres à chaque page, **aucun défilement global** (le scroll vit dans la liste,
+> l'éditeur, le terminal) ; ⑤ **l'icône Windows est enfin ton logo** — l'étoile verte
+> du frontend est rastérisée en ICO multi-tailles (16 → 256) au lieu de l'ancien
+> carré, donc la même icône pour la fenêtre, la barre des tâches, l'exe et les
+> installateurs. Les conventions sont figées par `scripts/verify-v10.3.0.mjs`.
 > **v10.2.2 — La revue live corrigée (docs/audits/2026-10-19-test-live-features.md)** :
 > ① tes **liens `[[note]]`** survivent désormais à l'éditeur riche — TipTap échappait
 > les crochets et une note enregistrée perdait ses liens sortants et ses backlinks ;

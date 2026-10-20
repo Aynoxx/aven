@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { api } from "./api"
 import { Icon } from "./icons"
+import PageShell, { type PageAction } from "./PageShell"
 import type { Breadcrumb, FileEntry, TextFile } from "./types"
 
 // Explorateur de fichiers intégré (v9.3.0) — lecture seule, cloisonné à la racine de
@@ -64,24 +65,31 @@ export default function FilesView(props: Props) {
     setAnalyzeFor(null)
   }
 
+  // v10.3.0 : page pleine, actions déclarées par la page (Explorateur, Fermer).
+  const pageActions: PageAction[] = [
+    { key: "explorer", label: "Explorateur", icon: "folder", onClick: () => { api.filesOpen(relative).catch((e) => props.onError(e)) }, title: "Ouvre ce dossier dans l'Explorateur Windows" },
+    { key: "close", label: "Fermer", icon: "close", variant: "ghost", onClick: props.onClose, className: "dialog-close", title: "Revenir à l'écran précédent (Échap)" },
+  ]
+
   return (
-    <div className="overlay"><div className="dialog wide files-dialog">
-      <header className="unified-settings-header">
-        <div><span className="eyebrow">FICHIERS</span><h3>Fichiers de l'espace</h3>
-          <nav className="files-crumbs" aria-label="Fil d'ariane">
-            {crumbs.map((c, i) => (
-              <span key={c.path || "root"} className="files-crumb">
-                {i > 0 && <Icon name="chevron-right" size={12} />}
-                <button className="button ghost files-crumb-button" type="button" onClick={() => openDir(c.path)}>{c.label}</button>
-              </span>
-            ))}
-          </nav>
-        </div>
-        <div className="row">
-          <button className="button secondary" type="button" onClick={() => api.filesOpen(relative).catch((e) => props.onError(e))} title="Ouvre ce dossier dans l'Explorateur Windows"><Icon name="folder" size={14} />Explorateur</button>
-          <button className="button button-icon dialog-close" onClick={props.onClose} aria-label="Fermer" type="button"><Icon name="close" size={17} /></button>
-        </div>
-      </header>
+    <PageShell
+      eyebrow="FICHIERS"
+      title="Fichiers de l'espace"
+      description={<>
+        <p>Lecture seule, cloisonnée à la racine de l'espace de travail.</p>
+        <nav className="files-crumbs" aria-label="Fil d'ariane">
+          {crumbs.map((c, i) => (
+            <span key={c.path || "root"} className="files-crumb">
+              {i > 0 && <Icon name="chevron-right" size={12} />}
+              <button className="button ghost files-crumb-button" type="button" onClick={() => openDir(c.path)}>{c.label}</button>
+            </span>
+          ))}
+        </nav>
+      </>}
+      actions={pageActions}
+      toolbarLabel="Actions des fichiers"
+      bodyClassName="files-body files-dialog"
+    >
       <div className="files-layout">
         <aside className="files-list-panel">
           {upDir !== null && (
@@ -130,6 +138,6 @@ export default function FilesView(props: Props) {
           )}
         </article>
       </div>
-    </div></div>
+    </PageShell>
   )
 }

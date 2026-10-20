@@ -4,17 +4,20 @@ import { ptyDims } from "./pty-dims"
 // v9.6.0 : filtrage du transcript centralisé (bordures, session, pubs, utilisateur).
 import { buildTranscript, isUserLine } from "./freebuff-transcript"
 import { Icon } from "./icons"
+import PageShell, { type PageAction } from "./PageShell"
 
-// Page pleine de l'agent Freebuff (v9.5.0) : naviguée comme la page Agents (une seule
-// vue à la fois, bouton « Accueil »), elle REMPLACE le dialogue v9.2.0 qui recouvrait
-// l'écran courant. Le TUI freebuff reste le TRANSPORT (process PTY côté main, émulateur
-// xterm.js hors écran pour parser l'ANSI) : l'écran montre une CONVERSATION D'AGENT —
-// présence (« En ligne »), transcript dérivé du buffer (spinners et bordures filtrés),
-// prompts rapides, composeur avec Entrée pour envoyer. Le terminal brut reste accessible
-// d'un clic (« Vue terminal »). Fermer/quitter la page n'arrête pas freebuff : à la
-// réouverture, l'écran est reconstruit depuis le scrollback (session persistante).
+// Page pleine de l'agent Freebuff (v9.5.0), RÉELLEMENT interactive depuis la v10.3.0.
+//
+// Cause racine du « terminal miroir » : l'instance xterm.js n'avait AUCUN pont
+// clavier → PTY. Seul le composeur du bas écrivait dans le process (`text + \r`,
+// une ligne à la fois) : impossible d'exprimer les flèches, Tab, Échap ou Ctrl+C,
+// et la souris n'atteignait jamais le TUI. Le composeur, les prompts rapides et
+// l'installation locale du CLI sont donc supprimés : l'émulateur reçoit chaque
+// frappe via `term.onData`, relaie chaque redimensionnement via `term.onResize`,
+// et capture la souris pour les modes de rapport du TUI (xterm encode les
+// séquences attendues). Le transcript reste disponible en LECTURE seule.
 
-// Thème de l'émulateur caché (contraste pour le parsing, jamais montré par défaut).
+// Thème de l'émulateur (contraste pour le TUI comme pour le parsing du transcript).
 const XTERM_THEME = {
   background: "#12151d",
   foreground: "#f4f5f8",
@@ -29,39 +32,51 @@ type PtyEvent =
   | { type: "freebuff.pty.exit"; data: { code: number; signal?: number } }
   | { type: "freebuff.pty.error"; data: { message: string } }
 
-function presenceOf(data: { state: "starting" | "running" | "restarting" }): { label: string; online: boolean } {
-  if (data.state === "starting") return { label: "Freebuff démarre…", online: false }
-  if (data.state === "restarting") return { label: "Nouvelle tentative…", online: false }
+// Type minimal de l'émulateur : seules les méthodes utilisées ici (le module xterm
+// est chargé dynamiquement, il ne pèse donc pas au démarrage de l'app).
+type XtermLike = {
+  write: (data: string) => void
+  focus: () => void
+  dispose: () => void
+  onData: (cb: (data: string) => void) => { dispose: () => void }
+  onResize: (cb: (size: { cols: number; rows: number }) => void) => { dispose: () => void }
+  cols: number
+  rows: number
+  buffer: { active: { length: number; getLine: (i: number) => { translateToString: (trim?: boolean) => string } | null } }
+}
+
+function presenceOf(state: "starting" | "running" | "restarting"): { label: string; online: boolean } {
+  if (state === "starting") return { label: "Freebuff démarre…", online: false }
+  if (state === "restarting") return { label: "Nouvelle tentative…", online: false }
   return { label: "En ligne", online: true }
 }
 
-// Lignes qui ne sont pas du discours : spinners braille, bordures de boîtes,
-// barres de progression, pubs et barres d'état — tout vit dans freebuff-transcript.ts (v9.6.0).
 export default function FreebuffAgentPage(props: { onError: (e: unknown) => void }) {
   const termHostRef = useRef<HTMLDivElement>(null)
-  const termRef = useRef<{ write: (s: string) => void; focus: () => void; dispose: () => void; buffer: { active: { length: number; getLine: (i: number) => { translateToString: (trim?: boolean) => string } | null } } } | null>(null)
+  const termRef = useRef<XtermLike | null>(null)
   const fitRef = useRef<{ fit: () => void; dispose: () => void } | null>(null)
   const chatRef = useRef<HTMLDivElement>(null)
   const [presence, setPresence] = useState<{ label: string; online: boolean }>({ label: "Freebuff démarre…", online: false })
   const [isError, setIsError] = useState(false)
   const [errorMsg, setErrorMsg] = useState("")
-  // v9.6.2 : bannière « l'app Desktop Freebuff tient la session » — avertit AVANT d'écrire
-  // (le CLI ne peut pas répondre ; l'envoi gelait muet). Relançable d'un clic.
+  // v9.6.2 : bannière « l'app Desktop Freebuff tient la session » — avertit AVANT d'écrire.
   const [desktopConflict, setDesktopConflict] = useState(false)
   const desktopCheckBusy = useRef(false)
+  // v10.3.0 : état du CLI fourni par le gestionnaire unique (plus d'installation ici).
+  const [cliReady, setCliReady] = useState<boolean | null>(null)
+  const [cliBusy, setCliBusy] = useState(false)
+  const [cliError, setCliError] = useState("")
   const [chatLines, setChatLines] = useState<string[]>([])
   const [userLines, setUserLines] = useState<boolean[]>([])
   const [sessionBar, setSessionBar] = useState("")
-  const [showRaw, setShowRaw] = useState(false)
+  // v10.3.0 : le terminal est la vue PAR DÉFAUT. Le transcript devient une lecture
+  // optionnelle — il ne prend plus la place de la surface interactive.
+  const [showTranscript, setShowTranscript] = useState(false)
   const [resume, setResume] = useState(false)
-  const [draft, setDraft] = useState("")
-  const [cliMissing, setCliMissing] = useState(false)
-  const [installing, setInstalling] = useState(false)
+  const [attempt, setAttempt] = useState(0)
   const renderTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  // v9.6.1 : miroir de showRaw pour le callback — en Vue terminal, le scan du buffer
-  // (transcript) est inutile : l'écran montre déjà le TUI brut.
-  const showRawRef = useRef(false)
-  showRawRef.current = showRaw
+  const showTranscriptRef = useRef(false)
+  showTranscriptRef.current = showTranscript
 
   // Transcript « conversation » : dérivé du buffer xterm (source unique de vérité),
   // coalescé pour ne pas rescanner à chaque octet.
@@ -70,21 +85,18 @@ export default function FreebuffAgentPage(props: { onError: (e: unknown) => void
     renderTimer.current = setTimeout(() => {
       const term = termRef.current
       if (!term) return
-      // v9.6.1 : Vue terminal = transcript suspendu (l'écran montre déjà le TUI brut).
-      if (showRawRef.current) return
+      // Transcript suspendu quand il n'est pas affiché (le terminal montre déjà tout).
+      if (!showTranscriptRef.current) return
       const buf = term.buffer.active
       const raw: string[] = []
-      // v9.6.1 : plafond de RENDU (et plus seulement de scan) — 400 lignes re-diffées
-      // à chaque frame de streaming figeaient l'interface ; 120 suffisent largement
-      // pour une conversation (le buffer xterm garde TOUT, la Vue terminal est intacte).
+      // Plafond de RENDU : 120 lignes suffisent pour une conversation (le buffer
+      // xterm garde tout, la vue terminal est intacte).
       const max = 120
       for (let i = Math.max(0, buf.length - max); i < buf.length; i++) {
         const line = buf.getLine(i)
         if (!line) continue
         raw.push(line.translateToString(true))
       }
-      // v9.6.0 : bordures rognées, barre de session extraite (quota Freebucks),
-      // pubs et barres d'état filtrées, lignes utilisateur marquées.
       const { lines: parsed, sessionBar: bar } = buildTranscript(raw)
       setChatLines(parsed.map((l) => l.text))
       setUserLines(parsed.map((l) => l.user))
@@ -99,40 +111,26 @@ export default function FreebuffAgentPage(props: { onError: (e: unknown) => void
   useEffect(() => {
     let disposed = false
     let cleanupResize: (() => void) | undefined
+    let cleanupObservers: (() => void) | undefined
 
     const boot = async () => {
       try {
-        // v10.2.3 : vérification et installation automatique du CLI Freebuff au démarrage
-        const cli = await api.freebuffCliStatus().catch(() => ({ installed: true }))
+        // v10.3.0 : le CLI est vérifié/installé au démarrage de l'app ; ici on ne fait
+        // que lire l'état partagé (aucune installation concurrente depuis cette page).
+        const cli = await api.freebuffCliEnsure().catch(() => null)
         if (disposed) return
-        if (!cli.installed) {
-          setCliMissing(true)
+        if (cli && !cli.installed) {
+          setCliReady(false)
+          setCliError(cli.error ?? "")
           setPresence({ label: "CLI Freebuff non installé", online: false })
-          // Tentative d'installation automatique du CLI
-          // L'utilisateur sera invité à installer si l'échec persiste après boot
-          setCliMissing(true)
-          // On ne bloque pas le démarrage - l'utilisateur peut installer depuis les paramètres
-          setInstalling(true)
-          try {
-            await api.freebuffCliLaunch("install")
-            let installed = false
-            for (let i = 0; i < 12 && !installed; i++) {
-              await new Promise((r) => setTimeout(r, 5_000))
-              installed = (await api.freebuffCliStatus().catch(() => ({ installed: false }))).installed
-            }
-            if (installed) {
-              setCliMissing(false)
-              setPresence({ label: "En ligne", online: true })
-            }
-          } catch (e) {
-            // Erreur silencieuse - l'utilisateur pourra réessayer manuellement depuis les Réglages
-          } finally {
-            setInstalling(false)
-          }
+          return
         }
-        setCliMissing(false)
+        setCliReady(true)
+        setCliError("")
+
         // Préférence de reprise (v9.5.0) : « Reprendre la dernière conversation ».
         api.prefs().then((p) => { if (!disposed) setResume(p.freebuffResume === true) }).catch(() => undefined)
+
         // Imports dynamiques : xterm ne pèse dans le bundle qu'à l'ouverture de la page.
         const [{ Terminal }, { FitAddon }] = await Promise.all([import("@xterm/xterm"), import("@xterm/addon-fit")])
         if (disposed || !termHostRef.current) return
@@ -142,23 +140,43 @@ export default function FreebuffAgentPage(props: { onError: (e: unknown) => void
           theme: XTERM_THEME,
           cursorBlink: true,
           scrollback: 5000,
+          // Le TUI Freebuff est une application plein écran : on lui laisse la main
+          // sur les fins de ligne et les rapports de souris (défaut xterm).
+          allowTransparency: false,
         })
         const fit = new FitAddon()
         term.loadAddon(fit)
         term.open(termHostRef.current)
         fit.fit()
-        termRef.current = term as unknown as typeof termRef.current
+        termRef.current = term as unknown as XtermLike
         fitRef.current = fit
 
-        const onResize = () => {
-          fit.fit()
-          const d = ptyDims(term)
-          void api.freebuffPtyResize(d.cols, d.rows)
-        }
-        window.addEventListener("resize", onResize)
-        cleanupResize = () => window.removeEventListener("resize", onResize)
+        // v10.3.0 — LE PONT QUI MANQUAIT : chaque frappe/clic (le TUI active le
+        // rapport de souris) part vers le PTY. Sans cette ligne, xterm affichait la
+        // sortie mais jetait silencieusement toutes les entrées.
+        const dataSub = term.onData((data) => {
+          void api.freebuffPtyInput(data)
+        })
+        // Un redimensionnement de l'émulateur (fenêtre, page, bascule de vue) doit
+        // atteindre le process : ConPTY redessine le TUI à la bonne taille.
+        const resizeSub = term.onResize(({ cols, rows }) => {
+          void api.freebuffPtyResize(cols, rows)
+        })
 
-        // Événements du PTY (via le canal opencode:event existant, comme router.notice).
+        const refit = () => {
+          // Le terminal est monté même en vue conversation (dimensions fiables) :
+          // fit() fonctionne dans les deux cas, il ne redimensionne rien à zéro.
+          try { fit.fit() } catch { /* conteneur masqué : dimension conservée */ }
+        }
+        // Le conteneur peut changer de taille SANS redimensionnement de fenêtre
+        // (fermeture de la barre latérale, retour d'une autre page) : ResizeObserver.
+        const observer = new ResizeObserver(refit)
+        observer.observe(termHostRef.current)
+        window.addEventListener("resize", refit)
+        cleanupResize = () => window.removeEventListener("resize", refit)
+        cleanupObservers = () => { observer.disconnect(); dataSub.dispose(); resizeSub.dispose() }
+
+        // Événements du PTY (même canal que le reste de l'app).
         const off = api.onEvent((raw: { type: string; data: Record<string, unknown> }) => {
           const ev = raw as PtyEvent
           if (disposed) return
@@ -172,7 +190,7 @@ export default function FreebuffAgentPage(props: { onError: (e: unknown) => void
               scheduleRender()
               break
             case "freebuff.pty.status": {
-              const p = presenceOf(ev.data as { state: "starting" | "running" | "restarting" })
+              const p = presenceOf((ev.data as { state: "starting" | "running" | "restarting" }).state)
               setPresence(p)
               if (ev.data.state === "running") setIsError(false)
               break
@@ -182,9 +200,8 @@ export default function FreebuffAgentPage(props: { onError: (e: unknown) => void
               setIsError(true)
               break
             case "freebuff.pty.exit":
-              // v9.6.2 : un exit silencieux (code 0) juste après une saisie est le symptôme
-              // du conflit de session (l'app Desktop tient le compte). On vérifie et on
-              // nomme la cause au lieu d'afficher un générique « relancez » qui n'explique rien.
+              // Un exit silencieux juste après une saisie = conflit de session (l'app
+              // Desktop tient le compte) : on vérifie et on nomme la cause.
               void api.freebuffDesktopRunning().then((running) => {
                 if (running && !disposed) {
                   setDesktopConflict(true)
@@ -202,25 +219,24 @@ export default function FreebuffAgentPage(props: { onError: (e: unknown) => void
         })
         if (disposed) { off(); return }
 
-        // Démarre (ou récupère) la session : le lancement transmet les dimensions
-        // réelles de l'émulateur (v9.4.0) et les options du pont agents (v9.5.0).
+        // Démarre (ou récupère) la session avec les dimensions réelles de l'émulateur.
         const dims = ptyDims(term)
         await api.freebuffCliLaunch("launch", dims.cols, dims.rows)
-        // v9.6.2 : après le lancement (ou la reprise), on vérifie l'app Desktop — la
-        // bannière prévient AVANT le premier message (le gel muet n'a plus lieu d'être).
+        if (disposed) return
+        // Focus immédiat : sans lui, le premier clic devait « réveiller » le terminal
+        // et l'utilisateur croyait le TUI mort.
+        requestAnimationFrame(() => { if (!disposed) term.focus() })
         void api.freebuffDesktopRunning().then((running) => { if (!disposed) setDesktopConflict(running) }).catch(() => undefined)
       } catch (e) {
         if (disposed) return
-        // v9.7.1 : un refus au lancement (app Desktop ouverte, CLI absent, session
-        // prise) est un conflit de session, pas un crash — bannière actionnable avec
-        // bouton Relancer au lieu de l'erreur brute « Error invoking remote method… ».
+        // Un refus au lancement (app Desktop ouverte, CLI absent) est un conflit de
+        // session, pas un crash — bannière actionnable au lieu de l'erreur brute.
         const raw = e instanceof Error ? e.message : String(e)
         const msg = raw.replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/, "")
         if (/app Freebuff Desktop est ouverte/i.test(msg)) {
           setDesktopConflict(true)
           setIsError(false)
           setErrorMsg("")
-          // La session n'existe pas : pas de « démarre… » qui reste bloqué.
           setPresence({ label: "Session refusée — voir la bannière", online: false })
         } else {
           setErrorMsg(msg)
@@ -234,22 +250,14 @@ export default function FreebuffAgentPage(props: { onError: (e: unknown) => void
       disposed = true
       if (renderTimer.current) { clearTimeout(renderTimer.current); renderTimer.current = null }
       cleanupResize?.()
+      cleanupObservers?.()
       // Session persistante : on quitte la PAGE, pas le process (contrat du protocole).
       fitRef.current?.dispose()
       fitRef.current = null
       termRef.current?.dispose()
       termRef.current = null
     }
-  }, [])
-
-  const send = () => {
-    const text = draft.trim()
-    if (!text) return
-    // Le TUI consomme une ligne à la fois : Entrée = \r (le composeur local garde \n).
-    void api.freebuffPtyInput(text.replace(/\n/g, "\r") + "\r")
-    setDraft("")
-    if (showRaw) termRef.current?.focus()
-  }
+  }, [attempt])
 
   const restartSession = () => {
     setIsError(false)
@@ -267,161 +275,147 @@ export default function FreebuffAgentPage(props: { onError: (e: unknown) => void
     void api.setFreebuffResume(on).catch(() => setResume(!on))
   }
 
-  // v10.2.2 : fonction d'installation manuelle du CLI depuis la page
-  const installCli = async () => {
-    setInstalling(true)
+  // v10.3.0 : installation via le gestionnaire UNIQUE (idempotent, vérifié). Le
+  // bouton force une nouvelle tentative après l'échec ; sinon le cooldown s'applique.
+  const ensureCli = async () => {
+    setCliBusy(true)
+    setCliError("")
     try {
-      await api.freebuffCliLaunch("install")
-      let installed = false
-      for (let i = 0; i < 12 && !installed; i++) {
-        await new Promise((r) => setTimeout(r, 5_000))
-        installed = (await api.freebuffCliStatus().catch(() => ({ installed: false }))).installed      }
-    } catch (e) { props.onError(e) } finally { setInstalling(false) }
+      const status = await api.freebuffCliEnsure(true)
+      setCliReady(status.installed)
+      if (!status.installed) setCliError(status.error ?? "Le CLI Freebuff reste indisponible.")
+      else setAttempt((n) => n + 1) // relance le boot (terminal + session)
+    } catch (e) {
+      props.onError(e)
+    } finally {
+      setCliBusy(false)
+    }
   }
 
+  const toggleView = () => {
+    const next = !showTranscript
+    setShowTranscript(next)
+    // Retour au terminal : refit + focus, sinon le TUI garde des dimensions périmées.
+    if (!next) setTimeout(() => {
+      fitRef.current?.fit()
+      const term = termRef.current
+      if (term) { const d = ptyDims(term); void api.freebuffPtyResize(d.cols, d.rows); term.focus() }
+    }, 80)
+  }
+
+  const actions: PageAction[] = [
+    {
+      key: "restart",
+      label: "Redémarrer la session",
+      icon: "restore",
+      onClick: restartSession,
+      title: "Redémarre l'agent (utile s'il se bloque sans crasher)",
+    },
+    {
+      key: "view",
+      label: showTranscript ? "Vue terminal" : "Vue conversation",
+      icon: "terminal",
+      onClick: toggleView,
+      title: showTranscript ? "Revenir au terminal interactif" : "Lire la conversation (lecture seule)",
+      pressed: showTranscript,
+    },
+  ]
+
   return (
-    <main className="agents-main">
-      <section className="agents-page freebuff-agent-page" aria-label="Agent Freebuff">
-        <header className="agents-page-header">
-          <div>
-            <span className="eyebrow">ASSISTANT EXTERNE GRATUIT</span>
-            <h1>Freebuff</h1>
-            <p>
-              Le même espace de travail que tes agents Aven, en sessions quotidiennes
-              gratuites. Quitter cette page n'arrête pas l'agent : tu retrouves la
-              conversation à la réouverture.
-            </p>
-          </div>
-          {/* v10.0.0 : le retour « Accueil » est porté par la barre de fenêtre
-              (window-tab global) — un second bouton dans le titre serait un doublon. */}
-        </header>
+    <PageShell
+      eyebrow="ASSISTANT EXTERNE GRATUIT"
+      title="Freebuff"
+      description="Le même espace de travail que tes agents Aven, en sessions quotidiennes gratuites. Le terminal est interactif : Entrée, flèches, Tab, Ctrl+C et la souris agissent directement dans Freebuff. Quitter cette page n'arrête pas l'agent."
+      actions={actions}
+      className="agents-main"
+      bodyClassName="agents-page freebuff-agent-page freebuff-stage"
+    >
+      <div className="row bridge-status-row">
+        <span className="agent-presence" role="status">
+          <span className={`agent-presence-dot ${presence.online ? "online" : ""}`} aria-hidden="true" />
+          {presence.label}
+        </span>
+        {/* L'interruption vit à côté de la présence : c'est un geste lié à la session
+            en cours (Ctrl+C envoyé au PTY), pas une action de page permanente. */}
+        <button className="button secondary" type="button" onClick={sendInterrupt} title="Interrompt le tour en cours (Ctrl+C envoyé à l'agent)" disabled={!presence.online}>
+          <Icon name="close" size={14} />Interrompre
+        </button>
+      </div>
 
-        <div className="row bridge-status-row">
-          <span className="agent-presence" role="status">
-            <span className={`agent-presence-dot ${presence.online ? "online" : ""}`} aria-hidden="true" />
-            {presence.label}
-          </span>
-          <span className="row bridge-actions">
-            <button className="button secondary" type="button" onClick={sendInterrupt} title="Interrompt le tour en cours (Ctrl+C envoyé à l'agent)" disabled={!presence.online}>
-              <Icon name="close" size={14} />Interrompre
-            </button>
-            <button className="button secondary" type="button" onClick={restartSession} title="Redémarre l'agent (utile s'il se bloque sans crasher)">
-              <Icon name="restore" size={14} />Redémarrer la session
-            </button>
-            <button className="button secondary" type="button" onClick={() => {
-              const next = !showRaw
-              setShowRaw(next)
-              // En sortant de la vue cachée, l'émulateur reprend ses vraies dimensions :
-              // refit + resize du PTY pour que le TUI se redessine à la bonne taille.
-              setTimeout(() => {
-                fitRef.current?.fit()
-                const term = termRef.current
-                if (term) { const d = ptyDims(term as unknown as { cols: number; rows: number }); void api.freebuffPtyResize(d.cols, d.rows) }
-                if (next) termRef.current?.focus()
-              }, 80)
-            }} aria-pressed={showRaw} title="Affiche le terminal brut (pour suivre ce que l'agent voit exactement)">
-              <Icon name="terminal" size={14} />{showRaw ? "Vue conversation" : "Vue terminal"}
-            </button>
-          </span>
+      {cliReady === false && (
+        <div className="freebuff-conflict" role="alert">
+          <div className="freebuff-conflict-text">
+            <strong>Le CLI Freebuff n'est pas installé sur cet ordinateur.</strong>
+            <span>Le terminal intégré en a besoin. Aven tente l'installation au démarrage ; si elle a échoué (réseau, droits npm), relance-la ici : la session démarre dès que le binaire répond.</span>
+            {cliError && <span className="hint">{cliError}</span>}
+          </div>
+          <button className="button primary" type="button" disabled={cliBusy} onClick={() => void ensureCli()}>
+            <Icon name="inbox" size={14} />{cliBusy ? "Installation en cours…" : "Installer le CLI (npm)"}
+          </button>
         </div>
+      )}
 
-        {/* v10.2.2 : affichage du CLI non installé avec bouton d'installation */}
-        {cliMissing && (
-          <div className="freebuff-conflict" role="alert">
-            <div className="freebuff-conflict-text">
-              <strong>Le CLI Freebuff n'est pas installé sur cet ordinateur.</strong>
-              <span>Le terminal intégré en a besoin. Installe-le ici (npm install -g freebuff), sans quitter Aven : la session se lance dès que le binaire répond.</span>
-            </div>
-            <button className="button primary" type="button" disabled={installing} onClick={() => void installCli()}>
-              <Icon name="inbox" size={14} />{installing ? "Installation en cours…" : "Installer le CLI (npm)"}
-            </button>
+      {desktopConflict && (
+        <div className="freebuff-conflict" role="alert">
+          <div className="freebuff-conflict-text">
+            <strong>Ta session Freebuff est déjà ouverte dans l'app Freebuff Desktop.</strong>
+            <span>Une seule session par compte : le terminal intégré ne peut pas répondre tant que l'app tourne. Ferme-la, puis relance ici — ou continue ta conversation là-bas.</span>
           </div>
-        )}
+          <button
+            className="button secondary"
+            type="button"
+            disabled={desktopCheckBusy.current}
+            onClick={() => {
+              desktopCheckBusy.current = true
+              void api.freebuffDesktopRunning().then((running) => {
+                setDesktopConflict(running)
+                if (!running) { setIsError(false); setErrorMsg(""); void api.freebuffCliLaunch("launch").catch(() => undefined) }
+              }).catch(() => undefined).finally(() => { desktopCheckBusy.current = false })
+            }}
+          >
+            <Icon name="restore" size={14} />J'ai fermé l'app — Relancer
+          </button>
+        </div>
+      )}
 
-        {/* v9.6.2 : bannière de conflit de session — l'app Desktop Freebuff tient le compte,
-            le terminal intégré ne peut pas répondre. Message + action, jamais de gel muet. */}
-        {desktopConflict && (
-          <div className="freebuff-conflict" role="alert">
-            <div className="freebuff-conflict-text">
-              <strong>Ta session Freebuff est déjà ouverte dans l'app Freebuff Desktop.</strong>
-              <span>Une seule session par compte : le terminal intégré ne peut pas répondre tant que l'app tourne. Ferme-la, puis relance ici — ou continue ta conversation là-bas.</span>
-            </div>
-            <button
-              className="button secondary"
-              type="button"
-              disabled={desktopCheckBusy.current}
-              onClick={() => {
-                desktopCheckBusy.current = true
-                void api.freebuffDesktopRunning().then((running) => {
-                  setDesktopConflict(running)
-                  if (!running) { setIsError(false); setErrorMsg(""); void api.freebuffCliLaunch("launch").catch(() => undefined) }
-                }).catch(() => undefined).finally(() => { desktopCheckBusy.current = false })
-              }}
-            >
-              <Icon name="restore" size={14} />J'ai fermé l'app — Relancer
-            </button>
-          </div>
-        )}
-
-        {sessionBar && (
-          <div className="freebuff-sessionbar" role="status" aria-label="Session Freebuff">
-            {sessionBar.split(/[│|]/).map((part) => part.trim()).filter(Boolean).map((part, i) => (
+      {sessionBar && (
+        <div className="freebuff-sessionbar" role="status" aria-label="Session Freebuff">
+          {sessionBar.split(/[│|]/).map((part) => part.trim()).filter(Boolean).map((part, i) => (
             <span key={i} className="freebuff-sessionbar-item">{part}</span>
-            ))}
-          </div>
-        )}
+          ))}
+        </div>
+      )}
 
-        {isError && <p className="err" role="alert">{errorMsg}</p>}
+      {isError && <p className="err" role="alert">{errorMsg}</p>}
 
-        {/* Vue conversation : transcript dérivé du buffer, sans spinner ni bordures.
-            L'émulateur reste monté (métriques fiables) mais invisible par défaut. */}
-        <div className="agent-stage">
-        {/* v9.6.1 : plus d'aria-live sur le transcript — chaque frame de streaming
-            déclenchait un recalcul complet de l'arbre d'accessibilité (gel ressenti).
-            Le composeur reste focalisable, le scroll suit le bas comme avant. */}
-        {!showRaw && (
-          <div className="agent-chat" ref={chatRef} aria-label="Conversation avec l'agent Freebuff">
-            {chatLines.length === 0 && (
-              <p className="hint agent-chat-empty">
-                {presence.online ? "Dis bonjour à Freebuff, ou choisis un prompt rapide ci-dessous." : "L'agent démarre…"}
-              </p>
-            )}
+      {/* Le terminal occupe le corps de page ; la vue conversation est une lecture
+          optionnelle qui ne remplace jamais la surface interactive (elle la masque). */}
+      <div className="agent-stage freebuff-stage-inner">
+        <div
+          className={`bridge-term-host freebuff-term${showTranscript ? " agent-term-hidden" : ""}`}
+          ref={termHostRef}
+          role="group"
+          aria-label="Terminal Freebuff interactif"
+          onClick={() => termRef.current?.focus()}
+        />
+        {showTranscript && (
+          <div className="agent-chat" ref={chatRef} aria-label="Conversation avec l'agent Freebuff (lecture seule)">
+            {chatLines.length === 0 && <p className="hint agent-chat-empty">Le terminal est vide pour l'instant.</p>}
             {chatLines.map((line, i) => (
               <p key={i} className={`agent-line${(userLines[i] ?? false) || isUserLine(line) ? " agent-line-user" : ""}`}>{line}</p>
             ))}
           </div>
         )}
-        <div className={`bridge-term-host${showRaw ? "" : " agent-term-hidden"}`} ref={termHostRef} />
-        </div>
+      </div>
 
-        {/* Prompts rapides : remplissent le composeur (l'utilisateur garde la main). */}
-        {!showRaw && (
-          <div className="agent-quick" role="group" aria-label="Prompts rapides">
-            {["Que peux-tu faire dans cet espace ?", "Résume l'état du projet", "Que vois-tu dans les fichiers ?"].map((q) => (
-              <button key={q} className="agent-quick-chip" type="button" onClick={() => setDraft(q)}>{q}</button>
-            ))}
-          </div>
-        )}
-
-        <div className="agent-composer">
-          <textarea
-            className="agent-composer-input"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send() } }}
-            placeholder={presence.online ? "Écris à Freebuff… (Entrée pour envoyer, Maj+Entrée pour un retour à la ligne)" : "Attends que l'agent soit en ligne…"}
-            aria-label="Message pour l'agent Freebuff"
-            rows={2}
-          />
-          <button className="button primary agent-composer-send" onClick={send} disabled={!draft.trim() || !presence.online} type="button" aria-label="Envoyer le message">
-            <Icon name="chevron-right" size={16} />Envoyer
-          </button>
-        </div>
+      {showTranscript ? (
+        <p className="hint freebuff-hint">Lecture seule — « Vue terminal » pour écrire, naviguer dans les menus et utiliser les raccourcis.</p>
+      ) : (
         <label className="agent-resume">
           <input type="checkbox" checked={resume} onChange={(e) => toggleResume(e.target.checked)} />
           Reprendre la dernière conversation à l'ouverture (sinon, nouvelle conversation)
         </label>
-      </section>
-    </main>
+      )}
+    </PageShell>
   )
 }

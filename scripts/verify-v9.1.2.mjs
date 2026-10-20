@@ -44,7 +44,9 @@ assert.match(types, /freebuffCliLaunch/)
 // sonde « freebuffCliLaunch("launch") » du hub est remplacée par le terminal intégré ;
 // la console externe reste accessible depuis les Réglages (lancement = install/login).
 assert.match(app, /showFreebuffAgent/, "v9.5.0 : l'agent Freebuff est une page pleine (plus de dialogue)")
-assert.match(app, /freebuffCliLaunch\("install"\)/, "le flux d'installation reste branché (avis hub)")
+// v10.3.0 : l'installation vit dans le gestionnaire unique (un seul chemin, vérifié) —
+// le hub déclenche `freebuffCliEnsure`, pas une console npm détachée.
+assert.match(app, /freebuffCliEnsure/, "le flux d'installation reste branché (avis hub)")
 assert.ok(!css.includes(".hub-card-freebuff"), "v9.4.0 : la carte Freebuff a quitté le hub (page Assistants)")
 assert.match(css, /--hub-angle:90deg/) // v9.4.0 : 4 cartes réparties à 90°
 assert.match(settingsDialog, /Freebuff CLI gratuit/)

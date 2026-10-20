@@ -61,9 +61,13 @@ assert.ok(!/freebuffAsEngine/.test(appearance), "le champ freebuffAsEngine doit 
 // ⑤ Freebuff CLI : statut vérifié AVANT lancement, quoting Windows corrigé.
 assert.match(freebuffCli, /export function freebuffMissingMessage/)
 assert.match(main, /checkFreebuffCli/)
-assert.match(main, /if \(action !== "install"\)/)
+// v10.3.0 : l'installation n'est plus une action de lancement — elle est servie par
+// le gestionnaire unique (`freebuffCliEnsure`), vérifié après npm.
+assert.match(main, /case "freebuffCliEnsure"/)
 assert.match(main, /freebuffMissingMessage\(\)/)
 assert.ok(!/windowsVerbatimArguments/.test(main), "windowsVerbatimArguments doit avoir disparu (quoting correct des chemins avec espaces)")
-assert.match(settingsDialog, /await api\.freebuffCliStatus\(\)/) // re-vérification après installation
+// v10.3.0 : la re-vérification est faite PAR le gestionnaire (ensure ne résout qu'une
+// fois « freebuff --version » confirmé) ; les Réglages lisent son verdict.
+assert.match(settingsDialog, /await api\.freebuffCliEnsure\(true\)/) // re-vérification après installation
 
 console.log("v9.1.3 verification: OK")

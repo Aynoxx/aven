@@ -66,8 +66,11 @@ assert.match(css, /body:has\(\.overlay\) \.home-toolbar[\s\S]*?\{ backdrop-filte
   "F2 : 3 backdrop-filters → 1 quand un dialogue est ouvert")
 // F3 : titres de vue en leading serré.
 assert.match(css, /line-height: 1\.08/, "F3 : h1 de vue en line-height 1.08")
-// F8 : les cartes hub sont préparées au compositor.
-assert.match(css, /\.hub-card \{[^}]*will-change: transform;/s, "F8 : will-change sur .hub-card")
+// F8 (amendée v10.3.0) : l'indice compositor `will-change: transform` était le
+// responsable du FLOU au survol — la carte composée était rastérisée puis mise à
+// l'échelle (1.025), texte compris. On fige l'inverse : plus d'indice, plus de scale.
+assert.ok(!/\.hub-card \{[^}]*will-change:\s*transform;/s.test(css), "F8 : plus de will-change sur .hub-card (flou au survol, v10.3.0)")
+assert.ok(!/\.hub-card:hover \{[^}]*scale\(/s.test(css), "F8 : plus de scale au survol des cartes (flou du texte)")
 // F9 : press-state homogène sur les contrôles segmentés.
 for (const sel of [/\.segmented button:active/, /\.settings-tabs button:active/, /\.home-recent-item:active/]) {
   assert.match(css, sel, "F9 : :active en scale sur les contrôles segmentés")
@@ -116,7 +119,9 @@ assert.match(css, /::view-transition-new\(dialog\) \{ animation-name: dialog-in;
 assert.match(css, /animation: dialog-in var\(--dur-med\) var\(--ease-spring\)/, "ressort RÉELLEMENT utilisé par l'entrée des dialogues (M12 : la token n'est plus morte)")
 assert.ok((css.match(/animation: popover-in var\(--dur-fast\) var\(--ease-spring\)/g) ?? []).length >= 2,
   "M13 : selbar ET menu modèle se déploient depuis leur ancrage (popover-in + spring)")
-assert.match(app, /closeNotesToHome = useCallback\(\(\) => withViewTransition\(/, "fermeture notes/fichiers/réglages en transition")
+// v10.3.0 : la fermeture s'appelle `closePage` — elle ferme TOUTES les pages et
+// revient à l'écran d'origine (plus de `showHome` forcé). La transition est conservée.
+assert.match(app, /closePage = useCallback\(\(\) => withViewTransition\(/, "fermeture notes/fichiers/réglages en transition")
 assert.match(app, /withViewTransition\(\(\) => setShowConversationPicker\(false\)\)/, "conversation : fermeture en transition")
 assert.match(app, /withViewTransition\(\(\) => setShowSettings\(false\)\)/, "réglages : fermeture en transition")
 assert.match(app, /withViewTransition\(\(\) => \{ setShowAgentsPage\(false\); setShowHome\(true\) \}\)/, "page Tâches : fermeture en transition")

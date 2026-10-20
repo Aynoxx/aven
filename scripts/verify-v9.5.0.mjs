@@ -63,13 +63,16 @@ assert.ok(Object.keys(tauriConf95.bundle?.resources ?? {}).some((f) => f.include
 
 // E. La vue n'est plus un terminal : conversation d'agent.
 assert.match(dialog, /agent-chat/, "transcript conversation dérivé du buffer")
-assert.match(dialog, /agent-composer/, "composeur d'agent attendu")
-assert.match(dialog, /agent-quick/, "prompts rapides attendus")
-assert.match(dialog, /Vue terminal/, "le terminal brut reste accessible en option")
+// v10.3.0 : le composeur d'agent et les prompts rapides sont SUPPRIMÉS — ils ne
+// pouvaient pas exprimer flèches/Tab/Ctrl+C et faisaient du terminal un miroir. La
+// sonde exige désormais le pont réel clavier → PTY.
+assert.match(dialog, /freebuffPtyInput/, "les frappes partent au PTY (terminal interactif)")
+assert.match(dialog, /term\.onData/, "l'émulateur est branché à l'entrée du process")
+assert.match(dialog, /Vue terminal|Vue conversation/, "le basculement transcript/terminal reste possible")
 assert.match(dialog, /presenceOf/, "présence (En ligne / démarre…) attendue")
 // v9.6.0 : le filtrage (spinners, bordures, pubs) vit dans freebuff-transcript.ts.
 assert.match(dialog, /buildTranscript/, "les spinners et bordures sont filtrés du transcript (module v9.6.0)")
-assert.match(css, /\.agent-composer/, "CSS du composeur attendue")
+assert.match(css, /\.bridge-term-host/, "CSS de l'hôte terminal attendue")
 assert.match(css, /\.agent-term-hidden/, "CSS de l'émulateur caché attendue")
 // v9.5.1 : la vue est une PAGE pleine (agents-main), pas un dialogue recouvrant.
 assert.match(dialog, /agents-main/, "la vue agent est routée comme la page Agents")

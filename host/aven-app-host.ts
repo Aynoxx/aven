@@ -34,7 +34,8 @@ import { Announcer } from "./announcer.js"
 import { countDictation } from "./stats.js"
 import { rpcObjectParam } from "./rpc-params.js"
 import { writeTextAtomic } from "./atomic-file.js"
-import { buildLaunchCommand, freebuffBusyMessage, freebuffMissingMessage, parseVersionOutput } from "./freebuff-cli.js"
+import { buildInstallCommand, buildLaunchCommand, freebuffBusyMessage, freebuffMissingMessage, parseVersionOutput } from "./freebuff-cli.js"
+import { createCliManager } from "./freebuff-cli-manager.js"
 import { DEFAULT_PTY_COLS, DEFAULT_PTY_ROWS, freebuffPtyPid, isFreebuffPtyActive, loadPtyModule, restartFreebuffPty, resizeFreebuffPty, signalFreebuffPty, startFreebuffPty, stopFreebuffPty, writeFreebuffPty } from "./freebuff-pty.js"
 
 type RpcMessage = { jsonrpc: "2.0"; id?: string | number; method?: string; params?: any }
@@ -273,6 +274,30 @@ async function checkFreebuffCli() {
   }
 }
 
+// v10.3.0 : UNE installation, au démarrage, vérifiée par « freebuff --version ».
+// Le gestionnaire est unique pour tout le host : App (démarrage), Réglages et la
+// page Freebuff passent tous par lui, donc plus d'installations concurrentes.
+async function installFreebuffCli(): Promise<void> {
+  if (process.platform !== "win32") throw new Error("Le CLI Freebuff n'est installable automatiquement que sous Windows.")
+  if (!(await checkNpm())) throw new Error("npm est introuvable sur cet ordinateur. Installe Node.js avec npm, puis réessaie.")
+  const cmd = buildInstallCommand()
+  try {
+    // 180 s : npm global + téléchargement du paquet ; au-delà, on considère l'échec.
+    await execFileAsync(cmd.command, cmd.args, { timeout: 180_000, windowsHide: true, maxBuffer: 4 * 1024 * 1024 })
+  } catch (error) {
+    const detail = String((error as { stderr?: string }).stderr ?? "").trim().split("\n").slice(-2).join(" ").slice(0, 300)
+    throw new Error(detail || (error as Error).message)
+  }
+}
+
+const cliManager = createCliManager({
+  check: checkFreebuffCli,
+  install: installFreebuffCli,
+  // L'état d'installation remonte au renderer : la pastille du hub et la page
+  // Freebuff n'ont plus à sonder chacun de leur côté.
+  onChange: (snapshot) => push({ type: "freebuff.cli.state", data: { ...snapshot } }),
+})
+
 async function checkNpm() {
   if (process.platform !== "win32") return false
   try {
@@ -317,18 +342,16 @@ async function isFreebuffDesktopRunning() {
   }
 }
 
-async function launchFreebuff(action: "launch" | "login" | "install", cols?: number, rows?: number) {
+async function launchFreebuff(action: "launch" | "login", cols?: number, rows?: number) {
   if (process.platform !== "win32") {
     throw new Error("Le terminal Freebuff n'est pris en charge que sous Windows.")
   }
 
-  if (action !== "install") {
-    const status = await checkFreebuffCli()
-    if (!status.installed) throw new Error(freebuffMissingMessage())
-    if (!isFreebuffPtyActive() && await isFreebuffProcessRunning()) throw new Error(freebuffBusyMessage())
-  } else if (!(await checkNpm())) {
-    throw new Error("npm est introuvable sur cet ordinateur. Installe Node.js avec npm, puis réessaie.")
-  }
+  // v10.3.0 : l'installation n'est plus une action de lancement — elle vit dans le
+  // gestionnaire unique (freebuffCliEnsure), vérifiée et sans fenêtre détachée.
+  const status = await checkFreebuffCli()
+  if (!status.installed) throw new Error(freebuffMissingMessage())
+  if (!isFreebuffPtyActive() && await isFreebuffProcessRunning()) throw new Error(freebuffBusyMessage())
 
   if (action === "launch") {
     if (await isFreebuffDesktopRunning()) {
@@ -697,11 +720,17 @@ async function dispatch(method: string, params: any): Promise<unknown> {
       return savePrefs({ notifications: params?.[0] === true })
     case "setFreebuffResume":
       return savePrefs({ freebuffResume: params?.[0] === true })
-    case "freebuffCliStatus":
-      return checkFreebuffCli()
+    case "freebuffCliStatus": {
+      // v10.3.0 : l'état du gestionnaire (installation en cours) complète la vérification.
+      const status = await checkFreebuffCli()
+      return { ...status, state: cliManager.status().state, cliError: cliManager.status().error }
+    }
+    // v10.3.0 : vérifie/installe le CLI une seule fois pour toute l'app (idempotent).
+    case "freebuffCliEnsure":
+      return cliManager.ensure(params?.[0] === true)
     case "freebuffCliLaunch":
       return launchFreebuff(
-        (params?.[0] ?? "launch") as "launch" | "login" | "install",
+        (params?.[0] ?? "launch") as "launch" | "login",
         params?.[1] === undefined ? undefined : Number(params[1]),
         params?.[2] === undefined ? undefined : Number(params[2]),
       )

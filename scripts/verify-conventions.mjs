@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { readFileSync } from "node:fs"
+import { readdirSync, readFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 
@@ -72,7 +72,12 @@ assert.match(iconReadme, /Ajouter une nouvelle icône dans le type `IconName`/)
 // Aucun composant n'embarque son propre <svg> local (l'unique <svg> est celui d'Icon.tsx).
 // v9.3.0 : NotesView.tsx remplace NotesDialog.tsx, FilesView.tsx arrive — la règle
 // « un seul <svg> (Icon.tsx) » s'applique aux nouvelles vues aussi.
-const jsxFiles = ["web/src/App.tsx", "web/src/SettingsDialog.tsx", "web/src/NotesView.tsx", "web/src/FilesView.tsx", "web/src/FreebuffAgentPage.tsx", "web/src/FormDialog.tsx", "web/src/MessageBubble.tsx", "web/src/Markdown.tsx", "web/src/RichMarkdown.tsx", "web/src/ErrorBoundary.tsx"]
+// v10.3.0 : découverte DYNAMIQUE des composants — une liste écrite à la main laissait
+// échapper tout nouveau fichier (NoteEditor, PageShell…) aux règles icônes / ARIA /
+// boutons. Seul Icon.tsx est exclu : c'est la bibliothèque elle-même.
+const jsxFiles = readdirSync(path.join(root, "web/src"))
+  .filter((file) => file.endsWith(".tsx") && file !== "Icon.tsx")
+  .map((file) => `web/src/${file}`)
 for (const f of jsxFiles) {
   const content = read(f)
   assert.ok(!/<svg[\s>]/.test(content),
