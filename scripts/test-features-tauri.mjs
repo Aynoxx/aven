@@ -188,7 +188,7 @@ try {
 
   // ── 2) Hub : les 4 cartes + dictée ────────────────────────────────────────
   const cartes = await cdp.eval(`[...document.querySelectorAll(".hub-card")].map((b) => b.getAttribute("aria-label"))`)
-  const attendues = ["Projet", "Tâches", "Fichiers", "Notes"]
+  const attendues = ["Freebuff", "Orchestration", "Fichiers", "Notes"]
   const absentes = attendues.filter((a) => !cartes.some((c) => c && c.startsWith(a)))
   if (absentes.length) fail(`cartes du hub absentes : ${absentes.join(", ")} (vu : ${cartes.join(" | ")})`)
   else pass(`hub : 4 cartes présentes (${cartes.length} au total)`)
