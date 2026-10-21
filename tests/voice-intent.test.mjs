@@ -32,6 +32,8 @@ test("fallbackIntent : commandes d'application courantes reconnues sans réseau"
   assert.deepEqual(fallbackIntent("affiche mes notes"), { intent: "app", action: "open-notes" })
   assert.deepEqual(fallbackIntent("ouvre la page des agents"), { intent: "app", action: "open-agents" })
   assert.deepEqual(fallbackIntent("lance Freebuff"), { intent: "app", action: "open-freebuff" })
+  assert.deepEqual(fallbackIntent("ouvre Freebuff"), { intent: "app", action: "open-project" })
+  assert.deepEqual(fallbackIntent("ouvre le terminal Freebuff"), { intent: "app", action: "open-project" })
   assert.deepEqual(fallbackIntent("ouvre freebuff dans le terminal"), { intent: "app", action: "open-freebuff" })
   assert.deepEqual(fallbackIntent("montre les statistiques"), { intent: "app", action: "open-stats" })
   assert.deepEqual(fallbackIntent("nouvelle conversation"), { intent: "app", action: "new-chat" })
