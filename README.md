@@ -1,4 +1,4 @@
-# Aven v10.4.0
+# Aven v10.5.0
 
 > ## v10.0.0 — 100 % Tauri (Electron et le natif retirés)
 > Aven est une **app Tauri 2** : la webview React parle à Rust (`src-tauri/`)
@@ -26,6 +26,14 @@
 
 Application de bureau (Tauri) : une chatbox avec **3 agents commutables** (code, recherche, analyse) et un
 sous-agent (code-reviewer), branchée sur **OpenCode 2.0.10** et un catalogue d’agents strictement gratuit (OpenRouter Free / OpenCode Zen).
+
+> **v10.5.0 — navigation et destinations explicites**
+> ① La barre de l’accueil recherche uniquement des conversations ; « Nouvelle conversation » est l’entrée distincte pour rédiger une demande. Entrée ouvre un résultat correspondant, sans créer de conversation depuis un état vide.
+> ② Les cartes du hub s’appellent désormais **Freebuff** et **Orchestration**. La page Freebuff indique qu’elle ouvre un terminal CLI indépendant de la conversation Aven.
+> ③ La conversation affiche l’agent actif. La page Orchestration précise la portée du mode de délégation et distingue l’orchestrateur de l’utilisation directe d’un spécialiste.
+> ④ Fichiers et Notes indiquent l’agent ciblé et précisent quand une demande est seulement préparée dans le composeur, sans être envoyée.
+> ⑤ Notes charge les étiquettes en un seul appel IPC et résout les liens d’une note avec un inventaire unique, au lieu de relire toute la bibliothèque par lien.
+> La revue des changements se trouve dans `docs/audits/2026-10-21-corrections-ux-v10.5.0.md`; la sonde `scripts/verify-v10.5.0.mjs` fige ces conventions.
 
 > **v10.0.0 — 100 % Tauri** : le shell **Electron est supprimé** (main, preload,
 electron-builder, ensure-binaries) ainsi que le socle **natif WinUI** suivi en
