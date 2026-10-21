@@ -45,7 +45,7 @@ assert.match(app, /const goHome/)
 
 // ④ quitter une conversation → page Agents.
 assert.match(app, /setShowHome\(false\); setShowAgentsPage\(true\)/)
-assert.match(app, /Voir la page des agents/)
+assert.match(app, /aria-label="Ouvrir l’orchestration"/, "v10.5.0 : le bouton contextuel nomme sa destination actuelle")
 
 // ⑤ Freebuff moteur de tous les agents.
 // v9.1.3 : la clé Codebuff, le bouton composeur et le réglage « moteur des agents » sont
