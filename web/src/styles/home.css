@@ -126,8 +126,8 @@ body:has(.overlay) .home-recent, body:has(.hub-picker-overlay) .home-recent, bod
 .home-recent-copy small { color: var(--muted); font-size: var(--font-size-xs); }
 .home-recent-arrow { color: var(--muted); transition: transform var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
 .home-recent-item:hover .home-recent-arrow { color: var(--accent-ink); transform: translateX(2px); }
-.home-empty-recent { min-height: 60px; border: 1px dashed var(--border-strong); border-radius: var(--radius-lg); background: transparent; color: var(--muted); padding: 12px; cursor: pointer; text-align: left; font-size: var(--font-size-sm); }
-.home-empty-recent:hover { border-color: var(--accent-border); background: var(--accent-soft); color: var(--text); }
+/* v10.5.0 : l'état vide de recherche informe ; ce n'est pas une action cliquable. */
+.home-empty-recent { min-height: 60px; border: 1px dashed var(--border-strong); border-radius: var(--radius-lg); background: transparent; color: var(--muted); padding: 12px; cursor: default; text-align: left; font-size: var(--font-size-sm); }
 .home-recent-new { margin-top: auto; width: 100%; justify-content: center; }
 
 .home-hub {
