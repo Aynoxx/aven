@@ -169,11 +169,11 @@ export function useAvenApp() {
   // Retourne la phrase de confirmation, affichée là où l'utilisateur regarde.
   const routeAppAction = (action: AppAction): string => {
     switch (action) {
-      // v10.4.0 : la page Projet (la carte du hub, l'assistant central) devient une
-      // destination vocale distincte des ESPACES DE TRAVAIL et du DOSSIER du projet.
+      // v10.5.0 : la commande vocale annonce la destination visible, Terminal Freebuff.
+      // L'identifiant open-project reste interne pour préserver le contrat de routage.
       case "open-project":
         openFreebuffAgent("project")
-        return "Page Projet ouverte."
+        return "Terminal Freebuff ouvert."
       case "go-home":
         goHome()
         return "Accueil."
@@ -185,7 +185,7 @@ export function useAvenApp() {
         return "Paramètres ouverts."
       case "open-agents":
         openAgentsPage()
-        return "Page des agents ouverte."
+        return "Orchestration ouverte."
       case "open-projects":
         openConfiguration("workspaces")
         return "Espaces ouverts."
