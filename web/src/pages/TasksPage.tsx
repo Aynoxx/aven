@@ -51,7 +51,7 @@ export default function TasksPage({ app }: { app: AvenApp }) {
                 <div className="agent-card-icon"><Icon name="sparkle" size={24} /></div>
                 <div className="agent-card-body">
                   <span className="agent-card-id"><em className="orchestrator-badge">Agent principal · délégation</em></span>
-                  <h2>{agentName("projet")}</h2>
+                  <h2>Aven · agent principal</h2>
                   <p>Comprend la demande, la découpe, délègue aux spécialistes, puis synthétise leur travail. Pour utiliser directement un spécialiste, ouvre une conversation dédiée à cet agent.</p>
                   <div className="tasks-mode-switch" role="group" aria-label="Mode de l'orchestrateur">
                     {TASK_MODES_UI.map((m) => (
