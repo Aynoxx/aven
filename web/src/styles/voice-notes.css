@@ -110,6 +110,11 @@
 .notes-tag-picker { display:inline-flex; flex-wrap:wrap; gap:6px; margin-left:8px; }
 .notes-render { min-width:0; overflow:auto; }
 .notes-render :first-child { margin-top:0; }
+/* v10.5.0 : les actions rares restent disponibles sans concurrencer la lecture de la note. */
+.notes-secondary-actions { position:relative; }
+.notes-secondary-actions > summary { border:1px solid var(--border); border-radius:var(--radius-sm); padding:6px 9px; color:var(--muted); cursor:pointer; font-size:var(--font-size-sm); list-style-position:inside; }
+.notes-secondary-actions[open] > summary { border-color:var(--accent-border); color:var(--text); background:var(--accent-soft); }
+.notes-secondary-actions-list { display:flex; flex-wrap:wrap; gap:6px; padding:8px 0; }
 
 /* Fichiers : explorateur intégré. */
 .files-dialog { width:var(--panel-workspace-w); height:var(--panel-workspace-h); padding:0; overflow:hidden; display:grid; grid-template-rows:auto 1fr; }
