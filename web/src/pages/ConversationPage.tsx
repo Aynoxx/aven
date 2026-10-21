@@ -286,7 +286,7 @@ export default function ConversationPage({ app }: { app: AvenApp }) {
             )}
             <main className="main">
               <div className="chat-titlebar">
-                <div><span className="eyebrow">SESSION</span>
+                <div><span className="eyebrow">SESSION · {agentName(tab)}</span>
                   {/* v10.2.2 : F2 renomme ici même quand la barre latérale est masquée. */}
                   {chatId && renamingChat === chatId && !appearance.showSidebar ? (
                     <input className="settings-input titlebar-rename" autoFocus value={chatValue} maxLength={120} aria-label="Titre de la conversation"
@@ -306,7 +306,7 @@ export default function ConversationPage({ app }: { app: AvenApp }) {
                       ))}
                     </div>
                   )}
-                  <button className="button ghost back-home-button" onClick={() => { setShowHome(false); setShowAgentsPage(true) }} aria-label="Voir la page des agents" type="button"><Icon name="agent" size={15} />Agents</button>
+                  <button className="button ghost back-home-button" onClick={() => { setShowHome(false); setShowAgentsPage(true) }} aria-label="Ouvrir l’orchestration" type="button"><Icon name="agent" size={15} />Orchestration</button>
                 </div>
               </div>
               <div className="main-scroll" ref={scrollRef} onScroll={onScroll}>{mainBlocks.map((id) => { if (id === "notices" && !appearance.showNotices) return null; if (id === "model" && !appearance.showModel) return null; if (id === "composer" && !appearance.showComposer) return null; return blocks.get(id)?.() })}</div>
