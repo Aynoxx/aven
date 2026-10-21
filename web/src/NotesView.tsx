@@ -192,7 +192,7 @@ export default function NotesView(props: Props) {
   }
 
   const tagName = (tag: string) => props.agents.find((a) => a.id === tag)?.name ?? tag
-  const activeAgentName = props.agents.find((a) => a.id === props.currentAgent)?.name ?? "agent actif"
+  const activeAgentName = props.currentAgent === "projet" ? "l’agent principal Aven" : props.agents.find((a) => a.id === props.currentAgent)?.name ?? "agent actif"
   const allTags = useMemo(() => [...new Set(Object.values(tags).flat())].sort((a, b) => a.localeCompare(b, "fr")), [tags])
   const visibleNote = (n: { id: string }) => !tagFilter || (tags[n.id] ?? []).includes(tagFilter)
 
