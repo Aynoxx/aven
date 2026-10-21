@@ -50,15 +50,15 @@ assert.match(intent, /- « ouvre le dossier du projet »[^\n]*= open-workspace/,
 // ajoutée en v10.5.0 peut, elle, apparaître plus tôt.
 const iWorkspace = intent.indexOf('action: "open-workspace"')
 const iProjects = intent.indexOf('action: "open-projects"')
-const iProjectGeneric = intent.indexOf('projets?\\b/i, intent: { intent: "app", action: "open-project" }')
-assert.ok(iWorkspace > 0 && iProjects > 0 && iProjectGeneric > 0, "les trois routes existent dans le filet")
-assert.ok(iWorkspace < iProjectGeneric && iProjects < iProjectGeneric,
-  "« dossier du projet » et « espaces » passent avant la route générique « projet »")
+const iAmbiguousProject = intent.indexOf('projets?\\b/i, intent: { intent: "chat" }')
+assert.ok(iWorkspace > 0 && iProjects > 0 && iAmbiguousProject > 0, "les trois routes existent dans le filet")
+assert.ok(iWorkspace < iAmbiguousProject && iProjects < iAmbiguousProject,
+  "« dossier du projet » et « espaces » sont reconnus avant le refus du projet ambigu")
 assert.match(intent, /action: "go-home"/, "le filet connaît le retour à l'accueil")
 
 // Un motif de commande l'emporte sur un verdict de modèle divergent (bug mesuré).
-assert.match(voice, /deterministic\?\.intent === "app"/,
-  "le filet de commande prime sur l'action du modèle (sinon « ouvre le projet » rouvre les Réglages)")
+assert.match(voice, /result\.intent = deterministic \?\? classified/,
+  "la décision déterministe prime sur le classifieur pour éviter une navigation ambiguë")
 assert.match(intentTests, /un motif de commande prime sur une action modèle divergente/,
   "le comportement d'arbitrage est testé")
 
