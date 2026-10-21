@@ -50,7 +50,7 @@ assert.match(app, /showFreebuffAgent/, "v9.5.0 : l'agent Freebuff est une page p
 assert.match(app, /freebuffCliEnsure/, "le flux d'installation reste branché (avis hub)")
 assert.ok(!css.includes(".hub-card-freebuff"), "v9.4.0 : la carte Freebuff a quitté le hub (page Assistants)")
 assert.match(css, /--hub-angle:90deg/) // v9.4.0 : 4 cartes réparties à 90°
-assert.match(settingsDialog, /Freebuff CLI gratuit/)
+assert.match(settingsDialog, /Terminal Freebuff/, "v10.5.0 : réglages du terminal nommés comme la destination réelle")
 // v9.2.0 : le lancement quotidien vit dans le terminal intégré (carte hub) ; les
 // Réglages gardent connexion (console externe) et installation.
 assert.match(settingsDialog, /Se connecter/)
