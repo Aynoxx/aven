@@ -30,7 +30,7 @@ Cette passe traduit les conclusions de la review fonctionnelle en modifications 
 
 - La configuration regroupe séparément les services IA, les notifications, le terminal Freebuff, les priorités des modèles et les espaces de travail.
 - Le sélecteur initial explique qu’un espace représente un dossier de projet et que les conversations, agents, priorités et explorations de fichiers dépendent de l’espace actif.
-- Les libellés vocaux distinguent le bouton de conversation sur l’accueil de la dictée dans le composeur.
+- Les libellés vocaux distinguent le bouton de conversation sur l’accueil de la dictée dans le composeur. « Ouvre Freebuff » ouvre le terminal ; « ouvre le projet » seul reste ambigu et ne déclenche aucune navigation, même si le classifieur IA suggère une action.
 
 ## Vérifications ajoutées ou réalignées
 
