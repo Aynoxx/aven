@@ -57,6 +57,7 @@ export const INTENT_SYSTEM_PROMPT = [
   "   - « ouvre Freebuff » ou « ouvre le terminal Freebuff » = open-project (page Terminal Freebuff), PAS les Réglages ;",
   "   - « ouvre les espaces de travail » / « change d'espace » = open-projects ;",
   "   - « ouvre le dossier du projet » / « ouvre les fichiers de l'espace » = open-workspace.",
+  "   - « ouvre le projet » sans préciser Freebuff ou le dossier est ambigu : classe en chat, n'exécute aucune action.",
   "2. Tâche pour un agent (l'utilisateur confie un travail à un agent) — cible parmi :",
   AGENT_LINES,
   '3. Dictée ordinaire (tout le reste : message, question, suite de conversation) : {"intent":"chat"}.',
@@ -86,8 +87,8 @@ function parseJsonLoose(content: string): unknown {
 // verbe d'action sur l'app, pas un objet quelconque : « ouvre le fichier main.ts » ne
 // déclenche rien). Testé sans réseau dans voice-intent.test.mjs.
 const FALLBACK_PATTERNS: Array<{ re: RegExp; intent: DictationIntent }> = [
-  // L'ORDRE compte : « espaces de travail » et « dossier du projet » passent avant le
-  // motif « projet », sinon « ouvre le projet » retombait sur les Réglages (mesuré).
+  // v10.5.0 : les libellés d'action doivent être explicites. « ouvre le projet » seul
+  // est ambigu et reste une dictée ordinaire ; il ne doit pas lancer une page au hasard.
   { re: /(?:ouvre|ouvrir|affiche|afficher|montre|montrer|va (?:à|aux?|sur))[^.?!]{0,30}(?:param[eè]tres?|r[eè]glages?)/i, intent: { intent: "app", action: "open-settings" } },
   { re: /(?:ouvre|ouvrir|affiche|afficher|montre|montrer|va (?:à|aux?|sur))[^.?!]{0,30}notes?\b/i, intent: { intent: "app", action: "open-notes" } },
   { re: /(?:ouvre|ouvrir|affiche|afficher|montre|montrer|va (?:à|aux?|sur))[^.?!]{0,30}(?:t[aâ]ches?|page d[es]? agents?|agents?)\b/i, intent: { intent: "app", action: "open-agents" } },
@@ -97,7 +98,7 @@ const FALLBACK_PATTERNS: Array<{ re: RegExp; intent: DictationIntent }> = [
   { re: /(?:ouvre|ouvrir|affiche|afficher|montre|montrer|va (?:à|aux?|sur))[^.?!]{0,30}(?:page freebuff|page terminal freebuff|terminal freebuff|freebuff(?![^.?!]{0,20}dans le terminal))/i, intent: { intent: "app", action: "open-project" } },
   { re: /(?:ouvre|ouvrir|affiche|afficher|montre|montrer|g[eè]re|g[eé]rer|change[rz]?)[^.?!]{0,30}(?:espaces\b|espace de travail|d['’]espace)/i, intent: { intent: "app", action: "open-projects" } },
   { re: /(?:ouvre|ouvrir|affiche|afficher|montre|montrer|va (?:à|aux?|sur))[^.?!]{0,30}(?:dossier\s+(?:du\s+|de l['’])?(?:projet|espace)|fichiers de l['’]espace|explorateur de fichiers)/i, intent: { intent: "app", action: "open-workspace" } },
-  { re: /(?:ouvre|ouvrir|affiche|afficher|montre|montrer|va (?:à|aux?|sur))[^.?!]{0,30}projets?\b/i, intent: { intent: "app", action: "open-project" } },
+  { re: /(?:ouvre|ouvrir|affiche|afficher|montre|montrer|va (?:à|aux?|sur))[^.?!]{0,30}projets?\b/i, intent: { intent: "chat" } },
   { re: /(?:ouvre|ouvrir|lance|lancer|d[eé]marre|d[eé]marrer)[^.?!]{0,30}freebuff/i, intent: { intent: "app", action: "open-freebuff" } },
   { re: /(?:ouvre|ouvrir|affiche|afficher|montre|montrer|va (?:à|aux?|sur))[^.?!]{0,30}statistiques?\b/i, intent: { intent: "app", action: "open-stats" } },
   { re: /nouvelle (?:conversation|discussion|chat)|nouveau chat/i, intent: { intent: "app", action: "new-chat" } },
