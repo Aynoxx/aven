@@ -31,8 +31,9 @@ const readme = read("README.md")
 
 // A. Hub reformé : Faire ×2 + Contenu ×2 (v9.4.0 : Freebuff a rejoint la page
 // Assistants, Statistiques vit dans Réglages/Usage depuis v9.3.0).
-assert.match(app, /key: "project", label: "Projet"/)
-assert.match(app, /key: "agents", label: "T\u00e2ches"/) // v9.6.0 : les spécialistes deviennent « Tâches »
+// v10.5.0 : les clés internes restent stables ; les libellés visibles nomment la destination.
+assert.match(app, /key: "project", label: "Freebuff", kind: "freebuff"/)
+assert.match(app, /key: "agents", label: "Orchestration"/)
 assert.match(app, /key: "files", label: "Fichiers"/)
 assert.match(app, /key: "notes", label: "Notes"/)
 assert.ok(!/key: "stats"/.test(app), "la carte Statistiques a quitté le cercle du hub (→ Réglages/Usage)")
