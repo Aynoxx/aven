@@ -1,0 +1,323 @@
+{
+  "start": {
+    "reduce": true,
+    "hub": true
+  },
+  "cards": [
+    {
+      "cls": "hub-card-project",
+      "x": 843,
+      "y": 175,
+      "anim": "none",
+      "selected": true,
+      "w": 148,
+      "h": 104
+    },
+    {
+      "cls": "hub-card-agents",
+      "x": 1052,
+      "y": 385,
+      "anim": "none",
+      "selected": true,
+      "w": 148,
+      "h": 104
+    },
+    {
+      "cls": "hub-card-files",
+      "x": 843,
+      "y": 594,
+      "anim": "none",
+      "selected": true,
+      "w": 148,
+      "h": 104
+    },
+    {
+      "cls": "hub-card-notes",
+      "x": 633,
+      "y": 385,
+      "anim": "none",
+      "selected": true,
+      "w": 148,
+      "h": 104
+    }
+  ],
+  "runs": [
+    {
+      "card": "notes",
+      "close": "escape",
+      "open": {
+        "ms": 1244,
+        "at30": {
+          "src": null,
+          "page": "page-main",
+          "title": "Notes de l'espace",
+          "hub": false,
+          "bodyH": 523.015625,
+          "vt": 0,
+          "stuckAnim": 0
+        },
+        "at150": {
+          "src": null,
+          "page": "page-main",
+          "title": "Notes de l'espace",
+          "hub": false,
+          "bodyH": 523.015625,
+          "vt": 0,
+          "stuckAnim": 0
+        },
+        "settled": {
+          "src": null,
+          "page": "page-main",
+          "title": "Notes de l'espace",
+          "hub": false,
+          "bodyH": 523.015625,
+          "vt": 0,
+          "stuckAnim": 0
+        }
+      },
+      "closeRun": {
+        "ms": 8,
+        "at30": {
+          "src": null,
+          "page": null,
+          "title": null,
+          "hub": true,
+          "bodyH": 0,
+          "vt": 0,
+          "stuckAnim": 0
+        },
+        "settled": {
+          "src": null,
+          "page": null,
+          "title": null,
+          "hub": true,
+          "bodyH": 0,
+          "vt": 0,
+          "stuckAnim": 0
+        }
+      }
+    },
+    {
+      "card": "files",
+      "close": "fermer",
+      "open": {
+        "ms": 1252,
+        "at30": {
+          "src": null,
+          "page": "page-main",
+          "title": "Fichiers de l'espace",
+          "hub": false,
+          "bodyH": 511.609375,
+          "vt": 0,
+          "stuckAnim": 0
+        },
+        "at150": {
+          "src": null,
+          "page": "page-main",
+          "title": "Fichiers de l'espace",
+          "hub": false,
+          "bodyH": 511.609375,
+          "vt": 0,
+          "stuckAnim": 0
+        },
+        "settled": {
+          "src": null,
+          "page": "page-main",
+          "title": "Fichiers de l'espace",
+          "hub": false,
+          "bodyH": 511.609375,
+          "vt": 0,
+          "stuckAnim": 0
+        }
+      },
+      "closeRun": {
+        "ms": 6,
+        "at30": {
+          "src": null,
+          "page": null,
+          "title": null,
+          "hub": true,
+          "bodyH": 0,
+          "vt": 0,
+          "stuckAnim": 0
+        },
+        "settled": {
+          "src": null,
+          "page": null,
+          "title": null,
+          "hub": true,
+          "bodyH": 0,
+          "vt": 0,
+          "stuckAnim": 0
+        }
+      }
+    },
+    {
+      "card": "agents",
+      "close": "escape",
+      "open": {
+        "ms": 1198,
+        "at30": {
+          "src": null,
+          "page": "page-main agents-main",
+          "title": "Un agent principal, des modes par besoin",
+          "hub": false,
+          "bodyH": 541.609375,
+          "vt": 0,
+          "stuckAnim": 0
+        },
+        "at150": {
+          "src": null,
+          "page": "page-main agents-main",
+          "title": "Un agent principal, des modes par besoin",
+          "hub": false,
+          "bodyH": 541.609375,
+          "vt": 0,
+          "stuckAnim": 0
+        },
+        "settled": {
+          "src": null,
+          "page": "page-main agents-main",
+          "title": "Un agent principal, des modes par besoin",
+          "hub": false,
+          "bodyH": 541.609375,
+          "vt": 0,
+          "stuckAnim": 0
+        }
+      },
+      "closeRun": {
+        "ms": 5,
+        "at30": {
+          "src": null,
+          "page": null,
+          "title": null,
+          "hub": true,
+          "bodyH": 0,
+          "vt": 0,
+          "stuckAnim": 0
+        },
+        "settled": {
+          "src": null,
+          "page": null,
+          "title": null,
+          "hub": true,
+          "bodyH": 0,
+          "vt": 0,
+          "stuckAnim": 0
+        }
+      }
+    },
+    {
+      "card": "project",
+      "close": "accueil",
+      "open": {
+        "ms": 1235,
+        "at30": {
+          "src": null,
+          "page": "page-main agents-main",
+          "title": "Freebuff",
+          "hub": false,
+          "bodyH": 523.015625,
+          "vt": 0,
+          "stuckAnim": 0
+        },
+        "at150": {
+          "src": null,
+          "page": "page-main agents-main",
+          "title": "Freebuff",
+          "hub": false,
+          "bodyH": 523.015625,
+          "vt": 0,
+          "stuckAnim": 0
+        },
+        "settled": {
+          "src": null,
+          "page": "page-main agents-main",
+          "title": "Freebuff",
+          "hub": false,
+          "bodyH": 523.015625,
+          "vt": 0,
+          "stuckAnim": 0
+        }
+      },
+      "closeRun": {
+        "ms": 3,
+        "at30": {
+          "src": null,
+          "page": null,
+          "title": null,
+          "hub": true,
+          "bodyH": 0,
+          "vt": 0,
+          "stuckAnim": 0
+        },
+        "settled": {
+          "src": null,
+          "page": null,
+          "title": null,
+          "hub": true,
+          "bodyH": 0,
+          "vt": 0,
+          "stuckAnim": 0
+        }
+      }
+    }
+  ],
+  "consoleErrors": [],
+  "sameTask": [
+    {
+      "card": "notes",
+      "open": {
+        "title": "Notes de l'espace",
+        "hub": false,
+        "src": null,
+        "bodyH": 523
+      },
+      "back": {
+        "hub": true,
+        "src": null
+      }
+    },
+    {
+      "card": "files",
+      "open": {
+        "title": "Fichiers de l'espace",
+        "hub": false,
+        "src": null,
+        "bodyH": 512
+      },
+      "back": {
+        "hub": true,
+        "src": null
+      }
+    },
+    {
+      "card": "agents",
+      "open": {
+        "title": "Un agent principal, des modes par besoin",
+        "hub": false,
+        "src": null,
+        "bodyH": 542
+      },
+      "back": {
+        "hub": true,
+        "src": null
+      }
+    },
+    {
+      "card": "project",
+      "open": {
+        "title": "Freebuff",
+        "hub": false,
+        "src": null,
+        "bodyH": 523
+      },
+      "back": {
+        "hub": true,
+        "src": null
+      }
+    }
+  ],
+  "note": "sameTask : card.click() puis lecture du DOM dans la MÊME tâche JS (aucun état intermédiaire possible) ; fermeture par le bouton Accueil/Fermer, hub relu immédiatement.",
+  "measurementNote": "runs[].open.ms / closeRun.ms incluent les pauses d’échantillonnage (120 + 500 / 400 ms) : ce ne sont PAS des latences. La latence se lit dans at30 (premier échantillon CDP après le clic) et dans sameTask (lecture dans la même tâche JS)."
+}

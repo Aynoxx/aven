@@ -51,7 +51,9 @@ function presenceOf(state: "starting" | "running" | "restarting"): { label: stri
   return { label: "En ligne", online: true }
 }
 
-export default function FreebuffAgentPage(props: { onError: (e: unknown) => void }) {
+// v10.4.0 : la page déclare son propre retour (« Fermer ») — la barre de fenêtre ne
+// duplique plus la sortie avec un second bouton qui ramenait au même endroit.
+export default function FreebuffAgentPage(props: { onError: (e: unknown) => void; onClose: () => void }) {
   const termHostRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<XtermLike | null>(null)
   const fitRef = useRef<{ fit: () => void; dispose: () => void } | null>(null)
@@ -319,6 +321,7 @@ export default function FreebuffAgentPage(props: { onError: (e: unknown) => void
       title: showTranscript ? "Revenir au terminal interactif" : "Lire la conversation (lecture seule)",
       pressed: showTranscript,
     },
+    { key: "close", label: "Fermer", icon: "close", variant: "ghost", onClick: props.onClose, className: "dialog-close", title: "Revenir à l'écran précédent (Échap)" },
   ]
 
   return (

@@ -1,3 +1,4 @@
+import { readApp } from "./lib/sources.mjs"
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import path from "node:path"
@@ -12,7 +13,7 @@ const intent = read("host/voice-intent.ts")
 const voice = read("host/voice.ts")
 const main = read("host/aven-app-host.ts") // v10.0.0 : remplace le main Electron
 const preload = read("web/src/types.ts") // v10.0.0 : remplace le preload (contrat OpenCodeApi)
-const app = read("web/src/App.tsx")
+const app = readApp()
 const types = read("web/src/types.ts")
 const tests = read("tests/voice-intent.test.mjs")
 

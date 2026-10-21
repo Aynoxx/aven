@@ -1,3 +1,4 @@
+import { readStyles } from "./lib/sources.mjs"
 import assert from "node:assert/strict"
 import { readFileSync, existsSync } from "node:fs"
 import path from "node:path"
@@ -19,7 +20,7 @@ const dialog = read("web/src/FreebuffAgentPage.tsx")
 const main = read("host/aven-app-host.ts") // v10.0.0 : remplace le main Electron
 const preload = read("web/src/types.ts") // v10.0.0 : remplace le preload (contrat OpenCodeApi)
 const types = read("web/src/types.ts")
-const css = read("web/src/App.css")
+const css = readStyles()
 const readme = read("README.md")
 
 // A. Le module PTY est PUR (sans Electron) et testé — RULES.md §8.

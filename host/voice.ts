@@ -147,7 +147,14 @@ export async function transcribeSpeech(
   // texte. L'exécution (routeAppAction) reste côté renderer, rien ne part chez l'agent.
   if (intentRes.status === "fulfilled") {
     const classified = intentRes.value
-    result.intent = classified.intent === "chat" ? (fallbackIntent(raw) ?? classified) : classified
+    // v10.4.0 : un motif déterministe de COMMANDE prime sur le modèle. Mesuré :
+    // « ouvre le projet » partait en open-projects (Réglages) alors que le motif
+    // désigne la page Projet. Les motifs exigent un VERBE + un NOM d'interface et
+    // restent bornés à 80 caractères : une phrase de contenu ne les déclenche pas.
+    const deterministic = fallbackIntent(raw)
+    result.intent = deterministic?.intent === "app"
+      ? deterministic
+      : classified.intent === "chat" ? (deterministic ?? classified) : classified
   } else {
     result.intent = fallbackIntent(raw)
   }

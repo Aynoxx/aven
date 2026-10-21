@@ -1,3 +1,4 @@
+import { readApp, readStyles } from "./lib/sources.mjs"
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import path from "node:path"
@@ -25,12 +26,12 @@ assert.ok(vMaj * 10000 + vMin * 100 + vPatch >= 100202, `version trop ancienne :
 const notes = read("host/notes.ts")
 const meta = read("host/notes-meta.ts")
 const host = read("host/aven-app-host.ts")
-const app = read("web/src/App.tsx")
+const app = readApp()
 const notesView = read("web/src/NotesView.tsx")
 const noteEditor = read("web/src/NoteEditor.tsx")
 const freebuff = read("web/src/FreebuffAgentPage.tsx")
 const settings = read("web/src/SettingsDialog.tsx")
-const css = read("web/src/App.css")
+const css = readStyles()
 const readme = read("README.md")
 
 // ── A. Chaîne de versions et documentation ─────────────────────────────────────

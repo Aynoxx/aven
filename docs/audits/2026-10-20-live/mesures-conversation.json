@@ -1,0 +1,40 @@
+{
+  "before": {
+    "hub": false,
+    "chats": 2
+  },
+  "created": {
+    "chats": 3,
+    "groups": [
+      "code3"
+    ],
+    "title": "Nouvelle conversation",
+    "page": null
+  },
+  "rest": {
+    "opacity": "0.35",
+    "size": "24x24",
+    "focusedWithin": false,
+    "hovered": false
+  },
+  "keyboard": {
+    "reached": true,
+    "focused": "chat-main",
+    "focusedWithin": true,
+    "opacity": "0.95286",
+    "outline": "solid 2px"
+  },
+  "hover": {
+    "hovered": true,
+    "opacity": "1"
+  },
+  "armed": {
+    "armed": true,
+    "opacity": "1",
+    "label": "Confirmer la suppression définitive"
+  },
+  "deleted": {
+    "chats": 2,
+    "empty": null
+  }
+}

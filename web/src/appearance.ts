@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { accentInks } from "./accent-contrast"
 
 export type Theme = "system" | "dark" | "light"
 export type Accent = "violet" | "blue" | "emerald" | "rose" | "amber" | "custom"
@@ -122,7 +123,18 @@ export function useAppearance() {
     const isDark = appearance.theme === "dark" ||
       (appearance.theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches)
     applyTheme(isDark ? "dark" : "light") // v10.2.0 (M4) : bascule en fondu
-    root.style.setProperty("--accent", accentColor(appearance))
+    const accent = accentColor(appearance)
+    root.style.setProperty("--accent", accent)
+    // v10.3.1 : l'accent ne sert plus d'encre à l'aveugle — quatre variables calculées
+    // par preset (v10.3.1, revue apple-design §4 P1) : le remplissage réellement peint,
+    // l'encre posée dessus, et l'encre d'accent pour chaque thème (App.css choisit
+    // `--accent-ink` selon `data-theme`). Blanc sur Émeraude tombait à 2,54:1.
+    const inks = accentInks(accent)
+    root.style.setProperty("--accent-fill", inks.fill)
+    root.style.setProperty("--accent-fill-hover", inks.fillHover)
+    root.style.setProperty("--on-accent", inks.onFill)
+    root.style.setProperty("--accent-ink-light", inks.inkLight)
+    root.style.setProperty("--accent-ink-dark", inks.inkDark)
     root.style.setProperty("--sidebar-width", `${appearance.sidebarWidth}px`)
     root.style.setProperty("--message-width", `${appearance.messageWidth}px`)
     root.style.setProperty("--density-gap", appearance.density === "compact" ? "8px" : "14px")

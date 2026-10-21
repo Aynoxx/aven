@@ -1,3 +1,4 @@
+import { readApp, readStyles } from "./lib/sources.mjs"
 import fs from 'node:fs'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -11,8 +12,8 @@ function check(name, ok, detail = '') {
   if (!ok) process.exitCode = 1
 }
 
-const app = read('web/src/App.tsx')
-const css = read('web/src/App.css')
+const app = readApp()
+const css = readStyles()
 const router = read('host/router.ts')
 const main = read('host/main.ts')
 const voice = read('web/src/live-voice.ts')

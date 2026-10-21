@@ -1,0 +1,171 @@
+/* v10.4.0 : Dialogues, Réglages, curseurs, interrupteurs — surfaces ponctuelles.
+   Extrait d'App.css — l'ordre des fichiers (App.css) reproduit l'ordre
+   d'origine, la cascade est inchangée. */
+
+/* Boîtes de dialogue (Réglages, Notes, formulaire d'agent, demande de permission…).
+   Il manquait tout le centrage et le style de base : .overlay ne centrait rien et
+   .dialog n'existait dans aucune règle, donc les panneaux s'affichaient sans fond ni
+   bordure, collés en haut à gauche de l'écran, avec des champs de formulaire bruts. */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  overflow-y: auto;
+  background: color-mix(in srgb, var(--bg) 76%, transparent);
+  backdrop-filter: blur(14px);
+}/* v10.3.1 (revue apple-design §4 P2) : MÊME chemin aller-retour. L'entrée et la sortie
+   partagent désormais exactement la même géométrie (10 px + scale .97) et des courbes
+   MIROIR (--ease-out pour entrer, --ease-out-mirror pour sortir) : la sortie était
+   40 % plus courte (6 px/.985) et changeait de courbe, donc la trajectoire mentait.
+   Le ressort (--ease-spring) n'entre plus ici : il est réservé aux gestes qui portent
+   de l'élan (skill §4 : un dépassement sur un panneau qui vient d'apparaître sonne
+   faux). Il ne reste que sur la barre de sélection, ouverte par un vrai geste. */
+@keyframes overlay-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes dialog-in { from { opacity: 0; transform: translateY(10px) scale(.97); } to { opacity: 1; transform: none; } }
+@keyframes dialog-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(10px) scale(.97); } }
+.overlay, .hub-picker-overlay, .home-modal-overlay { animation: overlay-in var(--dur-med) var(--ease-out) both; }
+.overlay > .dialog, .hub-picker-overlay > .hub-picker, .home-modal-overlay > .home-modal { animation: dialog-in var(--dur-med) var(--ease-out) both; view-transition-name: dialog; }
+/* Sortie via View Transition : le panneau qui ferme suit le MÊME chemin inversé.
+   Un seul panneau porte le nom à la fois (cas nominal) ; deux panneaux simultanés
+   (permission sur Notes) → startViewTransition lève → filet v10.0.1 : mise à jour
+   appliquée sans animation, jamais de casse. */
+::view-transition-old(dialog), ::view-transition-new(dialog) { animation-duration: var(--dur-med); animation-timing-function: var(--ease-out); }
+::view-transition-old(dialog) { animation-name: dialog-out; }
+/* v10.3.1 : courbe MIROIR de l'entrée (skill §7) — même trajectoire, parcourue à l'envers. */
+::view-transition-old(dialog) { animation-timing-function: var(--ease-out-mirror); }
+::view-transition-new(dialog) { animation-name: dialog-in; }
+.dialog {
+  position: relative;
+  width: min(460px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  padding: 20px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xl);
+  background: color-mix(in srgb, var(--panel-solid) 97%, transparent);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+.dialog h3 { margin: 0 0 10px; font-size: var(--font-size-lg); }
+.dialog pre { margin: 8px 0; padding: 10px; max-height: 220px; overflow: auto; border-radius: var(--radius-sm); background: var(--panel-soft); font-size: var(--font-size-xs); white-space: pre-wrap; word-break: break-word; }
+
+.field { display: grid; gap: 5px; margin: 12px 0; }
+.field input, .dialog input, .dialog select, select { width: 100%; padding: 8px 9px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--panel); color: var(--text); transition: border-color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out); }
+.field input:hover, .dialog input:hover, .dialog select:hover, select:hover { border-color: var(--accent-border); background: var(--panel-soft); }
+.field input:focus, .dialog input:focus, .dialog select:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); outline: none; }
+.hint { color: var(--muted); font-size: var(--font-size-xs); }
+.key-status { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; color: color-mix(in srgb, var(--success) 80%, var(--text)); font-size: var(--font-size-xs); font-weight: 700; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.row.end { justify-content: flex-end; }
+.settings-input { min-width: 190px; flex: 1 1 240px; }
+.dialog .row > .settings-input { width: auto; }
+
+.settings-section { padding: 18px 0; border-bottom: 1px solid var(--border); }
+.settings-section:last-child { border-bottom: 0; }
+/* v10.3.2 (revue apple-design §4 P3) : un TITRE de section est un seul rôle, mais il
+   mesurait 12 px/800 dans « Apparence » et 14 px/700 dans « Configuration »/« Usage »
+   (ces onglets-là passent par `h4`). Un cran au-dessus des libellés (md vs sm), même
+   poids que les h4 voisins : la hiérarchie de la colonne reste lisible sans que les
+   champs grandissent. */
+.section-title { font-size: var(--font-size-md); font-weight: 800; margin-bottom: 10px; }
+.section-hint { color: var(--muted); font-size: var(--font-size-sm); line-height: 1.45; margin: -4px 0 10px; }
+.segmented { display: flex; gap: 4px; padding: 3px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel); }
+.segmented button { flex: 1; border: 0; border-radius: var(--radius-xs); padding: 7px 5px; background: transparent; color: var(--muted); cursor: pointer; font-size: var(--font-size-sm); transition: transform var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out); }
+.segmented button:hover { background: var(--panel-soft); color: var(--text); }
+.segmented button:active { transform: scale(.98); }
+.segmented button.selected { background: var(--accent-soft); color: var(--text); box-shadow: inset 0 0 0 1px var(--accent-border), 0 3px 10px color-mix(in srgb, var(--accent) 8%, transparent); }
+.accent-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+.accent-choice { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 9px; display: flex; align-items: center; gap: 8px; background: var(--panel); color: var(--muted); cursor: pointer; font-size: var(--font-size-sm); }
+.accent-choice:hover { border-color: var(--accent-border); background: var(--panel-soft); color: var(--text); transform: translateY(-1px); }
+.accent-choice:active { transform: translateY(0); }
+.accent-choice.selected { border-color: var(--accent-border); background: var(--accent-soft); color: var(--text); box-shadow: 0 5px 16px color-mix(in srgb, var(--accent) 9%, transparent); }
+.accent-dot { width: 10px; height: 10px; border-radius: 50%; box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 8%, transparent); }
+.accent-custom { position: relative; }
+.accent-custom input[type="color"] { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; }
+/* v10.3.2 (revue apple-design §4 P3) : les libellés de contrôle étaient en 11 px
+   (`xs`, réservé aux micro-labels par AGENTS.md §2) — quatre rôles tenaient dans 2 px
+   (titre 12/800, libellé 11/400, valeur 11/700, hint 11/400). Le libellé et la valeur
+   passent en `sm` avec une interligne fixée : la hiérarchie se lit maintenant au POIDS
+   (400 libellé, 700 valeur) et au rôle, pas à 1 px près. */
+.setting-row, .toggle-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; padding: 8px 0; font-size: var(--font-size-sm); line-height: 1.35; }
+/* La valeur d'un curseur se cale au bord droit de la ligne au lieu de rester collée au
+   libellé (mesuré avant : 655 px de vide à droite, « 286px » à x=199). */
+.slider-row > span { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.setting-row b { color: var(--accent-ink); font-weight: 700; font-variant-numeric: tabular-nums; }
+.setting-row select { width: auto; min-width: 132px; }
+.slider-row { grid-template-columns: 1fr; gap: 8px; }
+.range-control { --range-progress: 50%; width: 100%; padding: 2px 0 4px; }
+.range-control input[type="range"] { --track: var(--border-strong); --fill: var(--accent); display: block; width: 100%; height: 22px; margin: 0; appearance: none; background: transparent; cursor: pointer; }
+.range-control input[type="range"]::-webkit-slider-runnable-track { height: 6px; border-radius: var(--radius-pill); background: linear-gradient(to right, var(--fill) 0 var(--range-progress), var(--track) var(--range-progress) 100%); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 5%, transparent); }
+.range-control input[type="range"]::-webkit-slider-thumb { appearance: none; width: 17px; height: 17px; margin-top: -5.5px; border: 3px solid var(--panel-solid); border-radius: 50%; background: var(--accent); box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 28%, transparent), 0 0 0 1px var(--accent-border); transition: transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out); }
+.range-control input[type="range"]:hover::-webkit-slider-thumb { transform: scale(1.08); box-shadow: 0 3px 12px color-mix(in srgb, var(--accent) 38%, transparent), 0 0 0 1px var(--accent-border); }
+.range-control input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px var(--accent-soft), 0 2px 10px color-mix(in srgb, var(--accent) 28%, transparent); }
+.range-control input[type="range"]::-moz-range-track { height: 6px; border-radius: var(--radius-pill); background: var(--track); }
+.range-control input[type="range"]::-moz-range-progress { height: 6px; border-radius: var(--radius-pill); background: var(--fill); }
+.range-control input[type="range"]::-moz-range-thumb { width: 11px; height: 11px; border: 3px solid var(--panel-solid); border-radius: 50%; background: var(--accent); box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 28%, transparent); }
+.toggle-row { padding: 7px 0; }
+.toggle-row input { appearance: none; width: 38px; height: 22px; margin: 0; border: 1px solid var(--border-strong); border-radius: var(--radius-pill); background: var(--panel-soft); cursor: pointer; position: relative; transition: background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out); }
+.toggle-row input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--muted); transition: transform var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out); }
+.toggle-row input:checked { background: var(--accent); border-color: var(--accent); }
+/* v10.2.0 (M7) : la pastille anime un transform (GPU), plus un `left` (layout peint à chaque frame). */
+.toggle-row input:checked::after { transform: translateX(16px); background: white; }
+.toggle-row input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sortable-list { display: grid; gap: 5px; }
+.sortable-item { display: flex; align-items: center; gap: 8px; padding: 8px 9px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel); cursor: grab; transition: border-color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out); }
+.sortable-item:active { cursor: grabbing; }
+.sortable-item:hover { border-color: var(--border-strong); background: var(--panel-soft); }
+.drag-handle { color: var(--muted); font-size: var(--font-size-md); line-height: 1; }
+.sortable-item > span:last-child { display: grid; gap: 2px; min-width: 0; }
+.sortable-item small { color: var(--muted); font-size: var(--font-size-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.drawer-footer { display: flex; justify-content: space-between; gap: 8px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); }
+
+.unified-settings { width: var(--panel-workspace-w); height: var(--panel-workspace-h); padding: 0; overflow: hidden; display: grid; grid-template-rows: auto auto 1fr; }
+.unified-settings-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 22px 24px 16px; border-bottom: 1px solid var(--border); }
+.unified-settings-header h3 { margin: 4px 0 5px; font-size: var(--font-size-xl); }
+.unified-settings-header .hint { margin: 0; max-width: 720px; }
+.dialog-close { width: 36px; height: 36px; min-height: 36px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--panel); color: var(--muted); cursor: pointer; font-size: var(--font-size-xl); line-height: 1; }
+.dialog-close:hover { color: var(--text); border-color: var(--border-strong); background: var(--panel-soft); }
+.settings-callout { display: grid; gap: 4px; margin: 14px 0 18px; padding: 12px 14px; border: 1px solid var(--accent-border); border-radius: var(--radius-md); background: var(--accent-soft); }
+.settings-callout b { font-size: var(--font-size-sm); }
+.settings-callout span { color: var(--muted); font-size: var(--font-size-sm); line-height: 1.5; }
+.settings-tabs { display: flex; gap: 6px; padding: 10px 24px 8px; border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--panel) 94%, transparent); }
+.settings-tabs button { border: 1px solid transparent; background: transparent; color: var(--muted); border-radius: var(--radius-sm); padding: 7px 13px; cursor: pointer; font-size: var(--font-size-sm); font-weight: 700; transition: transform var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
+.settings-tabs button:hover { color: var(--text); background: var(--panel-soft); }
+.settings-tabs button:active { transform: scale(.98); }
+.settings-tabs button.selected { color: var(--text); background: var(--accent-soft); border-color: var(--accent-border); }
+.unified-settings-scroll { min-height: 0; overflow: auto; padding: 0 24px 20px; }
+.settings-pane { min-width: 0; padding-top: 4px; }
+.settings-pane > h4 { margin: 18px 0 7px; font-size: var(--font-size-md); font-weight: 800; }
+.settings-pane-appearance .settings-section { max-width: 820px; }
+.sortable-item.is-dragged { opacity: .55; transform: scale(.99); }
+/* v10.2.0 (M8) : les listes triables se déplacent aussi au clavier (flèches) — le focus doit se voir. */
+.sortable-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.codeblock { margin: 9px 0; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; background: var(--code-bg); color: var(--term-fg); }
+.codeblock-bar { display: flex; align-items: center; justify-content: space-between; padding: 5px 8px; background: color-mix(in srgb, white 5%, transparent); color: var(--term-muted); font-size: var(--font-size-xs); }
+.codeblock-bar button { border: 1px solid color-mix(in srgb, white 10%, transparent); border-radius: var(--radius-xs); background: color-mix(in srgb, white 5%, transparent); color: var(--term-fg); cursor: pointer; padding: 3px 7px; font-size: var(--font-size-xs); }
+.codeblock pre { margin: 0; padding: 10px; overflow-x: auto; font-size: var(--font-size-xs); line-height: 1.55; }
+.codeblock code { font-family: var(--font-ui); }
+
+@media (max-width: 860px) {
+  .workspace-layout, .sidebar-right .workspace-layout { grid-template-columns: 220px minmax(0, 1fr); }
+  .sidebar { width: auto; }
+  .chat-actions button { opacity: 1; }
+  .model-assignment { display: none; }
+}
+
+@media (max-width: 680px) {
+  .workspace-layout, .sidebar-right .workspace-layout { grid-template-columns: 1fr; }
+  .sidebar { max-height: 34dvh; border-right: 0 !important; border-left: 0 !important; border-bottom: 1px solid var(--border); order: 1 !important; }
+  .main { order: 2 !important; min-height: 66dvh; }
+  .chat-list { max-height: 180px; }
+  .msg { max-width: 94%; }
+  .chat-titlebar { padding-inline: 14px; }
+}
+
+.sidebar-hidden .workspace-layout, .sidebar-hidden.sidebar-right .workspace-layout { grid-template-columns: minmax(0, 1fr); }
+

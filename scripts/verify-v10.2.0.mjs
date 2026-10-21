@@ -1,3 +1,4 @@
+import { readApp, readStyles } from "./lib/sources.mjs"
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import path from "node:path"
@@ -22,8 +23,8 @@ const pkg = JSON.parse(read("package.json"))
 const [vMaj, vMin, vPatch] = pkg.version.split(".").map(Number)
 assert.ok(vMaj * 10000 + vMin * 100 + vPatch >= 100200, `version trop ancienne : ${pkg.version}`)
 
-const css = read("web/src/App.css")
-const app = read("web/src/App.tsx")
+const css = readStyles()
+const app = readApp()
 const dictation = read("web/src/voice-dictation.ts")
 const notesView = read("web/src/NotesView.tsx")
 const settings = read("web/src/SettingsDialog.tsx")
@@ -116,15 +117,28 @@ assert.match(css, /@keyframes dialog-in/, "entrée dialog-in")
 assert.match(css, /@keyframes dialog-out/, "sortie dialog-out")
 assert.match(css, /::view-transition-old\(dialog\) \{ animation-name: dialog-out; \}/, "la sortie JOUE dialog-out (fermeture)")
 assert.match(css, /::view-transition-new\(dialog\) \{ animation-name: dialog-in; \}/, "l'entrée joue dialog-in")
-assert.match(css, /animation: dialog-in var\(--dur-med\) var\(--ease-spring\)/, "ressort RÉELLEMENT utilisé par l'entrée des dialogues (M12 : la token n'est plus morte)")
-assert.ok((css.match(/animation: popover-in var\(--dur-fast\) var\(--ease-spring\)/g) ?? []).length >= 2,
-  "M13 : selbar ET menu modèle se déploient depuis leur ancrage (popover-in + spring)")
+// AMENDEMENT v10.3.1 (revue apple-design §4 P2) : l'assertion d'origine exigeait le
+// ressort SUR l'entrée des dialogues. Le skill §4 le réserve aux gestes qui portent
+// de l'élan (« overshoot on a menu that just faded in feels wrong ») : la règle est
+// donc reformulée, aussi stricte, sur la nouvelle convention — le ressort reste
+// VIVANT (barre de sélection née d'un surlignage) et les apparitions sans geste
+// (panneaux, menu de modèle) passent en décélération.
+assert.match(css, /animation: dialog-in var\(--dur-med\) var\(--ease-out\)/,
+  "M12 (amendée v10.3.1) : l'entrée des dialogues utilise une décélération, pas un ressort")
+assert.match(css, /\.selbar \{[^}]*animation: popover-in var\(--dur-fast\) var\(--ease-spring\)/,
+  "M13 (amendée v10.3.1) : le ressort reste utilisé par un popover né d'un geste")
+assert.ok(!/\.model-select-menu \{[^}]*--ease-spring/.test(css),
+  "M13 (amendée v10.3.1) : un menu ouvert au clic ne rebondit pas")
 // v10.3.0 : la fermeture s'appelle `closePage` — elle ferme TOUTES les pages et
 // revient à l'écran d'origine (plus de `showHome` forcé). La transition est conservée.
-assert.match(app, /closePage = useCallback\(\(\) => withViewTransition\(/, "fermeture notes/fichiers/réglages en transition")
+// AMENDEMENT v10.3.1 : closePage garde l'esprit de la règle (toute fermeture passe
+// par une View Transition) et gagne la source du morph — on vérifie les deux.
+assert.match(app, /const closePage = useCallback\(\(\) => \{[\s\S]{0,900}?withViewTransition\(\(\) => \{[\s\S]{0,900}?\}, source\)/,
+  "fermeture des pages en transition, avec la carte d'origine comme source")
 assert.match(app, /withViewTransition\(\(\) => setShowConversationPicker\(false\)\)/, "conversation : fermeture en transition")
 assert.match(app, /withViewTransition\(\(\) => setShowSettings\(false\)\)/, "réglages : fermeture en transition")
-assert.match(app, /withViewTransition\(\(\) => \{ setShowAgentsPage\(false\); setShowHome\(true\) \}\)/, "page Tâches : fermeture en transition")
+assert.match(app, /showFreebuffAgent \|\| showFiles \|\| showAgentsPage \|\| showNotes \|\| showSettings\) closePage\(\)/,
+  "page Tâches : fermeture en transition, par le chemin commun (v10.3.1)")
 
 // ── F. Thème en fondu (M4) + signaux d'accessibilité complets (M5/M6) ────────
 assert.match(css, /\.theme-easing \*/, "fondu de bascule : classe CSS posée pendant 250 ms")

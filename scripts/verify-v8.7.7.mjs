@@ -1,3 +1,4 @@
+import { readApp } from "./lib/sources.mjs"
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import path from "node:path"
@@ -13,7 +14,7 @@ const main = read("host/main.ts")
 const providers = read("host/providers.ts")
 const preload = read("host/preload.cts")
 const notes = read("host/notes.ts")
-const app = read("web/src/App.tsx")
+const app = readApp()
 const types = read("web/src/types.ts")
 
 // ── Version et périmètre v8.7.7 : retrait de Gemini (vocal Live + clé Google) ──

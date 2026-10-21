@@ -1,0 +1,204 @@
+{
+  "settings": {
+    "close": {
+      "w": 99,
+      "h": 34
+    },
+    "rows": [
+      {
+        "t": "Clés API",
+        "size": "14px",
+        "weight": "800"
+      },
+      {
+        "t": "Notifications de",
+        "size": "14px",
+        "weight": "800"
+      },
+      {
+        "t": "Freebuff CLI gra",
+        "size": "14px",
+        "weight": "800"
+      },
+      {
+        "t": "Priorité des mod",
+        "size": "14px",
+        "weight": "800"
+      },
+      {
+        "t": "Espaces",
+        "size": "14px",
+        "weight": "800"
+      },
+      {
+        "t": "Fichiers de conf",
+        "size": "14px",
+        "weight": "800"
+      }
+    ],
+    "rowSize": null,
+    "rowLh": null,
+    "valueWeight": null,
+    "valueGapRight": null,
+    "tabs": 3
+  },
+  "tabs": [
+    {
+      "label": "Fermer",
+      "cls": "button ghost page-action d",
+      "outline": "solid 2px",
+      "color": "rgb(244, 63, 94)",
+      "radius": "2px",
+      "scope": "page"
+    },
+    {
+      "label": "Configuration",
+      "cls": "selected",
+      "outline": "solid 2px",
+      "color": "rgb(244, 63, 94)",
+      "radius": "2px",
+      "scope": "page"
+    },
+    {
+      "label": "Apparence",
+      "cls": "",
+      "outline": "solid 2px",
+      "color": "rgb(244, 63, 94)",
+      "radius": "2px",
+      "scope": "page"
+    },
+    {
+      "label": "Usage",
+      "cls": "",
+      "outline": "solid 2px",
+      "color": "rgb(244, 63, 94)",
+      "radius": "2px",
+      "scope": "page"
+    },
+    {
+      "label": "Clé API OpenRouter Free",
+      "cls": "settings-input",
+      "outline": "none 3px",
+      "color": "rgb(244, 245, 248)",
+      "radius": "2px",
+      "scope": "page"
+    },
+    {
+      "label": "Obtenir une clé",
+      "cls": "button secondary",
+      "outline": "solid 2px",
+      "color": "rgb(244, 63, 94)",
+      "radius": "2px",
+      "scope": "page"
+    },
+    {
+      "label": "Clé API Groq (chat + dictée)",
+      "cls": "settings-input",
+      "outline": "none 3px",
+      "color": "rgb(244, 245, 248)",
+      "radius": "2px",
+      "scope": "page"
+    },
+    {
+      "label": "Effacer",
+      "cls": "button danger",
+      "outline": "solid 2px",
+      "color": "rgb(244, 63, 94)",
+      "radius": "2px",
+      "scope": "page"
+    },
+    {
+      "label": "Obtenir une clé",
+      "cls": "button secondary",
+      "outline": "solid 2px",
+      "color": "rgb(244, 63, 94)",
+      "radius": "2px",
+      "scope": "page"
+    },
+    {
+      "label": "INPUT",
+      "cls": "",
+      "outline": "solid 2px",
+      "color": "rgb(244, 63, 94)",
+      "radius": "2px",
+      "scope": "page"
+    },
+    {
+      "label": "Copier le diagnostic",
+      "cls": "button secondary",
+      "outline": "solid 2px",
+      "color": "rgb(244, 63, 94)",
+      "radius": "2px",
+      "scope": "page"
+    },
+    {
+      "none": true
+    },
+    {
+      "label": "Se connecter",
+      "cls": "button secondary",
+      "outline": "solid 2px",
+      "color": "rgb(244, 63, 94)",
+      "radius": "2px",
+      "scope": "page"
+    },
+    {
+      "label": "Retirer de la liste",
+      "cls": "button danger",
+      "outline": "solid 2px",
+      "color": "rgb(244, 63, 94)",
+      "radius": "2px",
+      "scope": "page"
+    },
+    {
+      "label": "Nom du nouvel espace",
+      "cls": "settings-input",
+      "outline": "solid 2px",
+      "color": "rgb(244, 63, 94)",
+      "radius": "2px",
+      "scope": "page"
+    },
+    {
+      "label": "Créer un nouvel espace",
+      "cls": "button primary",
+      "outline": "solid 2px",
+      "color": "rgb(244, 63, 94)",
+      "radius": "2px",
+      "scope": "page"
+    }
+  ],
+  "escape": {
+    "hub": true,
+    "page": false,
+    "src": null
+  },
+  "mic": {
+    "disabled": false,
+    "label": "Dicter",
+    "title": "Maintiens pour dicter, relâche pour transcrire",
+    "cursor": "pointer",
+    "icon": "rgb(11, 13, 18)",
+    "bg": "linear-gradient(color(srgb 0.885961 0.233882 0.3"
+  },
+  "light": "hub-clair",
+  "layers": {
+    "auras": 2,
+    "orbits": 3,
+    "grid": 0,
+    "crosshair": 0,
+    "cards": 4
+  },
+  "darkSettings": "reglages-sombre",
+  "darkHub": "hub-sombre",
+  "dark": {
+    "theme": "dark",
+    "accentInk": "#f76f86",
+    "cardBg": "rgba(18, 21, 29, 0.78)",
+    "muted": "rgb(146, 153, 170)",
+    "bg": "color(srgb 0.150824 0.0548235 0.0853333)"
+  },
+  "final": {
+    "hub": true,
+    "theme": "light"
+  }
+}

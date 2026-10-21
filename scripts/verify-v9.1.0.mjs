@@ -1,3 +1,4 @@
+import { readApp, readStyles } from "./lib/sources.mjs"
 import assert from "node:assert/strict"
 import { existsSync as existsSync2 } from "node:fs"
 import { readFileSync } from "node:fs"
@@ -9,8 +10,8 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const read = (p) => readFileSync(path.join(root, p), "utf8")
 
 const pkg = JSON.parse(read("package.json"))
-const app = read("web/src/App.tsx")
-const css = read("web/src/App.css")
+const app = readApp()
+const css = readStyles()
 const appearance = read("web/src/appearance.ts")
 const settingsDialog = read("web/src/SettingsDialog.tsx")
 const notify = read("host/notify-policy.ts")

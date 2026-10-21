@@ -1,0 +1,134 @@
+[
+  {
+    "key": "notes",
+    "before": {
+      "hub": true,
+      "cards": 4,
+      "cls": null,
+      "source": null
+    },
+    "click": "ok",
+    "at50": {
+      "source": "notes",
+      "calls": 1,
+      "vis": "visible",
+      "focus": true,
+      "reduce": false,
+      "hub": false,
+      "page": "page-main",
+      "named": [
+        "notes-dialog"
+      ],
+      "anims": []
+    },
+    "at160": {
+      "source": "notes",
+      "calls": 1,
+      "vis": "visible",
+      "focus": true,
+      "reduce": false,
+      "hub": false,
+      "page": "page-main",
+      "named": [
+        "notes-dialog"
+      ],
+      "anims": []
+    },
+    "opened": {
+      "title": "Notes de l'espace",
+      "page": "page-main",
+      "source": "notes",
+      "calls": 1
+    },
+    "close50": {
+      "source": "notes",
+      "calls": 2,
+      "vis": "visible",
+      "focus": true,
+      "reduce": false,
+      "hub": true,
+      "page": null,
+      "named": [
+        "hub-card-notes"
+      ],
+      "anims": []
+    },
+    "closed": {
+      "hub": true,
+      "cards": 4,
+      "source": null,
+      "calls": 2,
+      "page": null
+    }
+  },
+  {
+    "key": "files",
+    "before": {
+      "hub": true,
+      "cards": 4,
+      "cls": null,
+      "source": null
+    },
+    "click": "ok",
+    "at50": {
+      "source": "files",
+      "calls": 3,
+      "vis": "visible",
+      "focus": true,
+      "reduce": false,
+      "hub": false,
+      "page": "page-main",
+      "named": [
+        "files-dialog"
+      ],
+      "anims": []
+    },
+    "at160": {
+      "source": null,
+      "calls": 3,
+      "vis": "visible",
+      "focus": true,
+      "reduce": false,
+      "hub": false,
+      "page": "page-main",
+      "named": [],
+      "anims": []
+    },
+    "opened": {
+      "title": "Fichiers de l'espace",
+      "page": "page-main",
+      "source": null,
+      "calls": 3
+    },
+    "close50": {
+      "source": "files",
+      "calls": 4,
+      "vis": "visible",
+      "focus": true,
+      "reduce": false,
+      "hub": true,
+      "page": null,
+      "named": [
+        "hub-card-files"
+      ],
+      "anims": []
+    },
+    "closed": {
+      "hub": true,
+      "cards": 4,
+      "source": null,
+      "calls": 4,
+      "page": null
+    }
+  },
+  {
+    "key": "tasks",
+    "before": {
+      "hub": true,
+      "cards": 4,
+      "cls": null,
+      "source": null
+    },
+    "click": "ABSENT"
+  }
+]

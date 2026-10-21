@@ -3,12 +3,15 @@
 // dans le composeur, JAMAIS directement chez l'agent : c'est l'utilisateur qui valide.
 import { useCallback, useEffect, useRef, useState } from "react"
 import { api } from "./api"
+import type { DictationOrigin } from "./dictation-routing"
 import type { DictationResult } from "./types"
 
 export type DictationState = "idle" | "recording" | "transcribing" | "error"
 
 export function useDictation(options: {
-  onText: (result: DictationResult) => void
+  // v10.4.0 : `origin` dit d'où vient le micro (hub ou composeur) — l'appelant en
+  // dépend pour ne pas exécuter une action depuis la zone de rédaction.
+  onText: (result: DictationResult, origin: DictationOrigin) => void
   onError: (message: string) => void
   /** Enregistrement trop court pour contenir de la parole (< ~75 ms). */
   onTooShort?: () => void
@@ -24,6 +27,9 @@ export function useDictation(options: {
   const streamRef = useRef<MediaStream | null>(null)
   const mimeTypeRef = useRef("audio/webm")
   const cancellingRef = useRef(false)
+  // Provenance du clip en cours. Lue à l'ARRÊT (onstop), pas au démarrage : le
+  // résultat dépend de l'endroit où l'utilisateur tenait le micro.
+  const originRef = useRef<DictationOrigin>("composer")
 
   const cleanup = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop())
@@ -37,13 +43,14 @@ export function useDictation(options: {
   // commande vocale pouvait s'exécuter avec des handlers invalides (v9.1.3).
   const optionsRef = useRef(options)
   optionsRef.current = options
-  const onText = useCallback((result: DictationResult) => optionsRef.current.onText(result), [])
+  const onText = useCallback((result: DictationResult, origin: DictationOrigin) => optionsRef.current.onText(result, origin), [])
   const onError = useCallback((message: string) => optionsRef.current.onError(message), [])
   const onTooShort = useCallback(() => optionsRef.current.onTooShort?.(), [])
   const onEmpty = useCallback(() => optionsRef.current.onEmpty?.(), [])
 
-  const start = useCallback(async () => {
+  const start = useCallback(async (origin: DictationOrigin = "composer") => {
     if (recorderRef.current || state !== "idle") return
+    originRef.current = origin
     try {
       if (!navigator.mediaDevices?.getUserMedia) throw new Error("Le microphone n'est pas disponible dans cette fenêtre.")
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -80,7 +87,7 @@ export function useDictation(options: {
               onEmpty() // silence ou bruit sans parole : message clair plutôt que rien
               return
             }
-            onText(result)
+            onText(result, originRef.current)
           })
           .catch((err) => {
             setState("error")

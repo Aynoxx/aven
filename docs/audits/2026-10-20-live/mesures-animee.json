@@ -1,0 +1,95 @@
+{
+  "emulation": "Emulation.setEmulatedMedia prefers-reduced-motion=no-preference (le signal OS de cette machine reste reduce — mesuré)",
+  "cards": [
+    {
+      "ns": "hub-card-project",
+      "x": 772,
+      "y": 142
+    },
+    {
+      "ns": "hub-card-agents",
+      "x": 977,
+      "y": 350
+    },
+    {
+      "ns": "hub-card-files",
+      "x": 773,
+      "y": 553
+    },
+    {
+      "ns": "hub-card-notes",
+      "x": 570,
+      "y": 350
+    }
+  ],
+  "notes": {
+    "during": {
+      "s": "notes",
+      "a": 10,
+      "p": true
+    },
+    "final": {
+      "h": false,
+      "p": true,
+      "t": "Notes de l'espace",
+      "s": null,
+      "a": 0
+    }
+  },
+  "afterEscNotes": {
+    "h": true,
+    "p": false,
+    "t": null,
+    "s": null,
+    "a": 0
+  },
+  "files": {
+    "during": {
+      "s": "files",
+      "a": 10,
+      "p": true
+    },
+    "final": {
+      "h": false,
+      "p": true,
+      "t": "Fichiers de l'espace",
+      "s": null,
+      "a": 0
+    }
+  },
+  "tasks": {
+    "during": {
+      "s": "tasks",
+      "a": 10,
+      "p": true
+    },
+    "final": {
+      "h": false,
+      "p": true,
+      "t": "Un agent principal, des modes par besoin",
+      "s": null,
+      "a": 0
+    }
+  },
+  "project": {
+    "during": {
+      "s": "project",
+      "a": 10,
+      "p": true
+    },
+    "final": {
+      "h": false,
+      "p": true,
+      "t": "Freebuff",
+      "s": null,
+      "a": 0
+    }
+  },
+  "afterEscProject": {
+    "h": true,
+    "p": false,
+    "t": null,
+    "s": null,
+    "a": 0
+  }
+}

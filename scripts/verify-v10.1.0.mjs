@@ -1,3 +1,4 @@
+import { readApp, readStyles } from "./lib/sources.mjs"
 import assert from "node:assert/strict"
 import { existsSync, readFileSync } from "node:fs"
 import path from "node:path"
@@ -22,8 +23,8 @@ const main = read("host/aven-app-host.ts")
 const notes = read("host/notes.ts")
 const notesMeta = read("host/notes-meta.ts")
 const types = read("web/src/types.ts")
-const app = read("web/src/App.tsx")
-const css = read("web/src/App.css")
+const app = readApp()
+const css = readStyles()
 const notesView = read("web/src/NotesView.tsx")
 const noteEditor = read("web/src/NoteEditor.tsx")
 const markdown = read("web/src/Markdown.tsx")

@@ -1,0 +1,708 @@
+{
+  "start": {
+    "reduce": false,
+    "hub": true,
+    "cards": 4
+  },
+  "notes": {
+    "card": {
+      "x": 633,
+      "y": 385,
+      "w": 148,
+      "h": 104
+    },
+    "openAt55": {
+      "src": "notes",
+      "vt": [
+        {
+          "p": "group(hub-target)",
+          "n": "-ua-view-transition-group-anim-hub-target",
+          "d": 250,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "group(root)",
+          "n": "-ua-view-transition-group-anim-root",
+          "d": 250,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "new(root)",
+          "n": "-ua-view-transition-fade-in",
+          "d": 240,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "new(root)",
+          "n": "-ua-mix-blend-mode-plus-lighter",
+          "d": 240,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "old(root)",
+          "n": "-ua-view-transition-fade-out",
+          "d": 120,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "old(root)",
+          "n": "-ua-mix-blend-mode-plus-lighter",
+          "d": 120,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "new(hub-target)",
+          "n": "-ua-view-transition-fade-in",
+          "d": 240,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "new(hub-target)",
+          "n": "-ua-mix-blend-mode-plus-lighter",
+          "d": 240,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "old(hub-target)",
+          "n": "-ua-view-transition-fade-out",
+          "d": 240,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "old(hub-target)",
+          "n": "-ua-mix-blend-mode-plus-lighter",
+          "d": 240,
+          "e": "linear",
+          "t": 17
+        }
+      ]
+    },
+    "openAt185": {
+      "src": null,
+      "vt": []
+    },
+    "opened": {
+      "title": "Notes de l'espace",
+      "page": "page-main",
+      "src": null
+    },
+    "closeAt55": {
+      "src": "notes",
+      "vt": [
+        {
+          "p": "group(hub-target)",
+          "n": "-ua-view-transition-group-anim-hub-target",
+          "d": 250,
+          "e": "linear",
+          "t": 34
+        },
+        {
+          "p": "group(root)",
+          "n": "-ua-view-transition-group-anim-root",
+          "d": 250,
+          "e": "linear",
+          "t": 34
+        },
+        {
+          "p": "new(root)",
+          "n": "-ua-view-transition-fade-in",
+          "d": 240,
+          "e": "linear",
+          "t": 34
+        },
+        {
+          "p": "new(root)",
+          "n": "-ua-mix-blend-mode-plus-lighter",
+          "d": 240,
+          "e": "linear",
+          "t": 34
+        },
+        {
+          "p": "old(root)",
+          "n": "-ua-view-transition-fade-out",
+          "d": 120,
+          "e": "linear",
+          "t": 34
+        },
+        {
+          "p": "old(root)",
+          "n": "-ua-mix-blend-mode-plus-lighter",
+          "d": 120,
+          "e": "linear",
+          "t": 34
+        },
+        {
+          "p": "new(hub-target)",
+          "n": "-ua-view-transition-fade-in",
+          "d": 240,
+          "e": "linear",
+          "t": 34
+        },
+        {
+          "p": "new(hub-target)",
+          "n": "-ua-mix-blend-mode-plus-lighter",
+          "d": 240,
+          "e": "linear",
+          "t": 34
+        },
+        {
+          "p": "old(hub-target)",
+          "n": "-ua-view-transition-fade-out",
+          "d": 240,
+          "e": "linear",
+          "t": 34
+        },
+        {
+          "p": "old(hub-target)",
+          "n": "-ua-mix-blend-mode-plus-lighter",
+          "d": 240,
+          "e": "linear",
+          "t": 34
+        }
+      ]
+    },
+    "closed": {
+      "hub": true,
+      "src": null,
+      "cards": 4
+    }
+  },
+  "files": {
+    "card": {
+      "x": 843,
+      "y": 594,
+      "w": 148,
+      "h": 104
+    },
+    "openAt55": {
+      "src": "files",
+      "vt": [
+        {
+          "p": "group(hub-target)",
+          "n": "-ua-view-transition-group-anim-hub-target",
+          "d": 250,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "group(root)",
+          "n": "-ua-view-transition-group-anim-root",
+          "d": 250,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "new(root)",
+          "n": "-ua-view-transition-fade-in",
+          "d": 240,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "new(root)",
+          "n": "-ua-mix-blend-mode-plus-lighter",
+          "d": 240,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "old(root)",
+          "n": "-ua-view-transition-fade-out",
+          "d": 120,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "old(root)",
+          "n": "-ua-mix-blend-mode-plus-lighter",
+          "d": 120,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "new(hub-target)",
+          "n": "-ua-view-transition-fade-in",
+          "d": 240,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "new(hub-target)",
+          "n": "-ua-mix-blend-mode-plus-lighter",
+          "d": 240,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "old(hub-target)",
+          "n": "-ua-view-transition-fade-out",
+          "d": 240,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "old(hub-target)",
+          "n": "-ua-mix-blend-mode-plus-lighter",
+          "d": 240,
+          "e": "linear",
+          "t": 17
+        }
+      ]
+    },
+    "openAt185": {
+      "src": null,
+      "vt": []
+    },
+    "opened": {
+      "title": "Fichiers de l'espace",
+      "page": "page-main",
+      "src": null
+    },
+    "closeAt55": {
+      "src": "files",
+      "vt": [
+        {
+          "p": "group(root)",
+          "n": "-ua-view-transition-group-anim-root",
+          "d": 250,
+          "e": "linear",
+          "t": 0
+        },
+        {
+          "p": "group(hub-target)",
+          "n": "-ua-view-transition-group-anim-hub-target",
+          "d": 250,
+          "e": "linear",
+          "t": 0
+        },
+        {
+          "p": "new(root)",
+          "n": "-ua-view-transition-fade-in",
+          "d": 240,
+          "e": "linear",
+          "t": 0
+        },
+        {
+          "p": "new(root)",
+          "n": "-ua-mix-blend-mode-plus-lighter",
+          "d": 240,
+          "e": "linear",
+          "t": 0
+        },
+        {
+          "p": "old(root)",
+          "n": "-ua-view-transition-fade-out",
+          "d": 120,
+          "e": "linear",
+          "t": 0
+        },
+        {
+          "p": "old(root)",
+          "n": "-ua-mix-blend-mode-plus-lighter",
+          "d": 120,
+          "e": "linear",
+          "t": 0
+        },
+        {
+          "p": "new(hub-target)",
+          "n": "-ua-view-transition-fade-in",
+          "d": 240,
+          "e": "linear",
+          "t": 0
+        },
+        {
+          "p": "new(hub-target)",
+          "n": "-ua-mix-blend-mode-plus-lighter",
+          "d": 240,
+          "e": "linear",
+          "t": 0
+        },
+        {
+          "p": "old(hub-target)",
+          "n": "-ua-view-transition-fade-out",
+          "d": 240,
+          "e": "linear",
+          "t": 0
+        },
+        {
+          "p": "old(hub-target)",
+          "n": "-ua-mix-blend-mode-plus-lighter",
+          "d": 240,
+          "e": "linear",
+          "t": 0
+        }
+      ]
+    },
+    "closed": {
+      "hub": true,
+      "src": null,
+      "cards": 4
+    }
+  },
+  "agents": {
+    "card": {
+      "x": 1052,
+      "y": 385,
+      "w": 148,
+      "h": 104
+    },
+    "openAt55": {
+      "src": "tasks",
+      "vt": [
+        {
+          "p": "group(hub-target)",
+          "n": "-ua-view-transition-group-anim-hub-target",
+          "d": 250,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "group(root)",
+          "n": "-ua-view-transition-group-anim-root",
+          "d": 250,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "new(root)",
+          "n": "-ua-view-transition-fade-in",
+          "d": 240,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "new(root)",
+          "n": "-ua-mix-blend-mode-plus-lighter",
+          "d": 240,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "old(root)",
+          "n": "-ua-view-transition-fade-out",
+          "d": 120,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "old(root)",
+          "n": "-ua-mix-blend-mode-plus-lighter",
+          "d": 120,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "new(hub-target)",
+          "n": "-ua-view-transition-fade-in",
+          "d": 240,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "new(hub-target)",
+          "n": "-ua-mix-blend-mode-plus-lighter",
+          "d": 240,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "old(hub-target)",
+          "n": "-ua-view-transition-fade-out",
+          "d": 240,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "old(hub-target)",
+          "n": "-ua-mix-blend-mode-plus-lighter",
+          "d": 240,
+          "e": "linear",
+          "t": 17
+        }
+      ]
+    },
+    "openAt185": {
+      "src": null,
+      "vt": []
+    },
+    "opened": {
+      "title": "Un agent principal, des modes par besoin",
+      "page": "page-main agents-main",
+      "src": null
+    },
+    "closeAt55": {
+      "src": "tasks",
+      "vt": [
+        {
+          "p": "group(hub-target)",
+          "n": "-ua-view-transition-group-anim-hub-target",
+          "d": 250,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "group(root)",
+          "n": "-ua-view-transition-group-anim-root",
+          "d": 250,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "new(root)",
+          "n": "-ua-view-transition-fade-in",
+          "d": 240,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "new(root)",
+          "n": "-ua-mix-blend-mode-plus-lighter",
+          "d": 240,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "old(root)",
+          "n": "-ua-view-transition-fade-out",
+          "d": 120,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "old(root)",
+          "n": "-ua-mix-blend-mode-plus-lighter",
+          "d": 120,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "new(hub-target)",
+          "n": "-ua-view-transition-fade-in",
+          "d": 240,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "new(hub-target)",
+          "n": "-ua-mix-blend-mode-plus-lighter",
+          "d": 240,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "old(hub-target)",
+          "n": "-ua-view-transition-fade-out",
+          "d": 240,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "old(hub-target)",
+          "n": "-ua-mix-blend-mode-plus-lighter",
+          "d": 240,
+          "e": "linear",
+          "t": 17
+        }
+      ]
+    },
+    "closed": {
+      "hub": true,
+      "src": null,
+      "cards": 4
+    }
+  },
+  "project": {
+    "card": {
+      "x": 843,
+      "y": 175,
+      "w": 148,
+      "h": 104
+    },
+    "openAt55": {
+      "src": "project",
+      "vt": [
+        {
+          "p": "group(root)",
+          "n": "-ua-view-transition-group-anim-root",
+          "d": 250,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "group(hub-target)",
+          "n": "-ua-view-transition-group-anim-hub-target",
+          "d": 250,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "new(root)",
+          "n": "-ua-view-transition-fade-in",
+          "d": 240,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "new(root)",
+          "n": "-ua-mix-blend-mode-plus-lighter",
+          "d": 240,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "old(root)",
+          "n": "-ua-view-transition-fade-out",
+          "d": 120,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "old(root)",
+          "n": "-ua-mix-blend-mode-plus-lighter",
+          "d": 120,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "new(hub-target)",
+          "n": "-ua-view-transition-fade-in",
+          "d": 240,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "new(hub-target)",
+          "n": "-ua-mix-blend-mode-plus-lighter",
+          "d": 240,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "old(hub-target)",
+          "n": "-ua-view-transition-fade-out",
+          "d": 240,
+          "e": "linear",
+          "t": 17
+        },
+        {
+          "p": "old(hub-target)",
+          "n": "-ua-mix-blend-mode-plus-lighter",
+          "d": 240,
+          "e": "linear",
+          "t": 17
+        }
+      ]
+    },
+    "openAt185": {
+      "src": null,
+      "vt": []
+    },
+    "opened": {
+      "title": "Freebuff",
+      "page": "page-main agents-main",
+      "src": null
+    },
+    "closeAt55": {
+      "src": "project",
+      "vt": [
+        {
+          "p": "group(hub-target)",
+          "n": "-ua-view-transition-group-anim-hub-target",
+          "d": 250,
+          "e": "linear",
+          "t": 0
+        },
+        {
+          "p": "group(root)",
+          "n": "-ua-view-transition-group-anim-root",
+          "d": 250,
+          "e": "linear",
+          "t": 0
+        },
+        {
+          "p": "new(root)",
+          "n": "-ua-view-transition-fade-in",
+          "d": 240,
+          "e": "linear",
+          "t": 0
+        },
+        {
+          "p": "new(root)",
+          "n": "-ua-mix-blend-mode-plus-lighter",
+          "d": 240,
+          "e": "linear",
+          "t": 0
+        },
+        {
+          "p": "old(root)",
+          "n": "-ua-view-transition-fade-out",
+          "d": 120,
+          "e": "linear",
+          "t": 0
+        },
+        {
+          "p": "old(root)",
+          "n": "-ua-mix-blend-mode-plus-lighter",
+          "d": 120,
+          "e": "linear",
+          "t": 0
+        },
+        {
+          "p": "new(hub-target)",
+          "n": "-ua-view-transition-fade-in",
+          "d": 240,
+          "e": "linear",
+          "t": 0
+        },
+        {
+          "p": "new(hub-target)",
+          "n": "-ua-mix-blend-mode-plus-lighter",
+          "d": 240,
+          "e": "linear",
+          "t": 0
+        },
+        {
+          "p": "old(hub-target)",
+          "n": "-ua-view-transition-fade-out",
+          "d": 240,
+          "e": "linear",
+          "t": 0
+        },
+        {
+          "p": "old(hub-target)",
+          "n": "-ua-mix-blend-mode-plus-lighter",
+          "d": 240,
+          "e": "linear",
+          "t": 0
+        }
+      ]
+    },
+    "closed": {
+      "hub": true,
+      "src": null,
+      "cards": 4
+    }
+  },
+  "panel": {
+    "panelOpen": {
+      "skip": true
+    },
+    "panelExit": {
+      "src": null,
+      "vt": []
+    },
+    "panelGone": {
+      "gone": true,
+      "hub": true
+    }
+  }
+}

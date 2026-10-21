@@ -1,3 +1,4 @@
+import { readApp, readStyles } from "./lib/sources.mjs"
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import path from "node:path"
@@ -15,10 +16,10 @@ const pkg = JSON.parse(read("package.json"))
 const [vMaj, vMin, vPatch] = pkg.version.split(".").map(Number)
 assert.ok(vMaj * 10000 + vMin * 100 + vPatch >= 90600, `version trop ancienne : ${pkg.version}`)
 
-const app = read("web/src/App.tsx")
+const app = readApp()
 const page = read("web/src/FreebuffAgentPage.tsx")
 const dims = read("web/src/pty-dims.ts")
-const css = read("web/src/App.css")
+const css = readStyles()
 const providers = read("host/providers.ts")
 const priorities = read("host/priorities.ts")
 const table = JSON.parse(read("model-priorities.json"))
@@ -88,12 +89,16 @@ const page922 = read("web/src/FreebuffAgentPage.tsx")
 assert.match(page922, /freebuffDesktopRunning/, "la page interroge la détection")
 assert.match(page922, /freebuff-conflict/, "bannière de conflit rendue")
 assert.match(page922, /déjà ouverte dans l'app Freebuff Desktop/, "message explicite attendu")
-const css922 = read("web/src/App.css")
+const css922 = readStyles()
 assert.match(css922, /\.freebuff-conflict/, "CSS de la bannière attendu")
 
 // K. v9.7.1 : shared element réellement branché (l'audit v9.7.0 l'a trouvé mort).
-assert.match(app, /openFreebuffAgent = \(source\?: "project"\) => withViewTransition/, "la page Freebuff accepte une source (morph carte→page)")
-assert.match(app, /openAgentsPage = \(source\?: "tasks"\) => withViewTransition/, "la page Tâches accepte une source")
+// AMENDEMENT v10.3.1 : l'ouverture est devenue un bloc (et non plus une expression
+// `=> withViewTransition`) parce qu'elle mémorise la carte d'origine AVANT la capture
+// du morph — la promesse vérifiée est la même : signature avec `source`, et source
+// réellement transmise à la transition.
+assert.match(app, /const openFreebuffAgent = \(source\?: "project"\) => \{[\s\S]{0,900}?withViewTransition\(\(\) => \{[\s\S]{0,900}?\}, source\)/, "la page Freebuff accepte une source (morph carte→page)")
+assert.match(app, /const openAgentsPage = \(source\?: "tasks"\) => \{[\s\S]{0,900}?withViewTransition\(\(\) => \{[\s\S]{0,900}?\}, source\)/, "la page Tâches accepte une source")
 assert.match(app, /openFreebuffAgent\("project"\)/, "la carte Projet passe sa source")
 assert.match(app, /openAgentsPage\("tasks"\)/, "la carte Tâches passe sa source")
 assert.match(css, /\[data-vt-source="project"\] \.freebuff-agent-page \{ view-transition-name: hub-target; \}/, "CSS : carte et page partagent le même view-transition-name")

@@ -1,4 +1,4 @@
-# Aven v10.3.0
+# Aven v10.4.0
 
 > ## v10.0.0 — 100 % Tauri (Electron et le natif retirés)
 > Aven est une **app Tauri 2** : la webview React parle à Rust (`src-tauri/`)
@@ -38,6 +38,63 @@ sondes de `npm run verify` réalignées sur cette réalité.
 > **v10.0.0 — fenêtre** : l'app démarre **maximisée** et **mémorise taille et
 position entre les lancements** (redimensionne, ferme, rouvre : tout est là) ;
 la barre de fenêtre vide a disparu de l'accueil (le hub commence par sa toolbar).
+> **v10.4.0 — la voix agit, et chaque écran dit où il ramène** :
+> ① **le micro du hub exécute la commande** — « ouvre le projet », « ouvre les
+> notes », « retour à l'accueil », « nouvelle conversation » partent directement ;
+> le filet déterministe prime sur le modèle, donc « ouvre le projet » ouvre la page
+> Projet au lieu des Réglages ; ② **le micro du composeur écrit, toujours** — une
+> dictée commencée dans une conversation y reste : plus de page qui s'ouvre pendant
+> que tu dictes ; ③ **plus de conversation vide** — le hub ne crée une conversation
+> qu'au moment où un texte arrive, pas à l'appui du micro ; ④ **une seule sortie par
+> écran** — la conversation garde « Accueil » dans la barre de fenêtre, chaque page
+> porte son « Fermer » : les deux boutons qui ramenaient au même endroit ont
+> disparu ; ⑤ **la barre suit la page** — plus de « Paramètres » dans les Réglages.
+> La sonde `scripts/verify-v10.4.0.mjs` fige ces conventions.
+>
+> **v10.3.2 — la finition : motion tokenisée, Réglages lisibles, hub allégé** :
+> ① **un seul vocabulaire de durées** — les transitions qui passaient encore des
+> durées et courbes en dur (survols de la sidebar, boutons, champs, onglets,
+> curseurs, cartes du hub, bascule de thème) suivent maintenant les tokens
+> `--dur-*`/`--ease-out` ; seules les boucles ambiantes (pouls, présence, dictée,
+> scintillement) gardent leur rythme propre, documenté et figé par sonde ;
+> ② **les libellés de Réglages se lisent** — les quatre rôles qui tenaient dans
+> 11 px (titre, libellé, valeur, hint) passent à l'échelle du projet : la
+> hiérarchie se lit au poids et au rôle, plus à 1 px près, et la valeur d'un
+> curseur se cale au bord droit de sa ligne ; ③ **plus d'écran vide au démarrage
+> en mouvement réduit** — `animation-delay` et `transition-delay` sont remis à
+> zéro par la neutralisation globale : la cascade des cartes du hub n'attend plus
+> 135 ms avant d'afficher quoi que ce soit ; ④ **les actions d'une conversation
+> se devinent** — au repos à 35 % au lieu de 15 %, et surtout révélées au CLAVIER
+> (`:focus-within`) comme au survol ; ⑤ **deux décors du hub retirés** (quadrillage
+> et croix) : les trois orbites, les deux auras et l'anneau portaient déjà la
+> constellation ; ⑥ **les cartes du hub restent sur leur orbite** — avec les
+> animations système activées, leur cascade écrasait le placement orbital et les
+> quatre cartes s'empilaient au centre, invisibles sous le micro : elles entrent
+> maintenant par `translate`/`scale`, qui se composent avec l'orbite ; ⑦ **le morph
+> se joue vraiment** — le callback de transition attendait deux frames, or le rendu
+> est suspendu pendant la mise à jour : la transition ne se résolvait jamais et le
+> changement d'écran était sec, sans animation. Le callback est synchrone (commit
+> React par `flushSync`) et le groupe du morph suit les mêmes tokens que ses deux
+> copies. La sonde `scripts/verify-v10.3.2.mjs` fige ces conventions.
+>
+> **v10.3.1 — les couleurs de l'accent redeviennent lisibles, et les pages se referment dans leur carte** :
+> ① **l'encre d'accent est calculée, plus supposée** — sur l'accent Émeraude par
+> défaut, le blanc d'un bouton primaire mesurait 2,54:1 et l'accent en texte 2,32:1
+> sur le fond : l'app choisit maintenant l'encre (blanche ou sombre), assombrit
+> l'accent juste ce qu'il faut et calcule une encre d'accent propre à chaque thème,
+> pour les cinq presets et les accents personnalisés — le seuil 4,5:1 est vérifié
+> par sonde sur les surfaces réelles (panneau, fond, teinte douce) ; ② **la dictée
+> dit la vérité** : sans clé Groq, le gros bouton du hub est réellement désactivé,
+> éteint, et son libellé annonce « Clé Groq requise » au lieu de rester cliquable en
+> promettant une action qu'il refusait ; ③ **« Fermer » retrouve sa taille** (99 ×
+> 21 px → une cible de 36 px) sans recouper le libellé ; ④ **les quatre cartes du
+> hub se transforment** : Notes et Fichiers s'ouvrent en morph depuis leur carte
+> comme Projet et Tâches, et toute page se referme dans la carte d'où elle vient
+> (Échap, « Fermer », « Accueil ») ; ⑤ **les panneaux partent comme ils arrivent** —
+> même translation, même échelle, courbe miroir — et le ressort n'est plus joué sur
+> une ouverture sans geste. Les conventions sont figées par
+> `scripts/verify-v10.3.1.mjs`.
+>
 > **v10.3.0 — Freebuff vraiment interactif, et une seule façon d'être une page** :
 > ① **le CLI Freebuff s'installe tout seul au démarrage** — un seul gestionnaire
 > vérifie `freebuff --version`, installe si besoin (une seule fois, même si tu ouvres

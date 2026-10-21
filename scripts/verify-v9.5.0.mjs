@@ -1,3 +1,4 @@
+import { readStyles } from "./lib/sources.mjs"
 import assert from "node:assert/strict"
 import { readFileSync, existsSync } from "node:fs"
 import path from "node:path"
@@ -26,7 +27,7 @@ const preload = read("web/src/types.ts")
 const types = read("web/src/types.ts")
 const prefs = read("host/prefs.ts")
 const dialog = read("web/src/FreebuffAgentPage.tsx")
-const css = read("web/src/App.css")
+const css = readStyles()
 const readme = read("README.md")
 
 // A. Pont catalogue : conversion .opencode → .agents (TypeScript AgentDefinition).

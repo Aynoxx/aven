@@ -305,10 +305,12 @@ try {
   if (envoiDesactive !== true) warn(`Freebuff : bouton Envoyer actif alors que la présence est « ${presence} »`)
   pass(`page Freebuff : présence affichée « ${presence.slice(0, 50)} », envoi ${envoiDesactive ? "correctement désactivé" : "AUTORISÉ"}`)
   await cdp.shot(`${OUT}/feat-freebuff.png`)
+  // v10.4.0 : la page Freebuff porte son propre « Fermer » (la barre de fenêtre n'a
+  // plus d'« Accueil » sur les pages : une seule affordance de retour par écran).
   const retours = await cdp.eval(`(() => {
-    const cibles = [...document.querySelectorAll(".window-tab, .freebuff-agent-page header button")].filter((b) => /Accueil/.test(b.textContent))
-    if (!cibles.length) return "aucun retour visible"
-    cibles[cibles.length - 1].click()
+    const b = document.querySelector(".page-actions .dialog-close")
+    if (!b) return "aucun retour visible"
+    b.click()
     return "ok"
   })()`)
   if (retours !== "ok") fail(`retour Freebuff : ${retours}`)

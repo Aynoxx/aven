@@ -63,7 +63,9 @@ export type FileEntry = { name: string; path: string; kind: "dir" | "file"; size
 export type TextFile = { path: string; size: number; truncated: boolean; content: string }
 export type Breadcrumb = { label: string; path: string }[]
 // Miroir de host/voice-intent.ts (contrat IPC identique, types dupliqués volontairement).
-export type AppAction = "open-notes" | "open-settings" | "open-agents" | "open-projects" | "open-workspace" | "open-freebuff" | "open-stats" | "new-chat"
+// v10.4.0 : « open-project » (page Projet) et « go-home » (accueil) — la page Projet
+// n'avait aucune commande vocale, et « ouvre le projet » tombait sur les Réglages.
+export type AppAction = "open-project" | "open-notes" | "open-settings" | "open-agents" | "open-projects" | "open-workspace" | "open-freebuff" | "open-stats" | "new-chat" | "go-home"
 export type DictationIntent =
   | { intent: "app"; action: AppAction } // commande d'application à exécuter
   | { intent: "agent"; target?: string } // tâche pour un autre agent (absent = courant)

@@ -38,6 +38,23 @@ test("fallbackIntent : commandes d'application courantes reconnues sans réseau"
   assert.deepEqual(fallbackIntent("crée une nouvelle discussion"), { intent: "app", action: "new-chat" })
 })
 
+// v10.4.0 : la page Projet, les espaces et le dossier sont TROIS destinations distinctes.
+// Le défaut mesuré : « ouvre le projet » ouvrait les Réglages (open-projects).
+test("fallbackIntent : projet / espaces / dossier ne se confondent plus", () => {
+  assert.deepEqual(fallbackIntent("ouvre le projet"), { intent: "app", action: "open-project" })
+  assert.deepEqual(fallbackIntent("affiche la page projet"), { intent: "app", action: "open-project" })
+  assert.deepEqual(fallbackIntent("ouvre les espaces de travail"), { intent: "app", action: "open-projects" })
+  assert.deepEqual(fallbackIntent("change d'espace"), { intent: "app", action: "open-projects" })
+  assert.deepEqual(fallbackIntent("ouvre le dossier du projet"), { intent: "app", action: "open-workspace" })
+  assert.deepEqual(fallbackIntent("ouvre les fichiers de l'espace"), { intent: "app", action: "open-workspace" })
+  assert.deepEqual(fallbackIntent("ouvre les tâches"), { intent: "app", action: "open-agents" })
+  assert.deepEqual(fallbackIntent("retour à l'accueil"), { intent: "app", action: "go-home" })
+  assert.deepEqual(fallbackIntent("reviens à l'accueil"), { intent: "app", action: "go-home" })
+  // Une demande de contenu reste une demande de contenu.
+  assert.equal(fallbackIntent("ouvre le fichier main.ts"), undefined)
+  assert.equal(fallbackIntent("corrige le bug du projet"), undefined)
+})
+
 test("fallbackIntent : routage d'agent et garde anti-faux positifs", () => {
   assert.deepEqual(fallbackIntent("passe sur l'agent code"), { intent: "agent", target: "code" })
   assert.deepEqual(fallbackIntent("bascule sur analyse"), { intent: "agent", target: "analyse" })
@@ -167,6 +184,19 @@ test("transcribeSpeech : texte ordinaire + classifieur en échec = aucune intent
   assert.equal(result.cleaned, undefined)
   assert.equal(result.intent, undefined) // aucun motif de commande : dictée ordinaire
   assert.equal(result.warning, "Rate limit exceeded")
+})
+
+// v10.4.0 : mesuré — le modèle classait « ouvre le projet » en open-projects (Réglages)
+// alors que le motif déterministe désigne la page Projet. Un motif de COMMANDE
+// (verbe + nom d'interface) prime donc sur le verdict du modèle.
+test("transcribeSpeech : un motif de commande prime sur une action modèle divergente", async () => {
+  const f = fakeFetch([
+    { match: "/audio/transcriptions", body: { text: "ouvre le projet" } },
+    { match: "/chat/completions", body: { choices: [{ message: { content: "Ouvre le projet." } }] }, left: 1 },
+    { match: "/chat/completions", body: { choices: [{ message: { content: '{"intent":"app","action":"open-projects"}' } }] } },
+  ])
+  const result = await transcribeSpeech(new Blob(["a"], { type: "audio/webm" }), f, KEY)
+  assert.deepEqual(result.intent, { intent: "app", action: "open-project" })
 })
 
 test("transcribeSpeech : échec du reformage n'empêche pas le routage d'intention", async () => {

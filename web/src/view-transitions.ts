@@ -9,9 +9,15 @@ type DocumentVT = Document & {
   startViewTransition?: (update: () => void | Promise<void>) => { finished: Promise<void> }
 }
 
-// Le callback de mise à jour est SYNCHRONE côté React 18 (les setState batchés hors
-// d'actu se vident au microtask suivant) : on double requestAnimationFrame pour garantir
-// que le nouveau rendu est peint AVANT que la capture ::new ne se fasse.
+// v10.3.2 : le callback de mise à jour est SYNCHRONE, sans attente de frame. Il
+// attendait deux requestAnimationFrame pour laisser React peindre : mesuré dans
+// l'app réelle (WebView2, animations système actives), cette attente NE SE RÉSOUT
+// JAMAIS — pendant la mise à jour, le navigateur suspend le rendu, donc les rAF
+// demandés DANS le callback ne partent pas : `ready` et `finished` restaient
+// pendantes, aucune animation de transition n'était créée (le morph ne s'est
+// jamais joué, seul le changement d'état passait, via le filet de 1 s).
+// La version synchrone anime réellement (mesuré : ready 13 ms, finished 269 ms).
+// C'est à l'appelant de committer React de façon synchrone (flushSync côté App).
 // v9.7.1 : `source` pose data-vt-source AVANT la capture (le CSS sélectionne la carte
 // source et la page cible par ce nom — morph carte→page) et le retire APRÈS la fin de
 // la transition (sinon deux vues portent le même view-transition-name ensuite).
@@ -37,10 +43,9 @@ export function withViewTransition(update: () => void, source?: string): void {
   const apply = () => { if (!applied) { applied = true; update() } }
   let transition: { finished: Promise<void> } | undefined
   try {
-    transition = doc.startViewTransition(() => new Promise<void>((resolve) => {
-      apply()
-      requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
-    }))
+    // v10.3.2 : retour synchrone (voir l'en-tête) — la capture ::new a lieu après
+    // l'application de l'état, jamais après une frame qui ne viendra pas.
+    transition = doc.startViewTransition(() => { apply() })
   } catch {
     apply()
   }

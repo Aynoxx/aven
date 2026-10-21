@@ -1,3 +1,4 @@
+import { readApp } from "./lib/sources.mjs"
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import path from "node:path"
@@ -12,7 +13,7 @@ const main = read("host/main.ts")
 const announcer = read("host/announcer.ts")
 const preload = read("host/preload.cts")
 const appearance = read("web/src/appearance.ts")
-const app = read("web/src/App.tsx")
+const app = readApp()
 const settings = read("web/src/SettingsDialog.tsx")
 const types = read("web/src/types.ts")
 

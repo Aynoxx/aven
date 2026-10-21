@@ -87,8 +87,25 @@ try {
   } finally {
     console.error = consoleErreur
   }
+
+  // 5) v10.3.2 : prefers-reduced-motion → état final IMMÉDIAT, aucune transition.
+  //    Le garde-fou est en tête de withViewTransition, AVANT la pose de la source et
+  //    l'appel à l'API. Rejoué dans l'app (mouvement système désactivé) : les quatre
+  //    cartes du hub ouvrent leur page finalisée au premier échantillon, source nulle.
+  let reduitAppels = 0
+  let reduitApi = 0
+  g.window = { matchMedia: (q) => ({ matches: q === "(prefers-reduced-motion: reduce)" }) }
+  g.document = {
+    documentElement: { dataset },
+    startViewTransition() { reduitApi++; return { finished: Promise.resolve() } },
+  }
+  withViewTransition(() => { reduitAppels++ }, "notes")
+  assert.equal(reduitAppels, 1, "reduce : mise à jour appliquée immédiatement (synchrone)")
+  assert.equal(reduitApi, 0, "reduce : startViewTransition jamais appelé")
+  assert.equal("vtSource" in dataset, false, "reduce : aucune source posée, rien à libérer")
 } finally {
   delete g.document
+  delete g.window
   g.requestAnimationFrame = undefined
 }
 

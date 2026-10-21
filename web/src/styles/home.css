@@ -1,0 +1,218 @@
+/* v10.4.0 : Accueil Aven : hub, cartes, récents, modales du hub.
+   Extrait d'App.css — l'ordre des fichiers (App.css) reproduit l'ordre
+   d'origine, la cascade est inchangée. */
+
+/* --- Accueil Aven : hub central + récents intégrés --- */
+:root {
+  --home-bg: color-mix(in srgb, var(--bg) 95%, var(--accent) 5%);
+  --home-orbit: color-mix(in srgb, var(--accent) 58%, var(--border));
+  --home-glow: color-mix(in srgb, var(--accent) 11%, transparent);
+  --home-surface: color-mix(in srgb, var(--panel) 94%, transparent);
+  --home-surface-strong: var(--panel-solid);
+  --home-surface-soft: color-mix(in srgb, var(--panel) 84%, transparent);
+}
+
+.window-chrome {
+  position: relative; z-index: 20; height: 44px; min-height: 44px;
+  display: flex; align-items: center; justify-content: flex-end;
+  padding: 0 8px 0 16px; background: var(--panel-solid); border-bottom: 1px solid var(--border);
+  -webkit-app-region: drag;
+}
+/* v10.2.0 (F2) : un scrim de dialogue floute déjà tout l'arrière-plan (blur 14) — les
+   surfaces du hub derrière n'ont pas à cumuler leur propre flou (3 backdrop-filters → 1). */
+body:has(.overlay) .home-toolbar, body:has(.hub-picker-overlay) .home-toolbar, body:has(.home-modal-overlay) .home-toolbar,
+body:has(.overlay) .home-recent, body:has(.hub-picker-overlay) .home-recent, body:has(.home-modal-overlay) .home-recent { backdrop-filter: none; }
+.window-bar-left { display: flex; align-items: center; gap: 8px; min-width: 0; margin-right: auto; -webkit-app-region: no-drag; }
+.window-status {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 28px; padding: 0 12px;
+  border: 1px solid var(--accent-border); border-radius: var(--radius-pill); color: var(--text); background: var(--accent-soft);
+  font-size: var(--font-size-sm); margin-right: 10px; -webkit-app-region: no-drag;
+}
+.window-tab {
+  display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 12px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel); color: var(--muted);
+  cursor: pointer; font-size: var(--font-size-sm); font-weight: 700; transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+}
+.window-tab:hover { background: var(--accent-soft); border-color: var(--accent-border); color: var(--text); transform: translateY(-1px); }
+.window-tab:active { transform: translateY(0); }
+.window-tab-icon { color: var(--accent-ink); }
+/* v10.0.x : sur l'accueil la barre ne contient plus rien (contrôles custom
+   supprimés, le hub a sa toolbar) — on la retire plutôt que de laisser 44 px
+   vides sous la barre Windows native. L'élément reste dans le DOM : les sondes
+   fumée/visuel attendent .window-chrome, seule sa place disparaît. */
+.window-chrome.window-chrome-home { display: none; }
+
+.home-main {
+  min-height: 0; flex: 1; overflow: hidden;
+  background: radial-gradient(circle at 50% 38%, var(--home-glow), transparent 28%),
+    radial-gradient(circle at 8% 100%, color-mix(in srgb, var(--accent) 5%, transparent), transparent 32%),
+    radial-gradient(circle at 94% 6%, color-mix(in srgb, var(--accent) 4%, transparent), transparent 28%), var(--home-bg);
+}
+.home-shell { position: relative; width: min(1480px, 100%); height: 100%; margin: 0 auto; display: flex; flex-direction: column; min-height: 0; }
+.home-toolbar {
+  min-height: 72px; padding: 12px clamp(16px, 3vw, 40px); display: grid;
+  grid-template-columns: minmax(190px, 1fr) minmax(320px, 680px) minmax(190px, 1fr);
+  align-items: center; gap: 22px; border-bottom: 1px solid var(--border); background: var(--home-surface); backdrop-filter: blur(20px) saturate(1.06);
+}
+.home-brand { min-width: 0; }
+.home-brand-button { width: fit-content; display: inline-flex; align-items: center; gap: 11px; border: 0; padding: 0; background: transparent; color: var(--text); cursor: pointer; text-align: left; }
+.home-brand .brand-mark { width: 38px; height: 38px; border-radius: var(--radius-md); flex: 0 0 auto; }
+.home-brand-copy { display: grid; gap: 2px; min-width: 0; }
+.home-brand-copy strong { font-size: var(--font-size-lg); letter-spacing: -.012em; }
+.home-brand-copy small { max-width: 30vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: var(--font-size-sm); }
+.home-brand-button:hover .brand-mark { transform: translateY(-1px) scale(1.02); box-shadow: 0 10px 28px color-mix(in srgb, var(--accent) 28%, transparent); }
+.home-command {
+  width: 100%; min-height: 44px; display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center;
+  gap: 10px; padding: 0 12px 0 15px; border: 1px solid var(--border-strong); border-radius: var(--radius-pill);
+  background: var(--home-surface-strong); box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 4%, transparent), 0 10px 30px color-mix(in srgb, var(--accent) 4%, transparent);
+  transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+}
+.home-command:focus-within { border-color: var(--accent-border); box-shadow: 0 0 0 4px var(--accent-soft), 0 16px 40px color-mix(in srgb, var(--accent) 8%, transparent); transform: translateY(-1px); }
+.home-command-icon { color: var(--muted); }
+.home-command input { min-width: 0; width: 100%; border: 0; outline: 0; background: transparent; color: var(--text); font-size: var(--font-size-md); padding: 3px 0; }
+.home-command input::placeholder { color: color-mix(in srgb, var(--muted) 88%, var(--text)); }
+.home-command kbd { white-space: nowrap; }
+.home-toolbar-actions { justify-self: end; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.home-toolbar-actions button { font: inherit; }
+.home-control { height: 36px; border: 1px solid var(--border); background: var(--home-surface); color: var(--text); cursor: pointer; transition: transform var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out); }
+.home-control:hover { border-color: var(--accent-border); background: var(--accent-soft); transform: translateY(-1px); box-shadow: 0 8px 20px color-mix(in srgb, var(--accent) 8%, transparent); }
+.home-control:active { transform: translateY(0); }
+/* v9.1.6 : bouton « Changer de projet » de la barre du hub — libellé caché quand la
+   fenêtre rétrécit, l'icône dossier reste seule (comportement du chip agent historique). */
+.home-project-button { padding-inline: 12px; font-weight: 600; }
+.home-project-button span { white-space: nowrap; }
+.home-project-button svg { color: var(--accent-ink); }
+
+.home-status { display: inline-flex; align-items: center; gap: 7px; padding: 0 5px 0 6px; color: var(--muted); font-size: var(--font-size-sm); white-space: nowrap; }
+.home-status .status-dot { width: 6px; height: 6px; }
+.button-icon { width: 36px; min-height: 36px; padding: 0; display: inline-grid; place-items: center; }
+.home-icon-button { border-radius: var(--radius-sm); color: var(--muted); }
+
+.home-content {
+  flex: 1; min-height: 0; overflow: hidden; display: grid; padding: 20px;
+}
+.home-workspace > * { min-width: 0; }
+.home-workspace {
+  min-height: 0; display: grid; grid-template-columns: minmax(244px, 292px) minmax(0, 1fr);
+  gap: clamp(14px, 2vw, 30px); align-items: stretch;
+}
+.home-hub-stage { min-width: 0; min-height: 0; display: grid; place-items: center; overflow: visible; }
+
+.home-recent {
+  min-height: 0; height: 100%; align-self: stretch; display: flex; flex-direction: column;
+  padding: 16px; border: 1px solid var(--border); border-radius: var(--radius-xl); background: var(--home-surface);
+  box-shadow: 0 18px 50px color-mix(in srgb, var(--text) 5%, transparent), inset 0 1px 0 color-mix(in srgb, white 32%, transparent);
+  backdrop-filter: blur(18px);
+}
+.home-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.home-section-heading > div:first-child { display: grid; gap: 2px; min-width: 0; }
+.home-section-heading strong { font-size: var(--font-size-md); }
+.home-text-button { min-height: 30px; padding-inline: 10px; font-size: var(--font-size-sm); }
+.home-recent-list { min-height: 0; overflow: auto; overscroll-behavior: contain; display: grid; grid-template-columns: 1fr; gap: 7px; align-content: start; }
+.home-recent-item {
+  min-width: 0; min-height: 64px; display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: 10px;
+  padding: 10px 11px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--home-surface-soft); color: var(--text); text-align: left; cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+.home-recent-item:hover, .home-recent-item:focus-visible { border-color: var(--accent-border); background: var(--accent-soft); transform: translateY(-1px); box-shadow: 0 10px 26px color-mix(in srgb, var(--accent) 7%, transparent); }
+.home-recent-item:active { transform: translateY(0) scale(.985); transition-duration: var(--dur-fast); }
+/* v9.1.6 : navigation flèches — l'item focusé est traité comme survolé (liseré accent),
+   le focus natif reste actif (accessibilité, RULES.md §12.2). */
+.home-recent-item:focus-visible { outline: none; }
+.home-recent-icon { width: 34px; height: 34px; display: grid; place-items: center; border-radius: var(--radius-sm); background: var(--accent-soft); color: var(--accent-ink); }
+.home-recent-copy { min-width: 0; display: grid; gap: 2px; }
+.home-recent-copy strong, .home-recent-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-recent-copy strong { font-size: var(--font-size-sm); }
+.home-recent-copy small { color: var(--muted); font-size: var(--font-size-xs); }
+.home-recent-arrow { color: var(--muted); transition: transform var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
+.home-recent-item:hover .home-recent-arrow { color: var(--accent-ink); transform: translateX(2px); }
+.home-empty-recent { min-height: 60px; border: 1px dashed var(--border-strong); border-radius: var(--radius-lg); background: transparent; color: var(--muted); padding: 12px; cursor: pointer; text-align: left; font-size: var(--font-size-sm); }
+.home-empty-recent:hover { border-color: var(--accent-border); background: var(--accent-soft); color: var(--text); }
+.home-recent-new { margin-top: auto; width: 100%; justify-content: center; }
+
+.home-hub {
+  /* v9.1.4 : rayon et tailles réduits — à ~716 px de hauteur utile, la 6ᵉ carte
+     (Statistiques, 180°) était coupée par le bord inférieur ; marge haute resserrée. */
+  position: relative; width: min(100%, 760px, calc(100vh - 130px)); aspect-ratio: 1 / 1; height: auto; min-height: 0; margin: 0;
+  container-type: inline-size;
+  --hub-r: clamp(196px, 37cqw, 272px);
+  --hub-card-w: clamp(124px, 11vw, 148px); --hub-card-h: clamp(98px, 7.6vw, 110px); --hub-core: clamp(184px, 24vmin, 236px);
+}
+.home-hub::after { content:""; position:absolute; left:50%; top:50%; width:calc(var(--hub-r) * 2); height:calc(var(--hub-r) * 2); transform:translate(-50%,-50%); border-radius:50%; border:1px solid color-mix(in srgb, var(--accent) 11%, transparent); pointer-events:none; }
+/* v10.3.2 (revue apple-design §4 P3) : le quadrillage (`.hub-grid-glow`) et la croix
+   (`.hub-crosshair`) sont retirés — deux décors sur huit qui doublaient info déjà
+   portée par les orbites et l'anneau (skill §16.1 : décider aussi ce qu'on ne dessine
+   pas). La constellation garde ses trois orbites, ses deux auras et son anneau. */
+.hub-aura,.hub-orbit { position:absolute; pointer-events:none; border-radius:50%; }
+.hub-aura-1 { width:78%; height:78%; left:50%; top:50%; transform:translate(-50%,-50%); background:color-mix(in srgb,var(--accent) 4%,transparent); filter:blur(18px); }
+.hub-aura-2 { width:58%; height:58%; left:50%; top:50%; transform:translate(-50%,-50%); background:color-mix(in srgb,var(--accent) 6%,transparent); filter:blur(12px); }
+.hub-orbit-outer { width:calc(var(--hub-r)*2); height:calc(var(--hub-r)*2); left:50%; top:50%; transform:translate(-50%,-50%); border:1px solid var(--home-orbit); opacity:.7; }
+.hub-orbit-inner { width:calc(var(--hub-r)*1.56); height:calc(var(--hub-r)*1.56); left:50%; top:50%; transform:translate(-50%,-50%); border:1px solid color-mix(in srgb,var(--accent) 19%,var(--border-strong)); opacity:.5; }
+.hub-orbit-core { width:calc(var(--hub-core) + 38px); height:calc(var(--hub-core) + 38px); left:50%; top:50%; transform:translate(-50%,-50%); border:1px solid color-mix(in srgb,var(--accent) 40%,var(--border-strong)); opacity:.62; }
+.hub-card {
+  --hub-angle:90deg; position:absolute; z-index:4; width:var(--hub-card-w); height:var(--hub-card-h); left:50%; top:50%; padding:13px 12px;
+  border:1px solid color-mix(in srgb,var(--border-strong) 86%,transparent); border-radius: var(--radius-xl); background:var(--home-surface); color:var(--text);
+  box-shadow:0 18px 40px color-mix(in srgb,var(--text) 7%,transparent),inset 0 1px 0 color-mix(in srgb,white 40%,transparent);
+  display:grid; justify-items:center; align-content:center; gap:7px; cursor:pointer;
+  transform:translate(-50%,-50%) rotate(var(--hub-angle)) translateY(calc(-1 * var(--hub-r))) rotate(calc(-1 * var(--hub-angle)));
+  transition:box-shadow var(--dur-fast) var(--ease-out),border-color var(--dur-fast) var(--ease-out),background-color var(--dur-fast) var(--ease-out);
+}
+/* v10.3.0 : plus de `scale()` au survol — la carte était composée (will-change:
+   transform) puis rastérisée à 1.025, ce qui rendait son texte flou au passage de
+   la souris (constaté sur WebView2, rendu fractionnaire). L'élévation reste portée
+   par la bordure accent, la surface et l'ombre : mêmes signaux, texte net. */
+.hub-card:hover { border-color:var(--accent-border); background:var(--home-surface-strong); box-shadow:0 22px 50px color-mix(in srgb,var(--accent) 13%,transparent),inset 0 1px 0 color-mix(in srgb,white 50%,transparent); }
+.hub-card:active { box-shadow:0 10px 26px color-mix(in srgb,var(--accent) 16%,transparent),inset 0 2px 6px color-mix(in srgb,var(--text) 12%,transparent); }
+.hub-card-icon { width:48px; height:48px; display:grid; place-items:center; border-radius: var(--radius-lg); background:color-mix(in srgb,var(--accent) 9%,var(--panel-soft)); color:var(--accent-ink); box-shadow:inset 0 0 0 1px var(--accent-border); }
+.hub-card-copy { display:grid; justify-items:center; gap:2px; min-width:0; text-align:center; }
+.hub-card-copy strong { font-size:var(--font-size-md); font-weight: 800; letter-spacing:.005em; }
+.hub-card-copy small { max-width:136px; color:var(--muted); font-size:var(--font-size-xs); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* v9.1.2 : 7 cartes réparties régulièrement (360/7 ≈ 51,43°). « Projet » (orchestrateur)
+   en haut, « Freebuff » (CLI gratuit, terminal) juste à côté — libellés distincts. */
+/* v9.3.0 : 5 cartes réparties à 72° (Statistiques a rejoint les Réglages → Usage). */
+.hub-card-project { --hub-angle:0deg; }
+.hub-card-agents { --hub-angle:90deg; }
+.hub-card-files { --hub-angle:180deg; }
+.hub-card-notes { --hub-angle:270deg; }
+
+/* Tuiles du panneau de statistiques (v8.11.0). */
+/* v9.1.0 : l'agent « projet » est à part — badge orchestrateur + liseré distinct. */
+.agent-card-orchestrator { border-color: color-mix(in srgb, var(--accent) 45%, var(--border-strong)); }
+.orchestrator-badge { font-style: normal; font-size: var(--font-size-xs); font-weight: 700; color: var(--accent-ink); border: 1px solid var(--accent-border); border-radius: var(--radius-pill); padding: 1px 7px; margin-left: 6px; }
+
+.stats-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px; }
+.stat-tile { display:grid; justify-items:center; gap:3px; padding:14px 10px; border:1px solid var(--border); border-radius: var(--radius-md); background:var(--home-surface-strong, var(--panel-soft)); text-align:center; }
+.stat-tile strong { font-size:1.45em; font-weight:800; }
+.stat-tile small { color:var(--muted); font-size:var(--font-size-xs); }
+.stat-wide { grid-column:1 / -1; }
+
+
+.hub-picker-overlay,.home-modal-overlay { position:fixed; inset:0; z-index:90; display:grid; place-items:center; padding:24px; background:color-mix(in srgb,var(--bg) 76%,transparent); backdrop-filter:blur(14px); }
+.hub-picker,.home-modal { width:min(420px,100%); max-height:min(72vh,520px); overflow:auto; border:1px solid var(--border-strong); border-radius: var(--radius-xl); background:var(--panel-solid); box-shadow:var(--shadow); padding:16px; }
+.hub-picker-header,.home-modal-header { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:12px; }
+.hub-picker-header > div,.home-modal-header > div { display:grid; gap:3px; }
+.hub-picker-title { font-size:var(--font-size-md); }
+.home-modal-header h2 { margin:2px 0 0; font-size:var(--font-size-lg); letter-spacing:-.02em; }
+.hub-picker-list,.home-modal-list { display:grid; gap:6px; }
+.hub-picker-item,.home-modal-item { text-align:left; border:1px solid var(--border); border-radius: var(--radius-md); padding:10px 12px; background:var(--panel); color:var(--text); cursor:pointer; display:grid; gap:2px; transition:border-color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
+.hub-picker-item:hover,.home-modal-item:hover { border-color:var(--accent-border); background:var(--panel-soft); transform:translateY(-1px); }
+/* v9.1.6 : navigation flèches — le focus clavier reçoit le même liseré que le survol.
+   outline:none assumé : le liseré accent + fond couvrent l'indice de focus (RULES.md §12.2). */
+.home-modal-item:focus-visible { outline:none; border-color:var(--accent-border); background:var(--panel-soft); transform:translateY(-1px); }
+.home-modal-list,.home-recent-list { scroll-behavior:smooth; }
+.hub-picker-item.active { border-color:var(--accent-border); background:var(--accent-soft); box-shadow:inset 0 0 0 1px var(--accent-border); }
+.hub-picker-item strong { font-size:var(--font-size-md); }
+.hub-picker-item small { color:var(--muted); font-size:var(--font-size-xs); line-height:1.4; }
+.home-modal-item { grid-template-columns:auto minmax(0,1fr) auto; align-items:center; }
+.home-modal-empty { padding:28px 14px; text-align:center; color:var(--muted); font-size:var(--font-size-sm); }
+/* v9.1.6 : modal « Changer de projet » du hub — même squelette que le sélecteur de
+   conversations, avec marque explicite du projet actif (badge + coche). */
+.project-modal { width:min(480px,100%); }
+.project-modal-hint { margin:0 0 12px; }
+.project-item.current { border-color:var(--accent-border); background:var(--accent-soft); box-shadow:inset 0 0 0 1px var(--accent-border); cursor:default; }
+.project-item.current:hover { transform:none; }
+.project-current-badge { font-style:normal; font-size:var(--font-size-xs); font-weight:700; color:var(--accent-ink); border:1px solid var(--accent-border); border-radius: var(--radius-pill); padding:0 7px; margin-left:8px; }
+.project-modal-actions { margin-top:14px; flex-wrap:wrap; }
+.project-item .home-recent-copy small { white-space:normal; word-break:break-all; }
+.back-home-button { min-height:34px; padding-inline:12px; }
+

@@ -9,10 +9,8 @@ accessibilité. Ces règles décrivent ce que le code fait DÉJÀ : en cas de do
 imite le fichier voisin le plus proche. Une contribution qui viole une règle se
 fait refuser par `npm run verify` (sondes automatiques).
 
-*(Fusion de l'ancien `RULES.md` du 2026-10-18 : §0 — la boucle obligatoire — a
-été retiré, ses points vivant dans les blocs ci-dessous ; §10 — modèles et
-gratuité — est fondue dans §9 ; la clause de conflit disparaît avec le second
-fichier.)*
+INSTRUCTION PRIMAIRE :
+Sois direct et honnête, pas agréable. Confronte mes idées lorsqu'elles sont faibles. Si j'ai faux dis juste "Tu as faux" et explique pourquoi. Note les idées sur 10 de manière honnête.
 
 Résumé en dix secondes :
 
@@ -87,7 +85,7 @@ Même quand tout est vert, la réponse finale contient toujours :
   existe` — le « pourquoi » prime sur le « quoi ». Un piège subtil corrigé
   (quoting Windows, CRLF, takeover Freebuff…) laisse l'explication sur place.
 
-## 2. Typographie (renderer, `web/src/App.css`)
+## 2. Typographie (renderer, `web/src/styles/*.css`)
 
 **Interdiction absolue : aucune taille, graisse ou police codée en dur.** Tout passe
 par les variables `:root` existantes, sinon thèmes et densités cassent.
@@ -110,20 +108,29 @@ par les variables `:root` existantes, sinon thèmes et densités cassent.
   `font-style: normal` — un badge n'est pas une emphase).
 - **Surbrillance d'eyebrow** : les libellés de section majuscules utilisent la classe
   `.eyebrow` existante (letter-spacing, uppercase) — ne recrée pas le style.
-- Une **nouvelle fonctionnalité = une nouvelle classe CSS** dans `App.css`, sectionnée
-  par un commentaire `/* v9.1.x : … */` placé près des styles voisins. Pas de style
-  inline sauf valeur calculée dynamiquement (position, largeur issue du state).
+- Une **nouvelle fonctionnalité = une nouvelle classe CSS** dans le fichier de sa
+  surface (`web/src/styles/` : base, chrome, dialogs, home, pages, voice-notes,
+  freebuff, motion), sectionnée par un commentaire `/* vX.Y.Z : … */` placé près des
+  styles voisins. `App.css` n'est qu'un manifeste d'imports — ne l'alourdis pas. Pas
+  de style inline sauf valeur calculée dynamiquement (position, largeur du state).
 
 ## 3. Couleurs et espacements
 
 - Couleurs : uniquement les tokens `--text`, `--muted`, `--border`, `--border-strong`,
   `--panel`, `--panel-solid`, `--panel-soft`, `--accent`, `--accent-soft`,
-  `--accent-border`, `--danger`, `--success`, `--warning`, `--bg`, `--shadow`.
+  `--accent-border`, `--accent-fill`, `--on-accent`, `--accent-ink`, `--danger`,
+  `--success`, `--warning`, `--bg`, `--shadow`.
+- **Trois rôles pour l'accent (v10.3.1)** : `--accent` = traits, bordures et halos ;
+  `--accent-ink` = TEXTE et icônes d'accent (encre assombrie en clair, éclaircée en
+  sombre) ; `--accent-fill` + `--on-accent` = remplissage et son encre (bouton
+  primaire, bulle utilisateur, micro). Ces trois valeurs sont calculées par preset
+  dans `web/src/accent-contrast.ts` — ne remets jamais `color: var(--accent)` sur du
+  texte : sur Émeraude, cela mesurait 2,32:1.
 - Une couleur inconnue (API, marque tierce) se mélange avec `color-mix(in srgb, …)`,
   jamais avec une valeur hexadécimale brute.
 - Espacements : réutilise `--density-gap` / `--density-pad` quand l'élément vit dans
   une vue à densité réglable ; sinon multiples de 2/4px cohérents avec les voisins.
-- Rayons : uniquement les tokens `--radius-*` de `:root` (App.css) — `xs` 6px (queues
+- Rayons : uniquement les tokens `--radius-*` de `:root` (`styles/base.css`) — `xs` 6px (queues
   de bulles, micro-contrôles), `sm` 10px (champs/boutons), `md` 12px (items de liste),
   `lg` 14px (tuiles/cartes), `xl` 20px (panneaux/dialogues), `pill` 999px (pilules et
   badges). Toute valeur hors échelle = une régression de cohérence.
@@ -183,7 +190,8 @@ par les variables `:root` existantes, sinon thèmes et densités cassent.
   `.unified-settings-scroll`, l'émulateur de terminal).
 - **Un vrai dialogue ponctuel** = un composant-fichier (`FormDialog.tsx`, dialogue de
   permission) ; une sur-structure d'interface partageant son état reste une fonction de
-  rendu dans `App.tsx`. Tout texte déjà affiché passe par `Markdown`/`RichMarkdown`,
+  rendu dans les pages (`web/src/pages/`) ou le shell (`web/src/app/AppShell.tsx`).
+  Tout texte déjà affiché passe par `Markdown`/`RichMarkdown`,
   jamais de HTML brut.
 - Les états de panneau sont fermés dans TOUTES les navigations (`selectAgent`,
   `goHome`, `openAgentsPage`, `closeNotesToHome`, Échap, effet `needsWorkspace`) —
@@ -192,6 +200,14 @@ par les variables `:root` existantes, sinon thèmes et densités cassent.
   recharger la page (`window.location.reload()` interdit : perd l'état visuel).
 - TypeScript strict : types du domaine dans `web/src/types.ts` (miroirs des contrats
   IPC ; duplication volontaire et commentée). Pas de `any` neuf.
+- **Un seul retour par écran (v10.4.0)** : la conversation garde « Accueil » dans la
+  barre de fenêtre ; chaque page porte son propre « Fermer » (dernier bouton de sa
+  barre d'actions) — les deux ensemble ramenaient au même endroit et ont été
+  supprimés. La barre de fenêtre n'affiche jamais l'entrée de l'écran où l'on se
+  trouve (pas de « Paramètres » dans les Réglages).
+- **Une dictée a une provenance (v10.4.0)** : le micro du composeur transcrit
+  TOUJOURS dans la chatbox ; seul celui du hub exécute les commandes d'application.
+  La décision vit dans `web/src/dictation-routing.ts` (module pur testé).
 
 ## 7. Architecture host/renderer (Tauri)
 
@@ -286,7 +302,8 @@ L'accessibilité d'Aven repose sur des pratiques déjà répandues dans le code
 - **Dialogues** : conteneur `role="dialog"` + `aria-modal="true"` + `aria-label`
   nommant le contenu (« Changer de projet », « Statistiques ») + fermeture au clic
   sur le fond (`e.target === e.currentTarget`) et à Échap (gérée dans le listener
-  global de `App.tsx`, dans l'ordre d'empilement des panneaux).
+  global du contrôleur (`web/src/app/use-aven-app.ts`), dans l'ordre d'empilement des
+  panneaux).
   Une **page** (`PageShell`) n'est pas un dialogue : elle n'est ni superposée ni
   modale, et n'annonce donc pas `aria-modal`.
 - **Groupes de contrôles** : une zone de navigation/outil porte un `role` et un nom
@@ -314,7 +331,7 @@ L'accessibilité d'Aven repose sur des pratiques déjà répandues dans le code
   modales conversations et projets) répondent à Haut/Bas (avec bouclage) et
   Home/End ; le focus suit la sélection et Entrée/Espace restent natifs. La
   logique vit dans le module pur `web/src/arrow-navigation.ts` (testé), le DOM
-  dans App.tsx — toute nouvelle liste suit ce modèle.
+  dans la page concernée (`web/src/pages/`) — toute nouvelle liste suit ce modèle.
 - Les raccourcis clavier existants (Ctrl+N, Ctrl+K, F2, Ctrl+Maj+V, Échap) sont
   documentés dans l'interface (`<kbd>`, `title`) : tout nouveau raccourci suit ce
   double affichage.
@@ -334,8 +351,15 @@ L'accessibilité d'Aven repose sur des pratiques déjà répandues dans le code
 
 ### 12.4 Mouvement et vivant
 
-- Le socle existe : `@media (prefers-reduced-motion: reduce)` neutralise durées et
-  répétitions. **Toute nouvelle animation CSS est couverte automatiquement** — ne
+- **Tokens obligatoires (v10.3.2)** : tout temps de RÉPONSE passe par `--dur-fast` /
+  `--dur-med` / `--dur-slow` et `--ease-out` / `--ease-spring` / `--ease-out-mirror`.
+  Une durée ou une courbe écrite en clair est une régression : régler le token ne
+  changerait plus l'écran. Seules exceptions, déclarées comme telles : les **boucles
+  ambiantes** (`infinite` — pulse, présence, dictée, shimmer), dont le rythme n'est
+  pas un temps d'attente, et le ressort réservé aux gestes qui portent un élan.
+- Le socle existe : `@media (prefers-reduced-motion: reduce)` neutralise durées,
+  **délais** et répétitions (l'état final est immédiat, jamais un élément qui attend
+  son décalage). **Toute nouvelle animation CSS est couverte automatiquement** — ne
   désactive pas ce bloc, n'ajoute pas d'animation JS hors de son périmètre.
 - Les animations sont discrètes (`fade-up .16–.22s`, translate 1–4px) : pas de
   parallaxe, pas d'animation > 300 ms, pas d'élément clignotant hors retour d'état

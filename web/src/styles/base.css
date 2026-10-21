@@ -1,0 +1,134 @@
+/* v10.4.0 : Jetons (:root), thème, reset, typographie de base, barres de défilement.
+   Extrait d'App.css — l'ordre des fichiers (App.css) reproduit l'ordre
+   d'origine, la cascade est inchangée. */
+
+:root {
+  color-scheme: light;
+  /* v10.2.0 (M1) : la « Inter » déclarée n'était JAMAIS chargée (aucun @font-face) —
+     fallback silencieux sur un graisse quelconque. On assume la police SYSTÈME
+     (skill apple-design §15 : la police de la plateforme porte déjà l'optical sizing,
+     le tracking et le lissage de lisibilité) — dit, pas feint. */
+  font-family: system-ui, "Segoe UI", sans-serif;
+  --font-ui: system-ui, "Segoe UI", sans-serif;
+  /* v10.2.0 (F4) : optique active dès qu'une fonte variable (axis opsz) est présente. */
+  font-optical-sizing: auto;
+  /* v10.2.0 (M2) : xs 10 → 11 px — les micro-labels (hints, méta) passaient sous le
+     seuil de lisibilité confortable sur les captures prod. */
+  --font-size-xs: 11px;
+  --font-size-sm: 12px;
+  --font-size-md: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 20px;
+  --font-size-2xl: 28px;
+  --font-size-3xl: 32px;
+  font-synthesis: none;
+  --bg: color-mix(in srgb, var(--accent) 6%, #fbfbfd);
+  --panel: rgba(255, 255, 255, .88);
+  --panel-solid: #ffffff;
+  --panel-soft: #eef0f6;
+  --border: rgba(20, 24, 38, .09);
+  --border-strong: rgba(20, 24, 38, .15);
+  --text: #171923;
+  /* v10.2.0 (E3) : muted assombri — l'ancien #707689 tombait à 4.14:1 sur --bg clair
+     (sous le seuil WCAG 4.5) et plus bas encore sur les surfaces TRANSLUCIDES du hub
+     (toolbar, récents) où le fond réel bouge sous le texte. Nouvelle valeur : 5.4:1
+     sur --bg, ≥ 5:1 sur panel-soft — mesuré, pas estimé. */
+  --muted: #5f6579;
+  --accent: #8b5cf6;
+  /* v10.3.1 : ENCRES D'ACCENT (revue apple-design §4 P1). L'accent reste la teinte
+     des traits, bordures, halos et fonds décoratifs ; le TEXTE et les icônes qui
+     portent du sens prennent `--accent-ink`, et ce qui vit SUR un remplissage accent
+     (bouton primaire, bulle utilisateur, micro) prend `--on-accent` sur
+     `--accent-fill`. Les quatre valeurs sont calculées par preset dans
+     appearance.ts (module pur accent-contrast.ts) : blanc sur Émeraude tombait à
+     2,54:1, l'accent en texte à 2,32:1 sur --bg. Les valeurs ci-dessous ne servent
+     qu'avant la première peinture (accent par défaut : Émeraude). */
+  --accent-fill: var(--accent);
+  --accent-fill-hover: color-mix(in srgb, var(--accent) 92%, white);
+  --on-accent: #0b0d12;
+  --accent-ink-light: #0e6c4f;
+  --accent-ink-dark: #10b981;
+  --accent-ink: var(--accent-ink-light);
+  --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
+  --accent-border: color-mix(in srgb, var(--accent) 30%, transparent);
+  --danger: #ef4444;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --sidebar-width: 286px;
+  --message-width: 860px;
+  --density-gap: 14px;
+  --density-pad: 16px;
+  --shadow: 0 18px 60px rgba(20, 24, 38, .08);
+  /* v10.0.0 : échelle de rayons (RULES.md §3) — la seule autorisée dans toute l'app. */
+  --radius-xs: 6px;     /* queues de bulles, micro-contrôles */
+  --radius-sm: 10px;    /* champs, boutons */
+  --radius-md: 12px;    /* items de liste, tuiles */
+  --radius-lg: 14px;    /* cartes, bulles de message */
+  --radius-xl: 20px;    /* panneaux, dialogues, cartes du hub */
+  --radius-pill: 999px; /* pilules et badges */
+  /* v10.0.0 : teintes récurrentes non thémées (états système, surfaces sombres). */
+  --rose: #f43f5e;
+  --term-bg: #12151d;
+  --term-fg: #e8ebf2;
+  --term-muted: #9ea6b8;
+  --code-bg: #090b10;
+  /* v10.0.0 : panneaux de travail (Réglages, Notes, Fichiers) — dimensions partagées. */
+  --panel-workspace-w: min(1000px, calc(100vw - 44px));
+  --panel-workspace-h: min(84vh, 840px);
+  /* v9.7.0 : tokens de MOTION — durées et courbes partagées par toute l'interface.
+     --ease-out : « decelerate » Fluent (entrée d'élément) ; --ease-spring : léger
+     dépassement (emphase) ; --dur-fast pour micro-interactions, --dur-med pour
+     transitions de vue. La chorégraphie (cascades) décale par --stagger-i. */
+  --dur-fast: 120ms;
+  --dur-med: 240ms;
+  --dur-slow: 380ms;
+  /* v10.3.2 : TOUT temps de réponse passe par ces tokens (sonde v10.3.2). Les seules
+     durées littérales admises sont les boucles AMBIANTES (pulse, présence, dictée,
+     shimmer) : une boucle n'est pas un temps de réponse — aucune interaction ne
+     l'attend — et son rythme lui est propre. */
+  --ease-out: cubic-bezier(.22, 1, .36, 1);
+  /* v10.3.1 : miroir de --ease-out (points de contrôle inversés) — une sortie doit
+     être la même trajectoire que l'entrée, parcourue à l'envers (skill §7). */
+  --ease-out-mirror: cubic-bezier(.64, 0, .78, 1);
+  --ease-spring: cubic-bezier(.34, 1.56, .64, 1);
+  --stagger-i: 0;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: color-mix(in srgb, var(--accent) 14%, #05060a);
+  --panel: rgba(18, 21, 29, .9);
+  --panel-solid: #12151d;
+  --panel-soft: #171b24;
+  --border: rgba(255, 255, 255, .08);
+  --border-strong: rgba(255, 255, 255, .14);
+  --text: #f4f5f8;
+  --muted: #9299aa;
+  /* v10.3.1 : en thème sombre c'est l'encre ÉCLAIRCIE qui rend l'accent lisible. */
+  --accent-ink: var(--accent-ink-dark);
+  --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
+  --accent-border: color-mix(in srgb, var(--accent) 35%, transparent);
+  --shadow: 0 18px 70px rgba(0, 0, 0, .32);
+  --home-surface: rgba(18, 21, 29, .78);
+  --home-surface-strong: #12151d;
+  --home-surface-soft: rgba(18, 21, 29, .64);
+}
+
+* { box-sizing: border-box; }
+html, body, #root { width: 100%; height: 100%; }
+body { margin: 0; overflow: hidden; background: var(--bg); color: var(--text); }
+body, button, input, textarea, select, code, pre { font-family: var(--font-ui); }
+button, input, textarea, select { font: inherit; }
+button { color: inherit; }
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.app {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(circle at 15% 0%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 32%),
+    radial-gradient(circle at 100% 20%, rgba(59, 130, 246, .06), transparent 30%),
+    var(--bg);
+}
+

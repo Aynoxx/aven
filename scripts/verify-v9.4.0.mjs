@@ -1,3 +1,4 @@
+import { readApp, readStyles } from "./lib/sources.mjs"
 import assert from "node:assert/strict"
 import { readFileSync, existsSync } from "node:fs"
 import path from "node:path"
@@ -15,8 +16,8 @@ const pkg = JSON.parse(read("package.json"))
 const [vMaj, vMin, vPatch] = pkg.version.split(".").map(Number)
 assert.ok(vMaj * 10000 + vMin * 100 + vPatch >= 90400, `version trop ancienne : ${pkg.version}`)
 
-const app = read("web/src/App.tsx")
-const css = read("web/src/App.css")
+const app = readApp()
+const css = readStyles()
 const main = read("host/aven-app-host.ts") // v10.0.0 : remplace le main Electron
 const preload = read("web/src/types.ts") // v10.0.0 : remplace le preload (contrat OpenCodeApi)
 const types = read("web/src/types.ts")

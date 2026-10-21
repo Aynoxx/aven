@@ -1,3 +1,4 @@
+import { readApp } from "./lib/sources.mjs"
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import path from "node:path"
@@ -12,7 +13,7 @@ const operations = readFileSync(path.join(root, "host/operations.ts"), "utf8")
 const freebuff = readFileSync(path.join(root, "host/freebuff.ts"), "utf8")
 const providers = readFileSync(path.join(root, "host/providers.ts"), "utf8")
 const history = readFileSync(path.join(root, "host/freebuff-history.ts"), "utf8")
-const app = readFileSync(path.join(root, "web/src/App.tsx"), "utf8")
+const app = readApp()
 const preload = readFileSync(path.join(root, "host/preload.cts"), "utf8")
 const types = readFileSync(path.join(root, "web/src/types.ts"), "utf8")
 

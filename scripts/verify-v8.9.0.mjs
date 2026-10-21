@@ -1,3 +1,4 @@
+import { readApp, readStyles } from "./lib/sources.mjs"
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import path from "node:path"
@@ -9,9 +10,9 @@ const read = (p) => readFileSync(path.join(root, p), "utf8")
 
 const pkg = JSON.parse(read("package.json"))
 const helper = read("web/src/selection-actions.ts")
-const app = read("web/src/App.tsx")
+const app = readApp()
 const icons = read("web/src/icons/Icon.tsx")
-const css = read("web/src/App.css")
+const css = readStyles()
 const tests = read("tests/selection-actions.test.mjs")
 const intent = read("host/voice-intent.ts") // régression : le routage vocal doit rester en place
 

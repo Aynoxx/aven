@@ -1,3 +1,4 @@
+import { readApp, readStyles } from "./lib/sources.mjs"
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import path from "node:path"
@@ -11,9 +12,9 @@ const pkg = JSON.parse(read("package.json"))
 const workspaces = read("host/workspaces.ts")
 const main = read("host/aven-app-host.ts") // v10.0.0 : remplace le main Electron
 const cli = read("host/freebuff-cli.ts")
-const app = read("web/src/App.tsx")
+const app = readApp()
 const settingsDialog = read("web/src/SettingsDialog.tsx")
-const css = read("web/src/App.css")
+const css = readStyles()
 
 // ── Version ──
 const [vMaj, vMin, vPatch] = pkg.version.split(".").map(Number)

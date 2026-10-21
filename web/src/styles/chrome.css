@@ -1,0 +1,243 @@
+/* v10.4.0 : Barre de fenêtre, sidebar, liste de conversations, barre de sélection, coquille.
+   Extrait d'App.css — l'ordre des fichiers (App.css) reproduit l'ordre
+   d'origine, la cascade est inchangée. */
+
+/* v10.0.0 : l'ancien app-header Electron (64px, status, actions) a disparu —
+   la barre de fenêtre est native (window-chrome) et le hub a sa propre toolbar. */
+
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.brand-mark {
+  width: 34px; height: 34px; border-radius: var(--radius-md); display: grid; place-items: center;
+  /* v10.3.1 : l'étoile blanche du logo cherchait 3:1 sur l'accent (2,54 sur Émeraude) —
+     le dégradé part plus profond pour que le blanc tienne sur TOUT le carré, sans
+     changer la teinte ni l'encre du logo (identité conservée, cf. icône Windows). */
+  font-weight: 800; color: white; background: linear-gradient(135deg, color-mix(in srgb, var(--accent-fill) 82%, #0b0d12), color-mix(in srgb, var(--accent-fill) 55%, #111));
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.brand > div:last-child { display: grid; gap: 2px; min-width: 0; }
+.brand strong { font-size: var(--font-size-md); letter-spacing: -.01em; }
+.brand span { color: var(--muted); font-size: var(--font-size-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 42vw; }
+
+.status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); box-shadow: 0 0 0 4px color-mix(in srgb, var(--success) 14%, transparent); }
+.status-dot.starting, .status-dot.warning { background: var(--warning); box-shadow: 0 0 0 4px color-mix(in srgb, var(--warning) 14%, transparent); }
+.status-dot.error { background: var(--danger); box-shadow: 0 0 0 4px color-mix(in srgb, var(--danger) 14%, transparent); }
+
+.status-banner { margin: 10px 12px 0; padding: 9px 11px; border: 1px solid color-mix(in srgb, var(--warning) 22%, var(--border)); border-radius: var(--radius-md); background: color-mix(in srgb, var(--warning) 7%, var(--panel)); display: flex; align-items: center; gap: 8px; font-size: var(--font-size-sm); color: var(--muted); }
+.status-banner.subtle { border-color: var(--border); background: var(--panel); }
+
+.workspace-layout { flex: 1; min-height: 0; display: grid; grid-template-columns: var(--sidebar-width) minmax(0, 1fr); gap: 0; overflow: hidden; }
+.sidebar-hidden .workspace-layout { grid-template-columns: minmax(0, 1fr); }
+.sidebar-right .workspace-layout { grid-template-columns: minmax(0, 1fr) var(--sidebar-width); }
+.sidebar-right .sidebar { order: 2; border-right: 0; border-left: 1px solid var(--border); }
+.sidebar-left .sidebar { order: 1; }
+.sidebar-left .main { order: 2; }
+.sidebar-right .main { order: 1; }
+
+.sidebar {
+  min-width: 0; border-right: 1px solid var(--border); background: color-mix(in srgb, var(--panel) 88%, transparent); display: flex; flex-direction: column; overflow: hidden;
+}
+.sidebar-top { padding: 14px; border-bottom: 1px solid var(--border); display: grid; gap: 10px; }
+.sidebar-heading { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.sidebar-heading > div { display: grid; gap: 2px; min-width: 0; }
+.sidebar-heading strong { font-size: var(--font-size-md); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.eyebrow { color: var(--muted); font-size: var(--font-size-xs); font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.search-wrap { display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: 7px; padding: 0 9px; min-height: 36px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel-solid); color: var(--muted); }
+/* v10.2.0 (E4) : la recherche sidebar est incrustée — son conteneur signale le focus. */
+.search-wrap:focus-within { border-color: var(--accent-border); box-shadow: 0 0 0 3px var(--accent-soft); }
+.search { width: 100%; border: 0; outline: 0; background: transparent; color: var(--text); padding: 7px 0; min-width: 0; font-size: var(--font-size-sm); }
+.search::placeholder { color: var(--muted); }
+kbd { border: 1px solid var(--border-strong); border-bottom-color: color-mix(in srgb, var(--border-strong) 65%, transparent); background: var(--panel-soft); color: var(--muted); border-radius: var(--radius-xs); padding: 1px 5px; font-size: var(--font-size-xs); line-height: 1.4; }
+.archive-toggle { width: 100%; display: flex; align-items: center; gap: 7px; border: 0; background: transparent; color: var(--muted); padding: 4px 2px; cursor: pointer; font-size: var(--font-size-xs); text-align: left; }
+.archive-toggle:hover, .archive-toggle.selected { color: var(--text); }
+/* v10.2.0 (M10) : overscroll contain — une liste en butée ne fait plus défiler son parent (skill : frontières douces). */
+.chat-list { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 8px; display: flex; flex-direction: column; gap: 4px; }
+.chat { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 4px; padding: 4px; border: 1px solid transparent; border-radius: var(--radius-sm); transition: background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out); }
+.chat:hover { background: var(--panel-soft); border-color: var(--border); }
+.chat.active { background: var(--accent-soft); border-color: var(--accent-border); }
+.chat-main { min-width: 0; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; padding: 6px; display: grid; gap: 3px; }
+.chat-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-size-sm); font-weight: 600; }
+.chat-meta { font-size: var(--font-size-xs); color: var(--muted); }
+.chat-actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 2px; flex-shrink: 0; }
+/* v10.2.0 (M9) : cible 24 px minimum (l'ancien 20×20 passait sous le seuil du projet).
+   v10.3.2 : au repos .15 rendait les actions invisibles — .35 les laisse deviner sans
+   crier (skill §16.5 wayfinding), et `:focus-within` les révèle au CLAVIER comme au
+   survol (mesuré : 0,15 → 1 avant, le focus ne changeait rien). */
+.chat-actions button { width: 24px; height: 24px; border: 0; background: transparent; color: var(--muted); cursor: pointer; border-radius: var(--radius-xs); font-size: var(--font-size-xs); opacity: .35; transition: opacity var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out); }
+/* v10.2.0 (E1) : état armé de la suppression — le rouge et l'anneau SONT la confirmation (deux clics). */
+.chat-actions button.armed { opacity: 1; color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--danger) 40%, transparent); }
+.chat:hover .chat-actions button, .chat.active .chat-actions button, .chat:focus-within .chat-actions button { opacity: 1; }
+.chat-actions button:hover { color: var(--text); background: var(--panel-solid); }
+.sidebar-empty { flex: 1; min-height: 180px; display: grid; place-items: center; align-content: center; color: var(--muted); text-align: center; font-size: var(--font-size-sm); }
+.sidebar-empty span { font-size: var(--font-size-2xl); opacity: .35; }
+.sidebar-footer { padding: 10px; border-top: 1px solid var(--border); }
+
+.button { min-height: 36px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel); color: var(--text); padding: 0 12px; cursor: pointer; transition: transform var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out); font-size: var(--font-size-sm); font-weight: 680; }
+.button:focus-visible { box-shadow: 0 0 0 3px var(--accent-soft); }
+.button:hover:not(:disabled) { transform: translateY(-1px); border-color: var(--border-strong); background: var(--panel-soft); box-shadow: 0 6px 18px color-mix(in srgb, var(--text) 5%, transparent); }
+.button:disabled { opacity: .4; cursor: not-allowed; }
+/* v10.3.1 : le remplissage est `--accent-fill` et son encre `--on-accent` (calculés
+   ensemble par preset) — le blanc sur l'accent ne tenait pas le seuil. Le survol
+   utilise `--accent-fill-hover`, qui s'éloigne toujours de l'encre : il ne peut donc
+   pas faire perdre le contraste (le mélange vers le blanc de v10.2.0 tombait à 2,29:1
+   sous une encre blanche, et l'assombrir aurait pénalisé les encres sombres). */
+.button.primary { border-color: var(--accent-fill); background: var(--accent-fill); color: var(--on-accent); box-shadow: 0 7px 20px color-mix(in srgb, var(--accent) 22%, transparent); }
+.button.primary:hover:not(:disabled) { background: var(--accent-fill-hover); border-color: var(--accent-fill-hover); }
+.button.secondary { background: var(--panel-soft); }
+.button.ghost { background: transparent; }
+.button.danger { border-color: color-mix(in srgb, var(--danger) 35%, var(--border)); color: color-mix(in srgb, var(--danger) 86%, var(--text)); background: color-mix(in srgb, var(--danger) 8%, var(--panel)); }
+.button.small { width: 34px; height: 32px; padding: 0; }
+.button.full { width: 100%; }
+
+.main { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: color-mix(in srgb, var(--bg) 80%, var(--panel)); }
+.chat-titlebar { min-height: 58px; display: flex; align-items: center; justify-content: space-between; padding: 10px 22px; border-bottom: 1px solid var(--border); }
+.chat-titlebar > div { display: grid; gap: 2px; min-width: 0; }
+.chat-titlebar > div.row { display: flex; align-items: center; gap: 8px; }
+.chat-titlebar strong { max-width: 60vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-size-md); }
+.session-id { color: var(--muted); font-size: var(--font-size-xs); font-family: var(--font-ui); }
+.main-scroll { min-height: 0; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: var(--density-gap); padding: 18px clamp(12px, 3vw, 28px) 24px; scroll-behavior: smooth; }
+.block-card { animation: fade-up var(--dur-med) var(--ease-out) both; }
+@keyframes fade-up { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+.messages { width: min(100%, var(--message-width)); margin: 0 auto; display: flex; flex-direction: column; gap: var(--density-gap); padding-top: 4px; }
+.msg { max-width: 84%; border: 1px solid var(--border); border-radius: var(--radius-lg); padding: var(--density-pad); line-height: 1.58; font-size: var(--font-size-md); box-shadow: 0 4px 18px color-mix(in srgb, var(--text) 4%, transparent); animation: fade-up var(--dur-med) var(--ease-out) both; }
+.msg.user { margin-left: auto; background: var(--accent-fill); border-color: transparent; color: var(--on-accent); border-bottom-right-radius: var(--radius-xs); box-shadow: 0 10px 26px color-mix(in srgb, var(--accent) 18%, transparent); }
+.msg.assistant { margin-right: auto; background: var(--panel-solid); border-bottom-left-radius: var(--radius-xs); }
+.msg.child { max-width: 94%; margin: 0 auto; padding: 0; background: transparent; border: 0; box-shadow: none; }
+.msg.child summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; color: var(--muted); padding: 8px 10px; border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); background: var(--panel); font-size: var(--font-size-xs); }
+.msg.child summary::-webkit-details-marker { display: none; }
+.msg.child > div { margin-top: 6px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--panel); padding: 10px 12px; }
+.live-message { border-color: var(--accent-border); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 4%, transparent), 0 10px 28px color-mix(in srgb, var(--accent) 8%, transparent); }
+.message-text p { margin: 0 0 8px; }
+.message-text p:last-child { margin-bottom: 0; }
+.msg.user .message-text code { background: color-mix(in srgb, white 16%, transparent); }
+.msg code { font-family: var(--font-ui); background: var(--panel-soft); padding: 1px 5px; border-radius: var(--radius-xs); }
+.modelbadge { display: block; margin-top: 8px; color: var(--muted); font-size: var(--font-size-xs); }
+.msg.user .modelbadge { color: color-mix(in srgb, var(--on-accent) 75%, transparent); }
+.message-edit { margin-top: 8px; border: 0; border-radius: var(--radius-xs); padding: 4px 7px; background: var(--panel-soft); color: var(--muted); cursor: pointer; font-size: var(--font-size-xs); }
+.msg.user .message-edit { background: color-mix(in srgb, var(--on-accent) 10%, transparent); color: color-mix(in srgb, var(--on-accent) 85%, transparent); }
+
+.tool-activity { width: min(100%, var(--message-width)); margin: 0 auto; display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { border: 1px solid var(--border); background: var(--panel); color: var(--muted); border-radius: var(--radius-pill); padding: 4px 8px; font-size: var(--font-size-xs); }
+.chip.completed { border-color: color-mix(in srgb, var(--success) 24%, var(--border)); color: color-mix(in srgb, var(--success) 82%, var(--text)); }
+.chip.error { border-color: color-mix(in srgb, var(--danger) 24%, var(--border)); color: color-mix(in srgb, var(--danger) 82%, var(--text)); }
+.working { width: min(100%, var(--message-width)); margin: 0 auto; display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: var(--font-size-xs); }
+.pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 32%, transparent); animation: pulse 1.4s infinite; }
+@keyframes pulse { 70% { box-shadow: 0 0 0 7px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+.error-card { width: min(100%, var(--message-width)); margin: 0 auto; padding: 9px 11px; border: 1px solid color-mix(in srgb, var(--danger) 24%, var(--border)); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--danger) 7%, var(--panel)); }
+.err { color: color-mix(in srgb, var(--danger) 83%, var(--text)); }
+
+.empty-state { min-height: min(55vh, 420px); display: grid; justify-items: center; align-content: center; text-align: center; color: var(--muted); }
+.empty-symbol { width: 54px; height: 54px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--panel); color: var(--accent-ink); font-size: var(--font-size-2xl); margin-bottom: 12px; }
+.empty-state h2 { color: var(--text); margin: 0 0 5px; font-size: var(--font-size-lg); }
+.empty-state p { margin: 0; font-size: var(--font-size-sm); }
+
+.notices { width: min(100%, var(--message-width)); margin: 0 auto; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--panel); overflow: hidden; }
+.notices summary { cursor: pointer; padding: 9px 11px; display: flex; justify-content: space-between; align-items: center; color: var(--muted); font-size: var(--font-size-xs); }
+.notices summary span { min-width: 18px; height: 18px; display: inline-grid; place-items: center; border-radius: var(--radius-pill); background: var(--panel-soft); }
+.notice-list { border-top: 1px solid var(--border); padding: 6px 11px; }
+.notice-list p { margin: 6px 0; color: var(--muted); font-size: var(--font-size-xs); }
+
+.modelbar { width: min(100%, var(--message-width)); margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--panel); }
+.modelbar > div { display: grid; gap: 2px; min-width: 0; flex: 1; }
+.modelbar strong { font-size: var(--font-size-md); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.modelbar .model-assignment { flex-shrink: 0; }
+.model-assignment { color: var(--muted); font-size: var(--font-size-xs); text-align: right; }
+
+.composer-wrap { width: min(100%, var(--message-width)); margin: 0 auto; }
+.composer { border: 1px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--panel-solid); box-shadow: var(--shadow); padding: 9px; }
+.composer textarea { display: block; width: 100%; min-height: 92px; max-height: 320px; resize: vertical; border: 0; outline: 0; background: transparent; color: var(--text); padding: 6px 7px; line-height: 1.5; font-size: var(--font-size-md); }
+.composer textarea::placeholder { color: var(--muted); }
+/* v10.2.0 (E4) : le composeur est un champ incrusté — `.composer textarea { outline: 0 }`
+   ÉCRASAIT `textarea:focus-visible` (spécificité égale, ordre source) : le focus clavier
+   y était invisible. Le conteneur prend le relais, comme .home-command (RULES.md §12.2). */
+.composer:focus-within { border-color: var(--accent-border); box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow); }
+.composer-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 5px 3px; }
+.composer-footer-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.composer-footer-left .composer-hint { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.composer-hint { color: var(--muted); font-size: var(--font-size-xs); }
+
+/* Dictée vocale (v8.7.8) : bouton push-to-talk + badge de reformage. */
+.dictation-button { border-radius: var(--radius-pill); touch-action: none; user-select: none; }
+
+/* Barre d'actions sur sélection (v8.9.0) : flottante, au-dessus du contenu. */
+.selbar { position: fixed; z-index: 90; display: flex; gap: 2px; padding: 3px; border-radius: var(--radius-sm);
+  background: var(--panel-solid, var(--panel)); border: 1px solid var(--border); box-shadow: 0 8px 24px color-mix(in srgb, black 35%, transparent);
+  transform-origin: bottom center; animation: popover-in var(--dur-fast) var(--ease-spring) both; }
+.selbar button { display: grid; place-items: center; width: 30px; height: 30px; border: none; border-radius: var(--radius-xs);
+  background: transparent; color: var(--text); cursor: pointer; }
+.selbar button:hover { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.selbar .selbar-close { color: var(--text-muted, var(--text)); opacity: .7; }
+
+/* Barre d'outils des notes premium (v8.10.0). */
+.notes-toolbar { display: flex; align-items: center; gap: 8px; margin: 6px 0 10px; flex-wrap: wrap; }
+.notes-toolbar .hint { margin-left: auto; }
+.notes-dir-row { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.notes-dir-row code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Sections d'agent dans la liste de conversations (v9.0.0). */
+.chat-group-header { display: flex; align-items: center; gap: 6px; margin: 10px 6px 4px; color: var(--muted); font-size: var(--font-size-xs); text-transform: uppercase; letter-spacing: .06em; }
+.chat-group-header:first-child { margin-top: 2px; }
+.chat-group-header .chat-group-count { margin-left: auto; opacity: .7; }
+
+/* Conversations par agent sur la page Agents (v9.0.0). */
+.agent-card-chats { display: grid; gap: 4px; margin-top: 10px; }
+.agent-card-chats .chat-main { justify-content: flex-start; padding: 6px 10px; border-radius: var(--radius-sm); }
+.dictation-button.dictation-recording { background: var(--rose); border-color: var(--rose); color: white; animation: dictation-pulse 1.2s ease-in-out infinite; }
+.dictation-button:disabled { opacity: .6; cursor: progress; }
+.dictation-toggle { font-size: var(--font-size-xs); padding: 2px 8px; min-height: 24px; }
+.dictation-toggle.showing-raw { color: var(--warning, #f59e0b); }
+@keyframes dictation-pulse { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--rose) 45%, transparent); } 50% { box-shadow: 0 0 0 7px transparent; } }
+
+/* Bouton central du hub : dictée push-to-talk (restauré en v8.7.9, nouveau rôle). */
+.voice-core { position:absolute; z-index:6; left:50%; top:50%; width:var(--hub-core); height:var(--hub-core); transform:translate(-50%,-50%); border-radius:50%; border:1px solid color-mix(in srgb,var(--accent) 56%,var(--border-strong)); background:radial-gradient(circle at 34% 26%,color-mix(in srgb,var(--accent) 11%,var(--panel-solid)) 0,color-mix(in srgb,var(--accent) 7%,var(--panel-solid)) 38%,var(--panel-solid) 100%); box-shadow:0 32px 110px color-mix(in srgb,var(--accent) 18%,transparent),inset 0 0 0 1px color-mix(in srgb,white 42%,transparent),inset 0 -30px 60px color-mix(in srgb,var(--accent) 9%,transparent); cursor:pointer; display:grid; place-items:center; overflow:visible; touch-action:none; user-select:none; transition:transform var(--dur-med) var(--ease-out),box-shadow var(--dur-med) var(--ease-out),border-color var(--dur-med) var(--ease-out); }
+.voice-core:hover { transform:translate(-50%,-50%) scale(1.04); border-color:var(--accent-border); }
+.voice-core:active { transform:translate(-50%,-50%) scale(.98); }
+/* v10.3.1 : dictée indisponible — l'affordance la plus imposante du hub ne promet
+   plus une action qu'elle refuse (skill apple-design §16.2 agency, §16.5 feedback).
+   Auparavant seul l'aria-label changeait : le bouton restait saturé, sans `disabled`.
+   Le libellé sous le micro dit la CAUSE, le curseur et le gris disent l'état. */
+.voice-core:disabled { cursor: not-allowed; }
+.voice-core:disabled:hover, .voice-core:disabled:active { transform: translate(-50%,-50%); border-color: color-mix(in srgb, var(--accent) 56%, var(--border-strong)); }
+.voice-core:disabled .voice-mic { background: var(--panel-soft); color: var(--muted); box-shadow: inset 0 0 0 1px var(--border-strong); }
+.voice-core:disabled .voice-ring { opacity: .28; }
+.voice-core:disabled .voice-core-label { color: var(--muted); }
+.voice-ring { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); border-radius:50%; border:1px solid color-mix(in srgb,var(--accent) 27%,transparent); pointer-events:none; }
+.voice-ring-outer { width:78%; height:78%; opacity:.82; }
+.voice-ring-inner { width:58%; height:58%; opacity:.6; }
+/* v10.3.1 : encre calculée sur le remplissage ; le dégradé ne s'éclaircit plus que de
+   8 % — à 36 % il sortait de la plage où `--on-accent` reste valide (icône à 2,54:1
+   sur Émeraude). */
+.voice-mic { position:relative; z-index:2; width:78px; height:78px; display:grid; place-items:center; border-radius: var(--radius-xl); background:linear-gradient(180deg,color-mix(in srgb,var(--accent-fill) 92%,var(--panel-solid)),var(--accent-fill)); color:var(--on-accent); box-shadow:0 18px 42px color-mix(in srgb,var(--accent) 32%,transparent),inset 0 1px 0 color-mix(in srgb,white 35%,transparent); }
+.voice-core-label { position:absolute; bottom:34px; z-index:2; color:var(--muted); font-size:var(--font-size-xs); font-weight:700; letter-spacing:.04em; pointer-events:none; }
+.voice-core.dictation-recording { border-color:var(--rose); animation:dictation-pulse 1.2s ease-in-out infinite; }
+/* v10.2.0 (F6) : dictée en pause (doigt sorti du bouton) — le signal reste armé
+   mais le pulse s'arrête : on distingue nettement « en pause » de « en cours ». */
+.dictation-button.dictation-recording.dictation-paused,
+.voice-core.dictation-recording.dictation-paused { animation-play-state: paused; filter: saturate(.55); }
+.voice-core.dictation-paused .voice-ring { animation-play-state: paused; }
+.voice-core.dictation-recording .voice-mic { background:linear-gradient(180deg,var(--rose),color-mix(in srgb,var(--rose) 64%,var(--panel-solid))); }
+/* v9.1.4 : l'avis vit dans le coin bas-GAUCHE du hub — en bas au centre, il masquait
+   la carte Statistiques ; le coin reste hors du cercle de cartes à toutes les tailles. */
+.home-notice { position:absolute; z-index:8; left:8px; bottom:8px; max-width:min(100%,480px); padding:8px 10px 8px 13px; border:1px solid var(--border); border-radius: var(--radius-lg); background:color-mix(in srgb,var(--panel-solid) 94%,transparent); color:var(--muted); font-size:var(--font-size-xs); box-shadow:var(--shadow); display:flex; align-items:center; gap:8px; }
+.home-notice-action { min-height:26px; padding:0 10px; font-size:var(--font-size-xs); border-radius: var(--radius-pill); }
+.home-notice-close { border:0; background:transparent; color:var(--muted); cursor:pointer; font-size:var(--font-size-sm); line-height:1; padding:3px 5px; min-width:24px; min-height:24px; border-radius: var(--radius-xs); }
+.home-notice-close:hover { color:var(--text); background:var(--panel-soft); }
+
+/* v9.1.5 : écran de premier choix d'espace de travail (plus de « Par défaut » imposé). */
+.workspace-picker { width:min(560px, 100%); }
+.workspace-picker .row { margin-top:14px; flex-wrap:wrap; }
+.workspace-picker .err { margin:10px 0 0; }
+/* v9.1.6 : liste des projets déjà connus, choisis en un clic depuis l'écran d'accueil. */
+.workspace-picker-list { display:grid; gap:8px; margin-top:14px; }
+.workspace-picker-item { display:flex; flex-direction:column; align-items:flex-start; gap:2px; padding:10px 12px; border:1px solid var(--border); border-radius: var(--radius-md); background:var(--panel-soft); cursor:pointer; text-align:left; }
+.workspace-picker-item:hover { border-color:var(--accent-border); background:var(--panel); }
+.workspace-picker-name { display:flex; align-items:center; gap:8px; font-weight:600; color:var(--text); }
+.workspace-picker-path { font-size:var(--font-size-xs); color:var(--muted); word-break:break-all; }
+
+/* v9.2.0 : terminal Freebuff intégré (pont PTY, xterm.js). Le dialog hérite du
+   système .dialog ; xterm a besoin d'un hôte dimensionné et d'un fond opaque. */
+.bridge-status-row { align-items: center; justify-content: space-between; margin: 0 0 10px; }
+.bridge-actions { gap: 8px; }
+.bridge-term-host { height: min(56vh, 480px); border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--term-bg); overflow: hidden; }
+.bridge-term-host .xterm { padding: 8px; height: 100%; }
+

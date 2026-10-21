@@ -1,3 +1,4 @@
+import { readApp } from "./lib/sources.mjs"
 import assert from "node:assert/strict"
 import { existsSync, readFileSync } from "node:fs"
 import path from "node:path"
@@ -13,7 +14,7 @@ const notes = read("host/notes.ts")
 const bridge = read("host/opencode-bridge.ts")
 const priorities = read("host/priorities.ts")
 const intent = read("host/voice-intent.ts")
-const app = read("web/src/App.tsx")
+const app = readApp()
 const appearance = read("web/src/appearance.ts")
 const groups = read("web/src/chat-groups.ts")
 const dialog = read("web/src/NotesView.tsx") // v9.3.0 : la vue Notes remplace le modal

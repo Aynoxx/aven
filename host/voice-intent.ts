@@ -12,7 +12,10 @@
 // v9.1.3 : trois actions exécutables en plus — ouvrir le CLI Freebuff dans un terminal,
 // afficher les statistiques et créer une nouvelle conversation. L'agent vocal exécute
 // désormais vraiment l'action demandée (routeAppAction côté renderer).
-export const APP_ACTIONS = ["open-notes", "open-settings", "open-agents", "open-projects", "open-workspace", "open-freebuff", "open-stats", "new-chat"] as const
+// v10.4.0 : « open-project » (page Projet) et « go-home » (accueil) entrent dans la
+// liste. « ouvre le projet » ouvrait les Réglages parce que « open-projects » ne
+// désignait que la gestion des ESPACES ; la page Projet n'avait aucune action vocale.
+export const APP_ACTIONS = ["open-project", "open-notes", "open-settings", "open-agents", "open-projects", "open-workspace", "open-freebuff", "open-stats", "new-chat", "go-home"] as const
 export type AppAction = (typeof APP_ACTIONS)[number]
 
 // Miroir des TABS d'opencode-bridge.ts (ids canoniques des agents), ici sans dépendance
@@ -43,12 +46,19 @@ export const INTENT_SYSTEM_PROMPT = [
   "Tu es un classifieur d'intention pour une dictée vocale en français. On te donne la transcription d'une demande.",
   "Classifie-la en EXACTEMENT une de ces catégories, et ne fais rien d'autre (ne réponds jamais à la demande, n'exécute rien, ne commente pas) :",
   `1. Commande d'application (l'utilisateur veut agir sur l'application elle-même) — action parmi : ${APP_ACTIONS.map((a) => `"${a}"`).join(", ")}.`,
-  "   - open-notes : ouvrir la page Notes ; open-settings : ouvrir les paramètres ; open-agents : voir les agents ;",
-  "   - open-projects : gérer les espaces de travail ; open-workspace : ouvrir le dossier du projet dans l'explorateur ;",
+  "   - open-project : ouvrir la PAGE PROJET (le projet dans l'application, l'assistant central) ;",
+  "   - open-projects : ouvrir la GESTION DES ESPACES DE TRAVAIL (liste des espaces, changer d'espace) ;",
+  "   - open-workspace : ouvrir le DOSSIER du projet / les fichiers de l'espace ;",
+  "   - open-notes : ouvrir la page Notes ; open-settings : ouvrir les paramètres ; open-agents : voir les tâches / les agents ;",
   "   - open-freebuff : lancer Freebuff (CLI) dans un terminal ; open-stats : afficher les statistiques ;",
-  "   - new-chat : créer une nouvelle conversation.",
+  "   - new-chat : créer une nouvelle conversation ; go-home : revenir à l'accueil.",
   "   Une COMMANDE parle de l'application elle-même (« ouvre les paramètres », « lance Freebuff », « nouvelle conversation »).",
   "   Une demande de CONTENU ou de travail n'est JAMAIS une commande d'application (ex. « ouvre le fichier main.ts et corrige-le » = dictée ordinaire).",
+  "   Distinctions qui comptent :",
+  "   - « ouvre le projet » = open-project (la page Projet), PAS les Réglages ;",
+  "   - « ouvre les espaces de travail » / « change d'espace » = open-projects ;",
+  "   - « ouvre le dossier du projet » / « ouvre les fichiers de l'espace » = open-workspace.",
+  "2. Tâche pour un agent (l'utilisateur confie un travail à un agent) — cible parmi :",
   AGENT_LINES,
   '3. Dictée ordinaire (tout le reste : message, question, suite de conversation) : {"intent":"chat"}.',
   "Réponds UNIQUEMENT par un JSON valide sur une ligne, sans Markdown ni commentaire :",
@@ -77,14 +87,21 @@ function parseJsonLoose(content: string): unknown {
 // verbe d'action sur l'app, pas un objet quelconque : « ouvre le fichier main.ts » ne
 // déclenche rien). Testé sans réseau dans voice-intent.test.mjs.
 const FALLBACK_PATTERNS: Array<{ re: RegExp; intent: DictationIntent }> = [
+  // L'ORDRE compte : « espaces de travail » et « dossier du projet » passent avant le
+  // motif « projet », sinon « ouvre le projet » retombait sur les Réglages (mesuré).
   { re: /(?:ouvre|ouvrir|affiche|afficher|montre|montrer|va (?:à|aux?|sur))[^.?!]{0,30}(?:param[eè]tres?|r[eè]glages?)/i, intent: { intent: "app", action: "open-settings" } },
   { re: /(?:ouvre|ouvrir|affiche|afficher|montre|montrer|va (?:à|aux?|sur))[^.?!]{0,30}notes?\b/i, intent: { intent: "app", action: "open-notes" } },
-  { re: /(?:ouvre|ouvrir|affiche|afficher|montre|montrer|va (?:à|aux?|sur))[^.?!]{0,30}(?:page d[es]? )?agents?\b/i, intent: { intent: "app", action: "open-agents" } },
-  { re: /(?:ouvre|ouvrir|affiche|afficher|montre|montrer|va (?:à|aux?|sur))[^.?!]{0,30}(?:espaces? de travail|projets?)\b/i, intent: { intent: "app", action: "open-projects" } },
-  { re: /(?:ouvre|ouvrir|lance|lancer|d[eé]marre|d[eé]marrer|l[eè]ve)[^.?!]{0,30}(?:dossier du )?projet\b/i, intent: { intent: "app", action: "open-workspace" } },
+  { re: /(?:ouvre|ouvrir|affiche|afficher|montre|montrer|va (?:à|aux?|sur))[^.?!]{0,30}(?:t[aâ]ches?|page d[es]? agents?|agents?)\b/i, intent: { intent: "app", action: "open-agents" } },
+  // « espaces » au PLURIEL (ou « espace de travail », ou « changer d'espace ») : le
+  // singulier « l'espace » désigne le dossier (« fichiers de l'espace »), pas la
+  // gestion des espaces — mesuré : cette collision faisait ouvrir les Réglages.
+  { re: /(?:ouvre|ouvrir|affiche|afficher|montre|montrer|g[eè]re|g[eé]rer|change[rz]?)[^.?!]{0,30}(?:espaces\b|espace de travail|d['’]espace)/i, intent: { intent: "app", action: "open-projects" } },
+  { re: /(?:ouvre|ouvrir|affiche|afficher|montre|montrer|va (?:à|aux?|sur))[^.?!]{0,30}(?:dossier\s+(?:du\s+|de l['’])?(?:projet|espace)|fichiers de l['’]espace|explorateur de fichiers)/i, intent: { intent: "app", action: "open-workspace" } },
+  { re: /(?:ouvre|ouvrir|affiche|afficher|montre|montrer|va (?:à|aux?|sur))[^.?!]{0,30}projets?\b/i, intent: { intent: "app", action: "open-project" } },
   { re: /(?:ouvre|ouvrir|lance|lancer|d[eé]marre|d[eé]marrer)[^.?!]{0,30}freebuff/i, intent: { intent: "app", action: "open-freebuff" } },
   { re: /(?:ouvre|ouvrir|affiche|afficher|montre|montrer|va (?:à|aux?|sur))[^.?!]{0,30}statistiques?\b/i, intent: { intent: "app", action: "open-stats" } },
   { re: /nouvelle (?:conversation|discussion|chat)|nouveau chat/i, intent: { intent: "app", action: "new-chat" } },
+  { re: /(?:retour|retourne|revient|reviens|va|ram[eè]ne|ouvre)[^.?!]{0,20}(?:accueil|hub)\b/i, intent: { intent: "app", action: "go-home" } },
   { re: /(?:passe|passer|bascule|basculer|mets?-?toi)[^.?!]{0,30}(?:sur |chez |chez l')?(?:agent )?(projet|code|recherche|analyse)\b/i, intent: { intent: "agent", target: "projet" } },
 ]
 

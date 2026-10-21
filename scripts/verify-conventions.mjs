@@ -1,3 +1,4 @@
+import { readApp, readStyles } from "./lib/sources.mjs"
 import assert from "node:assert/strict"
 import { readdirSync, readFileSync } from "node:fs"
 import path from "node:path"
@@ -13,14 +14,14 @@ import { fileURLToPath } from "node:url"
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const read = (p) => readFileSync(path.join(root, p), "utf8")
 
-const css = read("web/src/App.css")
+const css = readStyles()
 const icon = read("web/src/icons/Icon.tsx")
 const iconReadme = read("web/src/icons/README.md")
 // RULES.md a été fondu dans AGENTS.md (2026-10-18) : les deux lectures pointent
 // vers le fichier unique, les assertions restent identiques.
 const rules = read("AGENTS.md")
 const agents = rules
-const app = read("web/src/App.tsx")
+const app = readApp()
 
 // ── Règle 1 : la porte d'entrée existe et pointe au bon endroit ──────────────────
 assert.match(rules, /# AGENTS\.md — Aven/)

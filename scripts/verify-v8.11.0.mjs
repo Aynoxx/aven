@@ -1,3 +1,4 @@
+import { readApp } from "./lib/sources.mjs"
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import path from "node:path"
@@ -12,7 +13,7 @@ const stats = read("host/stats.ts")
 const main = read("host/aven-app-host.ts") // v10.0.0 : remplace le main Electron
 const preload = read("web/src/types.ts") // v10.0.0 : remplace le preload (contrat OpenCodeApi)
 const types = read("web/src/types.ts")
-const app = read("web/src/App.tsx")
+const app = readApp()
 const settingsDialog = read("web/src/SettingsDialog.tsx")
 const icons = read("web/src/icons/Icon.tsx")
 const tests = read("tests/stats.test.mjs")

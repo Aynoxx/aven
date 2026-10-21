@@ -1,3 +1,4 @@
+import { readApp } from "./lib/sources.mjs"
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import path from "node:path"
@@ -12,7 +13,7 @@ const main = read("host/main.ts")
 const providers = read("host/providers.ts")
 const voice = read("host/voice.ts")
 const preload = read("host/preload.cts")
-const app = read("web/src/App.tsx")
+const app = readApp()
 const types = read("web/src/types.ts")
 const hook = read("web/src/voice-dictation.ts")
 

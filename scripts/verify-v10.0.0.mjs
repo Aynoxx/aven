@@ -1,3 +1,4 @@
+import { readApp } from "./lib/sources.mjs"
 import assert from "node:assert/strict"
 import { existsSync, readFileSync } from "node:fs"
 import path from "node:path"
@@ -41,7 +42,7 @@ assert.ok(!existsSync(path.join(root, "electron")), "l'ancien dossier electron/ 
 assert.ok(!existsSync(path.join(root, "native")), "l'ancien prototype WinUI native/ doit être supprimé")
 assert.ok(!existsSync(path.join(root, "MIGRATION-WINUI.md")), "l'ancien protocole WinUI doit être supprimé")
 
-const app = read("web/src/App.tsx")
+const app = readApp()
 const api = read("web/src/api.ts")
 const apiTauri = read("web/src/api-tauri.ts")
 const ignore = read(".gitignore")
