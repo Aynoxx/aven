@@ -64,10 +64,10 @@ assert.match(app, /usableModelRef\(currentModel\)/, "le modèle affiché est fil
 assert.match(app, /AUTO_MODEL_LABEL/, "une conversation sans modèle est nommée « Auto »")
 
 // ── D. Hub : la recherche filtre, et les conversations restent joignables ──────
-assert.match(app, /chats\.filter\(\(c\) => \(c\.title \|\| "Conversation"\)\.toLowerCase\(\)\.includes\(needle\)\)/,
-  "la barre du hub filtre les conversations par titre")
-assert.match(app, /Chercher une conversation, ou demander…/,
-  "le placeholder ne promet plus une recherche silencieuse")
+assert.match(app, /chats\.filter\(\(c\) => \(c\.title \|\| "Conversation"\)\.toLocaleLowerCase\("fr-FR"\)\.includes\(needle\)\)/,
+  "la barre du hub filtre les conversations par titre, sans dépendre de la casse locale")
+assert.match(app, /Rechercher une conversation…/,
+  "la barre du hub distingue la recherche de la rédaction d'une demande")
 assert.match(app, /Afficher la liste des conversations/,
   "la barre de fenêtre porte une entrée « Conversations »")
 assert.match(app, /renamingChat === chatId && !appearance\.showSidebar/,
