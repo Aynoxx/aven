@@ -45,14 +45,15 @@ assert.match(intent, /- « ouvre les espaces de travail »[^\n]*= open-projects/
   "le prompt distingue les espaces de travail")
 assert.match(intent, /- « ouvre le dossier du projet »[^\n]*= open-workspace/,
   "le prompt distingue le dossier du projet")
-// L'ordre du filet déterministe est une garantie : « dossier du projet » et
-// « espaces de travail » doivent être testés AVANT le motif « projet » générique.
+// Le motif de destination générique « projet » reste après les motifs plus
+// spécifiques « dossier de projet » et « espaces de travail ». La route Freebuff
+// ajoutée en v10.5.0 peut, elle, apparaître plus tôt.
 const iWorkspace = intent.indexOf('action: "open-workspace"')
 const iProjects = intent.indexOf('action: "open-projects"')
-const iProject = intent.indexOf('action: "open-project"')
-assert.ok(iWorkspace > 0 && iProjects > 0 && iProject > 0, "les trois routes existent dans le filet")
-assert.ok(iWorkspace < iProject && iProjects < iProject,
-  "« dossier du projet » et « espaces » passent avant le motif « projet » (sinon Réglages)")
+const iProjectGeneric = intent.indexOf('projets?\\b/i, intent: { intent: "app", action: "open-project" }')
+assert.ok(iWorkspace > 0 && iProjects > 0 && iProjectGeneric > 0, "les trois routes existent dans le filet")
+assert.ok(iWorkspace < iProjectGeneric && iProjects < iProjectGeneric,
+  "« dossier du projet » et « espaces » passent avant la route générique « projet »")
 assert.match(intent, /action: "go-home"/, "le filet connaît le retour à l'accueil")
 
 // Un motif de commande l'emporte sur un verdict de modèle divergent (bug mesuré).
