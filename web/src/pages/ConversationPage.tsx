@@ -204,8 +204,8 @@ export default function ConversationPage({ app }: { app: AvenApp }) {
                 onPointerUp={(e) => { e.preventDefault(); releaseDictation() }}
                 onPointerLeave={() => { if (dictationPointerRef.current && dictation.state === "recording") dictation.pause() }} // v10.2.0 (F6) : doigt sorti = pause
                 onPointerEnter={() => { if (dictationPointerRef.current && dictation.paused) dictation.resume() }} // v10.2.0 (F6) : doigt revenu = reprise
-                aria-label={dictation.paused ? "Reprendre la dictée — repose le doigt" : dictation.state === "recording" ? "Relâcher pour transcrire" : "Dicter (maintenir, ou Ctrl+Maj+V)"}
-                title="Dicter (maintenir le clic, ou Ctrl+Maj+V). Le texte arrive dans le composeur : relis-le avant d’envoyer."
+                aria-label={dictation.paused ? "Reprendre la dictée du message — repose le doigt" : dictation.state === "recording" ? "Relâcher pour transcrire le message" : "Dicter un message (maintenir, ou Ctrl+Maj+V)"}
+                title="Dicter un message (maintenir le clic, ou Ctrl+Maj+V). Le texte arrive dans le composeur : relis-le avant d’envoyer."
               >
                 <Icon name="microphone" size={16} />
               </button>
