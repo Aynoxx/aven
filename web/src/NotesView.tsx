@@ -70,18 +70,16 @@ export default function NotesView(props: Props) {
     props.onCaptureHandled?.()
   })
 
-  // Tags des notes (best effort).
+  // v10.5.0 : toutes les étiquettes sont chargées en un seul appel IPC, pas un appel
+  // par note. On filtre sur l'arbre courant pour ignorer d'éventuelles métadonnées orphelines.
   useEffect(() => {
     let stop = false
-    void (async () => {
-      try {
-        const ids: string[] = []
-        const walk = (nodes: NoteTreeEntry[]) => { for (const n of nodes) { if (n.type === "note") ids.push(n.id); else walk(n.children) } }
-        walk(tree)
-        const entries = await Promise.all(ids.map(async (id) => [id, await api.noteTags(id).catch(() => [])] as const))
-        if (!stop) setTags(Object.fromEntries(entries))
-      } catch { /* indisponible : la vue reste utilisable */ }
-    })()
+    const ids = new Set<string>()
+    const walk = (nodes: NoteTreeEntry[]) => { for (const node of nodes) { if (node.type === "note") ids.add(node.id); else walk(node.children) } }
+    walk(tree)
+    api.noteTagsAll()
+      .then((all) => { if (!stop) setTags(Object.fromEntries(Object.entries(all).filter(([id]) => ids.has(id)))) })
+      .catch(() => { if (!stop) setTags({}) })
     return () => { stop = true }
   }, [tree])
 
@@ -194,6 +192,7 @@ export default function NotesView(props: Props) {
   }
 
   const tagName = (tag: string) => props.agents.find((a) => a.id === tag)?.name ?? tag
+  const activeAgentName = props.currentAgent === "projet" ? "l’agent principal Aven" : props.agents.find((a) => a.id === props.currentAgent)?.name ?? "agent actif"
   const allTags = useMemo(() => [...new Set(Object.values(tags).flat())].sort((a, b) => a.localeCompare(b, "fr")), [tags])
   const visibleNote = (n: { id: string }) => !tagFilter || (tags[n.id] ?? []).includes(tagFilter)
 
@@ -356,11 +355,16 @@ export default function NotesView(props: Props) {
               <div className="notes-toolbar">
                 <button className="button ghost" onClick={() => void togglePin(selected.id)} type="button">{pinned.includes(selected.id) ? "Détacher" : "Épingler"}</button>
                 <button className="button ghost" onClick={() => startEdit(selected)} type="button"><Icon name="pencil" size={13} />Modifier</button>
-                <button className="button ghost" onClick={() => attach(selected, false)} type="button" title="Copie la note dans le composeur de l'onglet actif"><Icon name="chevron-right" size={13} />Joindre à la conversation</button>
-                <button className="button ghost" onClick={() => attach(selected, true)} type="button" title="Demande une synthèse structurée à l'agent de l'onglet actif"><Icon name="sparkle" size={13} />Demander à l'agent</button>
-                <button className="button ghost" onClick={() => void withNote(() => api.noteArchive(selected.id))} type="button"><Icon name="archive" size={13} />Archiver</button>
-                <button className="button ghost" onClick={() => void withNote(() => api.noteDelete(selected.id))} type="button"><Icon name="trash" size={13} />Poubelle</button>
-                <button className="button ghost" onClick={() => api.noteExport(selected.id).catch((e) => props.onError(e))} type="button">Exporter .md</button>
+                <button className="button ghost" onClick={() => attach(selected, false)} type="button" title={`Prépare un message pour ${activeAgentName}, sans l'envoyer`}><Icon name="chevron-right" size={13} />Joindre à {activeAgentName}</button>
+                <button className="button ghost" onClick={() => attach(selected, true)} type="button" title={`Prépare une demande de synthèse pour ${activeAgentName}, sans l'envoyer`}><Icon name="sparkle" size={13} />Demander une synthèse à {activeAgentName}</button>
+                <details className="notes-secondary-actions">
+                  <summary>Autres actions</summary>
+                  <div className="notes-secondary-actions-list">
+                    <button className="button ghost" onClick={() => void withNote(() => api.noteArchive(selected.id))} type="button"><Icon name="archive" size={13} />Archiver</button>
+                    <button className="button ghost" onClick={() => void withNote(() => api.noteDelete(selected.id))} type="button"><Icon name="trash" size={13} />Poubelle</button>
+                    <button className="button ghost" onClick={() => api.noteExport(selected.id).catch((e) => props.onError(e))} type="button">Exporter .md</button>
+                  </div>
+                </details>
                 <span className="hint">{selected.markdown.split(/\s+/).filter(Boolean).length} mots</span>
               </div>
               <div className="notes-tags-editor" role="group" aria-label="Étiquettes par agent">

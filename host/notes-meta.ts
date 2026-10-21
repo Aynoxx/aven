@@ -41,6 +41,12 @@ export function loadTags(workspace: string, id: string): string[] {
   return clean ? readMeta(workspace).tags?.[clean] ?? [] : []
 }
 
+// v10.5.0 : lecture en lot pour l'arbre Notes — un seul accès au fichier de métadonnées.
+export function loadAllTags(workspace: string): Record<string, string[]> {
+  const tags = readMeta(workspace).tags ?? {}
+  return Object.fromEntries(Object.entries(tags).map(([id, values]) => [id, [...values]]))
+}
+
 /** Remplace les tags d'une note. Normalisation : accents retirés, minuscules, tirets. */
 export function setTags(workspace: string, id: string, tags: string[]): string[] {
   const clean = cleanNoteId(id)

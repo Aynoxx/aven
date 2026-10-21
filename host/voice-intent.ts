@@ -12,9 +12,8 @@
 // v9.1.3 : trois actions exécutables en plus — ouvrir le CLI Freebuff dans un terminal,
 // afficher les statistiques et créer une nouvelle conversation. L'agent vocal exécute
 // désormais vraiment l'action demandée (routeAppAction côté renderer).
-// v10.4.0 : « open-project » (page Projet) et « go-home » (accueil) entrent dans la
-// liste. « ouvre le projet » ouvrait les Réglages parce que « open-projects » ne
-// désignait que la gestion des ESPACES ; la page Projet n'avait aucune action vocale.
+// v10.5.0 : « open-project » reste l'identifiant historique, mais ouvre le Terminal
+// Freebuff ; « open-agents » mène à Orchestration. Les libellés vocaux suivent les pages visibles.
 export const APP_ACTIONS = ["open-project", "open-notes", "open-settings", "open-agents", "open-projects", "open-workspace", "open-freebuff", "open-stats", "new-chat", "go-home"] as const
 export type AppAction = (typeof APP_ACTIONS)[number]
 
@@ -46,18 +45,19 @@ export const INTENT_SYSTEM_PROMPT = [
   "Tu es un classifieur d'intention pour une dictée vocale en français. On te donne la transcription d'une demande.",
   "Classifie-la en EXACTEMENT une de ces catégories, et ne fais rien d'autre (ne réponds jamais à la demande, n'exécute rien, ne commente pas) :",
   `1. Commande d'application (l'utilisateur veut agir sur l'application elle-même) — action parmi : ${APP_ACTIONS.map((a) => `"${a}"`).join(", ")}.`,
-  "   - open-project : ouvrir la PAGE PROJET (le projet dans l'application, l'assistant central) ;",
+  "   - open-project : ouvrir la PAGE TERMINAL FREEBUFF (anciennement « Projet ») ;",
   "   - open-projects : ouvrir la GESTION DES ESPACES DE TRAVAIL (liste des espaces, changer d'espace) ;",
   "   - open-workspace : ouvrir le DOSSIER du projet / les fichiers de l'espace ;",
-  "   - open-notes : ouvrir la page Notes ; open-settings : ouvrir les paramètres ; open-agents : voir les tâches / les agents ;",
+  "   - open-notes : ouvrir Notes ; open-settings : ouvrir les paramètres ; open-agents : ouvrir Orchestration ;",
   "   - open-freebuff : lancer Freebuff (CLI) dans un terminal ; open-stats : afficher les statistiques ;",
   "   - new-chat : créer une nouvelle conversation ; go-home : revenir à l'accueil.",
   "   Une COMMANDE parle de l'application elle-même (« ouvre les paramètres », « lance Freebuff », « nouvelle conversation »).",
   "   Une demande de CONTENU ou de travail n'est JAMAIS une commande d'application (ex. « ouvre le fichier main.ts et corrige-le » = dictée ordinaire).",
   "   Distinctions qui comptent :",
-  "   - « ouvre le projet » = open-project (la page Projet), PAS les Réglages ;",
+  "   - « ouvre Freebuff » ou « ouvre le terminal Freebuff » = open-project (page Terminal Freebuff), PAS les Réglages ;",
   "   - « ouvre les espaces de travail » / « change d'espace » = open-projects ;",
   "   - « ouvre le dossier du projet » / « ouvre les fichiers de l'espace » = open-workspace.",
+  "   - « ouvre le projet » sans préciser Freebuff ou le dossier est ambigu : classe en chat, n'exécute aucune action.",
   "2. Tâche pour un agent (l'utilisateur confie un travail à un agent) — cible parmi :",
   AGENT_LINES,
   '3. Dictée ordinaire (tout le reste : message, question, suite de conversation) : {"intent":"chat"}.',
@@ -87,17 +87,18 @@ function parseJsonLoose(content: string): unknown {
 // verbe d'action sur l'app, pas un objet quelconque : « ouvre le fichier main.ts » ne
 // déclenche rien). Testé sans réseau dans voice-intent.test.mjs.
 const FALLBACK_PATTERNS: Array<{ re: RegExp; intent: DictationIntent }> = [
-  // L'ORDRE compte : « espaces de travail » et « dossier du projet » passent avant le
-  // motif « projet », sinon « ouvre le projet » retombait sur les Réglages (mesuré).
+  // v10.5.0 : les libellés d'action doivent être explicites. « ouvre le projet » seul
+  // est ambigu et reste une dictée ordinaire ; il ne doit pas lancer une page au hasard.
   { re: /(?:ouvre|ouvrir|affiche|afficher|montre|montrer|va (?:à|aux?|sur))[^.?!]{0,30}(?:param[eè]tres?|r[eè]glages?)/i, intent: { intent: "app", action: "open-settings" } },
   { re: /(?:ouvre|ouvrir|affiche|afficher|montre|montrer|va (?:à|aux?|sur))[^.?!]{0,30}notes?\b/i, intent: { intent: "app", action: "open-notes" } },
   { re: /(?:ouvre|ouvrir|affiche|afficher|montre|montrer|va (?:à|aux?|sur))[^.?!]{0,30}(?:t[aâ]ches?|page d[es]? agents?|agents?)\b/i, intent: { intent: "app", action: "open-agents" } },
   // « espaces » au PLURIEL (ou « espace de travail », ou « changer d'espace ») : le
   // singulier « l'espace » désigne le dossier (« fichiers de l'espace »), pas la
   // gestion des espaces — mesuré : cette collision faisait ouvrir les Réglages.
+  { re: /(?:ouvre|ouvrir|affiche|afficher|montre|montrer|va (?:à|aux?|sur))[^.?!]{0,30}(?:page freebuff|page terminal freebuff|terminal freebuff|freebuff(?![^.?!]{0,20}dans le terminal))/i, intent: { intent: "app", action: "open-project" } },
   { re: /(?:ouvre|ouvrir|affiche|afficher|montre|montrer|g[eè]re|g[eé]rer|change[rz]?)[^.?!]{0,30}(?:espaces\b|espace de travail|d['’]espace)/i, intent: { intent: "app", action: "open-projects" } },
   { re: /(?:ouvre|ouvrir|affiche|afficher|montre|montrer|va (?:à|aux?|sur))[^.?!]{0,30}(?:dossier\s+(?:du\s+|de l['’])?(?:projet|espace)|fichiers de l['’]espace|explorateur de fichiers)/i, intent: { intent: "app", action: "open-workspace" } },
-  { re: /(?:ouvre|ouvrir|affiche|afficher|montre|montrer|va (?:à|aux?|sur))[^.?!]{0,30}projets?\b/i, intent: { intent: "app", action: "open-project" } },
+  { re: /(?:ouvre|ouvrir|affiche|afficher|montre|montrer|va (?:à|aux?|sur))[^.?!]{0,30}projets?\b/i, intent: { intent: "chat" } },
   { re: /(?:ouvre|ouvrir|lance|lancer|d[eé]marre|d[eé]marrer)[^.?!]{0,30}freebuff/i, intent: { intent: "app", action: "open-freebuff" } },
   { re: /(?:ouvre|ouvrir|affiche|afficher|montre|montrer|va (?:à|aux?|sur))[^.?!]{0,30}statistiques?\b/i, intent: { intent: "app", action: "open-stats" } },
   { re: /nouvelle (?:conversation|discussion|chat)|nouveau chat/i, intent: { intent: "app", action: "new-chat" } },

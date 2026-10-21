@@ -208,6 +208,22 @@ par les variables `:root` existantes, sinon thèmes et densités cassent.
 - **Une dictée a une provenance (v10.4.0)** : le micro du composeur transcrit
   TOUJOURS dans la chatbox ; seul celui du hub exécute les commandes d'application.
   La décision vit dans `web/src/dictation-routing.ts` (module pur testé).
+- **Recherche d'accueil et nouvelle conversation (v10.5.0)** : la barre d'accueil sert
+  à retrouver des conversations, jamais à envoyer une demande. Une recherche vide
+  n'exécute aucune action implicite. Créer et rédiger une conversation reste une
+  action nommée distincte ; tout état vide est informatif, jamais un faux bouton.
+- **Les destinations ont un nom fonctionnel (v10.5.0)** : une carte indique ce qu'elle
+  ouvre réellement. « Freebuff » ouvre le terminal CLI ; « Orchestration » règle la
+  délégation de l'agent principal Aven. Les identifiants internes ne sont pas des
+  libellés utilisateur.
+- **Transfert IA sans envoi implicite (v10.5.0)** : lorsqu'une page prépare un texte
+  dans le composeur, le libellé précise la destination et indique que l'utilisateur
+  doit encore relire puis envoyer. Une action de préparation ne se nomme pas « lancer
+  une analyse » si elle ne fait que remplir le composeur.
+- **Notes à grande échelle (v10.5.0)** : les métadonnées répétées se chargent en lot
+  via une commande IPC ; la résolution des liens d'une note réutilise le même
+  inventaire de notes. Ne pas réintroduire un appel IPC par note ou un balayage
+  complet par lien.
 
 ## 7. Architecture host/renderer (Tauri)
 

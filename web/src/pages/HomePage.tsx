@@ -56,44 +56,36 @@ export default function HomePage({ app }: { app: AvenApp }) {
     workspaceName,
   } = app
 
-    // v9.4.0 : hub reformé — 4 cartes à 90° (FAIRE : Projet, Agents · CONTENU : Fichiers,
-    // Notes). Freebuff vit dans Assistants, Statistiques dans Réglages/Usage.
+    // v10.5.0 : les destinations affichent leur fonction réelle. Freebuff est le terminal
+    // externe ; Orchestration règle la délégation de l'agent principal Aven.
     const nav = [
-      // v9.1.0 : « projet » est à part — carte dédiée d'orchestrateur, hors sélecteur d'agents.
-      // v9.6.0 : la carte Projet OUVRE L'AGENT FREEBUFF (l'orchestrateur utilisateur devient
-      // l'agent externe gratuit) — le nom « Projet » reste le repère de la porte principale.
-      { key: "project", label: "Projet", kind: "project", hint: "Agent central (Freebuff)", action: () => openFreebuffAgent("project") },
-      { key: "agents", label: "Tâches", kind: "agent", hint: "Spécialistes par tâche", action: () => openAgentsPage("tasks") },
+      { key: "project", label: "Freebuff", kind: "freebuff", hint: "Terminal IA interactif", action: () => openFreebuffAgent("project") },
+      { key: "agents", label: "Orchestration", kind: "agent", hint: "Modes de délégation de l'agent principal", action: () => openAgentsPage("tasks") },
       // v9.4.0 : Freebuff quitte le cercle — il vit dans la page Assistants (avec les agents), la pastille reste un raccourci.
       // v9.3.0 : Fichiers et Notes = le CONTENU de l'espace — vues intégrées (l'Explorateur
       // Windows reste disponible d'un clic dans la vue Fichiers).
       { key: "files", label: "Fichiers", kind: "files", hint: "Explorer l'espace", action: () => openFilesView("files") },
       { key: "notes", label: "Notes", kind: "notes", hint: "Notes Markdown par agent", action: () => openNotesView(undefined, "notes") },
     ]
-    // v10.2.2 : la barre promettait « chercher » mais ne filtrait rien (elle créait
-    // seulement une conversation à la validation). Elle filtre désormais les
-    // conversations par titre ; Entrée garde l'action « demander à l'agent ».
-    const command = homeCommand.trim()
-    const needle = command.toLowerCase()
+    // v10.5.0 : la barre supérieure ne fait que rechercher. Une demande se lance par
+    // « Nouvelle conversation », puis se rédige dans le composeur avec sa destination visible.
+    const needle = homeCommand.trim().toLocaleLowerCase("fr-FR")
     const recent = (needle
-      ? chats.filter((c) => (c.title || "Conversation").toLowerCase().includes(needle))
+      ? chats.filter((c) => (c.title || "Conversation").toLocaleLowerCase("fr-FR").includes(needle))
       : chats
     ).slice(0, needle ? 6 : 3)
     const allConversations = chats
     const online = appState.status === "ready"
 
-    // v9.1.6 : flèches Haut/Bas dans les listes du hub (fabrique SANS hook — voir
-    // le fix « Rendered fewer hooks » ci-dessus ; la sélection est le focus DOM).
+    // v9.1.6 : flèches Haut/Bas dans les listes du hub (fabrique SANS hook).
     const recentNav = arrowListNav(recentListRef)
     const conversationsNav = arrowListNav(conversationsListRef)
-
-    // v10.4.0 : la page ne fait que déclencher les actions du contrôleur (même
-    // parcours qu'avant : création si besoin, puis composeur).
-    const submitHomeCommand = (e: FormEvent<HTMLFormElement>) => {
-      e.preventDefault()
-      void app.submitHomeCommand(command)
-    }
     const openConversation = (chat: Chat) => app.openHomeConversation(chat)
+    const submitHomeSearch = (e: FormEvent<HTMLFormElement>) => {
+      e.preventDefault()
+      if (!needle) { setShowConversationPicker(true); return }
+      if (recent.length) openConversation(recent[0])
+    }
 
     return (
       <section className="home-shell" aria-label="Accueil Aven">
@@ -107,9 +99,9 @@ export default function HomePage({ app }: { app: AvenApp }) {
             </span>
           </button>
 
-          <form className="home-command" onSubmit={submitHomeCommand}>
+          <form className="home-command" onSubmit={submitHomeSearch}>
             <span className="home-command-icon" aria-hidden="true"><Icon name="search" size={17} /></span>
-            <input ref={homeSearchRef} value={homeCommand} onChange={(e) => setHomeCommand(e.target.value)} placeholder="Chercher une conversation, ou demander…" aria-label="Chercher une conversation ou demander à l’agent" />
+            <input ref={homeSearchRef} value={homeCommand} onChange={(e) => setHomeCommand(e.target.value)} placeholder="Rechercher une conversation…" aria-label="Rechercher une conversation" title="Entrée ouvre le premier résultat correspondant." />
             <kbd>Ctrl K</kbd>
           </form>
 
@@ -155,9 +147,9 @@ export default function HomePage({ app }: { app: AvenApp }) {
                   </button>
                 ))}
                 {!recent.length && (
-                  <button className="home-empty-recent" onClick={() => void newChat()} disabled={!tab} type="button">
-                    <span>{needle ? "Aucune conversation ne correspond — Entrée crée une conversation sur ce sujet." : "Commencez une conversation pour la retrouver ici."}</span>
-                  </button>
+                  <div className="home-empty-recent" role="status">
+                    <span>{needle ? "Aucune conversation ne correspond à cette recherche." : "Aucune conversation récente. Crée une conversation pour commencer."}</span>
+                  </div>
                 )}
               </div>
               <button className="button primary home-recent-new" onClick={() => void newChat()} disabled={!tab} type="button">
@@ -191,7 +183,7 @@ export default function HomePage({ app }: { app: AvenApp }) {
                 <button
                   className={`voice-core ${dictation.state === "recording" ? "dictation-recording" : ""}${dictation.paused ? " dictation-paused" : ""}`}
                   disabled={!appState.keys.groq}
-                  title={appState.keys.groq ? "Maintiens pour dicter, relâche pour transcrire" : "Dicter — configure une clé Groq dans Paramètres"}
+                  title={appState.keys.groq ? "Maintiens pour parler. Une commande reconnue pilote l’application ; sinon, le texte est préparé dans le composeur." : "Parler à Aven — configure une clé Groq dans Paramètres"}
                   onPointerDown={(e) => {
                     e.preventDefault()
                     dictationPointerRef.current = true // v10.2.0 (F6) : doigt engagé sur le push-to-talk
@@ -204,14 +196,14 @@ export default function HomePage({ app }: { app: AvenApp }) {
                   onPointerUp={(e) => { e.preventDefault(); releaseDictation() }}
                   onPointerLeave={() => { if (dictationPointerRef.current && dictation.state === "recording") dictation.pause() }} // v10.2.0 (F6) : doigt sorti = pause
                   onPointerEnter={() => { if (dictationPointerRef.current && dictation.paused) dictation.resume() }} // v10.2.0 (F6) : doigt revenu = reprise
-                  aria-label={appState.keys.groq ? "Dicter — maintiens le bouton, relâche pour transcrire" : "Dictée indisponible : configure une clé Groq dans Paramètres"}
+                  aria-label={appState.keys.groq ? "Parler à Aven : maintenir pour donner une commande vocale ou dicter dans le composeur" : "Commandes vocales et dictée indisponibles : configure une clé Groq dans Paramètres"}
                   type="button"
                 >
                   <span className="voice-ring voice-ring-outer" aria-hidden="true" />
                   <span className="voice-ring voice-ring-inner" aria-hidden="true" />
                   <span className="voice-mic"><Icon name="microphone" size={30} /></span>
                   <span className="voice-core-label">
-                    {dictation.state === "recording" ? (dictation.paused ? "En pause" : "J’écoute…") : dictation.state === "transcribing" ? "Transcription…" : appState.keys.groq ? "Dicter" : "Clé Groq requise"}
+                    {dictation.state === "recording" ? (dictation.paused ? "En pause" : "J’écoute…") : dictation.state === "transcribing" ? "Transcription…" : appState.keys.groq ? "Parler à Aven" : "Clé Groq requise"}
                   </span>
                 </button>
 

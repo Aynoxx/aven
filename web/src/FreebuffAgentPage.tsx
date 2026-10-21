@@ -326,9 +326,9 @@ export default function FreebuffAgentPage(props: { onError: (e: unknown) => void
 
   return (
     <PageShell
-      eyebrow="ASSISTANT EXTERNE GRATUIT"
-      title="Freebuff"
-      description="Le même espace de travail que tes agents Aven, en sessions quotidiennes gratuites. Le terminal est interactif : Entrée, flèches, Tab, Ctrl+C et la souris agissent directement dans Freebuff. Quitter cette page n'arrête pas l'agent."
+      eyebrow="TERMINAL IA"
+      title="Terminal Freebuff"
+      description="Session CLI Freebuff indépendante de la conversation Aven. Le terminal est interactif : Entrée, flèches, Tab, Ctrl+C et la souris agissent directement dans Freebuff. Quitter cette page n’arrête pas la session."
       actions={actions}
       className="agents-main"
       bodyClassName="agents-page freebuff-agent-page freebuff-stage"

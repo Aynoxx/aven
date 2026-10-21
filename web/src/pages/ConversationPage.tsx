@@ -204,8 +204,8 @@ export default function ConversationPage({ app }: { app: AvenApp }) {
                 onPointerUp={(e) => { e.preventDefault(); releaseDictation() }}
                 onPointerLeave={() => { if (dictationPointerRef.current && dictation.state === "recording") dictation.pause() }} // v10.2.0 (F6) : doigt sorti = pause
                 onPointerEnter={() => { if (dictationPointerRef.current && dictation.paused) dictation.resume() }} // v10.2.0 (F6) : doigt revenu = reprise
-                aria-label={dictation.paused ? "Reprendre la dictée — repose le doigt" : dictation.state === "recording" ? "Relâcher pour transcrire" : "Dicter (maintenir, ou Ctrl+Maj+V)"}
-                title="Dicter (maintenir le clic, ou Ctrl+Maj+V). Le texte arrive dans le composeur : relis-le avant d’envoyer."
+                aria-label={dictation.paused ? "Reprendre la dictée du message — repose le doigt" : dictation.state === "recording" ? "Relâcher pour transcrire le message" : "Dicter un message (maintenir, ou Ctrl+Maj+V)"}
+                title="Dicter un message (maintenir le clic, ou Ctrl+Maj+V). Le texte arrive dans le composeur : relis-le avant d’envoyer."
               >
                 <Icon name="microphone" size={16} />
               </button>
@@ -286,7 +286,7 @@ export default function ConversationPage({ app }: { app: AvenApp }) {
             )}
             <main className="main">
               <div className="chat-titlebar">
-                <div><span className="eyebrow">SESSION</span>
+                <div><span className="eyebrow">SESSION · {tab === "projet" ? "Agent principal Aven" : agentName(tab)}</span>
                   {/* v10.2.2 : F2 renomme ici même quand la barre latérale est masquée. */}
                   {chatId && renamingChat === chatId && !appearance.showSidebar ? (
                     <input className="settings-input titlebar-rename" autoFocus value={chatValue} maxLength={120} aria-label="Titre de la conversation"
@@ -306,7 +306,7 @@ export default function ConversationPage({ app }: { app: AvenApp }) {
                       ))}
                     </div>
                   )}
-                  <button className="button ghost back-home-button" onClick={() => { setShowHome(false); setShowAgentsPage(true) }} aria-label="Voir la page des agents" type="button"><Icon name="agent" size={15} />Agents</button>
+                  <button className="button ghost back-home-button" onClick={() => { setShowHome(false); setShowAgentsPage(true) }} aria-label="Ouvrir l’orchestration" type="button"><Icon name="agent" size={15} />Orchestration</button>
                 </div>
               </div>
               <div className="main-scroll" ref={scrollRef} onScroll={onScroll}>{mainBlocks.map((id) => { if (id === "notices" && !appearance.showNotices) return null; if (id === "model" && !appearance.showModel) return null; if (id === "composer" && !appearance.showComposer) return null; return blocks.get(id)?.() })}</div>

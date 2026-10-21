@@ -5,7 +5,7 @@ import assert from "node:assert/strict"
 import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { forgetNote, loadPinned, loadTags, normalizeTags, setTags, togglePin } from "../host/notes-meta.ts"
+import { forgetNote, loadAllTags, loadPinned, loadTags, normalizeTags, setTags, togglePin } from "../host/notes-meta.ts"
 
 const makeWs = () => mkdtempSync(path.join(tmpdir(), "aven-notes-tags-"))
 
@@ -28,6 +28,11 @@ const makeWs = () => mkdtempSync(path.join(tmpdir(), "aven-notes-tags-"))
     const saved = setTags(ws, "note.md", ["Projet", "code"])
     assert.deepEqual(saved, ["projet", "code"])
     assert.deepEqual(loadTags(ws, "note.md"), ["projet", "code"])
+    assert.deepEqual(loadAllTags(ws), { "note.md": ["projet", "code"] })
+    // v10.5.0 : le résultat en lot est copié et n'expose pas l'état interne.
+    const all = loadAllTags(ws)
+    all["note.md"].push("externe")
+    assert.deepEqual(loadAllTags(ws), { "note.md": ["projet", "code"] })
     // Écrasement complet.
     assert.deepEqual(setTags(ws, "note.md", ["analyse"]), ["analyse"])
     assert.deepEqual(loadTags(ws, "note.md"), ["analyse"])

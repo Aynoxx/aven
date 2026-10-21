@@ -120,9 +120,9 @@ export default function AppShell({ app }: { app: AvenApp }) {
             <span className="eyebrow">PREMIERS PAS</span>
             <h3>Choisis ton espace de travail</h3>
             <p className="hint">
-              Chaque espace a ses propres conversations, agents et réglages. Choisis un
-              espace existant, crée un nouveau dossier (le sélecteur Windows le permet) ou
-              ouvre un dossier existant — plus aucun espace n'est choisi à ta place.
+              Un espace de travail correspond à un dossier de projet. Aven y conserve ses
+              conversations, agents et priorités ; les fichiers explorés restent limités à
+              ce dossier. Choisis un espace existant ou ouvre un dossier de projet existant.
             </p>
             {!!appState.workspaces?.length && (
               <div className="workspace-picker-list">
@@ -188,6 +188,7 @@ export default function AppShell({ app }: { app: AvenApp }) {
       {showFiles && (
         <FilesView
           agents={orderedAgents.map((a) => ({ id: a.id, name: a.name }))}
+          currentAgent={tab}
           onCompose={(text) => void composeIntoChat(text)}
           onClose={closePage}
           onError={fail}

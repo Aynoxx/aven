@@ -152,9 +152,9 @@ export async function transcribeSpeech(
     // désigne la page Projet. Les motifs exigent un VERBE + un NOM d'interface et
     // restent bornés à 80 caractères : une phrase de contenu ne les déclenche pas.
     const deterministic = fallbackIntent(raw)
-    result.intent = deterministic?.intent === "app"
-      ? deterministic
-      : classified.intent === "chat" ? (deterministic ?? classified) : classified
+    // v10.5.0 : un motif déterministe explicite prime sur le classifieur, y compris
+    // quand il neutralise une commande ambiguë pour éviter une navigation surprise.
+    result.intent = deterministic ?? classified
   } else {
     result.intent = fallbackIntent(raw)
   }

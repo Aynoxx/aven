@@ -243,35 +243,45 @@ export default function SettingsDialog(props: {
 
   const renderGeneral = () => (
     <div className="settings-pane">
-      <h4>Clés API</h4>
+      <section className="settings-section">
+      <h4>Services IA · clés API</h4>
       <p className="hint">Les modèles texte payants sont désactivés. OpenRouter Free est optionnel et Groq sert à la dictée vocale. Les clés sont chiffrées par le système et ne quittent jamais l’application.</p>
       {state.providers.map((p) => <div key={p.id} className="field"><b>{p.label} {state.keys[p.id] && <span className="key-status"><Icon name="check" size={12} />clé enregistrée</span>}</b><span className="hint">{p.note}</span>{state.keyWarnings?.[p.id] && <span className="err">{state.keyWarnings[p.id]}</span>}<div className="row"><input className="settings-input" type="password" aria-label={`Clé API ${p.label}`} placeholder={state.keys[p.id] ? "Remplacer la clé…" : "Coller la clé…"} value={inputs[p.id] ?? ""} onChange={(e) => setInputs((i) => ({ ...i, [p.id]: e.target.value }))} /><button className="button primary" disabled={!inputs[p.id]?.trim()} onClick={() => save(p.id, inputs[p.id])}>Enregistrer</button>{state.keys[p.id] && <button className="button danger" onClick={() => save(p.id, "")}>Effacer</button>}<button className="button secondary" onClick={() => api.openExternal(p.url)}>Obtenir une clé</button></div></div>)}
-      <div className="settings-callout"><b>Modèles Aven gratuits uniquement</b><span><code>OpenRouter Free</code> fournit des modèles gratuits pour les agents et <code>Groq</code> alimente la dictée vocale (maintiens le bouton micro ou Ctrl+Maj+V ; le texte arrive dans le composeur, à relire avant d’envoyer).</span></div>
+      <div className="settings-callout"><b>Modèles gratuits et dictée</b><span><code>OpenRouter Free</code> fournit des modèles gratuits pour les agents. <code>Groq</code> alimente la dictée vocale ; le texte transcrit arrive dans le composeur et doit être relu puis envoyé.</span></div>
+      </section>
+      <section className="settings-section">
       <h4>Notifications de bureau</h4>
       <p className="hint">Prévient quand un agent a besoin de toi : permission demandée, formulaire, tour terminé (s’il a duré plus de 8 s) ou échoué. Jamais quand la fenêtre est au premier plan.</p>
       <label className="toggle-row"><span>Activer les notifications</span><input type="checkbox" checked={notifications !== false} onChange={(e) => void changeNotifications(e.target.checked)} /></label>
       <div className="row"><button className="button secondary" onClick={() => void copyDiagnostic()}>Copier le diagnostic</button><span className="hint">Versions, état du moteur, agents et derniers événements — sans aucune clé API.</span>{diagnosticMsg && <span className="hint">{diagnosticMsg}</span>}</div>
-      <h4>Freebuff CLI gratuit</h4>
-      <p className="hint">Le free tier de Freebuff (sessions quotidiennes, financé par les pubs texte) vit dans son CLI interactif. v9.2.0 : il s'affiche DANS Aven (terminal intégré, session persistante) — la carte « Freebuff » de l'accueil ouvre la vue ; « Se connecter » reste une console externe (action courte, incompatible avec une session ouverte).</p>
+      </section>
+      <section className="settings-section">
+      <h4>Terminal Freebuff</h4>
+      <p className="hint">Le terminal Freebuff est indépendant de la conversation Aven. La carte Freebuff ouvre sa session interactive ; cette section permet de vérifier l’installation du CLI et de se connecter au service.</p>
       <div className="row">
         <span className="hint">{cli === null ? "Vérification…" : cli.installed ? <b><Icon name="check" size={12} /> CLI installé{cli.version ? ` — v${cli.version}` : ""}</b> : "CLI non installé"}</span>
         {cli?.installed && <button className="button secondary" onClick={() => void cliAction("login")}>Se connecter</button>}
         {!cli?.installed && <button className="button primary" disabled={cliInstalling} onClick={() => void cliAction("install")}>{cliInstalling ? "Installation en cours…" : "Installer le CLI (npm)"}</button>}
       </div>
-      <h4>Priorité des modèles par agent</h4>
-      <p className="hint">Chaque agent reçoit explicitement le premier modèle disponible de sa chaîne de priorité. Si ce modèle est temporairement indisponible, le routeur passe au suivant et la session est mise à jour.</p>
+      </section>
+      <section className="settings-section">
+      <h4>Priorité des modèles</h4>
+      <p className="hint">Chaque agent utilise sa propre chaîne de modèles : Aven essaie d’abord le premier disponible, puis passe au suivant en cas d’indisponibilité temporaire.</p>
       {state.warning && <p className="err">Table de priorités : {state.warning}</p>}
       {!!state.newModels?.length && <p className="hint">Nouveaux modèles ajoutés automatiquement à ta table de priorités : {state.newModels.join(", ")}.</p>}
       {!!state.removedModels?.length && <p className="hint">Modèles payants retirés de cet espace : {state.removedModels.join(", ")}.</p>}
       {Object.entries(state.assignments ?? {}).map(([agent, chain]) => <p key={agent} className="hint"><b>{agent}</b> : {chain.length ? chain.slice(0, 5).map((m, i) => `${i + 1}. ${m.label}`).join("  →  ") + (chain.length > 5 ? `  (+${chain.length - 5})` : "") : "aucun modèle disponible"}</p>)}
-      <h4>Espaces</h4>
-      <p className="hint">Chaque espace a ses propres conversations, agents et priorités. Les clés API sont partagées entre tous. Retirer le dernier espace ramène à l’écran de choix (plus aucun dossier n’est créé à ta place).</p>
+      </section>
+      <section className="settings-section">
+      <h4>Espaces de travail</h4>
+      <p className="hint">Un espace correspond à un dossier de projet. Il regroupe ses conversations, agents et priorités de modèles ; les clés API sont partagées entre tous les espaces. Les fichiers explorés et les notes suivent l’espace actif.</p>
       {(state.workspaces ?? []).map((w) => <div key={w.path} className="row"><span style={{ flex: 1 }}>{w.path === state.workspace ? <b className="current-workspace"><Icon name="dot" size={10} />{w.name}</b> : w.name} <span className="hint">{w.path}</span></span>{w.path !== state.workspace && <button className="button secondary" disabled={busy} onClick={() => switchWs(w.path)}>Utiliser</button>}<button className="button danger" disabled={busy} onClick={() => removeWs(w.path)}>Retirer de la liste</button></div>)}
       <div className="row"><input className="settings-input" aria-label="Nom du nouvel espace" placeholder="Nom du nouvel espace…" value={newWsName} onChange={(e) => setNewWsName(e.target.value)} /><button className="button primary" onClick={createWs}>Créer un nouvel espace</button><button className="button secondary" onClick={addExistingWs}>Ouvrir un dossier existant</button></div>
       {!!state.sync?.length && <><h4>Fichiers de config du dossier de travail</h4>{state.sync.map((s) => <p key={s.file} className="hint"><code>{s.file}</code> : {SYNC_LABEL[s.status] ?? s.status}</p>)}</>}
       {state.versionWarning && <p className="err">{state.versionWarning}</p>}
       <p className="hint">OpenCode {state.version ?? "?"} · CLI : {state.cli ?? "?"}<br />Dossier de travail actif : {state.workspace ?? "?"}</p>
-      <div className="row"><button className="button secondary" onClick={() => api.openWorkspace()}>Ouvrir le dossier</button></div>
+      <div className="row"><button className="button secondary" onClick={() => api.openWorkspace()}>Ouvrir le dossier actif</button></div>
+      </section>
       <div className="row"><button className="button ghost" onClick={props.onClose}>Fermer</button></div>
     </div>
   )

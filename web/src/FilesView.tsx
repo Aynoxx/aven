@@ -13,6 +13,7 @@ const fmtSize = (n: number) => (n < 1024 ? `${n} o` : n < 1024 * 1024 ? `${(n / 
 
 type Props = {
   agents: { id: string; name: string }[]
+  currentAgent?: string
   onCompose: (text: string) => void
   onClose: () => void
   onError: (e: unknown) => void
@@ -57,8 +58,9 @@ export default function FilesView(props: Props) {
     return parts.length ? parts.slice(0, -1).join("/") : null
   }, [relative])
 
-  // Le nom de l'agent cliqué est affiché par le bouton ; l'énoncé envoyé au composeur
-  // s'adresse à l'agent ACTIF (le composeur suit l'onglet courant — l'utilisateur valide).
+  // v10.5.0 : l'analyse est préparée dans la conversation de l'agent actif. La page
+  // n'affiche plus de choix de spécialistes trompeur : ce bouton ne changeait pas d'agent.
+  const activeAgentName = props.currentAgent === "projet" ? "l’agent principal Aven" : props.agents.find((a) => a.id === props.currentAgent)?.name ?? "agent actif"
   const askAgent = () => {
     const target = preview?.path ?? relative
     props.onCompose(`Analyse le fichier « ${target} » de l'espace et explique-moi ce qu'il contient.`)
@@ -119,12 +121,13 @@ export default function FilesView(props: Props) {
             <>
               <div className="notes-toolbar">
                 <span className="eyebrow">APERÇU · {preview.path}</span>
-                <button className="button ghost" type="button" onClick={() => setAnalyzeFor(analyzeFor === preview.path ? null : preview.path)}><Icon name="agent" size={13} />Faire analyser par un agent</button>
+                <button className="button ghost" type="button" title={`Prépare une demande pour ${activeAgentName}, sans l'envoyer`} onClick={() => setAnalyzeFor(analyzeFor === preview.path ? null : preview.path)}><Icon name="agent" size={13} />Préparer une analyse</button>
                 <span className="hint">{fmtSize(preview.size)}{preview.truncated ? " · aperçu tronqué (512 Kio)" : ""}</span>
               </div>
               {analyzeFor === preview.path && (
-                <div className="row files-analyze-row" role="group" aria-label="Préparer la demande d'analyse">
-                  {props.agents.map((a) => <button key={a.id} className="button secondary" type="button" onClick={askAgent}>{a.name}</button>)}
+                <div className="files-analyze-row" role="group" aria-label="Préparer la demande d'analyse">
+                  <p className="hint">Destination : <strong>{activeAgentName}</strong>. La demande sera préparée dans le composeur ; elle ne sera pas envoyée automatiquement.</p>
+                  <button className="button secondary" type="button" onClick={askAgent}>Préparer dans le composeur</button>
                 </div>
               )}
               <pre className="files-content">{preview.content}</pre>

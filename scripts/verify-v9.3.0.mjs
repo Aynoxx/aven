@@ -31,8 +31,9 @@ const readme = read("README.md")
 
 // A. Hub reformé : Faire ×2 + Contenu ×2 (v9.4.0 : Freebuff a rejoint la page
 // Assistants, Statistiques vit dans Réglages/Usage depuis v9.3.0).
-assert.match(app, /key: "project", label: "Projet"/)
-assert.match(app, /key: "agents", label: "T\u00e2ches"/) // v9.6.0 : les spécialistes deviennent « Tâches »
+// v10.5.0 : les clés internes restent stables ; les libellés visibles nomment la destination.
+assert.match(app, /key: "project", label: "Freebuff", kind: "freebuff"/)
+assert.match(app, /key: "agents", label: "Orchestration"/)
 assert.match(app, /key: "files", label: "Fichiers"/)
 assert.match(app, /key: "notes", label: "Notes"/)
 assert.ok(!/key: "stats"/.test(app), "la carte Statistiques a quitté le cercle du hub (→ Réglages/Usage)")
@@ -49,7 +50,7 @@ assert.match(css, /\.freebuff-pill/)
 assert.ok(!app.includes('aria-label="Gérer les espaces"'), "le raccourci espaces a quitté le hub (v9.6.0)")
 // v9.6.0 : l'eyebrow ESPACES du modal hub a disparu avec le modal (Réglages).
 // v9.6.0 : les avis « Espace actif » vivaient dans le modal retiré.
-assert.match(settings, /<h4>Espaces<\/h4>/, "Réglages : section « Espaces »")
+assert.match(settings, /<h4>Espaces de travail<\/h4>/, "Réglages : section « Espaces de travail » (v10.5.0)")
 assert.ok(!/Changer de projet/.test(app), "l'ancien libellé « Changer de projet » a disparu")
 
 // D. Notes : vue complète remplaçant le modal (rendu, édition, tags, joindre).
@@ -62,7 +63,8 @@ assert.ok(!/NotesDialog/.test(app), "plus aucune référence au modal NotesDialo
 assert.match(notesView, /Markdown/, "la vue Notes rend le Markdown (plus de <pre> brut)")
 assert.match(notesView, /noteSave/, "édition intégrée (notes:save)")
 assert.match(notesView, /noteSetTags/, "tags par agent (notes:setTags)")
-assert.match(notesView, /Joindre à la conversation/, "injection dans le composeur")
+assert.match(notesView, /Joindre à \{activeAgentName\}/, "l'action de transfert nomme l'agent ciblé")
+assert.match(notesView, /onClick=\{\(\) => attach\(selected, false\)\}/, "le transfert prépare toujours le texte dans le composeur")
 assert.match(notes, /export function saveNote/, "saveNote (création/édition de vrais fichiers .md)")
 assert.match(notesMeta, /MAX_NOTE_TAGS/, "tags bornés")
 assert.match(main, /case "noteSave"/)

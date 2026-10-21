@@ -25,7 +25,7 @@ import {
   listNotes, listTrash, moveNote, noteLinks, notesDir, notesTree, purgeNote, quickCapture,
   renameFolder, restoreNote, saveNote, searchNotes, unarchiveNote,
 } from "./notes.js"
-import { forgetNote, loadPinned, loadTags, setTags, togglePin } from "./notes-meta.js"
+import { forgetNote, loadAllTags, loadPinned, loadTags, setTags, togglePin } from "./notes-meta.js"
 import { listWorkspaceDir, readWorkspaceFile, breadcrumbOf, safeResolve as safeResolveWorkspacePath } from "./workspace-files.js"
 import { aggregateStats, readDictationStats } from "./stats.js"
 import { buildDiagnostic } from "./diagnostic.js"
@@ -659,6 +659,9 @@ async function dispatch(method: string, params: any): Promise<unknown> {
       return setTags(requireWorkspace(), String(params?.[0] ?? ""), Array.isArray(params?.[1]) ? params[1].map(String) : [])
     case "noteTags":
       return loadTags(requireWorkspace(), String(params?.[0] ?? ""))
+    // v10.5.0 : l'arbre Notes lit toutes les étiquettes en un seul appel IPC.
+    case "noteTagsAll":
+      return loadAllTags(requireWorkspace())
     case "noteDir":
       return notesDir(requireWorkspace())
     case "filesList":

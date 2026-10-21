@@ -316,10 +316,9 @@ export function notesTree(workspace: string): NoteTreeEntry[] {
 const WIKILINK = /\[\[([^\[\]\n]{1,120})\]\]/g
 
 /** Résolution d'une cible [[...]] : id exact, nom de fichier sans .md, puis titre. */
-export function resolveWikilink(workspace: string, target: string): string | null {
+function resolveWikilinkInNotes(notes: ReturnType<typeof listNotes>, target: string): string | null {
   const clean = String(target ?? "").trim()
   if (!clean) return null
-  const notes = listNotes(workspace)
   const direct = cleanNoteId(clean.includes(".") ? clean : `${clean}.md`)
   if (direct && notes.some((n) => n.id === direct)) return direct
   const lowered = clean.toLowerCase()
@@ -329,21 +328,25 @@ export function resolveWikilink(workspace: string, target: string): string | nul
   return byTitle?.id ?? null
 }
 
-/** Liens sortants d'une note (ids résolus + cibles orphelines). */
+export function resolveWikilink(workspace: string, target: string): string | null {
+  return resolveWikilinkInNotes(listNotes(workspace), target)
+}
+
+/** Liens sortants : l'inventaire de notes est chargé une fois, même si le document contient plusieurs liens. */
 export function noteLinks(workspace: string, id: string): { target: string; resolved: string | null }[] {
   const rel = cleanNoteId(id); if (!rel) throw new Error("Note invalide")
   const markdown = getNote(workspace, rel).markdown
+  const notes = listNotes(workspace)
   const out: { target: string; resolved: string | null }[] = []
   const seen = new Set<string>()
   for (const m of markdown.matchAll(WIKILINK)) {
     const target = m[1].trim()
     if (!target || seen.has(target)) continue
     seen.add(target)
-    out.push({ target, resolved: resolveWikilink(workspace, target) })
+    out.push({ target, resolved: resolveWikilinkInNotes(notes, target) })
   }
   return out
 }
-
 /** Backlinks : notes pointant vers la note donnée (clic → navigation). */
 export function backlinks(workspace: string, id: string): string[] {
   const rel = cleanNoteId(id); if (!rel) throw new Error("Note invalide")
