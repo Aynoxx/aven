@@ -27,7 +27,7 @@ const [vMaj, vMin] = pkg.version.split(".").map(Number)
 assert.ok(vMaj > 9 || (vMaj === 9 && vMin >= 1), `version trop ancienne : ${pkg.version}`)
 
 // ① projet à part : carte hub dédiée + badge orchestrateur, hors sélecteur.
-assert.match(app, /key: "project", label: "Projet"/)
+assert.match(app, /key: "project", label: "Freebuff", kind: "freebuff"/)
 assert.match(app, /hub-card-\$\{item\.key\}/) // classe construite depuis item.key
 assert.match(app, /agent-card-orchestrator/)
 assert.match(app, /orchestrator-badge/)
