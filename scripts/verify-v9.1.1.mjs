@@ -21,7 +21,7 @@ assert.ok(vMaj * 10000 + vMin * 100 + vPatch >= 90101, `version trop ancienne : 
 // 1. Plus de doublon « Projet » / « Projets » : l'ancienne carte espaces est retirée.
 assert.ok(!/key: "projects"/.test(app), "la carte « Projets » (doublon visuel) doit avoir disparu du hub")
 assert.ok(!/hub-card-projects/.test(css), "le CSS de la carte « Projets » doit avoir disparu")
-assert.match(app, /key: "project", label: "Projet"/) // la carte orchestrateur reste
+assert.match(app, /key: "project", label: "Freebuff", kind: "freebuff"/) // v10.5.0 : libellé visible de la destination
 
 // 2. Repli automatique sur OpenCode quand Freebuff tombe sur une erreur de facturation.
 // v9.1.6 : le chemin SDK (et son repli facturation) est PURGÉ — l'envoi ne passe que par
