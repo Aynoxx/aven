@@ -286,7 +286,7 @@ export default function ConversationPage({ app }: { app: AvenApp }) {
             )}
             <main className="main">
               <div className="chat-titlebar">
-                <div><span className="eyebrow">SESSION · {agentName(tab)}</span>
+                <div><span className="eyebrow">SESSION · {tab === "projet" ? "Agent principal Aven" : agentName(tab)}</span>
                   {/* v10.2.2 : F2 renomme ici même quand la barre latérale est masquée. */}
                   {chatId && renamingChat === chatId && !appearance.showSidebar ? (
                     <input className="settings-input titlebar-rename" autoFocus value={chatValue} maxLength={120} aria-label="Titre de la conversation"
