@@ -12,9 +12,8 @@
 // v9.1.3 : trois actions exécutables en plus — ouvrir le CLI Freebuff dans un terminal,
 // afficher les statistiques et créer une nouvelle conversation. L'agent vocal exécute
 // désormais vraiment l'action demandée (routeAppAction côté renderer).
-// v10.4.0 : « open-project » (page Projet) et « go-home » (accueil) entrent dans la
-// liste. « ouvre le projet » ouvrait les Réglages parce que « open-projects » ne
-// désignait que la gestion des ESPACES ; la page Projet n'avait aucune action vocale.
+// v10.5.0 : « open-project » reste l'identifiant historique, mais ouvre le Terminal
+// Freebuff ; « open-agents » mène à Orchestration. Les libellés vocaux suivent les pages visibles.
 export const APP_ACTIONS = ["open-project", "open-notes", "open-settings", "open-agents", "open-projects", "open-workspace", "open-freebuff", "open-stats", "new-chat", "go-home"] as const
 export type AppAction = (typeof APP_ACTIONS)[number]
 
@@ -46,16 +45,16 @@ export const INTENT_SYSTEM_PROMPT = [
   "Tu es un classifieur d'intention pour une dictée vocale en français. On te donne la transcription d'une demande.",
   "Classifie-la en EXACTEMENT une de ces catégories, et ne fais rien d'autre (ne réponds jamais à la demande, n'exécute rien, ne commente pas) :",
   `1. Commande d'application (l'utilisateur veut agir sur l'application elle-même) — action parmi : ${APP_ACTIONS.map((a) => `"${a}"`).join(", ")}.`,
-  "   - open-project : ouvrir la PAGE PROJET (le projet dans l'application, l'assistant central) ;",
+  "   - open-project : ouvrir la PAGE TERMINAL FREEBUFF (anciennement « Projet ») ;",
   "   - open-projects : ouvrir la GESTION DES ESPACES DE TRAVAIL (liste des espaces, changer d'espace) ;",
   "   - open-workspace : ouvrir le DOSSIER du projet / les fichiers de l'espace ;",
-  "   - open-notes : ouvrir la page Notes ; open-settings : ouvrir les paramètres ; open-agents : voir les tâches / les agents ;",
+  "   - open-notes : ouvrir Notes ; open-settings : ouvrir les paramètres ; open-agents : ouvrir Orchestration ;",
   "   - open-freebuff : lancer Freebuff (CLI) dans un terminal ; open-stats : afficher les statistiques ;",
   "   - new-chat : créer une nouvelle conversation ; go-home : revenir à l'accueil.",
   "   Une COMMANDE parle de l'application elle-même (« ouvre les paramètres », « lance Freebuff », « nouvelle conversation »).",
   "   Une demande de CONTENU ou de travail n'est JAMAIS une commande d'application (ex. « ouvre le fichier main.ts et corrige-le » = dictée ordinaire).",
   "   Distinctions qui comptent :",
-  "   - « ouvre le projet » = open-project (la page Projet), PAS les Réglages ;",
+  "   - « ouvre Freebuff » ou « ouvre le terminal Freebuff » = open-project (page Terminal Freebuff), PAS les Réglages ;",
   "   - « ouvre les espaces de travail » / « change d'espace » = open-projects ;",
   "   - « ouvre le dossier du projet » / « ouvre les fichiers de l'espace » = open-workspace.",
   "2. Tâche pour un agent (l'utilisateur confie un travail à un agent) — cible parmi :",
