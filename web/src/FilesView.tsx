@@ -60,7 +60,7 @@ export default function FilesView(props: Props) {
 
   // v10.5.0 : l'analyse est préparée dans la conversation de l'agent actif. La page
   // n'affiche plus de choix de spécialistes trompeur : ce bouton ne changeait pas d'agent.
-  const activeAgentName = props.agents.find((a) => a.id === props.currentAgent)?.name ?? "agent actif"
+  const activeAgentName = props.currentAgent === "projet" ? "l’agent principal Aven" : props.agents.find((a) => a.id === props.currentAgent)?.name ?? "agent actif"
   const askAgent = () => {
     const target = preview?.path ?? relative
     props.onCompose(`Analyse le fichier « ${target} » de l'espace et explique-moi ce qu'il contient.`)
