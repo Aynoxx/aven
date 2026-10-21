@@ -66,6 +66,9 @@
 
 .settings-section { padding: 18px 0; border-bottom: 1px solid var(--border); }
 .settings-section:last-child { border-bottom: 0; }
+/* v10.5.0 : les titres restent cohérents lorsqu'ils deviennent des groupes imbriqués. */
+.settings-section h4 { margin: 10px 0 7px; font-size: var(--font-size-md); font-weight: 800; }
+.settings-section > h4:first-child { margin-top: 0; }
 /* v10.3.2 (revue apple-design §4 P3) : un TITRE de section est un seul rôle, mais il
    mesurait 12 px/800 dans « Apparence » et 14 px/700 dans « Configuration »/« Usage »
    (ces onglets-là passent par `h4`). Un cran au-dessus des libellés (md vs sm), même
