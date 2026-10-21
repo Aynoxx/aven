@@ -15,9 +15,6 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const read = (p) => readFileSync(path.join(root, p), "utf8")
 
 const pkg = JSON.parse(read("package.json"))
-const tauri = JSON.parse(read("src-tauri/tauri.conf.json"))
-const cargo = read("src-tauri/Cargo.toml")
-const readme = read("README.md")
 const intent = read("host/voice-intent.ts")
 const voice = read("host/voice.ts")
 const routing = read("web/src/dictation-routing.ts")
@@ -35,18 +32,15 @@ const tests = read("tests/dictation-routing.test.mjs")
 const intentTests = read("tests/voice-intent.test.mjs")
 
 // ── Version publiée ─────────────────────────────────────────────────────────────
-assert.equal(pkg.version, "10.4.0", "package.json porte la version de la sonde")
-assert.equal(tauri.version, "10.4.0", "tauri.conf.json suit la même version")
-assert.match(cargo, /^version = "10\.4\.0"$/m, "Cargo.toml suit la même version")
-assert.match(readme, /^# Aven v10\.4\.0$/m, "README annonce la version")
-assert.match(readme, /v10\.4\.0 — la voix agit/, "README explique le bénéfice utilisateur")
-assert.ok(pkg.scripts.verify.includes("scripts/verify-v10.4.0.mjs"), "npm run verify exécute cette sonde")
+// v10.5.0 : cette sonde vérifie les comportements conservés de v10.4.0 ;
+// la version courante est contrôlée par verify-v10.5.0.mjs.
+assert.ok(pkg.scripts.verify.includes("scripts/verify-v10.4.0.mjs"), "npm run verify conserve la sonde historique v10.4.0")
 
 // ── A1. La page Projet est une destination vocale à part entière ────────────────
 assert.match(intent, /export const APP_ACTIONS = \["open-project",/, "open-project entre dans la liste fermée")
 assert.match(intent, /"new-chat", "go-home"\]/, "go-home entre dans la liste fermée")
-assert.match(intent, /- « ouvre le projet » = open-project \(la page Projet\), PAS les Réglages/,
-  "le prompt distingue explicitement la page Projet des Réglages")
+assert.match(intent, /- « ouvre Freebuff » ou « ouvre le terminal Freebuff » = open-project \(page Terminal Freebuff\), PAS les Réglages/,
+  "la commande vocale ouvre la page Terminal Freebuff plutôt que les Réglages")
 assert.match(intent, /- « ouvre les espaces de travail »[^\n]*= open-projects/,
   "le prompt distingue les espaces de travail")
 assert.match(intent, /- « ouvre le dossier du projet »[^\n]*= open-workspace/,
