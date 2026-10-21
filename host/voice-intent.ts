@@ -94,7 +94,7 @@ const FALLBACK_PATTERNS: Array<{ re: RegExp; intent: DictationIntent }> = [
   // « espaces » au PLURIEL (ou « espace de travail », ou « changer d'espace ») : le
   // singulier « l'espace » désigne le dossier (« fichiers de l'espace »), pas la
   // gestion des espaces — mesuré : cette collision faisait ouvrir les Réglages.
-  { re: /(?:ouvre|ouvrir|affiche|afficher|montre|montrer|va (?:à|aux?|sur))[^.?!]{0,30}(?:freebuff|terminal freebuff)/i, intent: { intent: "app", action: "open-project" } },
+  { re: /(?:ouvre|ouvrir|affiche|afficher|montre|montrer|va (?:à|aux?|sur))[^.?!]{0,30}(?:page freebuff|page terminal freebuff|terminal freebuff|freebuff(?![^.?!]{0,20}dans le terminal))/i, intent: { intent: "app", action: "open-project" } },
   { re: /(?:ouvre|ouvrir|affiche|afficher|montre|montrer|g[eè]re|g[eé]rer|change[rz]?)[^.?!]{0,30}(?:espaces\b|espace de travail|d['’]espace)/i, intent: { intent: "app", action: "open-projects" } },
   { re: /(?:ouvre|ouvrir|affiche|afficher|montre|montrer|va (?:à|aux?|sur))[^.?!]{0,30}(?:dossier\s+(?:du\s+|de l['’])?(?:projet|espace)|fichiers de l['’]espace|explorateur de fichiers)/i, intent: { intent: "app", action: "open-workspace" } },
   { re: /(?:ouvre|ouvrir|affiche|afficher|montre|montrer|va (?:à|aux?|sur))[^.?!]{0,30}projets?\b/i, intent: { intent: "app", action: "open-project" } },
