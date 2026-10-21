@@ -183,7 +183,7 @@ export default function HomePage({ app }: { app: AvenApp }) {
                 <button
                   className={`voice-core ${dictation.state === "recording" ? "dictation-recording" : ""}${dictation.paused ? " dictation-paused" : ""}`}
                   disabled={!appState.keys.groq}
-                  title={appState.keys.groq ? "Maintiens pour dicter, relâche pour transcrire" : "Dicter — configure une clé Groq dans Paramètres"}
+                  title={appState.keys.groq ? "Maintiens pour parler. Une commande reconnue pilote l’application ; sinon, le texte est préparé dans le composeur." : "Parler à Aven — configure une clé Groq dans Paramètres"}
                   onPointerDown={(e) => {
                     e.preventDefault()
                     dictationPointerRef.current = true // v10.2.0 (F6) : doigt engagé sur le push-to-talk
@@ -196,14 +196,14 @@ export default function HomePage({ app }: { app: AvenApp }) {
                   onPointerUp={(e) => { e.preventDefault(); releaseDictation() }}
                   onPointerLeave={() => { if (dictationPointerRef.current && dictation.state === "recording") dictation.pause() }} // v10.2.0 (F6) : doigt sorti = pause
                   onPointerEnter={() => { if (dictationPointerRef.current && dictation.paused) dictation.resume() }} // v10.2.0 (F6) : doigt revenu = reprise
-                  aria-label={appState.keys.groq ? "Dicter — maintiens le bouton, relâche pour transcrire" : "Dictée indisponible : configure une clé Groq dans Paramètres"}
+                  aria-label={appState.keys.groq ? "Parler à Aven : maintenir pour donner une commande vocale ou dicter dans le composeur" : "Commandes vocales et dictée indisponibles : configure une clé Groq dans Paramètres"}
                   type="button"
                 >
                   <span className="voice-ring voice-ring-outer" aria-hidden="true" />
                   <span className="voice-ring voice-ring-inner" aria-hidden="true" />
                   <span className="voice-mic"><Icon name="microphone" size={30} /></span>
                   <span className="voice-core-label">
-                    {dictation.state === "recording" ? (dictation.paused ? "En pause" : "J’écoute…") : dictation.state === "transcribing" ? "Transcription…" : appState.keys.groq ? "Dicter" : "Clé Groq requise"}
+                    {dictation.state === "recording" ? (dictation.paused ? "En pause" : "J’écoute…") : dictation.state === "transcribing" ? "Transcription…" : appState.keys.groq ? "Parler à Aven" : "Clé Groq requise"}
                   </span>
                 </button>
 
