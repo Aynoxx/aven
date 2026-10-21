@@ -7,7 +7,6 @@ import type { AvenApp } from "../app/use-aven-app"
 // v10.5.0 : la page Orchestration explique la portée persistante du mode de délégation.
 export default function TasksPage({ app }: { app: AvenApp }) {
   const {
-    agentName,
     agents,
     agentsError,
     agentsLoading,
