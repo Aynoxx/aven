@@ -32,7 +32,7 @@ sous-agent (code-reviewer), branchée sur **OpenCode 2.0.10** et un catalogue d�
 > ② Les cartes du hub s’appellent désormais **Freebuff** et **Orchestration**. La page Freebuff indique qu’elle ouvre un terminal CLI indépendant de la conversation Aven.
 > ③ La conversation affiche l’agent actif. La page Orchestration précise la portée du mode de délégation et distingue l’orchestrateur de l’utilisation directe d’un spécialiste.
 > ④ Fichiers et Notes indiquent l’agent ciblé et précisent quand une demande est seulement préparée dans le composeur, sans être envoyée.
-> ⑤ Notes charge les étiquettes en un seul appel IPC et résout les liens d’une note avec un inventaire unique, au lieu de relire toute la bibliothèque par lien.
+> ⑤ Notes charge les étiquettes en un seul appel IPC et résout les liens d’une note avec un inventaire unique, au lieu de relire toute la bibliothèque par lien. ⑥ La commande vocale suit les noms visibles : « ouvre Freebuff » ouvre le terminal, tandis que « ouvre le projet » sans autre précision ne provoque aucune navigation.
 > La revue des changements se trouve dans `docs/audits/2026-10-21-corrections-ux-v10.5.0.md`; la sonde `scripts/verify-v10.5.0.mjs` fige ces conventions.
 
 > **v10.0.0 — 100 % Tauri** : le shell **Electron est supprimé** (main, preload,
