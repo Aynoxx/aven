@@ -40,11 +40,11 @@ test("fallbackIntent : commandes d'application courantes reconnues sans réseau"
   assert.deepEqual(fallbackIntent("crée une nouvelle discussion"), { intent: "app", action: "new-chat" })
 })
 
-// v10.4.0 : la page Projet, les espaces et le dossier sont TROIS destinations distinctes.
-// Le défaut mesuré : « ouvre le projet » ouvrait les Réglages (open-projects).
-test("fallbackIntent : projet / espaces / dossier ne se confondent plus", () => {
-  assert.deepEqual(fallbackIntent("ouvre le projet"), { intent: "app", action: "open-project" })
-  assert.deepEqual(fallbackIntent("affiche la page projet"), { intent: "app", action: "open-project" })
+// v10.5.0 : seules les destinations nommées ouvrent une page. Une formule générale
+// « ouvre le projet » ne signifie ni « Freebuff » ni « ouvre le dossier ».
+test("fallbackIntent : Freebuff, espaces, dossier et formule ambiguë restent distincts", () => {
+  assert.deepEqual(fallbackIntent("ouvre le projet"), { intent: "chat" })
+  assert.deepEqual(fallbackIntent("affiche la page projet"), { intent: "chat" })
   assert.deepEqual(fallbackIntent("ouvre les espaces de travail"), { intent: "app", action: "open-projects" })
   assert.deepEqual(fallbackIntent("change d'espace"), { intent: "app", action: "open-projects" })
   assert.deepEqual(fallbackIntent("ouvre le dossier du projet"), { intent: "app", action: "open-workspace" })
@@ -188,13 +188,12 @@ test("transcribeSpeech : texte ordinaire + classifieur en échec = aucune intent
   assert.equal(result.warning, "Rate limit exceeded")
 })
 
-// v10.4.0 : mesuré — le modèle classait « ouvre le projet » en open-projects (Réglages)
-// alors que le motif déterministe désigne la page Projet. Un motif de COMMANDE
-// (verbe + nom d'interface) prime donc sur le verdict du modèle.
+// v10.5.0 : le nom visible de la destination prime sur une classification modèle
+// divergente : « ouvre Freebuff » ne doit pas devenir l'ouverture des Réglages.
 test("transcribeSpeech : un motif de commande prime sur une action modèle divergente", async () => {
   const f = fakeFetch([
-    { match: "/audio/transcriptions", body: { text: "ouvre le projet" } },
-    { match: "/chat/completions", body: { choices: [{ message: { content: "Ouvre le projet." } }] }, left: 1 },
+    { match: "/audio/transcriptions", body: { text: "ouvre Freebuff" } },
+    { match: "/chat/completions", body: { choices: [{ message: { content: "Ouvre Freebuff." } }] }, left: 1 },
     { match: "/chat/completions", body: { choices: [{ message: { content: '{"intent":"app","action":"open-projects"}' } }] } },
   ])
   const result = await transcribeSpeech(new Blob(["a"], { type: "audio/webm" }), f, KEY)
