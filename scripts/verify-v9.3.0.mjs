@@ -50,7 +50,7 @@ assert.match(css, /\.freebuff-pill/)
 assert.ok(!app.includes('aria-label="Gérer les espaces"'), "le raccourci espaces a quitté le hub (v9.6.0)")
 // v9.6.0 : l'eyebrow ESPACES du modal hub a disparu avec le modal (Réglages).
 // v9.6.0 : les avis « Espace actif » vivaient dans le modal retiré.
-assert.match(settings, /<h4>Espaces<\/h4>/, "Réglages : section « Espaces »")
+assert.match(settings, /<h4>Espaces de travail<\/h4>/, "Réglages : section « Espaces de travail » (v10.5.0)")
 assert.ok(!/Changer de projet/.test(app), "l'ancien libellé « Changer de projet » a disparu")
 
 // D. Notes : vue complète remplaçant le modal (rendu, édition, tags, joindre).
