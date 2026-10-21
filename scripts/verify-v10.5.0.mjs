@@ -41,7 +41,7 @@ assert.equal(lock.version, pkg.version, "package-lock.json correspond à package
 assert.equal(lock.packages[""].version, pkg.version, "le paquet racine du lock est synchronisé")
 assert.equal(tauri.version, pkg.version, "tauri.conf.json suit la version courante")
 assert.match(cargo, /^version = "10\.5\.0"$/m, "Cargo.toml suit la version courante")
-assert.match(cargoLock, /\[\[package\]\]\nname = "aven"\nversion = "10\.5\.0"/, "Cargo.lock suit la version courante")
+assert.match(cargoLock, /\[\[package\]\]\r?\nname = "aven"\r?\nversion = "10\.5\.0"/, "Cargo.lock suit la version courante")
 assert.match(readme, /^# Aven v10\.5\.0$/m, "README annonce la version courante")
 assert.ok(pkg.scripts.verify.includes("scripts/verify-v10.5.0.mjs"), "npm run verify inclut la sonde courante")
 assert.ok(pkg.scripts["verify:v10.5.0"], "la commande de sonde est accessible directement")
