@@ -32,7 +32,7 @@ assert.match(app, /openConfiguration\("workspaces"\)/, "la route vocale mène au
 
 // B. La carte Projet ouvre l'agent Freebuff (label et icône conservés).
 // v9.7.1 : la carte passe source="project" (shared element carte→page), même destination.
-assert.match(app, /key: "project", label: "Projet", kind: "project", hint: "Agent central \(Freebuff\)", action: \(\) => openFreebuffAgent\("project"\)/, "carte Projet → openFreebuffAgent(project)")
+assert.match(app, /key: "project", label: "Freebuff", kind: "freebuff", hint: "Terminal IA interactif", action: \(\) => openFreebuffAgent\("project"\)/, "carte Freebuff → page terminal")
 assert.ok(!app.includes('action: () => selectAgent("projet") },'), "l'ancien selectAgent projet a disparu du hub")
 
 // C. Fix du TUI : plancher de dimensions testé + émulateur superposé (vraies dimensions).
@@ -49,7 +49,7 @@ assert.match(css, /\.freebuff-sessionbar/, "CSS de la barre de session")
 assert.match(page, /setSessionBar\(bar\)/, "capture effective depuis le buffer")
 
 // E. « Tâches » : les spécialistes, et le hub ne parle plus d'« Agents ».
-assert.match(app, /key: "agents", label: "Tâches", kind: "agent", hint: "Spécialistes par tâche"/, "carte renommée Tâches")
+assert.match(app, /key: "agents", label: "Orchestration", kind: "agent", hint: "Modes de délégation de l'agent principal"/, "carte Orchestration")
 assert.ok(!/label: "Agents"/.test(app), "l'ancien label « Agents » a disparu du hub")
 
 // F. Agent central : le prompt projet délègue et ne code jamais lui-même.
