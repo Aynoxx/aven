@@ -200,6 +200,18 @@ test("transcribeSpeech : un motif de commande prime sur une action modèle diver
   assert.deepEqual(result.intent, { intent: "app", action: "open-project" })
 })
 
+// v10.5.0 : une demande ambiguë ne doit pas devenir une navigation parce que le
+// classifieur IA propose une action. Le filet déterministe neutralise cette route.
+test("transcribeSpeech : « ouvre le projet » seul ne déclenche aucune navigation", async () => {
+  const f = fakeFetch([
+    { match: "/audio/transcriptions", body: { text: "ouvre le projet" } },
+    { match: "/chat/completions", body: { choices: [{ message: { content: "Ouvre le projet." } }] }, left: 1 },
+    { match: "/chat/completions", body: { choices: [{ message: { content: '{"intent":"app","action":"open-projects"}' } }] } },
+  ])
+  const result = await transcribeSpeech(new Blob(["a"], { type: "audio/webm" }), f, KEY)
+  assert.deepEqual(result.intent, { intent: "chat" })
+})
+
 test("transcribeSpeech : échec du reformage n'empêche pas le routage d'intention", async () => {
   const f = fakeFetch([
     { match: "/audio/transcriptions", body: { text: "passe sur l'agent recherche" } },
