@@ -4,8 +4,7 @@ import { Icon } from "../icons"
 import { TASK_MODES_UI } from "../app/constants"
 import type { AvenApp } from "../app/use-aven-app"
 
-// v10.4.0 : la page Tâches (orchestrateur + modes) est un module de page. Le retry
-// des agents reste un handler du contrôleur ; la page ne connaît que son contrat.
+// v10.5.0 : la page Orchestration explique la portée persistante du mode de délégation.
 export default function TasksPage({ app }: { app: AvenApp }) {
   const {
     agentName,
@@ -24,19 +23,19 @@ export default function TasksPage({ app }: { app: AvenApp }) {
 
   return (
         <PageShell
-          eyebrow="TÂCHES"
-          title="Un agent principal, des modes par besoin"
-          description="Choisis un mode : l’orchestrateur délègue aux spécialistes du domaine et synthétise."
-          toolbarLabel="Actions des tâches"
+          eyebrow="ORCHESTRATION"
+          title="Modes de délégation de l’agent principal"
+          description="Choisis comment l’agent principal traite les prochaines demandes dans cet espace de travail."
+          toolbarLabel="Actions d’orchestration"
           actions={[
             {
               key: "open",
-              label: "Ouvrir la conversation",
+              label: "Ouvrir l’agent principal",
               icon: "agent",
               variant: "primary",
               onClick: () => selectAgent("projet"),
               disabled: !agents.some((a) => a.id === "projet"),
-              title: "Ouvre la conversation la plus récente de l’orchestrateur (une nouvelle seulement s’il n’en existe aucune), avec le mode choisi",
+              title: "Ouvre la conversation de l’agent principal avec le mode de délégation actif",
             },
             // v10.4.0 : une page porte SON retour — la barre de fenêtre ne double plus
             // ce bouton par « Accueil » (deux affordances pour la même sortie).
@@ -45,17 +44,15 @@ export default function TasksPage({ app }: { app: AvenApp }) {
           className="agents-main"
           bodyClassName="agents-page tasks-page"
         >
-            {/* v9.6.0 : l’orchestrateur « projet » est l’AGENT PRINCIPAL ; le mode
-                « Tâche complexe » l’ouvre directement, les modes simples pointent les
-                spécialistes (code / analyse / recherche). */}
+            {/* v10.5.0 : l'identifiant interne « projet » n'est pas exposé comme concept produit. */}
             {/* v10.1.0 : UNE carte orchestrateur + switch de mode (Auto par défaut). */}
             <div className="tasks-principal">
               <article className={`agent-card tasks-principal-card ${agents.some((a) => a.id === "projet") ? "agent-card-orchestrator" : "tasks-card-off"}`}>
                 <div className="agent-card-icon"><Icon name="sparkle" size={24} /></div>
                 <div className="agent-card-body">
-                  <span className="agent-card-id">projet <em className="orchestrator-badge">agent principal</em></span>
+                  <span className="agent-card-id"><em className="orchestrator-badge">Agent principal · délégation</em></span>
                   <h2>{agentName("projet")}</h2>
-                  <p>Comprend la demande, la découpe, délègue aux spécialistes, puis synthétise.</p>
+                  <p>Comprend la demande, la découpe, délègue aux spécialistes, puis synthétise leur travail. Pour utiliser directement un spécialiste, ouvre une conversation dédiée à cet agent.</p>
                   <div className="tasks-mode-switch" role="group" aria-label="Mode de l'orchestrateur">
                     {TASK_MODES_UI.map((m) => (
                       <button key={m.id} className={`button ${taskMode === m.id ? "primary" : "ghost"} tasks-mode-option`} onClick={() => changeTaskMode(m.id)} type="button" title={m.hint} aria-pressed={taskMode === m.id}>
@@ -63,7 +60,7 @@ export default function TasksPage({ app }: { app: AvenApp }) {
                       </button>
                     ))}
                   </div>
-                  <p className="hint tasks-mode-hint">{TASK_MODES_UI.find((m) => m.id === taskMode)?.hint}</p>
+                  <p className="hint tasks-mode-hint">{TASK_MODES_UI.find((m) => m.id === taskMode)?.hint} Ce choix reste actif pour les prochaines demandes adressées à l’agent principal dans cet espace ; il ne remplace pas le choix d’un agent spécialisé dans une conversation dédiée.</p>
                 </div>
               </article>
             </div>
