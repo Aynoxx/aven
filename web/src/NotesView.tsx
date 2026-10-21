@@ -357,9 +357,14 @@ export default function NotesView(props: Props) {
                 <button className="button ghost" onClick={() => startEdit(selected)} type="button"><Icon name="pencil" size={13} />Modifier</button>
                 <button className="button ghost" onClick={() => attach(selected, false)} type="button" title={`Prépare un message pour ${activeAgentName}, sans l'envoyer`}><Icon name="chevron-right" size={13} />Joindre à {activeAgentName}</button>
                 <button className="button ghost" onClick={() => attach(selected, true)} type="button" title={`Prépare une demande de synthèse pour ${activeAgentName}, sans l'envoyer`}><Icon name="sparkle" size={13} />Demander une synthèse à {activeAgentName}</button>
-                <button className="button ghost" onClick={() => void withNote(() => api.noteArchive(selected.id))} type="button"><Icon name="archive" size={13} />Archiver</button>
-                <button className="button ghost" onClick={() => void withNote(() => api.noteDelete(selected.id))} type="button"><Icon name="trash" size={13} />Poubelle</button>
-                <button className="button ghost" onClick={() => api.noteExport(selected.id).catch((e) => props.onError(e))} type="button">Exporter .md</button>
+                <details className="notes-secondary-actions">
+                  <summary>Autres actions</summary>
+                  <div className="notes-secondary-actions-list">
+                    <button className="button ghost" onClick={() => void withNote(() => api.noteArchive(selected.id))} type="button"><Icon name="archive" size={13} />Archiver</button>
+                    <button className="button ghost" onClick={() => void withNote(() => api.noteDelete(selected.id))} type="button"><Icon name="trash" size={13} />Poubelle</button>
+                    <button className="button ghost" onClick={() => api.noteExport(selected.id).catch((e) => props.onError(e))} type="button">Exporter .md</button>
+                  </div>
+                </details>
                 <span className="hint">{selected.markdown.split(/\s+/).filter(Boolean).length} mots</span>
               </div>
               <div className="notes-tags-editor" role="group" aria-label="Étiquettes par agent">
