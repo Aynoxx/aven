@@ -42,6 +42,17 @@ export type IconName =
   | "text" | "bold" | "italic" | "list" | "list-ordered" | "quote" | "link" | "inbox"
   // v10.2.2 : épingle des notes (remplace l'emoji 📌 de l'arbre).
   | "pin"
+  // v11.0.0 : inspecteur du Poste et barre de commande.
+  | "panel"
+  | "command"
+  // v11.0.2 : la sémantique des glyphes. Une icône dit UNE chose : `sparkle` reste la
+  // marque d'Aven, la génération assistée prend la baguette, la délégation une
+  // ramification, une conversation une bulle, l'arrêt un carré, un transfert un trombone.
+  | "wand"
+  | "branch"
+  | "chat"
+  | "stop"
+  | "paperclip"
 
 export interface IconProps {
   name: IconName
@@ -54,6 +65,30 @@ export interface IconProps {
 
 const joinClassNames = (...values: Array<string | undefined>) => values.filter(Boolean).join(" ") || undefined
 const ICON_SCALE = 1.25
+
+// v11.0.1 : centrage optique. Plusieurs tracés ne sont pas centrés dans le viewBox
+// 24×24 (mesuré au getBBox dans l'app) : placés dans un bouton carré, ils paraissent
+// hauts (folder 1 unité, sparkle 1,3), décalés à droite (file 1) ou à gauche (restore
+// 2,5). Le décalage corrige l'encre, pas la boîte — les boutons étaient déjà centrés.
+// 1 unité = 0,73 px à la taille de rendu habituelle (14 × 1,25).
+const OPTICAL_NUDGE: Partial<Record<IconName, [number, number]>> = {
+  restore: [2.48, 0.33],
+  sparkle: [0, 1.3],
+  folder: [0, 1],
+  file: [-1, 0],
+  check: [0, 1],
+  archive: [0, 0.75],
+  pencil: [0.72, -0.43],
+  microphone: [0, -0.5],
+  "chevron-down": [0, 0.5],
+  wrench: [-0.5, 0.5],
+  // v11.0.2 : glyphes de rôle, mesurés avant pose.
+  wand: [-1.05, 1.05],
+  paperclip: [-0.24, -0.66],
+  quote: [-1.5, 0],
+  chat: [0, 0.25],
+  copy: [-0.5, 0],
+}
 
 function paths(name: IconName): ReactNode {
   switch (name) {
@@ -111,8 +146,10 @@ function paths(name: IconName): ReactNode {
       return <><path d="M9 6h11M9 12h11M9 18h11" /><circle cx="4.5" cy="6" r="1" fill="currentColor" stroke="none" /><circle cx="4.5" cy="12" r="1" fill="currentColor" stroke="none" /><circle cx="4.5" cy="18" r="1" fill="currentColor" stroke="none" /></>
     case "list-ordered":
       return <><path d="M10 6h10M10 12h10M10 18h10M4 5h1.5v4M4 9h3M4 15.5c0-.8.7-1.3 1.4-1.3s1.3.5 1.3 1.2c0 1.3-2.7 1.6-2.7 3.1h3" /></>
+    // v11.0.2 : deux guillemets ouverts. L'ancien tracé (cadre + ligne) se lisait comme
+    // une page pliée dans la barre de sélection, où il signifie « citer ».
     case "quote":
-      return <path d="M5 5h14v6H9v6H5zM9 17h10" />
+      return <><path d="M9.5 16.5H7a1 1 0 0 1-1-1v-3a5 5 0 0 1 5-5" /><path d="M19.5 16.5H17a1 1 0 0 1-1-1v-3a5 5 0 0 1 5-5" /></>
     case "link":
       return <><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 1 0-5.66-5.66l-1.5 1.5" /><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 1 0 5.66 5.66l1.5-1.5" /></>
     case "pin":
@@ -141,6 +178,26 @@ function paths(name: IconName): ReactNode {
       return <><rect x="3" y="4.5" width="18" height="15" rx="2" /><path d="m7 9.5 3.5 3L7 15.5" /><path d="M12.5 15.5H17" /></>
     case "slash":
       return <path d="m6 6 12 12" />
+    case "panel":
+      return <><rect x="3" y="4.5" width="18" height="15" rx="1.5" /><path d="M15 4.5v15" /><path d="M6.5 9h5M6.5 12.5h5" /></>
+    case "command":
+      return <><path d="M8.5 8.5h7v7h-7z" /><path d="M8.5 8.5H6a2.5 2.5 0 1 1 2.5-2.5zM15.5 8.5H18A2.5 2.5 0 1 0 15.5 6zM8.5 15.5H6A2.5 2.5 0 1 0 8.5 18zM15.5 15.5H18A2.5 2.5 0 1 1 15.5 18z" /></>
+    // v11.0.2 : glyphes de rôle — chaque tracé est centré sur (12,12) pour rester
+    // droit dans un bouton carré (cf. OPTICAL_NUDGE).
+    // v11.0.2 : la baguette se termine par une étoile pleine (la même famille que la
+    // marque). Étoile agrandie après essai dans la barre des Notes : à 5 px elle se
+    // réduisait à une tache et le glyphe ressemblait à un crayon.
+    case "wand":
+      return <><path d="M4.5 19.5 13.4 10.6" /><path d="M17.4 2.4 18.6 5.4 21.6 6.6 18.6 7.8 17.4 10.8 16.2 7.8 13.2 6.6 16.2 5.4z" fill="currentColor" stroke="none" /></>
+    case "branch":
+      return <><circle cx="6.5" cy="5.8" r="2.2" /><circle cx="6.5" cy="18.2" r="2.2" /><circle cx="17.5" cy="9.6" r="2.2" /><path d="M6.5 8v8" /><path d="M8.7 6.4h2.9a3.8 3.8 0 0 1 3.8 3.8v0.6" /></>
+    case "chat":
+      return <path d="M20 15a2 2 0 0 1-2 2H7.5L4 20.5V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2z" />
+    // v11.0.2 : 10 unités se lisaient comme un point de ponctuation avant « Interrompre ».
+    case "stop":
+      return <rect x="6.5" y="6.5" width="11" height="11" rx="1.8" fill="currentColor" stroke="none" />
+    case "paperclip":
+      return <path d="M20.5 11.6 12 20.1a4.9 4.9 0 0 1-6.9-6.9l8.5-8.5a3.3 3.3 0 0 1 4.6 4.6l-8.4 8.4a1.6 1.6 0 0 1-2.3-2.3l7.7-7.7" />
   }
 }
 
@@ -148,6 +205,9 @@ export function Icon({ name, size = 18, strokeWidth = 1.7, className, title, "ar
   return (
     <svg
       className={joinClassNames("app-icon", className)}
+      // v11.0.1 : le nom rendu est lisible dans le DOM — un audit peut mesurer
+      // l'encre de chaque glyphe (getBBox) sans deviner l'icône par son contexte.
+      data-icon={name}
       width={size}
       height={size}
       viewBox="0 0 24 24"
@@ -161,7 +221,11 @@ export function Icon({ name, size = 18, strokeWidth = 1.7, className, title, "ar
       style={{ transform: `scale(${ICON_SCALE})` }}
     >
       {title ? <title>{title}</title> : null}
-      {paths(name)}
+      {(() => {
+        const [dx, dy] = OPTICAL_NUDGE[name] ?? [0, 0]
+        if (!dx && !dy) return paths(name)
+        return <g transform={`translate(${dx} ${dy})`}>{paths(name)}</g>
+      })()}
     </svg>
   )
 }
