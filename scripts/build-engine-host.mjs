@@ -23,7 +23,16 @@ await build({
   // Impose le tsconfig du projet : sinon esbuild remonte AU-DELÀ du dépôt et
   // lit un tsconfig.json étranger (ex. un fichier vide au-dessus de l'espace).
   tsconfig: "host/tsconfig.json",
-  banner: { js: "// Aven engine host — généré par scripts/build-engine-host.mjs, ne pas éditer." },
+  // v11.3.0 : `ws` est du CommonJS et appelle `require()` pour les modules Node
+  // (« events »…). En ESM, esbuild remplace ces appels par un `__require` qui lève
+  // « Dynamic require of \"events\" is not supported » — le host ne démarrait plus.
+  // Le banner fournit un vrai `require` de module à ce shim.
+  banner: {
+    js:
+      "// Aven engine host — généré par scripts/build-engine-host.mjs, ne pas éditer.\n" +
+      'import { createRequire as __avenCreateRequire } from "node:module";\n' +
+      "const require = __avenCreateRequire(import.meta.url);",
+  },
 })
 console.log("✓ dist-host/aven-engine-host.mjs")
 console.log("✓ dist-host/aven-pty-host.mjs")

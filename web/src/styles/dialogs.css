@@ -26,18 +26,12 @@
    faux). Il ne reste que sur la barre de sélection, ouverte par un vrai geste. */
 @keyframes overlay-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes dialog-in { from { opacity: 0; transform: translateY(10px) scale(.97); } to { opacity: 1; transform: none; } }
-@keyframes dialog-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(10px) scale(.97); } }
-.overlay, .hub-picker-overlay, .home-modal-overlay { animation: overlay-in var(--dur-med) var(--ease-out) both; }
-.overlay > .dialog, .hub-picker-overlay > .hub-picker, .home-modal-overlay > .home-modal { animation: dialog-in var(--dur-med) var(--ease-out) both; view-transition-name: dialog; }
-/* Sortie via View Transition : le panneau qui ferme suit le MÊME chemin inversé.
-   Un seul panneau porte le nom à la fois (cas nominal) ; deux panneaux simultanés
-   (permission sur Notes) → startViewTransition lève → filet v10.0.1 : mise à jour
-   appliquée sans animation, jamais de casse. */
-::view-transition-old(dialog), ::view-transition-new(dialog) { animation-duration: var(--dur-med); animation-timing-function: var(--ease-out); }
-::view-transition-old(dialog) { animation-name: dialog-out; }
-/* v10.3.1 : courbe MIROIR de l'entrée (skill §7) — même trajectoire, parcourue à l'envers. */
-::view-transition-old(dialog) { animation-timing-function: var(--ease-out-mirror); }
-::view-transition-new(dialog) { animation-name: dialog-in; }
+.overlay { animation: overlay-in var(--dur-med) var(--ease-out) both; }
+.overlay > .dialog { animation: dialog-in var(--dur-med) var(--ease-out) both; }
+/* v11.0.0 : la fermeture ne passe plus par une View Transition (le Poste ne change
+   jamais de cadre) ; un dialogue ponctuel disparaît immédiatement. La sortie
+   animée, elle, vivait dans la pseudo-transition de vue de l'ancien panneau :
+   la conserver aurait laissé une règle morte, donc une promesse que rien ne tient. */
 .dialog {
   position: relative;
   width: min(460px, 100%);
@@ -126,20 +120,14 @@
 .sortable-item small { color: var(--muted); font-size: var(--font-size-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .drawer-footer { display: flex; justify-content: space-between; gap: 8px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); }
 
+/* v11.0.1 : remplace un `style={{ flex: 1 }}` en ligne (interdit par la règle §2). */
+.settings-workspace-line { flex: 1; min-width: 0; }
 .unified-settings { width: var(--panel-workspace-w); height: var(--panel-workspace-h); padding: 0; overflow: hidden; display: grid; grid-template-rows: auto auto 1fr; }
-.unified-settings-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 22px 24px 16px; border-bottom: 1px solid var(--border); }
-.unified-settings-header h3 { margin: 4px 0 5px; font-size: var(--font-size-xl); }
-.unified-settings-header .hint { margin: 0; max-width: 720px; }
-.dialog-close { width: 36px; height: 36px; min-height: 36px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--panel); color: var(--muted); cursor: pointer; font-size: var(--font-size-xl); line-height: 1; }
-.dialog-close:hover { color: var(--text); border-color: var(--border-strong); background: var(--panel-soft); }
+/* v11.1.3 : l'en-tête et les onglets de l'ancienne modale de réglages ont disparu avec
+   les sections rendues par InstrumentFrame — aucun composant ne pose plus ces classes. */
 .settings-callout { display: grid; gap: 4px; margin: 14px 0 18px; padding: 12px 14px; border: 1px solid var(--accent-border); border-radius: var(--radius-md); background: var(--accent-soft); }
 .settings-callout b { font-size: var(--font-size-sm); }
 .settings-callout span { color: var(--muted); font-size: var(--font-size-sm); line-height: 1.5; }
-.settings-tabs { display: flex; gap: 6px; padding: 10px 24px 8px; border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--panel) 94%, transparent); }
-.settings-tabs button { border: 1px solid transparent; background: transparent; color: var(--muted); border-radius: var(--radius-sm); padding: 7px 13px; cursor: pointer; font-size: var(--font-size-sm); font-weight: 700; transition: transform var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
-.settings-tabs button:hover { color: var(--text); background: var(--panel-soft); }
-.settings-tabs button:active { transform: scale(.98); }
-.settings-tabs button.selected { color: var(--text); background: var(--accent-soft); border-color: var(--accent-border); }
 .unified-settings-scroll { min-height: 0; overflow: auto; padding: 0 24px 20px; }
 .settings-pane { min-width: 0; padding-top: 4px; }
 .settings-pane > h4 { margin: 18px 0 7px; font-size: var(--font-size-md); font-weight: 800; }
@@ -155,20 +143,21 @@
 .codeblock code { font-family: var(--font-ui); }
 
 @media (max-width: 860px) {
-  .workspace-layout, .sidebar-right .workspace-layout { grid-template-columns: 220px minmax(0, 1fr); }
+  /* v11.1.4 : la position est une classe de la grille ; la largeur réduite suit le côté. */
+  .workspace-layout.sidebar-left { grid-template-columns: 220px minmax(0, 1fr); }
+  .workspace-layout.sidebar-right { grid-template-columns: minmax(0, 1fr) 220px; }
   .sidebar { width: auto; }
   .chat-actions button { opacity: 1; }
   .model-assignment { display: none; }
 }
 
 @media (max-width: 680px) {
-  .workspace-layout, .sidebar-right .workspace-layout { grid-template-columns: 1fr; }
+  .workspace-layout.sidebar-left,
+  .workspace-layout.sidebar-right { grid-template-columns: 1fr; }
   .sidebar { max-height: 34dvh; border-right: 0 !important; border-left: 0 !important; border-bottom: 1px solid var(--border); order: 1 !important; }
   .main { order: 2 !important; min-height: 66dvh; }
   .chat-list { max-height: 180px; }
   .msg { max-width: 94%; }
-  .chat-titlebar { padding-inline: 14px; }
 }
 
-.sidebar-hidden .workspace-layout, .sidebar-hidden.sidebar-right .workspace-layout { grid-template-columns: minmax(0, 1fr); }
 

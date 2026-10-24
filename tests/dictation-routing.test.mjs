@@ -28,28 +28,28 @@ test("composeur : aucune bascule d'agent", () => {
 
 test("hub : la commande d'application traverse telle quelle", () => {
   assert.deepEqual(
-    effectiveIntent({ intent: "app", action: "open-project" }, "hub", AGENTS),
+    effectiveIntent({ intent: "app", action: "open-project" }, "workbench", AGENTS),
     { intent: "app", action: "open-project" },
   )
   assert.deepEqual(
-    effectiveIntent({ intent: "app", action: "open-settings" }, "hub", AGENTS),
+    effectiveIntent({ intent: "app", action: "open-settings" }, "workbench", AGENTS),
     { intent: "app", action: "open-settings" },
   )
 })
 
 test("hub : une cible d'agent connue bascule, une cible inconnue devient une dictée", () => {
   assert.deepEqual(
-    effectiveIntent({ intent: "agent", target: "recherche" }, "hub", AGENTS),
+    effectiveIntent({ intent: "agent", target: "recherche" }, "workbench", AGENTS),
     { intent: "agent", target: "recherche" },
   )
   assert.deepEqual(
-    effectiveIntent({ intent: "agent", target: "superadmin" }, "hub", AGENTS),
+    effectiveIntent({ intent: "agent", target: "superadmin" }, "workbench", AGENTS),
     { intent: "chat" },
   )
-  assert.deepEqual(effectiveIntent({ intent: "agent" }, "hub", AGENTS), { intent: "chat" })
+  assert.deepEqual(effectiveIntent({ intent: "agent" }, "workbench", AGENTS), { intent: "chat" })
 })
 
 test("hub : dictée ordinaire ou intention absente restent des dictées", () => {
-  assert.deepEqual(effectiveIntent({ intent: "chat" }, "hub", AGENTS), { intent: "chat" })
-  assert.deepEqual(effectiveIntent(undefined, "hub", AGENTS), { intent: "chat" })
+  assert.deepEqual(effectiveIntent({ intent: "chat" }, "workbench", AGENTS), { intent: "chat" })
+  assert.deepEqual(effectiveIntent(undefined, "workbench", AGENTS), { intent: "chat" })
 })

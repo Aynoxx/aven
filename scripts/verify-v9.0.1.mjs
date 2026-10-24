@@ -8,10 +8,10 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const read = (p) => readFileSync(path.join(root, p), "utf8")
 
 const pkg = JSON.parse(read("package.json"))
-const settings = read("host/settings.ts")
 // v10.0.0 (parité native) : le seed a été extrait de settings.ts (couplé à Electron)
-// vers workspace-seed.ts — module pur bundlé dans le host moteur. Les assertions
-// de découverte dynamique suivent le code ; settings.ts garde la ré-exportation.
+// vers workspace-seed.ts — module pur bundlé dans le host moteur.
+// v11.1.3 : la ré-exportation `settings.ts` n'avait plus aucun importeur en
+// production. Elle est supprimée ; la sonde lit le module réellement exécuté.
 const seed = read("host/workspace-seed.ts")
 const readme = read("README.md")
 
@@ -20,7 +20,6 @@ const [vMaj, vMin, vPatch] = pkg.version.split(".").map(Number)
 assert.ok(vMaj * 10000 + vMin * 100 + vPatch >= 90001, `version trop ancienne : ${pkg.version}`)
 
 // ── Fix principal : les agents sont découverts dans le gabarit, plus de liste statique ──
-assert.match(settings, /from "\.\/workspace-seed\.js"/, "settings.ts doit ré-exporter le seed historique")
 assert.match(seed, /export function trackedAgentFiles/)
 assert.match(seed, /readdirSync\(agentsDir\)/)
 assert.match(seed, /\.endsWith\("\.md"\)/)

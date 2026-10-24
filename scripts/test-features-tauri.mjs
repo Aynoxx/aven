@@ -177,161 +177,144 @@ try {
   await cdp.send("Page.enable").catch(() => undefined)
   await cdp.send("Performance.enable").catch(() => undefined)
 
-  // ── 1) Démarrage : hub monté, runtime prêt ────────────────────────────────
-  await waitFor(cdp, `document.readyState === "complete" && !!document.querySelector(".home-hub")`, 30_000)
+  // ── 1) Démarrage : Poste monté, runtime prêt ──────────────────────────────
+  await waitFor(cdp, `document.readyState === "complete" && !!document.querySelector(".wb-app") && !!document.querySelector(".wb-status")`, 30_000)
   const href = await cdp.eval("location.href")
   if (!/tauri\.localhost/.test(href)) fail(`origine inattendue : ${href}`)
   const state = await waitFor(cdp, `window.__TAURI_INTERNALS__.invoke("aven_call", { method: "state", args: [] }).then((s) => s && s.status === "ready" ? JSON.stringify({ ws: s.needsWorkspace, keys: Object.entries(s.keys || {}).filter(([, v]) => v).map(([k]) => k), agents: (s.agents || []).length }) : null, () => null)`, 90_000)
   const st = JSON.parse(state)
   pass(`démarrage : runtime ready, espace actif=${!st.ws}, clés=[${st.keys.join(", ") || "aucune"}], agents=${st.agents}`)
   if (st.ws) warn("needsWorkspace=true : l'app attend un choix d'espace au lancement")
+  const cadre = await cdp.eval(`JSON.stringify({ rail: !!document.querySelector(".wb-rail"), tabs: !!document.querySelector(".wb-tabs"), stage: !!document.querySelector(".wb-stage"), inspecteur: !!document.querySelector(".wb-inspector") })`)
+  const c0 = JSON.parse(cadre)
+  if (!c0.rail || !c0.tabs || !c0.stage) fail(`cadre du Poste incomplet : ${cadre}`)
+  else pass(`Poste monté : rail + onglets + scène${c0.inspecteur ? " + inspecteur" : ""}`)
 
-  // ── 2) Hub : les 4 cartes + dictée ────────────────────────────────────────
-  const cartes = await cdp.eval(`[...document.querySelectorAll(".hub-card")].map((b) => b.getAttribute("aria-label"))`)
-  const attendues = ["Freebuff", "Orchestration", "Fichiers", "Notes"]
-  const absentes = attendues.filter((a) => !cartes.some((c) => c && c.startsWith(a)))
-  if (absentes.length) fail(`cartes du hub absentes : ${absentes.join(", ")} (vu : ${cartes.join(" | ")})`)
-  else pass(`hub : 4 cartes présentes (${cartes.length} au total)`)
-  const voix = await cdp.eval(`document.querySelector(".voice-core")?.getAttribute("aria-label") || null`)
-  if (!voix) fail("bouton de dictée introuvable")
-  else pass(`dictée exposée : « ${voix.slice(0, 60)}… »`)
+  // ── 2) Rail : les six instruments + micro global ──────────────────────────
+  const rail = await cdp.eval(`[...document.querySelectorAll(".wb-rail-nav .wb-rail-item")].map((b) => b.getAttribute("aria-label"))`)
+  const attendues = ["Aujourd’hui", "Conversations", "Notes", "Fichiers", "Terminal", "Orchestration"]
+  const absentes = attendues.filter((a) => !rail.includes(a))
+  if (absentes.length) fail(`instruments absents du rail : ${absentes.join(", ")} (vu : ${rail.join(" | ")})`)
+  else pass(`rail : ${rail.length} instruments présents`)
+  const micro = await cdp.eval(`document.querySelector(".wb-command-mic")?.getAttribute("aria-label") || null`)
+  if (!micro) fail("micro global introuvable dans la barre de commande")
+  else pass(`dictée exposée : « ${micro.slice(0, 60)}… »`)
+  const onglets0 = await cdp.eval(`document.querySelectorAll(".wb-tab").length`)
+  if (onglets0 !== 1) fail(`${onglets0} onglets au démarrage (1 attendu : Aujourd’hui)`)
+  else pass("un seul onglet au démarrage : Aujourd’hui (non fermable)")
 
-  // ── 3) Recherche du hub : saisie sans casse ───────────────────────────────
-  const tapé = await cdp.eval(TYPE(".home-command input", "syntaxe"))
-  const vu = await cdp.eval(`document.querySelector(".home-command input")?.value`)
-  if (tapé === "absent" || vu !== "syntaxe") fail(`recherche du hub : saisie KO (vu=${vu})`)
-  else pass("recherche du hub : la saisie alimente l'input React")
-  await cdp.eval(TYPE(".home-command input", ""))
-  await cdp.eval(`document.querySelector(".home-command")?.requestSubmit()`)
-  await waitFor(cdp, `!!document.querySelector('[aria-label="Toutes les conversations"]')`, 5_000)
-  const rechercheVideSansChat = await cdp.eval(`!!document.querySelector(".home-hub") && !document.querySelector(".workspace-layout")`)
-  if (rechercheVideSansChat) pass("Entrée dans une recherche vide ouvre l'historique sans créer de conversation")
-  else fail("recherche vide : une conversation a été créée ou l'accueil a été quitté")
-  await cdp.eval(ESC)
-  await waitFor(cdp, `!document.querySelector('[aria-label="Toutes les conversations"]')`, 5_000)
+  // ── 3) Barre de commande : saisie, commandes, portée ──────────────────────
+  const tapé = await cdp.eval(TYPE(".wb-command-input", "syntaxe"))
+  const vu = await cdp.eval(`document.querySelector(".wb-command-input")?.value`)
+  if (tapé === "absent" || vu !== "syntaxe") fail(`barre de commande : saisie KO (vu=${vu})`)
+  else pass("barre de commande : la saisie alimente l'input React")
+  await cdp.eval(`document.querySelector(".wb-command-input")?.focus()`)
+  await sleep(200)
+  const resultats = await cdp.eval(`document.querySelectorAll(".wb-command-result").length`)
+  if (resultats < 1) fail("barre de commande : aucun résultat affiché pour « syntaxe »")
+  else pass(`barre de commande : ${resultats} résultat(s)`)
+  await cdp.eval(TYPE(".wb-command-input", ">"))
+  await sleep(120)
+  const commandes = await cdp.eval(`[...document.querySelectorAll(".wb-command-result")].map((b) => b.textContent).join(" | ")`)
+  if (!/Nouvelle conversation/.test(commandes)) fail(`mode commande : « Nouvelle conversation » absent (${commandes.slice(0, 120)})`)
+  else pass("mode « > » : les commandes du Poste sont proposées")
+  await cdp.eval(TYPE(".wb-command-input", "/notes"))
+  await sleep(120)
+  const portee = await cdp.eval(`document.querySelector(".wb-command-section")?.textContent || ""`)
+  if (!/PORTÉE · notes/.test(portee)) fail(`portée /notes non reconnue : ${portee}`)
+  else pass("portée « /notes » reconnue par la barre de commande")
+  await cdp.eval(TYPE(".wb-command-input", ""))
+  await cdp.eval(`document.querySelector(".wb-command-input")?.blur()`)
 
-  // ── 4) Sélecteur « Toutes les conversations » ─────────────────────────────
-  const boutons = await cdp.eval(`[...document.querySelectorAll("button")].filter((b) => /Tout voir/i.test(b.textContent)).length`)
-  if (boutons) {
-    await cdp.eval(`[...document.querySelectorAll("button")].find((b) => /Tout voir/i.test(b.textContent)).click()`)
-    await waitFor(cdp, `!!document.querySelector('[aria-label="Toutes les conversations"]')`, 5_000)
-    pass("sélecteur de conversations : s'ouvre (rôle dialog)")
-    await cdp.eval(ESC)
-    const fermé = await waitFor(cdp, `!document.querySelector('[aria-label="Toutes les conversations"]')`, 5_000).then(() => true).catch(() => false)
-    if (fermé) pass("sélecteur de conversations : Échap ferme le dialogue")
-    else { await cdp.eval(`document.querySelector('[aria-label="Toutes les conversations"] .dialog-close')?.click()`); warn("sélecteur de conversations : Échap ne l'a pas fermé (fermeture par le bouton)") }
-  } else warn("bouton « Tout voir » introuvable dans les récents")
+  // ── 4) Notes : instrument dans la scène, fermeture par l'onglet ───────────
+  await cdp.eval(`document.querySelector('.wb-rail-nav [aria-label="Notes"]')?.click()`)
+  await waitFor(cdp, `!!document.querySelector(".notes-layout") && !!document.querySelector(".instrument")`, 8_000)
+  const notesSaisie = await cdp.eval(TYPE(".notes-panel input, .notes-sidebar input, .notes-layout input", "test"))
+  if (notesSaisie === "absent") warn("Notes : champ de recherche introuvable (l'instrument est monté)")
+  else pass("Notes : instrument monté dans la scène, recherche alimentée")
+  await cdp.eval(TYPE(".notes-panel input, .notes-sidebar input, .notes-layout input", ""))
+  const ongletsNotes = await cdp.eval(`document.querySelectorAll(".wb-tab").length`)
+  if (ongletsNotes !== 2) fail(`Notes : ${ongletsNotes} onglets (2 attendus)`)
+  else pass("Notes : un onglet unique ajouté à la barre")
+  await cdp.eval(`document.querySelector('.wb-tab[data-selected="true"] .wb-tab-close')?.click()`)
+  const notesFermé = await waitFor(cdp, `!!document.querySelector(".wb-home")`, 5_000).then(() => true).catch(() => false)
+  if (notesFermé) pass("Notes : fermer l'onglet rend Aujourd’hui")
+  else fail("Notes : l'onglet ne rend pas la scène d'accueil")
 
-  // ── 5) Page Tâches : spécialistes chargés ─────────────────────────────────
-  const clicAgents = await REAL_CLICK(cdp, ".hub-card-agents")
-  if (clicAgents !== "ok") fail(`clic réel carte Tâches : ${clicAgents}`)
-  // v10.1.0 : UNE carte orchestrateur + switch segmenté (Auto/Code/Analyse/Recherche).
-  await waitFor(cdp, `!!document.querySelector(".tasks-principal-card") && !!document.querySelector(".tasks-mode-switch")`, 10_000)
-  const orchestrationNommée = await cdp.eval(`document.body.innerText.includes("Modes de délégation de l’agent principal")`)
-  if (orchestrationNommée) pass("page Orchestration : titre et portée de la page explicités")
-  else fail("page Orchestration : le titre fonctionnel est absent")
-  const modes = await cdp.eval(`document.querySelectorAll(".tasks-mode-option").length`)
-  const auto = await cdp.eval(`!!document.querySelector('.tasks-mode-option[aria-pressed="true"]')`)
-  const ouvrir = await cdp.eval(`(() => { const b = [...document.querySelectorAll(".tasks-principal-actions button")][0]; return b ? !b.disabled : false })()`)
-  if (modes !== 4) fail(`page Tâches : switch à ${modes} modes (4 attendus)`)
-  else if (!auto) fail("page Tâches : aucun mode actif (Auto doit être pressé par défaut)")
-  else pass(`page Tâches : switch ${modes} modes (Auto actif), bouton principal ${ouvrir ? "actif" : "DÉSACTIVÉ (agents non chargés)"}`)
-  if (!ouvrir) warn("agents non chargés : la conversation principale ne s'ouvre pas")
-  await cdp.shot(`${OUT}/feat-tasks.png`)
-
-  // ── 6) Vue conversation : état vide, composeur désactivé, retour ──────────
-  if (ouvrir) {
-    await cdp.eval(`document.querySelector(".tasks-principal-actions button").click()`)
-    await waitFor(cdp, `!!document.querySelector(".workspace-layout") && !!document.querySelector(".chat-titlebar")`, 8_000)
-    const vide = await cdp.eval(`!!document.querySelector(".empty-state")`)
-    const composeur = await cdp.eval(`(() => { const t = document.querySelector(".composer textarea"); return t ? t.disabled : null })()`)
-    if (!vide) warn("vue conversation : l'état vide « Prêt à commencer » n'apparaît pas")
-    if (composeur !== true) fail(`composeur censé être désactivé sans conversation (disabled=${composeur})`)
-    else pass("vue conversation : état vide + composeur désactivé, sidebar présente")
-    const contexte = await cdp.eval(`document.body.innerText.includes("SESSION · Agent principal Aven")`)
-    if (contexte) pass("conversation : l’agent principal est visible dans le contexte de session")
-    else warn("conversation : l’agent actif n’a pas été trouvé dans le libellé de session")
-    await cdp.eval(`[...document.querySelectorAll(".window-tab")].find((b) => /Accueil/.test(b.textContent))?.click()`)
-    await waitFor(cdp, `!!document.querySelector(".home-hub")`, 6_000)
-    pass("retour à l'accueil depuis la conversation")
-  } else {
-    // v10.0.1 : agents non chargés → pas de conversation à ouvrir, MAIS la suite
-    // du tour (cartes du hub) suppose l'accueil : on y retourne quand même.
-    const back6 = await cdp.eval(`(() => { const b = [...document.querySelectorAll(".window-tab")].find((x) => /Accueil/.test(x.textContent)); if (!b) return "absent"; b.click(); return "ok" })()`)
-    const revenu6 = await waitFor(cdp, `!!document.querySelector(".home-hub")`, 6_000).then(() => true).catch(() => false)
-    if (back6 === "ok" && revenu6) pass("retour à l'accueil (agents non chargés : conversation sautée)")
-    else fail("retour à l'accueil impossible depuis la page Tâches (agents non chargés)")
-  }
-
-  // ── 7) Notes : dialogue, recherche, fermeture ─────────────────────────────
-  const clicNotes = await REAL_CLICK(cdp, ".hub-card-notes")
-  if (clicNotes !== "ok") fail(`clic réel carte Notes : ${clicNotes}`)
-  await waitFor(cdp, `!!document.querySelector(".notes-dialog")`, 8_000)
-  const notesSaisie = await cdp.eval(TYPE(".notes-dialog input", "test"))
-  if (notesSaisie === "absent") fail("Notes : champ de recherche introuvable")
-  else pass("Notes : dialogue ouvert, recherche alimentée")
-  await cdp.eval(TYPE(".notes-dialog input", ""))
-  await cdp.eval(`document.querySelector(".notes-dialog .dialog-close")?.click()`)
-  const notesFermé = await waitFor(cdp, `!document.querySelector(".notes-dialog")`, 5_000).then(() => true).catch(() => false)
-  if (notesFermé) pass("Notes : fermeture par le bouton")
-  else fail("Notes : le dialogue ne se ferme pas")
-
-  // ── 8) Fichiers : dialogue, fil d'ariane, fermeture ───────────────────────
-  const clicFichiers = await REAL_CLICK(cdp, ".hub-card-files")
-  if (clicFichiers !== "ok") fail(`clic réel carte Fichiers : ${clicFichiers}`)
-  await waitFor(cdp, `!!document.querySelector(".files-dialog")`, 8_000)
+  // ── 5) Fichiers : instrument, fil d'ariane, fermeture ─────────────────────
+  await cdp.eval(`document.querySelector('.wb-rail-nav [aria-label="Fichiers"]')?.click()`)
+  await waitFor(cdp, `!!document.querySelector(".files-layout")`, 8_000)
   const crumbs = await cdp.eval(`document.querySelectorAll(".files-crumbs a, .files-crumbs button, .files-crumbs li, .files-crumbs span").length`)
   if (crumbs < 1) warn("Fichiers : fil d'ariane vide")
-  else pass(`Fichiers : dialogue ouvert, fil d'ariane (${crumbs} nœuds)`)
-  await cdp.eval(`document.querySelector(".files-dialog .dialog-close")?.click()`)
-  const fichiersFermé = await waitFor(cdp, `!document.querySelector(".files-dialog")`, 5_000).then(() => true).catch(() => false)
-  if (fichiersFermé) pass("Fichiers : fermeture par le bouton")
-  else fail("Fichiers : le dialogue ne se ferme pas")
+  else pass(`Fichiers : instrument monté, fil d'ariane (${crumbs} nœuds)`)
+  await cdp.eval(`document.querySelector('.wb-tab[data-selected="true"] .wb-tab-close')?.click()`)
+  const fichiersFermé = await waitFor(cdp, `!!document.querySelector(".wb-home")`, 5_000).then(() => true).catch(() => false)
+  if (fichiersFermé) pass("Fichiers : fermeture par l'onglet")
+  else fail("Fichiers : l'onglet ne se ferme pas")
 
-  // ── 9) Réglages : 3 sections rendues, Échap ferme ─────────────────────────
-  await cdp.eval(`document.querySelector('[aria-label="Ouvrir les paramètres"]').click()`)
+  // ── 6) Réglages : sections dans l'inspecteur, fermeture ───────────────────
+  await cdp.eval(`document.querySelector('.wb-rail-bottom [aria-label="Réglages"]')?.click()`)
   await waitFor(cdp, `!!document.querySelector(".unified-settings")`, 8_000)
-  const onglets = await cdp.eval(`[...document.querySelectorAll(".settings-tabs button")].map((b) => b.textContent)`)
-  if (onglets.length !== 3) fail(`Réglages : ${onglets.length} onglets (3 attendus) : ${onglets.join(", ")}`)
-  else pass(`Réglages : onglets ${onglets.join(" / ")}`)
-  // Chaque section doit rendre du contenu
+  const onglets = await cdp.eval(`[...document.querySelectorAll(".wb-inspector-tab")].map((b) => b.textContent)`)
+  if (onglets.length !== 3) fail(`Réglages : ${onglets.length} sections (3 attendues) : ${onglets.join(", ")}`)
+  else pass(`Réglages : sections ${onglets.join(" / ")}`)
   let sectionsOk = true
   for (const t of ["Configuration", "Apparence", "Usage"]) {
-    const n = await cdp.eval(`(() => { const b = [...document.querySelectorAll(".settings-tabs button")].find((x) => x.textContent === ${JSON.stringify(t)}); if (!b) return -1; b.click(); return document.querySelectorAll(".unified-settings-scroll .settings-section, .unified-settings-scroll .settings-pane, .unified-settings-scroll .field, .unified-settings-scroll .appearance-group").length })()`)
+    const n = await cdp.eval(`(() => { const b = [...document.querySelectorAll(".wb-inspector-tab")].find((x) => x.textContent === ${JSON.stringify(t)}); if (!b) return -1; b.click(); return document.querySelectorAll(".unified-settings-scroll .settings-section, .unified-settings-scroll .settings-pane, .unified-settings-scroll .field, .unified-settings-scroll .appearance-group").length })()`)
     if (n < 1) { sectionsOk = false; fail(`Réglages : la section « ${t} » rend vide`) }
   }
   if (sectionsOk) pass("Réglages : les 3 sections rendent du contenu")
-  await cdp.eval(`(() => { const b = [...document.querySelectorAll(".settings-tabs button")].find((x) => x.textContent === "Apparence"); b?.click(); return 1 })()`)
+  await cdp.eval(`(() => { const b = [...document.querySelectorAll(".wb-inspector-tab")].find((x) => x.textContent === "Apparence"); b?.click(); return 1 })()`)
   await cdp.shot(`${OUT}/feat-settings.png`)
-  await cdp.eval(ESC)
-  const reglagesFermé = await waitFor(cdp, `!document.querySelector(".unified-settings")`, 5_000).then(() => true).catch(() => false)
-  if (reglagesFermé) pass("Réglages : Échap ferme le dialogue")
-  else { await cdp.eval(`document.querySelector(".unified-settings .dialog-close")?.click()`); warn("Réglages : Échap ne ferme pas (bouton utilisé)") }
+  await cdp.eval(`document.querySelector('.wb-tab[data-selected="true"] .wb-tab-close')?.click()`)
+  await waitFor(cdp, `!!document.querySelector(".wb-home")`, 5_000)
 
-  // ── 10) Page Freebuff : présence honnête, pas de crash ────────────────────
-  const clicProjet = await REAL_CLICK(cdp, ".hub-card-project")
-  if (clicProjet !== "ok") fail(`clic réel carte Projet : ${clicProjet}`)
+  // ── 7) Orchestration : mode de délégation ─────────────────────────────────
+  await cdp.eval(`document.querySelector('.wb-rail-nav [aria-label="Orchestration"]')?.click()`)
+  await waitFor(cdp, `!!document.querySelector(".tasks-principal-card") && !!document.querySelector(".tasks-mode-switch")`, 10_000)
+  const orchestrationNommée = await cdp.eval(`document.body.innerText.includes("Modes de délégation de l’agent principal")`)
+  if (orchestrationNommée) pass("Orchestration : titre et portée explicités")
+  else fail("Orchestration : le titre fonctionnel est absent")
+  const modes = await cdp.eval(`document.querySelectorAll(".tasks-mode-option").length`)
+  const auto = await cdp.eval(`!!document.querySelector('.tasks-mode-option[aria-pressed="true"]')`)
+  if (modes !== 4) fail(`Orchestration : switch à ${modes} modes (4 attendus)`)
+  else if (!auto) fail("Orchestration : aucun mode actif (Auto doit être pressé par défaut)")
+  else pass(`Orchestration : switch ${modes} modes (Auto actif)`)
+  await cdp.shot(`${OUT}/feat-tasks.png`)
+  await cdp.eval(`document.querySelector('.wb-tab[data-selected="true"] .wb-tab-close')?.click()`)
+  await waitFor(cdp, `!!document.querySelector(".wb-home")`, 5_000)
+
+  // ── 8) Conversation : nouvel onglet, état vide, composeur ─────────────────
+  await cdp.eval(`document.querySelector(".wb-tabs-tools button")?.click()`)
+  await waitFor(cdp, `!!document.querySelector(".workspace-layout")`, 8_000)
+  const vide = await cdp.eval(`!!document.querySelector(".empty-state")`)
+  const composeur = await cdp.eval(`(() => { const t = document.querySelector(".composer textarea"); return t ? t.disabled : null })()`)
+  if (!vide) warn("conversation : l'état vide « Prêt à commencer » n'apparaît pas")
+  if (composeur !== true && composeur !== false) warn("conversation : composeur introuvable")
+  else pass(`conversation : état vide, composeur ${composeur ? "désactivé" : "actif"}`)
+  const kindConv = await cdp.eval(`document.querySelector('.wb-tab[data-selected="true"] .wb-tab-kind')?.textContent || ""`)
+  if (kindConv !== "CONV") fail(`conversation : l'onglet actif est « ${kindConv} » (CONV attendu)`)
+  else pass("conversation : onglet CONV actif")
+  await cdp.eval(`document.querySelector('.wb-tab[data-selected="true"] .wb-tab-close')?.click()`)
+  await waitFor(cdp, `!!document.querySelector(".wb-home")`, 5_000)
+
+  // ── 9) Terminal : instrument Freebuff sans crash ──────────────────────────
+  await cdp.eval(`document.querySelector('.wb-rail-nav [aria-label="Terminal"]')?.click()`)
   await waitFor(cdp, `!!document.querySelector(".freebuff-agent-page")`, 10_000)
   const titreTerminal = await cdp.eval(`document.body.innerText.includes("Terminal Freebuff")`)
-  if (titreTerminal) pass("destination Freebuff : page nommée Terminal Freebuff")
-  else fail("destination Freebuff : le titre fonctionnel est absent")
-  const presence = await waitFor(cdp, `(() => { const el = document.querySelector(".freebuff-agent-page [role='status'], .freebuff-agent-page .agent-presence"); if (!el) return null; const t = el.textContent.trim(); return t && t.length < 80 ? t : null })()`, 15_000)
-  const envoiDesactive = await cdp.eval(`(() => { const b = document.querySelector(".agent-composer-send"); return b ? b.disabled : null })()`)
-  if (envoiDesactive !== true) warn(`Freebuff : bouton Envoyer actif alors que la présence est « ${presence} »`)
-  pass(`page Freebuff : présence affichée « ${presence.slice(0, 50)} », envoi ${envoiDesactive ? "correctement désactivé" : "AUTORISÉ"}`)
+  if (titreTerminal) pass("Terminal : page nommée Terminal Freebuff")
+  else fail("Terminal : le titre fonctionnel est absent")
   await cdp.shot(`${OUT}/feat-freebuff.png`)
-  // v10.4.0 : la page Freebuff porte son propre « Fermer » (la barre de fenêtre n'a
-  // plus d'« Accueil » sur les pages : une seule affordance de retour par écran).
-  const retours = await cdp.eval(`(() => {
-    const b = document.querySelector(".page-actions .dialog-close")
-    if (!b) return "aucun retour visible"
-    b.click()
-    return "ok"
-  })()`)
-  if (retours !== "ok") fail(`retour Freebuff : ${retours}`)
-  const accueil = await waitFor(cdp, `!!document.querySelector(".home-hub")`, 6_000).then(() => true).catch(() => false)
-  if (accueil) pass("retour à l'accueil depuis Freebuff")
-  else fail("retour à l'accueil depuis Freebuff impossible")
+  await cdp.eval(`document.querySelector('.wb-tab[data-selected="true"] .wb-tab-close')?.click()`)
+  const accueil = await waitFor(cdp, `!!document.querySelector(".wb-home")`, 6_000).then(() => true).catch(() => false)
+  if (accueil) pass("Terminal : fermer l'onglet rend Aujourd’hui")
+  else fail("Terminal : impossible de revenir à Aujourd’hui")
+
+  // ── 10) Aujourd’hui : planche de données + capture rapide ─────────────────
+  const tuiles = await cdp.eval(`document.querySelectorAll(".wb-tile").length`)
+  const capture = await cdp.eval(`!!document.querySelector(".wb-capture textarea")`)
+  if (tuiles < 4 || !capture) fail(`Aujourd’hui : ${tuiles} tuiles, capture ${capture ? "présente" : "absente"}`)
+  else pass(`Aujourd’hui : ${tuiles} tuiles de données, capture rapide présente`)
 
   // ── 11) Ergonomie : boutons nommés, cibles, focus-visible ─────────────────
   const a11y = await cdp.eval(`(() => {

@@ -1,9 +1,15 @@
 import { useEffect, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from "react"
 import { api } from "./api"
 import { Icon } from "./icons"
-import PageShell from "./PageShell"
-import type { Agent, AppState, AggregatedStats, FreebuffCliStatus } from "./types"
+import InstrumentFrame from "./InstrumentFrame"
+import type { Agent, AppState, AggregatedStats, FreebuffCliStatus, VoiceAgentPrefs } from "./types"
 import type { AppearanceConfig, BlockId } from "./appearance"
+import { displayPath } from "./display-path"
+// v11.1.0 : agent vocal — libellés miroir de host/voice-agent-personality.ts.
+import { VOICE_PERSONALITY_OPTIONS } from "./voice-agent/personalities"
+// v11.3.0 : voix neuronales (Edge) et lecture du MP3 dans la webview.
+import { playVoiceSpeech } from "./voice-agent/playback"
+import { isNeuralVoice, voiceIdOf, voiceLabel } from "./voice-agent/voices"
 
 const SYNC_LABEL: Record<string, string> = {
   created: "créé",
@@ -12,14 +18,18 @@ const SYNC_LABEL: Record<string, string> = {
   custom: "personnalisé — laissé tel quel",
 }
 
-// v9.3.0 : 3 onglets — Configuration | Apparence | Usage (les statistiques quittent le hub).
-type Section = "general" | "appearance" | "usage"
+// v9.3.0 : 3 sections — Configuration | Apparence | Usage.
+// v11.0.0 : la navigation des sections vit dans l'inspecteur du Poste ; ce composant
+// rend la section reçue, sans onglets internes.
+// v11.1.0 : « voice » — voix Windows, personnalité et micro de l'agent vocal.
+export type SettingsSection = "general" | "appearance" | "usage" | "voice"
 
 export default function SettingsDialog(props: {
   state: AppState
   appearance: AppearanceConfig
   agents: Agent[]
-  initialSection: Section
+  section: SettingsSection
+  onSectionChange: (section: SettingsSection) => void
   // Vrai quand l'appelant veut atterrir directement sur la gestion des espaces de
   // travail (carte "Projets" du hub d'accueil) plutôt qu'en haut du panneau général.
   focusWorkspaces?: boolean
@@ -30,8 +40,7 @@ export default function SettingsDialog(props: {
   // L'état a changé côté main (nouvelle clé, espace actif différent) : l'App se met à jour.
   onAppStateChanged: (state: AppState) => void
 }) {
-  const { state, appearance } = props
-  const [section, setSection] = useState<Section>(props.initialSection)
+  const { state, appearance, section } = props
 
   useEffect(() => {
     if (!props.focusWorkspaces || section !== "general") return
@@ -57,6 +66,28 @@ export default function SettingsDialog(props: {
     if (section !== "usage") return
     api.getStats().then(setStats).catch((e) => props.onError(e))
   }, [section, props.onError])
+  // v11.1.0 : agent vocal — préférences et voix Windows chargées à l'ouverture
+  // de la section. Les préférences sont enregistrées par le host (prefs.json).
+  const [voicePrefs, setVoicePrefs] = useState<VoiceAgentPrefs | null>(null)
+  const [voiceNames, setVoiceNames] = useState<string[]>([])
+  const [voicePreviewing, setVoicePreviewing] = useState(false)
+  useEffect(() => {
+    if (section !== "voice") return
+    api.voiceAgentPrefs().then(setVoicePrefs).catch((e) => props.onError(e))
+    api.voiceAgentVoices().then(setVoiceNames).catch(() => setVoiceNames([]))
+  }, [section, props.onError])
+  const saveVoicePrefs = async (patch: { voiceName?: string; personality?: VoiceAgentPrefs["personality"]; micMuted?: boolean }) => {
+    try { setVoicePrefs(await api.setVoiceAgentPrefs(patch)) } catch (e) { props.onError(e) }
+  }
+  const previewVoice = async () => {
+    setVoicePreviewing(true)
+    try {
+      // v11.3.0 : l'aperçu emprunte le même chemin que la lecture réelle. Une voix
+      // neuronale rend un MP3 que la webview joue ici même.
+      const speech = await api.voiceAgentPreview("Bonjour, je suis l'agent vocal d'Aven. Voici ma voix.", voicePrefs?.voiceName)
+      await playVoiceSpeech(speech)
+    } catch (e) { props.onError(e) } finally { setVoicePreviewing(false) }
+  }
   const cliAction = async (action: "launch" | "login" | "install") => {
     try {
       if (action === "install") {
@@ -180,6 +211,8 @@ export default function SettingsDialog(props: {
   }
 
   const accentChoices = [
+    // v11.0.0 : l'orange signal est le défaut de la DA ; les anciens presets restent.
+    ["signal", "Orange signal", "#ff5a00"],
     ["violet", "Violet", "#8b5cf6"],
     ["blue", "Bleu", "#3b82f6"],
     ["emerald", "Émeraude", "#10b981"],
@@ -237,7 +270,7 @@ export default function SettingsDialog(props: {
           {props.agents.map((agent) => <div key={agent.id} className={`sortable-item ${draggedAgent === agent.id ? "is-dragged" : ""}`} role="listitem" tabIndex={0} data-sort-id={agent.id} onKeyDown={(e) => sortableKeyDown(e, moveAgent)} draggable onDragStart={(e) => { setDraggedAgent(agent.id); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", agent.id) }} onDragEnd={() => setDraggedAgent(null)} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { moveAgent(e.dataTransfer.getData("text/plain"), agent.id); setDraggedAgent(null) }}><span className="drag-handle"><Icon name="grip" size={16} /></span><span><b>{agent.name}</b><small>{agent.description || agent.id}</small></span></div>)}
         </div>
       </section>
-      <footer className="drawer-footer"><button className="button ghost" onClick={props.onAppearanceReset}>Réinitialiser</button><button className="button primary" onClick={props.onClose}>Terminé</button></footer>
+      <footer className="drawer-footer"><button type="button" className="button ghost" onClick={props.onAppearanceReset}>Réinitialiser</button><button type="button" className="button primary" onClick={props.onClose}>Terminé</button></footer>
     </div>
   )
 
@@ -246,22 +279,24 @@ export default function SettingsDialog(props: {
       <section className="settings-section">
       <h4>Services IA · clés API</h4>
       <p className="hint">Les modèles texte payants sont désactivés. OpenRouter Free est optionnel et Groq sert à la dictée vocale. Les clés sont chiffrées par le système et ne quittent jamais l’application.</p>
-      {state.providers.map((p) => <div key={p.id} className="field"><b>{p.label} {state.keys[p.id] && <span className="key-status"><Icon name="check" size={12} />clé enregistrée</span>}</b><span className="hint">{p.note}</span>{state.keyWarnings?.[p.id] && <span className="err">{state.keyWarnings[p.id]}</span>}<div className="row"><input className="settings-input" type="password" aria-label={`Clé API ${p.label}`} placeholder={state.keys[p.id] ? "Remplacer la clé…" : "Coller la clé…"} value={inputs[p.id] ?? ""} onChange={(e) => setInputs((i) => ({ ...i, [p.id]: e.target.value }))} /><button className="button primary" disabled={!inputs[p.id]?.trim()} onClick={() => save(p.id, inputs[p.id])}>Enregistrer</button>{state.keys[p.id] && <button className="button danger" onClick={() => save(p.id, "")}>Effacer</button>}<button className="button secondary" onClick={() => api.openExternal(p.url)}>Obtenir une clé</button></div></div>)}
+      {state.providers.map((p) => <div key={p.id} className="field"><b>{p.label} {state.keys[p.id] && <span className="key-status"><Icon name="check" size={12} />clé enregistrée</span>}</b><span className="hint">{p.note}</span>{state.keyWarnings?.[p.id] && <span className="err">{state.keyWarnings[p.id]}</span>}{/* v11.0.1 : une seule action primaire par panneaux — deux « Enregistrer » orange
+            côte à côte se neutralisaient. L'enregistrement d'une clé est local. */}
+      <div className="row"><input className="settings-input" type="password" aria-label={`Clé API ${p.label}`} placeholder={state.keys[p.id] ? "Remplacer la clé…" : "Coller la clé…"} value={inputs[p.id] ?? ""} onChange={(e) => setInputs((i) => ({ ...i, [p.id]: e.target.value }))} /><button type="button" className="button secondary" disabled={!inputs[p.id]?.trim()} onClick={() => save(p.id, inputs[p.id])}>Enregistrer</button>{state.keys[p.id] && <button type="button" className="button danger" onClick={() => save(p.id, "")}>Effacer</button>}<button type="button" className="button secondary" onClick={() => api.openExternal(p.url)}>Obtenir une clé</button></div></div>)}
       <div className="settings-callout"><b>Modèles gratuits et dictée</b><span><code>OpenRouter Free</code> fournit des modèles gratuits pour les agents. <code>Groq</code> alimente la dictée vocale ; le texte transcrit arrive dans le composeur et doit être relu puis envoyé.</span></div>
       </section>
       <section className="settings-section">
       <h4>Notifications de bureau</h4>
       <p className="hint">Prévient quand un agent a besoin de toi : permission demandée, formulaire, tour terminé (s’il a duré plus de 8 s) ou échoué. Jamais quand la fenêtre est au premier plan.</p>
       <label className="toggle-row"><span>Activer les notifications</span><input type="checkbox" checked={notifications !== false} onChange={(e) => void changeNotifications(e.target.checked)} /></label>
-      <div className="row"><button className="button secondary" onClick={() => void copyDiagnostic()}>Copier le diagnostic</button><span className="hint">Versions, état du moteur, agents et derniers événements — sans aucune clé API.</span>{diagnosticMsg && <span className="hint">{diagnosticMsg}</span>}</div>
+      <div className="row"><button type="button" className="button secondary" onClick={() => void copyDiagnostic()}>Copier le diagnostic</button><span className="hint">Versions, état du moteur, agents et derniers événements — sans aucune clé API.</span>{diagnosticMsg && <span className="hint">{diagnosticMsg}</span>}</div>
       </section>
       <section className="settings-section">
       <h4>Terminal Freebuff</h4>
       <p className="hint">Le terminal Freebuff est indépendant de la conversation Aven. La carte Freebuff ouvre sa session interactive ; cette section permet de vérifier l’installation du CLI et de se connecter au service.</p>
       <div className="row">
         <span className="hint">{cli === null ? "Vérification…" : cli.installed ? <b><Icon name="check" size={12} /> CLI installé{cli.version ? ` — v${cli.version}` : ""}</b> : "CLI non installé"}</span>
-        {cli?.installed && <button className="button secondary" onClick={() => void cliAction("login")}>Se connecter</button>}
-        {!cli?.installed && <button className="button primary" disabled={cliInstalling} onClick={() => void cliAction("install")}>{cliInstalling ? "Installation en cours…" : "Installer le CLI (npm)"}</button>}
+        {cli?.installed && <button type="button" className="button secondary" onClick={() => void cliAction("login")}>Se connecter</button>}
+        {!cli?.installed && <button type="button" className="button primary" disabled={cliInstalling} onClick={() => void cliAction("install")}>{cliInstalling ? "Installation en cours…" : "Installer le CLI (npm)"}</button>}
       </div>
       </section>
       <section className="settings-section">
@@ -275,14 +310,14 @@ export default function SettingsDialog(props: {
       <section className="settings-section">
       <h4>Espaces de travail</h4>
       <p className="hint">Un espace correspond à un dossier de projet. Il regroupe ses conversations, agents et priorités de modèles ; les clés API sont partagées entre tous les espaces. Les fichiers explorés et les notes suivent l’espace actif.</p>
-      {(state.workspaces ?? []).map((w) => <div key={w.path} className="row"><span style={{ flex: 1 }}>{w.path === state.workspace ? <b className="current-workspace"><Icon name="dot" size={10} />{w.name}</b> : w.name} <span className="hint">{w.path}</span></span>{w.path !== state.workspace && <button className="button secondary" disabled={busy} onClick={() => switchWs(w.path)}>Utiliser</button>}<button className="button danger" disabled={busy} onClick={() => removeWs(w.path)}>Retirer de la liste</button></div>)}
-      <div className="row"><input className="settings-input" aria-label="Nom du nouvel espace" placeholder="Nom du nouvel espace…" value={newWsName} onChange={(e) => setNewWsName(e.target.value)} /><button className="button primary" onClick={createWs}>Créer un nouvel espace</button><button className="button secondary" onClick={addExistingWs}>Ouvrir un dossier existant</button></div>
+      {(state.workspaces ?? []).map((w) => <div key={w.path} className="row"><span className="settings-workspace-line">{w.path === state.workspace ? <b className="current-workspace"><Icon name="dot" size={12} />{w.name}</b> : w.name} <span className="hint">{displayPath(w.path)}</span></span>{w.path !== state.workspace && <button type="button" className="button secondary" disabled={busy} onClick={() => switchWs(w.path)}>Utiliser</button>}<button type="button" className="button danger" disabled={busy} onClick={() => removeWs(w.path)}>Retirer de la liste</button></div>)}
+      <div className="row"><input className="settings-input" aria-label="Nom du nouvel espace" placeholder="Nom du nouvel espace…" value={newWsName} onChange={(e) => setNewWsName(e.target.value)} /><button type="button" className="button primary" onClick={createWs}>Créer un nouvel espace</button><button type="button" className="button secondary" onClick={addExistingWs}>Ouvrir un dossier existant</button></div>
       {!!state.sync?.length && <><h4>Fichiers de config du dossier de travail</h4>{state.sync.map((s) => <p key={s.file} className="hint"><code>{s.file}</code> : {SYNC_LABEL[s.status] ?? s.status}</p>)}</>}
       {state.versionWarning && <p className="err">{state.versionWarning}</p>}
       <p className="hint">OpenCode {state.version ?? "?"} · CLI : {state.cli ?? "?"}<br />Dossier de travail actif : {state.workspace ?? "?"}</p>
-      <div className="row"><button className="button secondary" onClick={() => api.openWorkspace()}>Ouvrir le dossier actif</button></div>
+      <div className="row"><button type="button" className="button secondary" onClick={() => api.openWorkspace()}>Ouvrir le dossier actif</button></div>
       </section>
-      <div className="row"><button className="button ghost" onClick={props.onClose}>Fermer</button></div>
+      <div className="row"><button type="button" className="button ghost" onClick={props.onClose}>Fermer</button></div>
     </div>
   )
 
@@ -306,24 +341,74 @@ export default function SettingsDialog(props: {
     </div>
   )
 
+  // v11.1.0 : section « Agent vocal ». Le micro visible vit dans le bandeau du
+  // Poste ; ici on choisit la voix et la personnalité, et on dit clairement ce
+  // qui part chez le fournisseur distant et ce que coûtent les quotas gratuits.
+  const renderVoice = () => (
+    <div className="settings-pane">
+      <section className="settings-section">
+        <h4>Agent vocal</h4>
+        <p className="hint">Le micro reste à l’écoute tant qu’il n’est pas coupé. Dis « Aven » puis ta demande ; après une réponse, tu as dix secondes pour enchaîner sans répéter le mot. Le bouton micro du bandeau coupe et réactive l’écoute.</p>
+        <div className="settings-callout">
+          <b>Ce qui part en ligne</b>
+          <span>La transcription et la réponse passent par Groq (palier gratuit) : les segments audio sont envoyés au STT distant, rien n’est conservé sur disque. Avec une voix neuronale, le texte de la réponse part aussi au service de lecture d’Edge pour la synthèse. Les quotas gratuits ne sont pas illimités ; en cas de dépassement, l’agent s’arrête — aucun service payant n’est utilisé.</span>
+        </div>
+      </section>
+      <section className="settings-section">
+        <h4>Voix de l’agent</h4>
+        <p className="hint">La voix choisie est utilisée phrase par phrase. Le changement est enregistré immédiatement ; l’aperçu lit un court message.</p>
+        <div className="setting-row">
+          <span>Voix</span>
+          <select aria-label="Voix de l’agent vocal" value={voiceIdOf(voicePrefs?.voiceName)} onChange={(e) => void saveVoicePrefs({ voiceName: e.target.value })}>
+            <option value="">Voix par défaut</option>
+            {voiceNames.some(isNeuralVoice) && (
+              <optgroup label="Neuronales (Edge, en ligne)">
+                {voiceNames.filter(isNeuralVoice).map((id) => <option key={id} value={id}>{voiceLabel(id)}</option>)}
+              </optgroup>
+            )}
+            {voiceNames.some((id) => !isNeuralVoice(id)) && (
+              // v11.5.0 : le groupe ne dit plus « Windows » — il contient aussi la voix
+              // Piper, qui est locale sans être une voix Windows.
+              <optgroup label="Locales (hors ligne)">
+                {voiceNames.filter((id) => !isNeuralVoice(id)).map((id) => <option key={id} value={id}>{voiceLabel(id)}</option>)}
+              </optgroup>
+            )}
+          </select>
+        </div>
+        <div className="row">
+          <button type="button" className="button secondary" onClick={() => void previewVoice()} disabled={voicePreviewing}>{voicePreviewing ? "Lecture…" : "Tester la voix"}</button>
+          <button type="button" className="button ghost" onClick={() => { void api.voiceAgentStop().catch((e) => props.onError(e)) }}>Arrêter la lecture</button>
+          {voicePrefs && !voiceNames.some((id) => !isNeuralVoice(id)) && <span className="hint">Aucune voix Windows détectée.</span>}
+        </div>
+        <p className="hint">Les voix neuronales passent par le service de lecture d’Edge : gratuit, sans compte ni clé, mais en ligne — le texte de la réponse y est envoyé pour la synthèse. Si le service ne répond pas, Aven le signale et lit avec la voix Windows locale, qui fonctionne hors ligne.</p>
+      </section>
+      <section className="settings-section">
+        <h4>Personnalité</h4>
+        <p className="hint">Change le ton des réponses, jamais l’exécution d’une commande. Aucun bruitage n’est ajouté.</p>
+        <div className="segmented" role="group" aria-label="Personnalité de l’agent vocal">
+          {VOICE_PERSONALITY_OPTIONS.map((option) => (
+            <button key={option.id} type="button" className={voicePrefs?.personality === option.id ? "selected" : ""} aria-pressed={voicePrefs?.personality === option.id} title={option.hint} onClick={() => void saveVoicePrefs({ personality: option.id })}>{option.label}</button>
+          ))}
+        </div>
+      </section>
+      <section className="settings-section">
+        <h4>Micro</h4>
+        <p className="hint">Le micro se coupe et se réactive depuis le bandeau du Poste ; son état y reste visible. Aucune autre commande ne le coupe à ta place.</p>
+      </section>
+    </div>
+  )
+
   // v10.3.0 : les Réglages sont une PAGE pleine, pas un dialogue superposé — même
   // charpente que Tâches et Projet, actions déclarées ici (Fermer). Les classes
   // « unified-settings » / « unified-settings-scroll » restent (scripts de fumée).
   return (
-    <PageShell
+    <InstrumentFrame
       eyebrow="RÉGLAGES"
       title="Configuration et apparence"
-      description="Un seul endroit pour les clés, les espaces, l’apparence et l’usage de l’application."
-      actions={[{ key: "close", label: "Fermer", icon: "close", variant: "ghost", onClick: props.onClose, className: "dialog-close", title: "Revenir à l'écran précédent (Échap)" }]}
-      toolbarLabel="Actions des réglages"
+      description="Un seul endroit pour les clés, les espaces, l’apparence et l’usage de l’application. Les sections se choisissent dans l’inspecteur."
       bodyClassName="unified-settings"
     >
-      <nav className="settings-tabs" role="tablist" aria-label="Sections des paramètres">
-        <button role="tab" type="button" aria-selected={section === "general"} className={section === "general" ? "selected" : ""} onClick={() => setSection("general")}>Configuration</button>
-        <button role="tab" type="button" aria-selected={section === "appearance"} className={section === "appearance" ? "selected" : ""} onClick={() => setSection("appearance")}>Apparence</button>
-        <button role="tab" type="button" aria-selected={section === "usage"} className={section === "usage" ? "selected" : ""} onClick={() => setSection("usage")}>Usage</button>
-      </nav>
-      <div className="unified-settings-scroll" role="tabpanel">{section === "appearance" ? renderAppearance() : section === "usage" ? renderUsage() : renderGeneral()}</div>
-    </PageShell>
+      <div className="unified-settings-scroll" role="tabpanel" aria-label={`Réglages · ${section}`}>{section === "appearance" ? renderAppearance() : section === "usage" ? renderUsage() : section === "voice" ? renderVoice() : renderGeneral()}</div>
+    </InstrumentFrame>
   )
 }

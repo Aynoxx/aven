@@ -30,9 +30,11 @@ const readme = read("README.md")
 assert.ok(!app.includes('aria-label="Gérer les espaces" title="Gérer les espaces"'), "le bouton « Espaces » a quitté la barre du hub")
 assert.match(app, /openConfiguration\("workspaces"\)/, "la route vocale mène aux Réglages → Configuration")
 
-// B. La carte Projet ouvre l'agent Freebuff (label et icône conservés).
-// v9.7.1 : la carte passe source="project" (shared element carte→page), même destination.
-assert.match(app, /key: "project", label: "Freebuff", kind: "freebuff", hint: "Terminal IA interactif", action: \(\) => openFreebuffAgent\("project"\)/, "carte Freebuff → page terminal")
+// B. Le rail ouvre l'agent Freebuff (label et destination conservés).
+// v11.0.0 : le hub a disparu ; l'entrée Terminal du rail ouvre le même instrument.
+const workbench = read("web/src/workbench/WorkbenchShell.tsx")
+assert.match(workbench, /kind: "terminal", label: "Terminal"/, "le rail nomme le terminal Freebuff")
+assert.match(app, /case "open-project":\s*openFreebuffAgent\(\)/, "la route Projet ouvre le terminal Freebuff")
 assert.ok(!app.includes('action: () => selectAgent("projet") },'), "l'ancien selectAgent projet a disparu du hub")
 
 // C. Fix du TUI : plancher de dimensions testé + émulateur superposé (vraies dimensions).
@@ -48,9 +50,9 @@ assert.match(page, /freebuff-sessionbar/, "barre de session rendue dans la page"
 assert.match(css, /\.freebuff-sessionbar/, "CSS de la barre de session")
 assert.match(page, /setSessionBar\(bar\)/, "capture effective depuis le buffer")
 
-// E. « Tâches » : les spécialistes, et le hub ne parle plus d'« Agents ».
-assert.match(app, /key: "agents", label: "Orchestration", kind: "agent", hint: "Modes de délégation de l'agent principal"/, "carte Orchestration")
-assert.ok(!/label: "Agents"/.test(app), "l'ancien label « Agents » a disparu du hub")
+// E. « Tâches » : les spécialistes, et le Poste ne parle plus d'« Agents ».
+assert.match(workbench, /kind: "orchestration", label: "Orchestration"/, "le rail nomme l'orchestration")
+assert.ok(!/label: "Agents"/.test(app), "l'ancien label « Agents » a disparu du Poste")
 
 // F. Agent central : le prompt projet délègue et ne code jamais lui-même.
 assert.match(agentProjet, /CERVEAU CENTRAL/, "rôle central affirmé")
@@ -92,19 +94,12 @@ assert.match(page922, /déjà ouverte dans l'app Freebuff Desktop/, "message exp
 const css922 = readStyles()
 assert.match(css922, /\.freebuff-conflict/, "CSS de la bannière attendu")
 
-// K. v9.7.1 : shared element réellement branché (l'audit v9.7.0 l'a trouvé mort).
-// AMENDEMENT v10.3.1 : l'ouverture est devenue un bloc (et non plus une expression
-// `=> withViewTransition`) parce qu'elle mémorise la carte d'origine AVANT la capture
-// du morph — la promesse vérifiée est la même : signature avec `source`, et source
-// réellement transmise à la transition.
-assert.match(app, /const openFreebuffAgent = \(source\?: "project"\) => \{[\s\S]{0,900}?withViewTransition\(\(\) => \{[\s\S]{0,900}?\}, source\)/, "la page Freebuff accepte une source (morph carte→page)")
-assert.match(app, /const openAgentsPage = \(source\?: "tasks"\) => \{[\s\S]{0,900}?withViewTransition\(\(\) => \{[\s\S]{0,900}?\}, source\)/, "la page Tâches accepte une source")
-assert.match(app, /openFreebuffAgent\("project"\)/, "la carte Projet passe sa source")
-assert.match(app, /openAgentsPage\("tasks"\)/, "la carte Tâches passe sa source")
-assert.match(css, /\[data-vt-source="project"\] \.freebuff-agent-page \{ view-transition-name: hub-target; \}/, "CSS : carte et page partagent le même view-transition-name")
-const vt921 = read("web/src/view-transitions.ts")
-assert.match(vt921, /finished\.finally/, "la source est retirée après finished (pas de nom orphelin)")
-assert.ok(!vt921.includes("transitionNameSelector"), "helper : fonction morte supprimée")
+// K. v11.0.0 : les View Transitions du hub ont été retirées — l'instrument suit
+// l'onglet, sans morph. La convention de navigation vit dans le modèle pur d'onglets.
+const tabModel = read("web/src/workbench/tabs.ts")
+assert.match(tabModel, /export function openInstrument/, "un instrument s'ouvre par un onglet unique")
+assert.match(tabModel, /export function closeTab/, "fermer un onglet rend le voisin")
+assert.ok(!css.includes("view-transition-name"), "aucun nom de transition de vue ne subsiste")
 // Canal mort retiré (0 caller UI depuis v9.6.0).
 const preload921 = read("web/src/types.ts")
 const types921 = read("web/src/types.ts")

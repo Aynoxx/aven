@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { api } from "./api"
 import { Icon } from "./icons"
-import PageShell, { type PageAction } from "./PageShell"
+import InstrumentFrame, { type InstrumentAction } from "./InstrumentFrame"
 import type { Breadcrumb, FileEntry, TextFile } from "./types"
 
 // Explorateur de fichiers intégré (v9.3.0) — lecture seule, cloisonné à la racine de
@@ -68,13 +68,12 @@ export default function FilesView(props: Props) {
   }
 
   // v10.3.0 : page pleine, actions déclarées par la page (Explorateur, Fermer).
-  const pageActions: PageAction[] = [
+  const pageActions: InstrumentAction[] = [
     { key: "explorer", label: "Explorateur", icon: "folder", onClick: () => { api.filesOpen(relative).catch((e) => props.onError(e)) }, title: "Ouvre ce dossier dans l'Explorateur Windows" },
-    { key: "close", label: "Fermer", icon: "close", variant: "ghost", onClick: props.onClose, className: "dialog-close", title: "Revenir à l'écran précédent (Échap)" },
   ]
 
   return (
-    <PageShell
+    <InstrumentFrame
       eyebrow="FICHIERS"
       title="Fichiers de l'espace"
       description={<>
@@ -121,7 +120,7 @@ export default function FilesView(props: Props) {
             <>
               <div className="notes-toolbar">
                 <span className="eyebrow">APERÇU · {preview.path}</span>
-                <button className="button ghost" type="button" title={`Prépare une demande pour ${activeAgentName}, sans l'envoyer`} onClick={() => setAnalyzeFor(analyzeFor === preview.path ? null : preview.path)}><Icon name="agent" size={13} />Préparer une analyse</button>
+                <button className="button ghost" type="button" title={`Prépare une demande pour ${activeAgentName}, sans l'envoyer`} onClick={() => setAnalyzeFor(analyzeFor === preview.path ? null : preview.path)}><Icon name="agent" size={14} />Préparer une analyse</button>
                 <span className="hint">{fmtSize(preview.size)}{preview.truncated ? " · aperçu tronqué (512 Kio)" : ""}</span>
               </div>
               {analyzeFor === preview.path && (
@@ -141,6 +140,6 @@ export default function FilesView(props: Props) {
           )}
         </article>
       </div>
-    </PageShell>
+    </InstrumentFrame>
   )
 }

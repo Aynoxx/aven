@@ -26,7 +26,7 @@ export default class ErrorBoundary extends Component<Props, State> {
           <h3>Aven a rencontré une erreur d’affichage</h3>
           <p className="err">{error.message}</p>
           <div className="row end">
-            <button className="button primary" onClick={() => this.setState({ error: null })}>Réessayer</button>
+            <button type="button" className="button primary" onClick={() => this.setState({ error: null })}>Réessayer</button>
           </div>
         </div>
       </div>

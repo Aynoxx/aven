@@ -1,5 +1,9 @@
 # AGENTS.md — Aven
 
+INSTRUCTION PRIMAIRE :
+Sois direct et honnête, pas agréable. Confronte mes idées lorsqu'elles sont faibles. Si j'ai faux dis juste "Tu as faux" et explique pourquoi. Note les idées sur 10 de manière honnête.
+
+
 **Lis ce fichier AVANT de modifier quoi que ce soit.** Il contient le contrat
 d'exécution (parcours, définition de terminé, compte rendu, périmètre) puis les
 règles universelles du projet : typographie (tokens CSS), format des boutons
@@ -8,9 +12,6 @@ versionnés, architecture host/renderer (Tauri), IPC, sécurité, tests, sondes 
 accessibilité. Ces règles décrivent ce que le code fait DÉJÀ : en cas de doute,
 imite le fichier voisin le plus proche. Une contribution qui viole une règle se
 fait refuser par `npm run verify` (sondes automatiques).
-
-INSTRUCTION PRIMAIRE :
-Sois direct et honnête, pas agréable. Confronte mes idées lorsqu'elles sont faibles. Si j'ai faux dis juste "Tu as faux" et explique pourquoi. Note les idées sur 10 de manière honnête.
 
 Résumé en dix secondes :
 
@@ -93,6 +94,7 @@ par les variables `:root` existantes, sinon thèmes et densités cassent.
 | Usage | Variable | Valeur |
 |---|---|---|
 | Police | `var(--font-ui)` | `system-ui, "Segoe UI", sans-serif` — pile système honnête, chargée au premier pixel (jamais autre chose, v10.2.0) |
+| Télémétrie, micro-libellés | `var(--font-mono)` | pile monospace système (`ui-monospace`, Cascadia, Consolas) — deuxième voix du Poste, jamais une police téléchargée (v11.0.0) |
 | Micro-labels, métadonnées | `var(--font-size-xs)` | 11px (10px était sous le seuil de lisibilité, v10.2.0) |
 | Libellés secondaires, hints | `var(--font-size-sm)` | 12px |
 | Texte courant, boutons | `var(--font-size-md)` | 14px |
@@ -109,10 +111,11 @@ par les variables `:root` existantes, sinon thèmes et densités cassent.
 - **Surbrillance d'eyebrow** : les libellés de section majuscules utilisent la classe
   `.eyebrow` existante (letter-spacing, uppercase) — ne recrée pas le style.
 - Une **nouvelle fonctionnalité = une nouvelle classe CSS** dans le fichier de sa
-  surface (`web/src/styles/` : base, chrome, dialogs, home, pages, voice-notes,
-  freebuff, motion), sectionnée par un commentaire `/* vX.Y.Z : … */` placé près des
-  styles voisins. `App.css` n'est qu'un manifeste d'imports — ne l'alourdis pas. Pas
-  de style inline sauf valeur calculée dynamiquement (position, largeur du state).
+  surface (`web/src/styles/` : base, chrome, dialogs, pages, voice-notes, freebuff,
+  motion, da, workbench), sectionnée par un commentaire `/* vX.Y.Z : … */` placé près
+  des styles voisins. `da.css` porte la palette et les jetons, `workbench.css` la
+  charpente du Poste. `App.css` n'est qu'un manifeste d'imports — ne l'alourdis pas.
+  Pas de style inline sauf valeur calculée dynamiquement (position, largeur du state).
 
 ## 3. Couleurs et espacements
 
@@ -130,10 +133,12 @@ par les variables `:root` existantes, sinon thèmes et densités cassent.
   jamais avec une valeur hexadécimale brute.
 - Espacements : réutilise `--density-gap` / `--density-pad` quand l'élément vit dans
   une vue à densité réglable ; sinon multiples de 2/4px cohérents avec les voisins.
-- Rayons : uniquement les tokens `--radius-*` de `:root` (`styles/base.css`) — `xs` 6px (queues
-  de bulles, micro-contrôles), `sm` 10px (champs/boutons), `md` 12px (items de liste),
-  `lg` 14px (tuiles/cartes), `xl` 20px (panneaux/dialogues), `pill` 999px (pilules et
-  badges). Toute valeur hors échelle = une régression de cohérence.
+- Rayons : uniquement les tokens `--radius-*` (`styles/base.css`, redéfinis par la DA
+  active dans `styles/da.css`) — `xs` (queues de bulles, micro-contrôles), `sm`
+  (champs/boutons), `md` (items de liste), `lg` (tuiles/cartes), `xl`
+  (panneaux/dialogues), `pill` (pilules et badges). La DA v11.0.0 les resserre (2–8px)
+  sans renommer les rôles : seuls les NOMS sont autorisés, jamais un littéral. Toute
+  valeur hors échelle = une régression de cohérence.
 
 ## 4. Boutons (classes standard, aucune exception)
 
@@ -166,56 +171,134 @@ par les variables `:root` existantes, sinon thèmes et densités cassent.
   24 (empty states), 30 (bouton micro central). Une taille hors grille = à justifier.
 - Icône porteuse de sens seule → `aria-label` sur le bouton hôte ; icône décorative →
   laisse l'`aria-hidden` par défaut du composant.
+- **Une icône dit une seule chose (v11.0.2)** : `sparkle` = la marque d'Aven (rail),
+  `wand` = génération assistée (synthèse, explication), `chat` = conversation,
+  `branch` = délégation, `agent` = un agent, `file` = un document (note ou fichier),
+  `folder` = un dossier, `stop` = interruption, `paperclip` = transfert, `quote` =
+  citation, `chevron-*` = navigation. Ne prends pas le glyphe d'un autre sens « parce
+  qu'il ressemble » : `scripts/verify-v11.0.2.mjs` refuse ce retour en arrière.
 
-## 6. Composants React et pages (renderer)
+## 6. Poste, instruments et composants React (renderer)
 
-> **Règle d'architecture (v10.3.0).** Toutes les sections principales d'Aven doivent
-> être implémentées comme des **pages** occupant l'intégralité de la surface de contenu
-> de la fenêtre principale, et utiliser le système commun de navigation supérieure avec
-> des **actions contextuelles**. Les fenêtres modales et les panneaux superposés sont
-> réservés aux véritables interactions ponctuelles et ne doivent pas servir de
-> structure principale aux pages. Les pages d'accueil et centrales ne doivent pas
-> défiler globalement ; tout défilement nécessaire doit être limité au conteneur
-> concerné. Toute exception doit être explicitement justifiée par le besoin fonctionnel.
+> **Règle d'architecture (v11.0.0).** Aven est un **Poste de travail** : une seule
+> fenêtre dont le cadre ne change jamais. Bandeau de télémétrie, rail d'instruments,
+> barre d'onglets, scène et inspecteur restent visibles en permanence. Une section
+> principale (Aujourd'hui, conversation, Notes, Fichiers, Terminal, Orchestration,
+> Réglages) est un **instrument rendu dans la scène**, jamais une page plein écran ni
+> un dialogue superposé. La navigation vit dans le modèle d'onglets pur
+> (`web/src/workbench/tabs.ts`) : Aujourd'hui est le premier onglet et ne se ferme pas,
+> un instrument n'a qu'un onglet, une conversation peut en avoir plusieurs. Le Poste ne
+> défile pas globalement ; seul le conteneur concerné défile. Toute exception doit être
+> explicitement justifiée par le besoin fonctionnel.
 
-- **Une page = `PageShell`** (`web/src/PageShell.tsx`) : `eyebrow`, titre, description,
-  et **actions déclarées par la page** (`actions`), jamais une barre recopiée. Tâches,
-  Projet/Freebuff, Notes, Fichiers et Réglages passent tous par lui ; une nouvelle
-  section principale s'ajoute comme une page, pas comme un dialogue.
-- **La barre de fenêtre est contextuelle** : « Conversations » n'apparaît que devant
-  une conversation ; une page n'affiche que ses propres actions. Un bouton sans usage
-  sur la page où il figure est un bug.
-- **Pas de défilement global** : `body` et `.page-main` sont en `overflow: hidden`.
-  Le scroll vit dans le conteneur qui en a besoin (`.notes-preview`, `.files-list-panel`,
-  `.unified-settings-scroll`, l'émulateur de terminal).
+- **Un instrument = `InstrumentFrame`** (`web/src/InstrumentFrame.tsx`) : micro-libellé,
+  titre de scène, description, et **actions déclarées par l'instrument** (`actions`),
+  jamais une barre recopiée. Notes, Fichiers, Terminal, Orchestration et Réglages
+  passent par lui ; une nouvelle section principale s'ajoute comme un instrument, pas
+  comme un dialogue.
+- **La coquille ne recopie aucune action** (`web/src/workbench/WorkbenchShell.tsx`) : le
+  rail et les onglets naviguent, l'inspecteur porte le contexte de l'instrument actif
+  (titre de session et renommage, modèle, mode de délégation, événements, sections de
+  Réglages). Un bouton sans usage sur l'instrument où il figure est un bug.
+- **Pas de défilement global** : `body` et `.wb-app` sont en `overflow: hidden`. Le
+  scroll vit dans le conteneur qui en a besoin (`.wb-home-scroll`, `.wb-tile-body`,
+  `.notes-preview`, `.files-list-panel`, `.unified-settings-scroll`, l'émulateur de
+  terminal).
 - **Un vrai dialogue ponctuel** = un composant-fichier (`FormDialog.tsx`, dialogue de
-  permission) ; une sur-structure d'interface partageant son état reste une fonction de
-  rendu dans les pages (`web/src/pages/`) ou le shell (`web/src/app/AppShell.tsx`).
-  Tout texte déjà affiché passe par `Markdown`/`RichMarkdown`,
-  jamais de HTML brut.
+  permission, choix d'espace) ; une sur-structure d'interface partageant son état reste
+  une fonction de rendu dans les instruments (`web/src/pages/`, `web/src/workbench/`).
+  Tout texte déjà affiché passe par `Markdown`/`RichMarkdown`, jamais de HTML brut.
 - Les états de panneau sont fermés dans TOUTES les navigations (`selectAgent`,
-  `goHome`, `openAgentsPage`, `closeNotesToHome`, Échap, effet `needsWorkspace`) —
-  un modal oublié ouvert est un bug.
+  `goHome`, `openInstrumentTab`, `openConversationInstrument`, `openAgentsPage`,
+  Échap, effet `needsWorkspace`) — un modal oublié ouvert est un bug.
 - Après une action qui redémarre le moteur, relis l'état (`api.state()`) au lieu de
   recharger la page (`window.location.reload()` interdit : perd l'état visuel).
 - TypeScript strict : types du domaine dans `web/src/types.ts` (miroirs des contrats
   IPC ; duplication volontaire et commentée). Pas de `any` neuf.
-- **Un seul retour par écran (v10.4.0)** : la conversation garde « Accueil » dans la
-  barre de fenêtre ; chaque page porte son propre « Fermer » (dernier bouton de sa
-  barre d'actions) — les deux ensemble ramenaient au même endroit et ont été
-  supprimés. La barre de fenêtre n'affiche jamais l'entrée de l'écran où l'on se
-  trouve (pas de « Paramètres » dans les Réglages).
+- **Un seul retour par écran (v10.4.0, resserré v11.0.0)** : le cadre est permanent.
+  Fermer un onglet rend le voisin ; Aujourd'hui ne se ferme pas et reste le plancher du
+  Poste. Ctrl+W ferme l'onglet actif, jamais la fenêtre. **Chaque onglet fermable porte
+  sa croix** (v11.3.0 : v11.1.0 l'avait retirée « pour alléger », et une souris ne
+  pouvait plus fermer d'onglet du tout) : un raccourci ne remplace jamais l'action
+  visible. Aucun instrument n'ajoute un second chemin vers lui-même.
 - **Une dictée a une provenance (v10.4.0)** : le micro du composeur transcrit
-  TOUJOURS dans la chatbox ; seul celui du hub exécute les commandes d'application.
-  La décision vit dans `web/src/dictation-routing.ts` (module pur testé).
-- **Recherche d'accueil et nouvelle conversation (v10.5.0)** : la barre d'accueil sert
-  à retrouver des conversations, jamais à envoyer une demande. Une recherche vide
-  n'exécute aucune action implicite. Créer et rédiger une conversation reste une
-  action nommée distincte ; tout état vide est informatif, jamais un faux bouton.
-- **Les destinations ont un nom fonctionnel (v10.5.0)** : une carte indique ce qu'elle
-  ouvre réellement. « Freebuff » ouvre le terminal CLI ; « Orchestration » règle la
-  délégation de l'agent principal Aven. Les identifiants internes ne sont pas des
-  libellés utilisateur.
+  TOUJOURS dans la chatbox ; seul le micro global du Poste (barre de commande, tuile
+  Capturer) exécute les commandes d'application. La décision vit dans
+  `web/src/dictation-routing.ts` (module pur testé).
+- **L'agent vocal est une provenance distincte (v11.1.0)** : il n'exécute une
+  commande que si le mot **« Aven »** a été prononcé (ou pendant la fenêtre de suivi
+  de dix secondes après une réponse). Le micro se coupe depuis le bandeau, l'état
+  est du texte (jamais la couleur seule), et l'audio n'est jamais écrit sur disque.
+  Le routage vit dans `host/voice-agent-commands.ts` et l'état de session dans
+  `web/src/voice-agent/session.ts` — deux modules purs testés.
+- **Une note dictée se confirme (v11.4.0)** : « Aven, note que… » ne crée jamais
+  la note dans la foulée. Le contenu est **relu**, puis attendu un « oui »
+  explicite — la décision vit dans `web/src/voice-agent/note.ts` (module pur
+  testé). Un refus, une parole incomprise, l'arrêt de la lecture, la coupure du
+  micro ou 45 s de silence annulent la note. Une demande de note ne part jamais
+  au LLM, qui répondrait « c'est noté » sans rien écrire ; une seule ligne écrit
+  la note (`onCreateNote`, appelée dans la branche « confirm » uniquement), et
+  `scripts/verify-v11.4.0.mjs` refuse tout autre chemin.
+- **Le micro entend Aven (v11.4.1)** : la webview joue sa propre voix dans les
+  haut-parleurs ; sa transcription revient par le STT. Aven reconnaît sa propre
+  voix (`web/src/voice-agent/echo.ts`, module pur testé) : un fragment contigu
+  de trois mots déjà prononcés, ou son écho moins de 2,5 s après la lecture,
+  n'est jamais une réponse — un mot seul (« oui », « non », « stop ») le reste.
+  Le garde s'exécute avant toute décision de note et ne peut rien écrire.
+  `scripts/verify-v11.4.1.mjs` refuse un garde acoustique opaque ou un seuil à
+  un mot. Pendant une question de note, la lecture n'est PAS coupée à la
+  détection de parole (`web/src/voice-agent/barge-in.ts`, module pur testé) : la
+  question va au bout, et s'arrête dès que le texte prouve une vraie reprise
+  (v11.4.2).
+- **Le repli parle avec Piper (v11.5.0)** : quand le service neuronal est
+  injoignable (429, réseau), Aven bascule sur **Piper** (`host/piper-tts.ts`,
+  binaire et modèle posés par `npm run fetch:piper` dans
+  `src-tauri/resources/piper`, embarqués par l'installeur, dossier reçu par
+  `AVEN_PIPER_DIR`). Pas de PyTorch, pas de Python, pas de réseau : le repli ne
+  peut pas tomber en 429. La voix Windows (Hortense) ne sert plus que si Piper
+  manque — et la bascule est toujours **dite** (`warning`). Une voix locale
+  ajoutée se choisit par le préfixe `piper:` et passe par le dictionnaire de
+  prononciation. Le débit vit dans `PIPER_LENGTH_SCALE` (1,10 en v11.5.1) : la
+  parité avec Denise avait été mesurée à 1,44, mais **écoutée puis rejetée** —
+  trop lente. Un réglage de prosodie se mesure sur une phrase de référence,
+  puis s'écoute dans l'app : la mesure fixe l'ordre de grandeur, l'oreille
+  tranche la valeur.
+- **La voix neuronale est gratuite et sans compte (v11.3.0)** : les voix françaises
+  passent par le service de lecture d'Edge, gratuit (aucune clé, aucune carte),
+  jamais par un service facturé. Ce service n'est pas contractuel : un échec ou une
+  limite (429) ne rend jamais l'agent muet — Aven repasse sur la voix locale Piper
+  (v11.5.0, la voix Windows n'étant plus que le dernier recours)
+  **et le dit** (`warning` rendu par l'IPC), sinon le changement de timbre serait
+  inexplicable. La décision et le jeton vivent dans `host/voice-agent-edge.ts`
+  (module pur testé), le transport WebSocket dans `host/voice-agent-tts.ts` — le
+  protocole est à nous, la bibliothèque `msedge-tts` ne passait plus la poignée de
+  main le 23/10/2026 (HTTP 200 au lieu de 101, 3 fois sur 3) — et la synthèse dans
+  `host/voice-agent-speech.ts` ; l'audio arrive en base64 au renderer, qui le joue —
+  aucun fichier audio n'est écrit sur disque. **Une réponse = une synthèse** :
+  découper par phrase ajoutait ~1,5 s de silence à chaque frontière ; la lecture
+  coupe le silence de tête et de queue (`web/src/voice-agent/trim.ts`) et ramène
+  les pauses internes de plus de 650 ms à ~420 ms (`web/src/voice-agent/pause.ts`),
+  deux modules purs testés. Le débit (`rate`) reste à 0 % : c'est la longueur des
+  silences qui faisait paraître la voix lente, pas la vitesse des mots.
+  **Une phrase déjà synthétisée n'est pas redemandée** (`host/voice-cache.ts`,
+  cache borné en mémoire) et un 429 ouvre un blocage d'une minute respecté sans
+  aucune requête (`EDGE_COOLDOWN_MS`) : insister entretient la limite du service
+  et coûte 1,2 s par phrase (v11.4.3). Le repli reste toujours dit.
+- **Un nom propre se prononce (v11.4.4)** : les moteurs de synthèse lisent les
+  noms d'Aven avec leurs règles générales et les mangent (« Freebuff » sortait
+  « frebff » sur la voix locale). La correction vit dans `host/pronunciation.ts`
+  (module pur testé) : une table **par moteur**, appliquée au texte de synthèse
+  seulement — jamais au texte affiché — et **vide pour la voix neuronale**, qui
+  prononce juste. Une entrée nouvelle s'accompagne d'une écoute et d'un test.
+- **Barre de commande et nouvelle conversation (v11.0.0)** : la barre permanente
+  (Ctrl+K) sert à retrouver une conversation ou une note, à exécuter une commande
+  (`>`), ou à cibler une portée (`/`). Une recherche vide n'exécute aucune action
+  implicite. Créer et rédiger une conversation reste une action nommée distincte ;
+  tout état vide est informatif, jamais un faux bouton.
+- **Les destinations ont un nom fonctionnel (v10.5.0)** : le rail et la planche
+  Aujourd'hui indiquent ce qu'ils ouvrent réellement. « Terminal » ouvre le CLI
+  Freebuff ; « Orchestration » règle la délégation de l'agent principal Aven. Les
+  identifiants internes ne sont pas des libellés utilisateur.
 - **Transfert IA sans envoi implicite (v10.5.0)** : lorsqu'une page prépare un texte
   dans le composeur, le libellé précise la destination et indique que l'utilisateur
   doit encore relire puis envoyer. Une action de préparation ne se nomme pas « lancer
@@ -288,7 +371,11 @@ par les variables `:root` existantes, sinon thèmes et densités cassent.
   `scripts/verify-v*.mjs` + `verify-build.mjs`. **Chaque version fige ses
   conventions dans une sonde** — c'est ainsi que le projet se souvient de ses
   règles sans confiance aveugle ; le script de la version courante reçoit les
-  ajouts, les anciens scripts restent intacts.
+  ajouts, les anciens scripts restent intacts **tant que leur sujet existe**.
+  Une sonde dont le module, l'écran ou le fichier a été supprimé se retire avec lui
+  (et son entrée npm) : une sonde qui ne peut plus passer ne protège rien. Toute
+  sonde présente dans `scripts/` doit être appelée par `npm run verify` —
+  `verify-conventions.mjs` le mesure.
 - `scripts/verify-docs.mjs` vérifie la **doc elle-même** : les modules cités dans
   `AGENTS.md`/`README.md` existent et sont réellement importés, les scripts cités
   existent, les audits respectent leur format daté. **Aucun compteur recopié à la

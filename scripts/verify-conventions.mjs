@@ -1,4 +1,4 @@
-import { readApp, readStyles } from "./lib/sources.mjs"
+import { readStyles } from "./lib/sources.mjs"
 import assert from "node:assert/strict"
 import { readdirSync, readFileSync } from "node:fs"
 import path from "node:path"
@@ -21,7 +21,6 @@ const iconReadme = read("web/src/icons/README.md")
 // vers le fichier unique, les assertions restent identiques.
 const rules = read("AGENTS.md")
 const agents = rules
-const app = readApp()
 
 // ── Règle 1 : la porte d'entrée existe et pointe au bon endroit ──────────────────
 assert.match(rules, /# AGENTS\.md — Aven/)
@@ -55,7 +54,9 @@ for (const w of weightValues) {
 const radiusValues = [...css.matchAll(/(?<![-\w])border-radius:\s*([^;}]+)/g)].map((m) => m[1].trim())
 for (const r of radiusValues) {
   const rest = r.replace(/var\(--radius-\w+\)/g, "").trim()
-  assert.ok(rest === "" || rest === "50%",
+  // v11.0.0 : « 0 » est admis — remise à zéro explicite d'un élément système
+  // (pouce de scrollbar du Poste), pas un rayon inventé.
+  assert.ok(rest === "" || rest === "50%" || rest === "0",
     `Règle « Rayons » (AGENTS.md §3) : border-radius « ${r} » hors tokens --radius-* — utilise var(--radius-xs|sm|md|lg|xl|pill).`)
 }
 
@@ -63,8 +64,10 @@ for (const r of radiusValues) {
 // (v10.2.0 M1 : system-ui / Segoe UI — la pile Inter n'est plus la référence).
 const fontFamilies = [...css.matchAll(/font-family:\s*([^;]+);/g)].map((m) => m[1].trim())
 for (const f of fontFamilies) {
-  assert.ok(/var\(--font-ui\)|^system-ui/.test(f),
-    `Règle « Typographie par tokens » (AGENTS.md §2) : font-family non standard « ${f} ». Utilise var(--font-ui) (pile système : system-ui, "Segoe UI", sans-serif).`)
+  // v11.0.0 : le Poste a DEUX voix typographiques — --font-ui (texte, pile système)
+  // et --font-mono (télémétrie, micro-libellés). Aucune police téléchargée.
+  assert.ok(/var\(--font-ui\)|var\(--font-mono\)|^system-ui/.test(f),
+    `Règle « Typographie par tokens » (AGENTS.md §2) : font-family non standard « ${f} ». Utilise var(--font-ui) (pile système : system-ui, "Segoe UI", sans-serif) ou var(--font-mono).`)
 }
 
 // ── Règle 3 : les icônes passent toutes par la bibliothèque centralisée ──────────
@@ -198,13 +201,33 @@ assert.match(arrowNav, /Pur|sans React/i,
   "arrow-navigation.ts reste un module pur, testable sans React")
 assert.ok(read("tests/arrow-navigation.test.mjs").includes("nextArrowIndex"),
   "le module arrow-navigation doit garder ses tests")
-assert.match(app, /nextArrowIndex/,
-  "les listes du hub doivent brancher la navigation flèches")
-assert.match(app, /onKeyDown=\{recentNav\.onKeyDown\}/,
-  "la liste des récents doit écouter les flèches")
-assert.match(app, /onKeyDown=\{conversationsNav\.onKeyDown\}/,
-  "le modal conversations doit écouter les flèches")
-// v9.6.0 : le sélecteur d'espaces du hub est retiré (Réglages → Configuration) —
-// plus de liste projets à naviguer ici ; les modales restantes gardent leurs flèches.
+// v11.0.0 : le hub et ses listes ont disparu avec le Poste. La liste de résultats
+// qui reste — la barre de commande — DOIT garder le même contrat de flèches ;
+// la barre d'onglets a son équivalent horizontal testé (nextTabFocus).
+const commandBar = read("web/src/workbench/CommandBar.tsx")
+const tabBar = read("web/src/workbench/WorkbenchShell.tsx")
+const tabModel = read("web/src/workbench/tabs.ts")
+assert.match(commandBar, /nextArrowIndex\(e\.key, active, results\.length\)/,
+  "la barre de commande branche la navigation flèches (module pur)")
+assert.match(tabBar, /nextTabFocus\(e\.key, index, tabsState\.tabs\.length\)/,
+  "la barre d'onglets écoute les flèches horizontales")
+assert.match(tabModel, /export function nextTabFocus/,
+  "la logique horizontale vit dans le module pur tabs.ts")
+assert.ok(read("tests/workbench-tabs.test.mjs").includes("nextTabFocus"),
+  "nextTabFocus garde son test .test.mjs")
+
+// 10. Une sonde ne survit pas à son sujet (2026-10-23). Neuf scripts verify-v8.7.x
+// lisaient host/main.ts (supprimé en v10.0.0) et figeaient une version révolue :
+// aucun n'était dans la chaîne, donc aucun ne pouvait échouer. La règle devient
+// mesurable : toute sonde présente dans scripts/ est branchée dans `npm run verify`.
+const pkgScripts = JSON.parse(read("package.json")).scripts
+const verifyChain = new Set([...pkgScripts.verify.matchAll(/scripts\/(verify-v[\d.]+\.mjs)/g)].map((m) => m[1]))
+const probeFiles = readdirSync(path.join(root, "scripts")).filter((f) => /^verify-v[\d.]+\.mjs$/.test(f))
+for (const probe of probeFiles) {
+  assert.ok(verifyChain.has(probe), `sonde orpheline : scripts/${probe} n'est pas appelée par « npm run verify »`)
+}
+for (const probe of verifyChain) {
+  assert.ok(probeFiles.includes(probe), `sonde fantôme : scripts/${probe} est appelée mais absente du dépôt`)
+}
 
 console.log("conventions (AGENTS.md) : OK")

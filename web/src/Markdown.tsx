@@ -37,7 +37,7 @@ function CodeBlock({ lang, code }: { lang: string; code: string }) {
     <div className="codeblock">
       <div className="codeblock-bar">
         <span>{lang || "texte"}</span>
-        <button onClick={copy} title="Copier">
+        <button type="button" onClick={copy} title="Copier">
           Copier
         </button>
       </div>

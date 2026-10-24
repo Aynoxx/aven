@@ -4,7 +4,7 @@ import { ptyDims } from "./pty-dims"
 // v9.6.0 : filtrage du transcript centralisé (bordures, session, pubs, utilisateur).
 import { buildTranscript, isUserLine } from "./freebuff-transcript"
 import { Icon } from "./icons"
-import PageShell, { type PageAction } from "./PageShell"
+import InstrumentFrame, { type InstrumentAction } from "./InstrumentFrame"
 
 // Page pleine de l'agent Freebuff (v9.5.0), RÉELLEMENT interactive depuis la v10.3.0.
 //
@@ -305,7 +305,7 @@ export default function FreebuffAgentPage(props: { onError: (e: unknown) => void
     }, 80)
   }
 
-  const actions: PageAction[] = [
+  const actions: InstrumentAction[] = [
     {
       key: "restart",
       label: "Redémarrer la session",
@@ -321,11 +321,10 @@ export default function FreebuffAgentPage(props: { onError: (e: unknown) => void
       title: showTranscript ? "Revenir au terminal interactif" : "Lire la conversation (lecture seule)",
       pressed: showTranscript,
     },
-    { key: "close", label: "Fermer", icon: "close", variant: "ghost", onClick: props.onClose, className: "dialog-close", title: "Revenir à l'écran précédent (Échap)" },
   ]
 
   return (
-    <PageShell
+    <InstrumentFrame
       eyebrow="TERMINAL IA"
       title="Terminal Freebuff"
       description="Session CLI Freebuff indépendante de la conversation Aven. Le terminal est interactif : Entrée, flèches, Tab, Ctrl+C et la souris agissent directement dans Freebuff. Quitter cette page n’arrête pas la session."
@@ -341,7 +340,8 @@ export default function FreebuffAgentPage(props: { onError: (e: unknown) => void
         {/* L'interruption vit à côté de la présence : c'est un geste lié à la session
             en cours (Ctrl+C envoyé au PTY), pas une action de page permanente. */}
         <button className="button secondary" type="button" onClick={sendInterrupt} title="Interrompt le tour en cours (Ctrl+C envoyé à l'agent)" disabled={!presence.online}>
-          <Icon name="close" size={14} />Interrompre
+          {/* v11.0.2 : un carré d'arrêt pour interrompre ; le X reste réservé à la fermeture. */}
+          <Icon name="stop" size={14} />Interrompre
         </button>
       </div>
 
@@ -419,6 +419,6 @@ export default function FreebuffAgentPage(props: { onError: (e: unknown) => void
           Reprendre la dernière conversation à l'ouverture (sinon, nouvelle conversation)
         </label>
       )}
-    </PageShell>
+    </InstrumentFrame>
   )
 }

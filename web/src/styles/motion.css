@@ -7,69 +7,27 @@
    width/height/top/left ; aucun JAMAIS sur le conteneur xterm (refit PTY) ; tout est
    coupé sous prefers-reduced-motion. */
 
-/* Shared element v9.7.1 : la carte source ET la page cible portent le MÊME
-   view-transition-name pendant la transition (data-vt-source est posé avant capture
-   par withViewTransition et retiré après finished) — le navigateur interroge les deux
-   snapshots et morph la carte EN page. Sans l'attribut (retour Accueil, reduced-motion),
-   c'est le fondu root par défaut qui joue. */
-[data-vt-source="project"] .hub-card-project,
-[data-vt-source="project"] .freebuff-agent-page { view-transition-name: hub-target; }
-[data-vt-source="tasks"] .hub-card-agents,
-[data-vt-source="tasks"] .agents-page { view-transition-name: hub-target; }
-/* v10.3.1 (revue apple-design §4 P2) : les DEUX autres destinations du hub se
-   transforment aussi, dans les deux sens. Le même nom est porté par la carte (vue
-   hub) et par le corps de page (vue page) : `data-vt-source` est posé avant la
-   capture, donc l'ouverture morph la carte EN page et la fermeture la page EN
-   carte (skill §7 : « emerge from where it came »). */
-[data-vt-source="notes"] .hub-card-notes,
-[data-vt-source="notes"] .notes-dialog { view-transition-name: hub-target; }
-[data-vt-source="files"] .hub-card-files,
-[data-vt-source="files"] .files-dialog { view-transition-name: hub-target; }
+/* v11.0.0 : les View Transitions de hub ont disparu avec le hub — le Poste ne
+   change jamais de cadre, les instruments permutent dans la scène. */
 
-::view-transition-old(hub-target),
-::view-transition-new(hub-target) { animation-duration: var(--dur-med); animation-timing-function: var(--ease-out); height: 100%; }
-/* v10.3.2 : le GROUPE porte le déplacement/redimensionnement du shared element — il
-   gardait les valeurs UA (250 ms, `ease`) alors que les deux copies croisaient en
-   240 ms/`--ease-out` : deux trajectoires pour un seul morph (mesuré dans l'app).
-   Il suit désormais le même token de durée et de courbe que la traversée. */
-::view-transition-group(hub-target),
-::view-transition-group(dialog) { animation-duration: var(--dur-med); animation-timing-function: var(--ease-out); }
-::view-transition-old(root) { animation-duration: var(--dur-fast); }
-::view-transition-new(root) { animation-duration: var(--dur-med); animation-timing-function: var(--ease-out); }
-
-/* Entrée des pages (sans shared element concerné) : léger fondu + montée. */
+/* Entrée de l'instrument Orchestration : léger fondu + montée. */
 @keyframes page-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 .agents-page { animation: page-in var(--dur-med) var(--ease-out) both; }
 
-/* Chorégraphie d'entrée : les cartes du hub et les modes apparaissent en cascade
-   (décalage par --stagger-i posé en inline style). Transform/opacity uniquement. */
-/* v10.3.2 : la cascade n'anime plus `transform` — les cartes du hub portent déjà leur
-   placement d'orbite DANS `transform` (`translate(-50%,-50%) rotate() translateY(--hub-r)`),
-   et une animation sur cette propriété l'écrase : avec `fill: both`, le `transform: none`
-   final restait appliqué À VIE, donc les quatre cartes s'empilaient au centre du hub,
-   sous le micro (z-index 6) — invisibles et non cliquables dès que l'OS autorise les
-   animations (le réglage « effets d'animation » coupé de cette machine le masquait).
-   Les propriétés individuelles `translate`/`scale` se COMPOSENT avec `transform` :
-   l'entrée est conservée, l'orbite aussi. */
+/* v11.0.0 : les cartes du hub ont disparu. La cascade reste pour les modes de
+   délégation, seule surface encore animée à l'entrée (décalage --stagger-i). */
 @keyframes card-in { from { opacity: 0; translate: 0 14px; scale: .97; } to { opacity: 1; translate: 0 0; scale: 1; } }
-.hub-card { animation: card-in var(--dur-slow) var(--ease-out) both; animation-delay: calc(var(--stagger-i, 0) * 45ms); }
 .tasks-principal-card { animation: card-in var(--dur-slow) var(--ease-out) both; animation-delay: calc(var(--stagger-i, 0) * 45ms); }
 
 /* Micro-interactions : press enfoncé, hover qui soulève (translateZ nul = GPU). */
-/* v10.0.1 : `.hub-card:active` RETIRÉ de cette règle — son transform positionnel
-   (translate(-50%,-50%) rotate/translateY sur l'orbite) serait écrasé par le simple
-   scale(.98) : la carte quittait son orbite au clic (« glitch »), le relâchement
-   tombait sur le fond du hub et le click React ne se déclenchait jamais. Les cartes
-   du hub gardent leur propre :active positionnel (voir .hub-card:active ci-dessus). */
 .tasks-principal-card:active { transform: scale(.98); transition: transform var(--dur-fast) var(--ease-out); }
 .button:active { transform: translateY(1px) scale(.99); transition: transform var(--dur-fast) var(--ease-out); }
 .agent-card, .tasks-principal-card { transition: box-shadow var(--dur-med) var(--ease-out), border-color var(--dur-med) var(--ease-out); }.tasks-principal-card:hover { border-color:var(--accent-border); box-shadow: 0 8px 24px color-mix(in srgb, var(--text) 8%, transparent); }
 
 /* Pastille de présence Freebuff : respiration discrète quand la session est active. */
 @keyframes presence-breathe { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
-/* v10.2.0 (F5) : un seul foyer vivant par écran — le point de présence respire (seul
-   loop infinie de sa vue), le point de la pilule du hub reste statique (deux boucles
-   infinies simultanées = bruit visuel, contre la « restraint » du skill). */
+/* v10.2.0 (F5) : un seul foyer vivant par instrument — le point de présence respire
+   (seule boucle infinie de sa vue), pas deux boucles concurrentes. */
 .agent-presence-dot.online { animation: presence-breathe 2.4s ease-in-out infinite; }
 
 /* Skeleton shimmer pendant le chargement des agents (page Tâches). */
@@ -80,8 +38,7 @@
    reduced-motion (bloc ci-dessus), reduced-transparency (surfaces opaques ci-dessous)
    et prefers-contrast (bordures/texte renforcés). */
 @media (prefers-reduced-transparency: reduce) {
-  .overlay, .hub-picker-overlay, .home-modal-overlay, .home-toolbar, .home-recent, .sidebar,
-  .model-select-menu, .selbar, .dialog, .hub-picker, .home-modal { background: var(--panel-solid); backdrop-filter: none; }
+  .overlay, .sidebar, .model-select-menu, .selbar, .dialog { background: var(--panel-solid); backdrop-filter: none; }
 }
 @media (prefers-contrast: more) {
   :root { --border: color-mix(in srgb, var(--text) 30%, transparent); --border-strong: color-mix(in srgb, var(--text) 48%, transparent); }
@@ -95,10 +52,9 @@
 
 /* Accessibilité : TOUT le motion s'arrête si l'OS le demande. */
 @media (prefers-reduced-motion: reduce) {
-  .hub-card, .tasks-principal-card, .agents-page { animation: none; }
+  .tasks-principal-card, .agents-page { animation: none; }
   .agent-presence-dot.online { animation: none; }
   .hint[aria-busy="true"] { animation: none; }
-  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
 }
 
 /* v10.0.0 : défilement et sélection — finition partagée par toutes les vues

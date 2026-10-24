@@ -23,7 +23,7 @@ function MessageBubbleImpl({ m, isLastUser, busy, onEdit, labelOf, showToolActiv
       {m.model && <span className="modelbadge">{labelOf(m.model)}</span>}
       {m.error && <p className="err">{m.error}</p>}
       {m.role === "user" && isLastUser && !busy && (
-        <button className="message-edit" onClick={onEdit} title="Modifier et renvoyer">
+        <button type="button" className="message-edit" onClick={onEdit} title="Modifier et renvoyer">
           Modifier
         </button>
       )}

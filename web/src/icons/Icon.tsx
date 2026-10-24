@@ -19,6 +19,8 @@ export type IconName =
   | "file"
   | "grid"
   | "microphone"
+  // v11.1.0 : micro coupé de l'agent vocal (l'état doit se lire sans couleur seule).
+  | "microphone-off"
   | "close"
   | "minimize"
   | "maximize"
@@ -88,6 +90,9 @@ const OPTICAL_NUDGE: Partial<Record<IconName, [number, number]>> = {
   quote: [-1.5, 0],
   chat: [0, 0.25],
   copy: [-0.5, 0],
+  bold: [-0.25, 0],
+  list: [0, 0.75],
+  text: [0, 0.5],
 }
 
 function paths(name: IconName): ReactNode {
@@ -120,6 +125,8 @@ function paths(name: IconName): ReactNode {
       return <><rect x="4" y="4" width="6" height="6" rx="1.5" /><rect x="14" y="4" width="6" height="6" rx="1.5" /><rect x="4" y="14" width="6" height="6" rx="1.5" /><rect x="14" y="14" width="6" height="6" rx="1.5" /></>
     case "microphone":
       return <><rect x="8.25" y="4" width="7.5" height="11" rx="3.75" /><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M9.5 21h5" /></>
+    case "microphone-off":
+      return <><path d="M9 9v3a3 3 0 0 0 5.1 2.1M15 10.5V6a3 3 0 0 0-5.8-.9" /><path d="M5.5 11.5a6.5 6.5 0 0 0 9.8 5.7M18.5 11.5a6.5 6.5 0 0 1-.4 2.3" /><path d="M12 18v3M9.5 21h5" /><path d="m4 4 16 16" /></>
     case "close":
       return <><path d="m5 5 14 14" /><path d="m19 5-14 14" /></>
     case "minimize":

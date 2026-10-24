@@ -1,12 +1,11 @@
-/* v10.4.0 : entrée unique des styles — les règles vivent dans styles/*.css,
-   regroupées par surface (base, chrome, dialogues, accueil, pages, contenu, Freebuff,
-   motion). L'ordre ci-dessous est celui de l'ancien App.css monolithique : la cascade
-   ne bouge pas d'un pixel. Toute nouvelle surface s'ajoute dans son fichier, pas ici. */
+/* v11.0.0 : entrée unique des styles. L'accueil orbital (home.css) a disparu avec
+   le Poste ; da.css fait autorité sur la palette et workbench.css porte la charpente. */
 @import "./styles/base.css";
 @import "./styles/chrome.css";
 @import "./styles/dialogs.css";
-@import "./styles/home.css";
 @import "./styles/pages.css";
 @import "./styles/voice-notes.css";
 @import "./styles/freebuff.css";
 @import "./styles/motion.css";
+@import "./styles/da.css";
+@import "./styles/workbench.css";

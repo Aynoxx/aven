@@ -1,6 +1,6 @@
 [package]
 name = "aven"
-version = "10.5.0"
+version = "11.5.1"
 description = "Aven — espace de travail IA"
 authors = ["Liam"]
 edition = "2021"

@@ -54,7 +54,9 @@ assert.match(types, /setTaskMode: \(mode: TaskMode\) => Promise<TaskMode>/)
 
 // ── C. UI : UNE carte orchestrateur + switch segmenté (carte + conversation) ────
 assert.match(app, /const TASK_MODES_UI = \[/, "les modes UI dérivent d'une constante unique")
-assert.equal((app.match(/tasks-mode-switch/g) ?? []).length >= 2, true, "switch présent sur la carte Tâches ET le bandeau conversation")
+// AMENDEMENT v11.0.0 : le second emplacement est l'INSPECTEUR du Poste (contexte
+// de l'instrument actif) — le bandeau de conversation a disparu avec les pages.
+assert.equal((app.match(/tasks-mode-switch/g) ?? []).length >= 2, true, "switch présent sur la carte Tâches ET dans l'inspecteur")
 assert.match(app, /aria-pressed=\{taskMode === m\.id\}/, "état actif exposé aux technologies d'assistance")
 assert.match(app, /api\.taskMode\(\)\.then\(setTaskModeState\)/, "le mode est chargé au boot")
 assert.match(css, /\.tasks-mode-switch \{/, "styles du switch")

@@ -3,9 +3,10 @@ import { api } from "./api"
 import Markdown from "./Markdown"
 import NoteEditor from "./NoteEditor"
 import { Icon } from "./icons"
-import PageShell, { type PageAction } from "./PageShell"
+import InstrumentFrame, { type InstrumentAction } from "./InstrumentFrame"
 import type { Note, NoteLink, NoteSearchHit, NoteTreeEntry } from "./types"
 import { stripLeadingTitle } from "./note-display"
+import { displayPath } from "./display-path"
 
 // v10.1.0 « façon Kortex » : arbre de dossiers (drag&drop natif), éditeur riche
 // TipTap, wikilinks [[note]] + backlinks, poubelle/archive sur disque, recherche
@@ -200,7 +201,7 @@ export default function NotesView(props: Props) {
     <div key={entry.id} className={`notes-tree-row ${selectedId === entry.id ? "selected" : ""}`} data-note-id={entry.id} draggable
       onDragStart={() => setDragId(entry.id)} onDragEnd={() => setDragId(null)}>
       <button className="notes-tree-item" onClick={() => open(entry.id)} type="button" title={entry.id}>
-        <Icon name="file" size={13} />
+        <Icon name="file" size={14} />
         {/* v10.2.2 : l'emoji 📌 violait la règle « icônes = <Icon> » et brouillait la lecture. */}
         {pinned.includes(entry.id) && <Icon name="pin" size={12} className="notes-pin" />}
         <span>{entry.title}</span>
@@ -218,7 +219,7 @@ export default function NotesView(props: Props) {
           onDragOver={(e) => { e.preventDefault(); setDropFolder(n.id) }} onDragLeave={() => setDropFolder((f) => (f === n.id ? null : f))} onDrop={(e) => { e.preventDefault(); void onDrop(n.id) }}>
           <button className="notes-tree-item folder" onClick={() => setCollapsed((c) => ({ ...c, [n.id]: !c[n.id] }))} type="button">
             <Icon name={isCollapsed ? "chevron-right" : "chevron-down"} size={12} />
-            <Icon name="folder" size={13} />
+            <Icon name="folder" size={14} />
             <span>{n.name}</span>
           </button>
           {!isCollapsed && renderTree(n.children, depth + 1)}
@@ -258,21 +259,18 @@ export default function NotesView(props: Props) {
     void moveNote(noteId, target)
   }
 
-  // v10.3.0 : la page déclare SES actions — plus de dialogue flottant par-dessus
-  // la conversation. Le bouton Fermer garde la classe `dialog-close` attendue par
-  // les scripts de fumée et ramène à l'écran d'origine (Échap fait de même).
-  const pageActions: PageAction[] = [
+  // v11.0.0 : l'instrument déclare SES actions ; la sortie est l'onglet voisin.
+  const pageActions: InstrumentAction[] = [
     { key: "dir", label: "Ouvrir le dossier", icon: "folder", onClick: () => { api.noteOpenFolder().catch((e) => props.onError(e)) }, title: dir },
-    { key: "close", label: "Fermer", icon: "close", variant: "ghost", onClick: props.onClose, className: "dialog-close", title: "Revenir à l'écran précédent (Échap)" },
   ]
 
   return (
-    <PageShell
+    <InstrumentFrame
       eyebrow="NOTES"
       title="Notes de l'espace"
       description={<>
         <p>De vrais fichiers Markdown sur ton PC — dossiers, liens [[note]], poubelle. Glisse une note sur un dossier, ou Alt+↑↓ au clavier.</p>
-        <p><code className="hint">{dir || "…"}</code></p>
+        <p><code className="hint">{displayPath(dir) || "…"}</code></p>
       </>}
       actions={pageActions}
       toolbarLabel="Actions des notes"
@@ -282,8 +280,9 @@ export default function NotesView(props: Props) {
         <aside className="notes-list-panel">
           <div className="row notes-actions-row">
             <input className="settings-input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher… (global)" aria-label="Rechercher dans les notes" />
-            <button className="button secondary" type="button" onClick={() => void quickCapture()} title="Capture rapide (dans Inbox)"><Icon name="inbox" size={14} /></button>
-            <button className="button secondary" type="button" onClick={() => void createFolder()} title="Nouveau dossier"><Icon name="folder" size={14} /></button>
+            {/* v11.0.1 : boutons icône seuls — le title ne remplace pas un nom accessible (§12.1). */}
+            <button className="button secondary" type="button" onClick={() => void quickCapture()} title="Capture rapide (dans Inbox)" aria-label="Capture rapide dans Inbox"><Icon name="inbox" size={14} /></button>
+            <button className="button secondary" type="button" onClick={() => void createFolder()} title="Nouveau dossier" aria-label="Nouveau dossier"><Icon name="folder" size={14} /></button>
             <button className="button primary" type="button" onClick={() => startEdit()} title="Nouvelle note"><Icon name="plus" size={14} />Nouvelle</button>
           </div>
           {!!allTags.length && (
@@ -308,22 +307,22 @@ export default function NotesView(props: Props) {
           </div>
           <div className="notes-tree-sections">
             <button className="notes-tree-item folder" onClick={() => { setTrashOpen((v) => !v); if (!trashOpen) api.noteTrash().then(setTrash).catch(() => undefined) }} type="button">
-              <Icon name="trash" size={13} /><span>Poubelle ({trashOpen ? trash.length : "?"})</span>
+              <Icon name="trash" size={14} /><span>Poubelle ({trashOpen ? trash.length : "?"})</span>
             </button>
             {trashOpen && trash.map((n) => (
               <div key={n.id} className="notes-tree-row">
-                <button className="notes-tree-item" onClick={() => open(n.id)} type="button" title={n.id}><Icon name="file" size={13} /><span>{n.title}</span></button>
-                <button className="button ghost note-row-action" onClick={() => void withNote(() => api.noteRestore(n.id))} type="button" title="Restaurer"><Icon name="restore" size={13} /></button>
-                <button className={`button ghost note-row-action${purgeArmed === n.id ? " armed" : ""}`} onClick={() => purgeNote(n.id)} type="button" title={purgeArmed === n.id ? "Confirmer : supprimer définitivement" : "Supprimer définitivement"} aria-label={purgeArmed === n.id ? "Confirmer : supprimer définitivement" : "Supprimer définitivement"}><Icon name="trash" size={13} /></button>
+                <button className="notes-tree-item" onClick={() => open(n.id)} type="button" title={n.id}><Icon name="file" size={14} /><span>{n.title}</span></button>
+                <button className="button ghost note-row-action" onClick={() => void withNote(() => api.noteRestore(n.id))} type="button" title="Restaurer"><Icon name="restore" size={14} /></button>
+                <button className={`button ghost note-row-action${purgeArmed === n.id ? " armed" : ""}`} onClick={() => purgeNote(n.id)} type="button" title={purgeArmed === n.id ? "Confirmer : supprimer définitivement" : "Supprimer définitivement"} aria-label={purgeArmed === n.id ? "Confirmer : supprimer définitivement" : "Supprimer définitivement"}><Icon name="trash" size={14} /></button>
               </div>
             ))}
             <button className="notes-tree-item folder" onClick={() => { setArchiveOpen((v) => !v); if (!archiveOpen) api.noteArchived().then(setArchived).catch(() => undefined) }} type="button">
-              <Icon name="archive" size={13} /><span>Archive ({archiveOpen ? archived.length : "?"})</span>
+              <Icon name="archive" size={14} /><span>Archive ({archiveOpen ? archived.length : "?"})</span>
             </button>
             {archiveOpen && archived.map((n) => (
               <div key={n.id} className="notes-tree-row">
-                <button className="notes-tree-item" onClick={() => open(n.id)} type="button" title={n.id}><Icon name="file" size={13} /><span>{n.title}</span></button>
-                <button className="button ghost note-row-action" onClick={() => void withNote(() => api.noteUnarchive(n.id))} type="button" title="Restaurer"><Icon name="restore" size={13} /></button>
+                <button className="notes-tree-item" onClick={() => open(n.id)} type="button" title={n.id}><Icon name="file" size={14} /><span>{n.title}</span></button>
+                <button className="button ghost note-row-action" onClick={() => void withNote(() => api.noteUnarchive(n.id))} type="button" title="Restaurer"><Icon name="restore" size={14} /></button>
               </div>
             ))}
           </div>
@@ -354,14 +353,14 @@ export default function NotesView(props: Props) {
               <h4>{selected.title}</h4>
               <div className="notes-toolbar">
                 <button className="button ghost" onClick={() => void togglePin(selected.id)} type="button">{pinned.includes(selected.id) ? "Détacher" : "Épingler"}</button>
-                <button className="button ghost" onClick={() => startEdit(selected)} type="button"><Icon name="pencil" size={13} />Modifier</button>
-                <button className="button ghost" onClick={() => attach(selected, false)} type="button" title={`Prépare un message pour ${activeAgentName}, sans l'envoyer`}><Icon name="chevron-right" size={13} />Joindre à {activeAgentName}</button>
-                <button className="button ghost" onClick={() => attach(selected, true)} type="button" title={`Prépare une demande de synthèse pour ${activeAgentName}, sans l'envoyer`}><Icon name="sparkle" size={13} />Demander une synthèse à {activeAgentName}</button>
+                <button className="button ghost" onClick={() => startEdit(selected)} type="button"><Icon name="pencil" size={14} />Modifier</button>
+                <button className="button ghost" onClick={() => attach(selected, false)} type="button" title={`Prépare un message pour ${activeAgentName}, sans l'envoyer`}><Icon name="paperclip" size={14} />Joindre à {activeAgentName}</button>
+                <button className="button ghost" onClick={() => attach(selected, true)} type="button" title={`Prépare une demande de synthèse pour ${activeAgentName}, sans l'envoyer`}><Icon name="wand" size={14} />Demander une synthèse à {activeAgentName}</button>
                 <details className="notes-secondary-actions">
                   <summary>Autres actions</summary>
                   <div className="notes-secondary-actions-list">
-                    <button className="button ghost" onClick={() => void withNote(() => api.noteArchive(selected.id))} type="button"><Icon name="archive" size={13} />Archiver</button>
-                    <button className="button ghost" onClick={() => void withNote(() => api.noteDelete(selected.id))} type="button"><Icon name="trash" size={13} />Poubelle</button>
+                    <button className="button ghost" onClick={() => void withNote(() => api.noteArchive(selected.id))} type="button"><Icon name="archive" size={14} />Archiver</button>
+                    <button className="button ghost" onClick={() => void withNote(() => api.noteDelete(selected.id))} type="button"><Icon name="trash" size={14} />Poubelle</button>
                     <button className="button ghost" onClick={() => api.noteExport(selected.id).catch((e) => props.onError(e))} type="button">Exporter .md</button>
                   </div>
                 </details>
@@ -401,6 +400,6 @@ export default function NotesView(props: Props) {
           )}
         </article>
       </div>
-    </PageShell>
+    </InstrumentFrame>
   )
 }

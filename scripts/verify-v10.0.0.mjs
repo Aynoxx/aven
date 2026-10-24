@@ -51,7 +51,6 @@ const conf = JSON.parse(read("src-tauri/tauri.conf.json"))
 const lib = read("src-tauri/src/lib.rs")
 const runtime = read("src-tauri/src/runtime.rs")
 const notify = read("src-tauri/src/notify.rs")
-const notifyPolicy = read("host/notify-policy.ts")
 const providers = read("host/providers.ts")
 
 // A. Barre Windows native : la barre de fermeture custom (héritée d'Electron
@@ -148,13 +147,13 @@ assert.match(runtime, /restart_allowed/, "budget de reprise après crash")
 assert.match(runtime, /is_dead/, "détection de l'enfant Node mort")
 assert.match(runtime, /CARGO_MANIFEST_DIR/, "template_dir ancré sur le manifeste, pas le cwd")
 
-// F. Parité notifications : même seuil que notify-policy.ts, titre « Aven ».
-const threshold = notifyPolicy.match(/turnDurationMs \?\? 0\) > (\d+)/)
-assert.ok(threshold, "seuil TS introuvable dans notify-policy.ts")
-assert.ok(
-  notify.includes(`> ${threshold[1]}`),
-  `notify.rs doit partager le seuil ${threshold[1]} ms de notify-policy.ts`
-)
+// F. Notifications : le seuil n'existe plus qu'une fois, dans notify.rs.
+// v11.1.3 : le jumeau TypeScript (`host/notify-policy.ts`) n'avait aucun importeur
+// en production ; il est supprimé, donc la parité n'a plus d'objet — la valeur
+// reste figée ici pour que la règle « 8 s » ne dérive pas en silence.
+const threshold = notify.match(/turn_duration_ms\.unwrap_or\(0\) > (\d+)/)
+assert.ok(threshold, "seuil du tour terminé introuvable dans notify.rs")
+assert.equal(Number(threshold[1]), 8000, "un tour terminé ne notifie qu'au-delà de 8 s")
 assert.match(notify, /\("Aven", "Tour terminé/, "titre de notification aligné sur « Aven »")
 assert.ok(
   !notify.includes('("Tour terminé",'),

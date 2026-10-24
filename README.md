@@ -1,4 +1,4 @@
-# Aven v10.5.0
+# Aven v11.5.1
 
 > ## v10.0.0 — 100 % Tauri (Electron et le natif retirés)
 > Aven est une **app Tauri 2** : la webview React parle à Rust (`src-tauri/`)
@@ -26,6 +26,104 @@
 
 Application de bureau (Tauri) : une chatbox avec **3 agents commutables** (code, recherche, analyse) et un
 sous-agent (code-reviewer), branchée sur **OpenCode 2.0.10** et un catalogue d’agents strictement gratuit (OpenRouter Free / OpenCode Zen).
+
+> **v11.5.1 — la voix de secours prend le rythme de Denise**
+> ① À texte égal, Piper parlait **44 % plus vite** que Denise (2,45 s contre 3,53 s) : c'est ce qui donnait l'impression d'une voix pressée, avant même le timbre.
+> ② Le réglage mesuré à parité avec Denise (`length_scale` 1,44, 101 % de sa durée) a été **écouté puis rejeté : trop lent**. Le débit retenu est **1,10**, à peine 9 % plus lent que le modèle d'origine — assez pour ne plus paraître essoufflé, sans donner l'impression d'attendre.
+> ③ Le timbre reste celui de siwis — cette version ajuste le rythme, pas la couleur de voix. La leçon est écrite dans le module : une valeur calibrée sur la durée ne remplace pas une écoute.
+
+> **v11.5.0 — la voix de secours devient bonne**
+> ① Quand la voix neuronale n'est pas joignable (429, coupure réseau), Aven ne prend plus la voix Windows robotique : elle passe à **Piper**, une voix locale française huit fois plus rapide que le temps réel, **hors ligne, sans compte et sans quota** — donc jamais en 429.
+> ② Elle est embarquée avec l'app (~90 Mo) : la bascule fonctionne même sans réseau, et l'interface dit laquelle parle.
+> ③ Cette voix avalait « Freebuff » ; le dictionnaire de prononciation de la v11.4.4 s'applique donc aussi à elle — les deux noms se disent correctement, et la voix neuronale n'est pas réécrite.
+
+> **v11.4.4 — Aven ne mange plus ses propres noms**
+> ① La voix locale avalait une syllabe des noms propres : « Freebuff » sortait « frebff ». Quatre graphies ont été écoutées à l'aveugle ; « Fribeuf » est la seule qui rende le nom correctement, et « Aven » se dit « Aveun ».
+> ② La réécriture ne touche **que l'audio** : l'écran continue d'afficher Freebuff et Aven, sans faute d'orthographe.
+> ③ La voix neuronale d'Edge n'est jamais réécrite — elle prononce déjà juste. La table est **par moteur**, vide côté neuronal, et un test le vérifie.
+
+> **v11.4.3 — moins de « voix neuronale indisponible »**
+> ① Le bandeau venait du service vocal d'Edge, gratuit et sans compte, qui **limite le débit** (HTTP 429) — pas d'une panne d'Aven. Aven lui demande maintenant beaucoup moins : une phrase déjà synthétisée est **resservie depuis la mémoire**, donc « C'est fait. », les questions de note et les refus ne repartent plus au service (mesuré : 390 à 760 ms économisées par phrase répétée).
+> ② Après un 429, le service est laissé tranquille **une minute** : plus d'attente de 1,2 s à chaque phrase, plus de tentatives qui entretiennent la limite. La voix neuronale revient d'elle-même dès qu'elle répond.
+> ③ Rien n'est tu : le bandeau dit toujours quand la voix Windows prend le relais, et rien n'est écrit sur disque — le cache vit en mémoire et expire seul.
+
+> **v11.4.2 — Aven ne coupe plus sa propre question**
+> ① Quand le micro entendait Aven dans les haut-parleurs, la question de confirmation se tronquait à mi-mot — tu n'entendais jamais le « Je l'enregistre ? ». Pendant une question de note, la lecture va maintenant au bout.
+> ② Une vraie reprise de parole arrête toujours la lecture — au moment où le texte prouve que c'est toi, pas sur un simple bruit.
+> ③ Hors question de note, rien ne change : parler pendant une réponse la coupe immédiatement, comme avant.
+
+> **v11.4.1 — une note dictée ne s'annule plus toute seule**
+> ① Le micro reprenait la voix d'Aven dans les haut-parleurs : la question de confirmation revenait transcrite, passait pour une réponse, et la note était annulée sans que tu aies rien dit. Aven **reconnaît sa propre voix** : une phrase de trois mots ou plus qu'elle vient de prononcer (ou son écho moins de 2,5 s après la lecture) ne compte plus comme une réponse.
+> ② Un mot seul reste une réponse — « oui », « non », « stop » passent toujours, c'est ainsi qu'on décide.
+> ③ L'échec reste du bon côté : au pire Aven repose la question, elle n'écrit jamais une note que tu n'as pas confirmée.
+
+> **v11.4.0 — dicte une note, Aven la relit avant d'écrire**
+> ① Tu dis « Aven, note que le client rappelle lundi » : Aven **répète** le contenu et demande **« Je l'enregistre ? »**. Rien n'est écrit avant ton « oui » — une transcription approximative ne peut donc pas salir tes notes.
+> ② Sans contenu (« Aven, crée une note »), elle demande le texte, le relit, puis attend le même accord. « Non », « annule », « n'enregistre pas » : rien n'est créé, et elle le dit.
+> ③ La décision expire au bout de 45 secondes ; couper le micro ou interrompre la lecture l'annule aussi. La note créée s'ouvre à l'écran, avec un titre tiré de ta phrase.
+
+> **v11.3.0 — une vraie voix pour l'agent**
+> ① Les voix robotiques de Windows laissent la place à des **voix neuronales françaises** (Denise, Henri, Éloïse, Vivienne, Rémy) : **gratuit, sans compte, sans clé, sans carte**. Choisis la voix dans Réglages → Agent vocal.
+> ② La lecture change de camp : l'audio est décodé et joué par la **fenêtre elle-même**, et **une réponse est synthétisée d'un seul trait**. Fini les trous : chaque frontière de phrase coûtait ~1,5 s de blanc mesuré (900 ms de silence de fin + 500 ms de réseau + 150 ms de tête). Le silence ajouté avant et après chaque réponse est coupé, et les pauses internes de plus d'une demi-seconde sont ramenées à un rythme de conversation (mesuré : **5,33 s au lieu de 5,88 s** sur la même réponse). Le micro revient **~0,9 s plus tôt**.
+> ③ Le service neuronal n'est pas contractuel : s'il ne répond pas, Aven **le dit** et lit avec la voix Windows locale, qui fonctionne hors ligne. Jamais de silence, jamais de facture.
+
+> **v11.2.1 — « Aven » prononcé à la française réveille enfin l'agent**
+> ① Tu prononces le A à la française et « ven » à l'anglaise : le STT écrivait **« Haven »**, et le réveil restait muet alors que la transcription était juste. Les graphies réellement entendues — **Haven, Aveun, Avin, Avène** — sont maintenant reconnues.
+> ② Le garde-fou n'a pas bougé : seuls ces mots **entiers** comptent. « avenue », « avenir », « aventure » ne déclenchent toujours rien, et « Avant, » ne réveille qu'avec sa pause.
+> ③ Le retrait du mot d'activation suit le même découpage en mots : la demande derrière « Haven, ouvre les notes » arrive intacte, sans le mot ni la virgule.
+
+> **v11.2.0 — l'agent vocal lit vraiment tes notes**
+> ① « Qu'est-ce que j'ai noté sur le pricing ? » ne reçoit plus une réponse plausible mais inventée : l'agent peut maintenant **chercher dans tes notes, en ouvrir une et connaître l'espace actif**. Trois outils, tous en **lecture seule** — il ne peut rien créer, modifier, supprimer ni naviguer.
+> ② La boucle est **bornée à trois appels** : passé ce point, il répond avec ce qu'il a au lieu de tourner en rond. Une question de conversation ne déclenche aucun appel d'outil — même latence qu'avant.
+> ③ Ce qui part chez le fournisseur reste minimal : le **nom** de l'espace, jamais le chemin complet de ta machine, et une note tronquée au-delà de 900 caractères.
+
+> **v11.1.5 — l'agent vocal reçoit enfin sa clé**
+> ① Chaque segment dicté partait chez Groq **sans en-tête d'authentification** : la clé était transmise à la place du type MIME, donc la transcription répondait « HTTP 401 » même avec une clé valide. La clé est maintenant un paramètre à part entière, et le test vérifie l'en-tête `Authorization`.
+> ② Un refus 401/403 ne s'affiche plus comme une panne anonyme : le bandeau dit **« Clé Groq refusée »** et indique où la remplacer (Réglages → Services IA).
+> ③ La transcription était en plus **ré-emballée** par le host : le renderer recevait un objet, le convertissait en « [object Object] » et ignorait la phrase sans aucune erreur — d'où l'impression que rien ne se passait. Le host renvoie le texte, et une charge non textuelle affiche une erreur au lieu d'un silence.
+
+> **v11.1.4 — la barre latérale change vraiment de côté**
+> ① Le réglage **Position de la barre latérale** ne faisait rien depuis la v11.0.1 : la classe de position n'était posée par aucun composant. Choisir **Droite** met maintenant la liste des conversations à droite du fil, bordure et colonne comprises.
+> ② Le choix s'applique sans redémarrer (il était déjà enregistré) et, barre masquée, la grille continue de ne réserver qu'une seule colonne.
+
+> **v11.1.3 — l'agent vocal reste dans Aven**
+> ① La consigne système lui interdit explicitement d'agir hors de l'app : Windows, autres applications, musique, volume, réseau. « Mets la musique en sourdine », « ouvre Spotify » ou « éteins l'ordinateur » reçoivent un refus clair au lieu d'une fausse confirmation.
+> ② Aucune commande vocale n'expose de sortie système : les actions restent la navigation interne, la sourdine et l'arrêt de la lecture.
+
+> **v11.1.2 — la sourdine obéit enfin**
+> ① « Mets le micro en sourdine », « mets-toi en sourdine » et « passe en mode silencieux » coupent maintenant le micro au lieu de partir au modèle — qui répondait parfois « c'est fait » sans rien couper.
+> ② Les formulations historiques (« coupe le micro », « mets en sourdine le micro ») restent inchangées, et une phrase sur un autre son (« mets la musique en sourdine ») ne coupe pas le micro.
+
+> **v11.1.1 — le mot « Aven » n'est plus perdu en route**
+> ① L'enregistrement ne démarrait qu'après 220 ms de voix : le « A » de « Aven » n'arrivait jamais au STT, donc la phrase était ignorée. Un pré-roll garde maintenant l'attaque, et un clip sans parole confirmée est jeté sans consommer de quota.
+> ② Whisper écrit souvent « Avant » : « Avant, ouvre une note » réveille désormais l'agent, tandis que « avant de partir » reste du texte ordinaire.
+> ③ Le seuil d'écoute suit le bruit ambiant (entre 0,006 et 0,02) au lieu d'un 0,012 fixe qui rendait un micro discret muet ; si la webview a suspendu l'audio, le premier clic le relance.
+> ④ En cas d'échec, le bandeau affiche la vraie erreur (clé, quota, micro refusé) au lieu du seul « Erreur vocale » ; l'infobulle montre la dernière transcription entendue.
+
+> **v11.1.0 — un agent vocal, pas un assistant de plus**
+> ① Dis **« Aven »** puis ta demande : l'agent vocal écoute tant que le micro n'est pas coupé, transcrit à distance et répond à voix haute. Après une réponse, tu as dix secondes pour enchaîner sans répéter le mot.
+> ② Les commandes connues (« ouvre les notes », « coupe le micro ») sont exécutées directement ; le reste part au modèle distant, en français, **deux phrases maximum**. Reprendre la parole coupe la lecture et invalide la réponse en cours.
+> ③ La voix Windows se choisit dans **Réglages → Agent vocal**, avec aperçu et sauvegarde ; la personnalité change le ton, jamais l'exécution. Aucun bruitage, aucun audio conservé : les segments partent chez le STT distant (Groq, palier gratuit) et l'app s'arrête sur un quota atteint plutôt que de basculer sur un service payant.
+> ④ Le bandeau du Poste se limite à l'essentiel (état, agent, modèle) : la version du moteur reste dans l'inspecteur, et le micro de l'agent vocal y est visible en permanence.
+
+> **v11.0.2 — une icône, un sens**
+> ① L'étoile `sparkle` servait à la fois de marque d'Aven, d'icône à l'Orchestration, à la synthèse d'une note, à l'explication d'un code et à l'écran « Prêt à commencer » — cinq sens pour un dessin. Elle ne désigne plus que la **marque**, en haut du rail.
+> ② Les rôles ont maintenant chacun leur glyphe : une **baguette** pour la génération assistée (synthèse, explication), une **bulle** pour une conversation, une **ramification** pour l'Orchestration, un **carré d'arrêt** pour « Interrompre » — le X ne ferme plus un tour en cours —, un **trombone** pour « Joindre à » et le guillemet pour « Citer ».
+> ③ Une conversation n'est plus dessinée comme un fichier, ni comme un agent : la planche Aujourd'hui, le rail et les états vides disent la même chose. Le mode de délégation « Analyse » prend l'icône d'un graphique plutôt que l'étoile.
+
+> **v11.0.1 — lisibilité et cohérence**
+> ① La conversation occupe enfin toute la scène : la grille réservait une colonne de barre latérale même quand celle-ci était masquée (286 px de large, 700 px vides).
+> ② L'onglet **Usage** retrouve sa mise en page — chiffres et libellés étaient collés (« 4conversations actives ») depuis la suppression de l'ancienne feuille du hub.
+> ③ Le bandeau annonce **MOTEUR 2.0.10** au lieu de faire passer la version d'OpenCode pour celle d'Aven, l'inspecteur parle français (« en ligne », plus de `ready`), et les chemins n'affichent plus le préfixe technique `\\?\`.
+> ④ Une seule action primaire par écran, quatre familles de boutons-icônes ramenées à trois tailles documentées, icônes sur la grille (plus de 13 px), 66 boutons déclarent `type="button"`, et les deux boutons icône des Notes ont un nom accessible.
+> ⑤ Les icônes sont **centrées sur leur encre**, pas sur leur cadre : dix tracés dessinaient à côté du centre du viewBox (dossier 1 unité plus haut, fichier 1 unité à droite, restauration 2,5) et paraissaient de travers dans un bouton carré ; ils sont corrigés dans `Icon.tsx`, décalage mesuré au rendu réel. Et un bouton-icône ne porte plus l'ancienne marge droite (6 px) réservée aux boutons avec texte — c'est elle qui poussait l'Inbox et la bascule de l'inspecteur hors du centre.
+
+> **v11.0.0 — le Poste : une seule fenêtre, des instruments**
+> ① Fini les allers-retours page ↔ accueil : le bandeau de télémétrie, le rail d’instruments, les onglets, la scène et l’inspecteur restent en place pendant que tu travailles. Une conversation peut vivre dans plusieurs onglets ; tes brouillons suivent leur session.
+> ② **Aujourd’hui** remplace le hub orbital par une planche de données : conversations à reprendre, travail en cours, notes récentes et capture rapide — chaque ligne agit vraiment.
+> ③ La **barre de commande** (Ctrl+K) cherche conversations et notes, exécute une commande avec `>` et cible une portée avec `/`. Son micro est le seul point d’entrée vocal global : une commande pilote le Poste, une dictée rejoint le composeur sans envoyer.
+> ④ L’**inspecteur** porte le contexte de l’instrument actif : titre et renommage de session (F2), modèle, mode de délégation, événements, sections des Réglages. Fermer un onglet rend le voisin ; Aujourd’hui ne se ferme pas, et Ctrl+W ne ferme jamais la fenêtre.
+> ⑤ Nouvelle identité **DRONE** : champ olive, un seul orange signal, filets d’un pixel, télémétrie monospace et deux thèmes complets — réglable dans Apparence. La sonde `scripts/verify-v11.0.0.mjs` fige cette architecture.
 
 > **v10.5.0 — navigation et destinations explicites**
 > ① La barre de l’accueil recherche uniquement des conversations ; « Nouvelle conversation » est l’entrée distincte pour rédiger une demande. Entrée ouvre un résultat correspondant, sans créer de conversation depuis un état vide.
@@ -408,7 +506,10 @@ Prérequis : **Node.js 22+**, **Rust** ([rustup.rs](https://rustup.rs)) et, sous
 npm install            # à la racine : installe aussi web/ automatiquement (CLI OpenCode uniquement)
 npm run dev            # développement : Tauri + webview + rechargement
 npm run tauri:build    # installeurs Windows : NSIS + MSI (src-tauri/target/release/bundle)
+npm run build:windows:signed   # idem + signature Authenticode (v11.0.0)
 ```
+
+**Signature (v11.0.0)** : Smart App Control refuse un binaire non signé par une AC du Microsoft Trusted Root Program — un certificat auto-signé ne suffit pas. `build:windows:signed` exige `AVEN_SIGN_THUMBPRINT` (empreinte SHA-1 du certificat installé dans le magasin Windows), signe via l'horodatage RFC 3161, puis **vérifie chaque binaire produit** (`signtool verify /pa`) : un installeur signé ne protège pas un `aven.exe` non signé. `node scripts/build-windows-signed.mjs --check` diagnostique l'outillage sans rien construire.
 
 ## Modèles et clés
 

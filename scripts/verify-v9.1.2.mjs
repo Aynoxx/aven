@@ -49,7 +49,11 @@ assert.match(app, /showFreebuffAgent/, "v9.5.0 : l'agent Freebuff est une page p
 // le hub déclenche `freebuffCliEnsure`, pas une console npm détachée.
 assert.match(app, /freebuffCliEnsure/, "le flux d'installation reste branché (avis hub)")
 assert.ok(!css.includes(".hub-card-freebuff"), "v9.4.0 : la carte Freebuff a quitté le hub (page Assistants)")
-assert.match(css, /--hub-angle:90deg/) // v9.4.0 : 4 cartes réparties à 90°
+// AMENDEMENT v11.0.0 : le hub orbital a disparu au profit de la planche « Aujourd'hui »
+// (le Poste garde son cadre). L'assertion ne peut plus mesurer un angle de carte :
+// elle mesure l'absence de la géométrie d'orbite et la présence de la grille de tuiles.
+assert.ok(!/--hub-angle/.test(css), "v11.0.0 : plus aucune orbite de hub")
+assert.match(css, /\.wb-home-grid/, "la planche Aujourd'hui porte la grille de tuiles")
 assert.match(settingsDialog, /Terminal Freebuff/, "v10.5.0 : réglages du terminal nommés comme la destination réelle")
 // v9.2.0 : le lancement quotidien vit dans le terminal intégré (carte hub) ; les
 // Réglages gardent connexion (console externe) et installation.

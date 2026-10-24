@@ -71,6 +71,11 @@ impl NodeRuntime {
         let (node, host, cwd) = runtime_command(app)?;
 
         let mut command = Command::new(&node);
+        // v11.5.0 : le host a besoin du dossier Piper (binaire + modèle) pour
+        // parler hors ligne. Absent, il se rabat sur la voix Windows en le disant.
+        if let Some(piper) = bundled_piper(app) {
+            command.env("AVEN_PIPER_DIR", piper);
+        }
         command
             .arg(&host)
             .current_dir(&cwd)
@@ -303,6 +308,26 @@ pub(crate) fn runtime_command(app: &AppHandle) -> Result<(String, PathBuf, PathB
         let cwd = user_data_dir()?;
 
         Ok((node.to_string_lossy().into_owned(), host, cwd))
+    }
+}
+
+/// v11.5.0 : dossier de la voix locale Piper, posé par `npm run fetch:piper`.
+/// En développement il vit dans le dépôt ; en production, l'installeur l'embarque
+/// sous `runtime/piper`.
+pub(crate) fn bundled_piper(app: &AppHandle) -> Option<PathBuf> {
+    #[cfg(debug_assertions)]
+    {
+        let _ = app;
+        let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/piper");
+        return if dev.is_dir() { Some(dev) } else { None };
+    }
+
+    #[cfg(not(debug_assertions))]
+    {
+        app.path()
+            .resolve("runtime/piper", BaseDirectory::Resource)
+            .ok()
+            .filter(|path| path.is_dir())
     }
 }
 

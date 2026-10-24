@@ -5,6 +5,9 @@
 //  2) npm run tauri:dev : contrôles custom absents (la barre Windows native porte
 //     la fermeture), puis reprise après CRASH RÉEL du runtime Node (on tue
 //     l'enfant, la requête suivante doit le relancer sous budget 3/min).
+//  3) AVEN_SMOKE_ATTACH=1 : même étape 2, mais sur une instance dev DÉJÀ lancée
+//     (voir le commentaire de stageAttach — compilation Rust bloquée par une
+//     stratégie de contrôle d'application sur cette machine).
 // On pilote la webview par le débogueur CDP de WebView2
 // (variables locales ou stratégie HKLM temporaire sous CI). Les journaux restent
 // en fichiers/ignore : un exe GUI qui hérite du pipe du shell ne rend jamais la main.
@@ -184,10 +187,11 @@ async function waitForExpression(cdp, expression, timeoutMs) {
 const EXPR_PATH = `({ href: location.href, opencode: typeof window.opencode, tauri: typeof (window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke) })`
 
 // La barre de fermeture custom (héritée d'Electron frameless) a été supprimée :
-// la fumée vérifie qu'aucun contrôle custom ne subsiste et que la chrome reste
-// montée — c'est la barre Windows native qui minimise/agrandit/ferme.
+// la fumée vérifie qu'aucun contrôle custom ne subsiste et que le cadre du Poste
+// reste monté — c'est la barre Windows native qui minimise/agrandit/ferme.
+// v11.0.0 : le chrome mesuré est le bandeau de télémétrie (.wb-status).
 const EXPR_BARRE = `({
-  chrome: document.querySelectorAll(".window-chrome").length,
+  chrome: document.querySelectorAll(".wb-status").length,
   controles: document.querySelectorAll(".window-controls").length
 })`
 
@@ -215,7 +219,7 @@ const EXPR_STATE = `window.__TAURI_INTERNALS__
   : Promise.resolve({ ok: 0, error: "pas de __TAURI_INTERNALS__" })`
 
 async function checkPath(stage, cdp) {
-  await waitForExpression(cdp, `document.readyState === "complete" && document.querySelectorAll(".window-chrome").length >= 1`, 30_000)
+  await waitForExpression(cdp, `document.readyState === "complete" && document.querySelectorAll(".wb-status").length >= 1`, 30_000)
   const path = await cdp.eval(EXPR_PATH)
   const sousTauri = path.opencode === "undefined" && path.tauri === "function"
   record(stage, "renderer-tauri", sousTauri, `window.opencode=${path.opencode}, __TAURI_INTERNALS__.invoke=${path.tauri}`)
@@ -235,7 +239,8 @@ async function checkCspBinary(cdp) {
 }
 
 // Barre native : plus de contrôles custom dans le DOM — la fermeture appartient
-// à la barre Windows de Tauri (décorations par défaut).
+// à la barre Windows de Tauri (décorations par défaut). Le bandeau du Poste est le
+// seul élément qui occupe le haut de la fenêtre.
 async function checkBarreNative(stage, cdp) {
   const barre = await cdp.eval(EXPR_BARRE)
   record(
@@ -350,6 +355,40 @@ async function stageBinary() {
   }
 }
 
+// ── Mode « attach » (v11.0.0) ────────────────────────────────────────────────
+// Sur cette machine, Smart App Control (politique CodeIntegrity {0283ac0f-…})
+// refuse la DLL de proc-macro thiserror_impl : `cargo build` échoue, donc
+// `npm run tauri:dev` ne peut pas relancer la coque Rust. Le binaire
+// target/debug déjà compilé est un binaire DEV (devUrl 5173) : il charge le front
+// courant et le bundle host de target/debug/runtime — qu'il faut recopier depuis
+// dist-host après chaque build:host, sinon Aven tourne avec l'ancien code host.
+// Restent vérifiables la façade IPC, la barre native et la reprise après crash.
+// Ce mode ne remplace JAMAIS l'étape binaire : l'embarquement des assets et la
+// CSP de production se prouvent par `npm run tauri:check`, sur une machine où la
+// compilation passe.
+const ATTACH = process.env.AVEN_SMOKE_ATTACH === "1"
+
+async function stageAttach() {
+  const stage = "dev"
+  writeFileSync(DEV_LOG, `=== fumée attach ${new Date().toISOString()} ===\n`)
+  let cdp
+  try {
+    const page = await waitForPage(/127\.0\.0\.1:5173/, 20_000)
+    record(stage, "demarrage", true, `${page.url} (instance existante, CDP ${CDP_PORT})`)
+    cdp = new Cdp(page.webSocketDebuggerUrl)
+    await cdp.open()
+    await cdp.enable()
+    await checkPath(stage, cdp)
+    record(stage, "csp-dev", null, "devUrl externe : injection CSP impossible (limitation Tauri, le blocage est prouvé sur le binaire)")
+    await stageCrash(stage, cdp)
+    await checkBarreNative(stage, cdp)
+  } catch (error) {
+    record(stage, "demarrage", false, String(error.message ?? error))
+  } finally {
+    await cdp?.close()
+  }
+}
+
 // ── Étape 2 : npm run tauri:dev (barre native + reprise après crash) ────────
 async function stageDev() {
   const stage = "dev"
@@ -427,43 +466,53 @@ function nettoyerStore(provisionne) {
 }
 
 // ── Principal ────────────────────────────────────────────────────────────────
-console.log("Fumée Tauri v10.0.0 — CDP port " + CDP_PORT)
+console.log("Fumée Tauri v11.0.1 — CDP port " + CDP_PORT + (ATTACH ? " (mode attach)" : ""))
 
-if (avenPids().length > 0) {
-  console.error("ABANDON : aven.exe tourne déjà (instance unique) — fermer Aven puis relancer.")
-  process.exit(2)
-}
-const port5173Pris = portOwner(5173) !== null
-if (port5173Pris) {
-  console.warn("⚠ port 5173 déjà occupé — l'étape dev sera ignorée (serveur existant non touché).")
-}
-const provisionne = provisionnerStore()
-
-await stageBinary()
-
-if (avenPids().length > 0) {
-  record("dev", "demarrage", false, "l'instance autonome survit encore — étape dev sautée")
-} else if (port5173Pris) {
-  record("dev", "demarrage", null, "port 5173 occupé par un serveur existant")
-} else if ((await listTargets()).some((t) => t.url?.includes("tauri.localhost"))) {
-  record("dev", "demarrage", false, "instance autonome résiduelle — étape dev sautée")
-} else {
-  await stageDev()
-}
-
-// Filet de sécurité : aucun aven.exe ni serveur vite ne doit survivre.
-await sleep(2_000)
-const restants = avenPids()
-for (const pid of restants) killTree(pid)
-if (restants.length > 0) record("nettoyage", "arbre-nettoye", null, `pid restants éliminés : ${restants.join(", ")}`)
-if (!port5173Pris) {
-  const owner = portOwner(5173)
-  if (owner) {
-    killTree(owner)
-    record("nettoyage", "port-5173", null, `pid résiduel ${owner} éliminé`)
+if (ATTACH) {
+  // Aven tourne déjà : c'est la cible du mode attach, pas un conflit.
+  if (avenPids().length === 0) {
+    console.error(`ABANDON : mode attach sans instance — lancer Aven sur http://127.0.0.1:5173 avec --remote-debugging-port=${CDP_PORT}.`)
+    process.exit(2)
   }
+  record("binaire", "rendu-assets", null, "mode attach : binaire dev déjà lancé — l'étape binaire exige npm run tauri:check")
+  await stageAttach()
+} else {
+  if (avenPids().length > 0) {
+    console.error("ABANDON : aven.exe tourne déjà (instance unique) — fermer Aven puis relancer.")
+    process.exit(2)
+  }
+  const port5173Pris = portOwner(5173) !== null
+  if (port5173Pris) {
+    console.warn("⚠ port 5173 déjà occupé — l'étape dev sera ignorée (serveur existant non touché).")
+  }
+  const provisionne = provisionnerStore()
+
+  await stageBinary()
+
+  if (avenPids().length > 0) {
+    record("dev", "demarrage", false, "l'instance autonome survit encore — étape dev sautée")
+  } else if (port5173Pris) {
+    record("dev", "demarrage", null, "port 5173 occupé par un serveur existant")
+  } else if ((await listTargets()).some((t) => t.url?.includes("tauri.localhost"))) {
+    record("dev", "demarrage", false, "instance autonome résiduelle — étape dev sautée")
+  } else {
+    await stageDev()
+  }
+
+  // Filet de sécurité : aucun aven.exe ni serveur vite ne doit survivre.
+  await sleep(2_000)
+  const restants = avenPids()
+  for (const pid of restants) killTree(pid)
+  if (restants.length > 0) record("nettoyage", "arbre-nettoye", null, `pid restants éliminés : ${restants.join(", ")}`)
+  if (!port5173Pris) {
+    const owner = portOwner(5173)
+    if (owner) {
+      killTree(owner)
+      record("nettoyage", "port-5173", null, `pid résiduel ${owner} éliminé`)
+    }
+  }
+  nettoyerStore(provisionne)
 }
-nettoyerStore(provisionne)
 for (const profile of WEBVIEW_PROFILES) {
   try { rmSync(profile, { recursive: true, force: true }) } catch {}
 }

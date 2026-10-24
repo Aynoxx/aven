@@ -79,6 +79,17 @@ export type DictationResult = {
   intent?: DictationIntent // routage décidé par la passe d'intention (absent si elle a échoué)
 }
 
+// v11.1.0 : agent vocal — miroirs de host/voice-agent-*.ts (duplication volontaire
+// et commentée des contrats IPC, comme les autres types du fichier).
+export type VoicePersonality = "neutre" | "direct" | "chaleureux"
+export type VoiceAgentPrefs = { voiceName: string; personality: VoicePersonality; micMuted: boolean }
+export type VoiceInterpretation = { woken: boolean; command: string | null; demand: string }
+export type VoiceAnswer = { text: string; sentences: string[] }
+// v11.3.0 : la voix est soit neuronale (audio MP3 rendu à la webview, qui le joue),
+// soit Windows locale (le host a déjà parlé : `spoken`). `warning` signale un repli
+// sur la voix locale : l'utilisateur doit savoir pourquoi le timbre a changé.
+export type VoiceSpeech = { audio?: string; mime?: string; spoken?: boolean; warning?: string }
+
 // Miroir de host/stats.ts (AgregatedStats) : chiffres affichables du panneau de stats.
 export type AggregatedStats = {
   totalChats: number
@@ -182,6 +193,19 @@ export type OpenCodeApi = {
   noteQuickCapture: (title: string, markdown: string) => Promise<Note>
   getStats: () => Promise<AggregatedStats>
   voiceTranscribe: (audio: Uint8Array, mimeType: string) => Promise<DictationResult>
+  // v11.1.0 : agent vocal (mot d'activation « Aven ») — STT et LLM distants,
+  // voix Windows choisie dans les Réglages, aucun repli payant.
+  voiceAgentPrefs: () => Promise<VoiceAgentPrefs>
+  setVoiceAgentPrefs: (patch: { voiceName?: string; personality?: VoicePersonality; micMuted?: boolean }) => Promise<VoiceAgentPrefs>
+  voiceAgentVoices: () => Promise<string[]>
+  voiceAgentTranscribe: (audio: Uint8Array, mimeType: string) => Promise<{ text: string }>
+  voiceAgentInterpret: (text: string) => Promise<VoiceInterpretation>
+  voiceAgentAsk: (question: string) => Promise<VoiceAnswer>
+  voiceAgentSpeak: (text: string, voice?: string) => Promise<void>
+  // v11.3.0 : chemin unique de lecture — le host choisit la voix neuronale ou Windows.
+  voiceAgentSay: (text: string) => Promise<VoiceSpeech>
+  voiceAgentPreview: (text: string, voice?: string) => Promise<VoiceSpeech>
+  voiceAgentStop: () => Promise<void>
   announcerActivity: () => Promise<void>
   announcerSetEnabled: (on: boolean) => Promise<boolean>
   announcerTest: (text: string) => Promise<void>

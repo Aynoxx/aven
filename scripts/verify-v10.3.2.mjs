@@ -73,7 +73,11 @@ assert.match(cssCode, /\.setting-row, \.toggle-row \{[^}]*font-size: var\(--font
   "les libellés de contrôle passent en sm avec une interligne fixée (AGENTS.md §2)")
 assert.ok(!/\.setting-row, \.toggle-row \{[^}]*font-size: var\(--font-size-xs\)/.test(cssCode),
   "plus de libellé de contrôle en 11 px (micro-labels)")
-for (const selector of ["\\.segmented button", "\\.accent-choice", "\\.settings-tabs button", "\\.section-hint"]) {
+// v11.1.3 : `.settings-tabs button` a disparu avec les onglets de la modale de réglages —
+// les Réglages sont un instrument du Poste, la navigation vit dans l'inspecteur (sondée
+// par v11.0.0). La règle « libellé de contrôle en sm » reste vérifiée sur les contrôles
+// qui existent encore.
+for (const selector of ["\\.segmented button", "\\.accent-choice", "\\.section-hint"]) {
   const rule = cssCode.match(new RegExp(`${selector} \\{[^}]*\\}`))?.[0] ?? ""
   assert.ok(rule.length > 0, `règle ${selector} présente`)
   assert.match(rule, /font-size: var\(--font-size-sm\)/, `${selector} : libellé de contrôle en sm`)
@@ -103,73 +107,25 @@ assert.match(cssCode, /\.chat:hover \.chat-actions button, \.chat\.active \.chat
   "le clavier révèle les actions comme le survol (:focus-within)")
 assert.match(cssCode, /\.chat-actions button\.armed \{ opacity: 1;/, "l'état armé reste pleinement visible")
 
-// ── E. Le hub garde sa composition sans les décors redondants ──────────────────
-for (const dead of [".hub-grid-glow", ".hub-crosshair"]) {
-  assert.ok(!cssCode.includes(dead), `${dead} est retiré de la feuille (revue §4 P3)`)
-  assert.ok(!app.includes(dead), `${dead} est retiré du rendu du hub`)
+// ── E. Les décors et transitions du hub ont été RETIRÉS avec lui (v11.0.0) ─────
+// La sonde historique ne peut plus vérifier une constellation qui n'existe plus ;
+// elle vérifie que la suppression est complète, sans fantôme dans le rendu ni CSS.
+for (const dead of [".hub-grid-glow", ".hub-crosshair", ".hub-orbit-outer", ".hub-card "]) {
+  assert.ok(!cssCode.includes(dead), `${dead} est retiré de la feuille (hub supprimé en v11.0.0)`)
 }
-for (const kept of [".hub-orbit-outer", ".hub-orbit-inner", ".hub-orbit-core", ".hub-aura-1", ".hub-aura-2", ".home-hub::after"]) {
-  assert.ok(cssCode.includes(kept), `${kept} reste : la constellation n'est pas appauvrie`)
-}
+assert.ok(!app.includes("startViewTransition("), "plus aucune transition de vue de hub")
+assert.ok(!readdirSync(path.join(root, "web/src")).includes("view-transitions.ts"),
+  "le module de transition de vue a disparu avec le hub")
 
-// ── F. La cascade du hub ne détruit pas le placement des cartes ──────────────
-// Constaté dans l'app réelle (WebView2, animations système ACTIVES) : `card-in`
-// animait `transform` alors que `.hub-card` y range son orbite — avec `fill: both`,
-// les quatre cartes restaient empilées au centre, sous le micro. Le correctif anime
-// les propriétés individuelles, qui se composent.
-// Le groupe d'un shared element (déplacement/redimensionnement) suit le même token
-// de durée/courbe que ses deux copies : sinon le morph a deux trajectoires.
-const vtGroup = cssCode.match(/::view-transition-group\(hub-target\),\s*\n::view-transition-group\(dialog\) \{[^}]*\}/)?.[0] ?? ""
-assert.match(vtGroup, /animation-duration: var\(--dur-med\);/, "le groupe du morph suit --dur-med")
-assert.match(vtGroup, /animation-timing-function: var\(--ease-out\);/, "le groupe du morph suit --ease-out")
+// ── F. La cascade restante n'anime jamais `transform` sur un élément positionné ─
+// card-in anime translate/scale (propriétés individuelles), pas transform.
 const cardIn = cssCode.match(/@keyframes card-in \{[^}]*\}/)?.[0] ?? ""
-assert.ok(cardIn.length > 0, "les keyframes card-in existent")
-assert.ok(!/transform\s*:/.test(cardIn), "card-in n'anime pas `transform` : les cartes du hub perdraient leur orbite")
-assert.match(cardIn, /translate\s*:/, "l'entrée des cartes garde sa translation (propriété individuelle)")
-assert.match(cssCode, /\.hub-card \{[^}]*transform:translate\(-50%,-50%\) rotate\(var\(--hub-angle\)\) translateY/, 
-  "les cartes du hub portent toujours leur placement d'orbite dans `transform`")
-
-// ── G. La transition de vue n'attend AUCUNE frame dans son callback ──────────
-// Constaté dans l'app réelle : un callback qui attend requestAnimationFrame ne se
-// résout jamais (le rendu est suspendu pendant la mise à jour) — plus aucune
-// transition n'animait, seul le filet de 1 s appliquait l'état. Le callback doit
-// être synchrone, et App committe React avec flushSync avant la capture.
-const vtSource = read("web/src/view-transitions.ts")
-assert.ok(!/requestAnimationFrame\(/.test(vtSource),
-  "le callback de transition de vue n'attend pas de frame (impasse mesurée : ready/finished pendantes)")
-assert.match(vtSource, /startViewTransition\(\(\) => \{ apply\(\) \}\)/, "le callback reste synchrone")
-assert.match(app, /import \{ flushSync \} from "react-dom"/, "App committe React de façon synchrone (flushSync)")
-assert.match(app, /runViewTransition\(\(\) => flushSync\(update\), source\)/, "le wrapper applique flushSync dans le callback")
-
-// ── H. Le chemin reduce est antérieur à l'API, donc prouvable sans navigateur ──
-// Rejoué dans l'app avec le mouvement système DÉSACTIVÉ (mesures :
-// docs/audits/2026-10-20-live/mesures-reduce.json) : les 4 cartes ouvrent leur page
-// finalisée au premier échantillon, data-vt-source reste nul, 0 animation
-// ::view-transition-*, 0 exception ; Échap / « Fermer » / « Accueil » rendent le hub
-// au premier échantillon. Ce que le code doit continuer de garantir :
-assert.match(vtSource, /if \(!doc \|\| typeof doc\.startViewTransition !== "function" \|\| prefersReducedMotion\(\)\) \{\s*\n\s*update\(\)\s*\n\s*return\s*\n\s*\}/,
-  "reduce : update() appliqué directement et retour, AVANT toute pose de source")
-assert.ok(vtSource.indexOf("prefersReducedMotion()") < vtSource.indexOf("doc.startViewTransition("),
-  "le garde reduce précède l'appel à l'API (sinon une transition fantôme part sans animation)")
-assert.match(vtSource, /window\.matchMedia\("\(prefers-reduced-motion: reduce\)"\)\.matches/,
-  "le garde lit le réglage système réel, pas une constante")
-// Personne ne contourne le module : sans cela, une page pourrait lancer une transition
-// (et poser data-vt-source) même sous reduce, en échappant au garde et au flushSync.
-const rendererFiles = readdirSync(path.join(root, "web/src"), { recursive: true })
-  .filter((f) => /\.(?:ts|tsx)$/.test(String(f)))
-  .map((f) => `web/src/${String(f).replaceAll(path.sep, "/")}`)
-for (const file of rendererFiles) {
-  if (file === "web/src/view-transitions.ts") continue
-  const code = read(file)
-  assert.ok(!code.includes("startViewTransition("), `${file} n'appelle pas l'API hors du module`)
-  assert.ok(!/dataset\.vtSource\s*=/.test(code), `${file} ne pose pas data-vt-source (source unique : le module)`)
-}
-// v10.4.0 : le wrapper a quitté App.tsx pour app/with-view-transition.ts — la promesse
-// est la même, le module agrégé le contient désormais.
-assert.match(app, /export function withViewTransition\(update: \(\) => void, source\?: string\) \{\s*\n\s*runViewTransition\(\(\) => flushSync\(update\), source\)/,
-  "les transitions passent TOUTES par le wrapper flushSync (reduce comme animé)")
+assert.ok(cardIn.length > 0, "les keyframes card-in existent (Orchestration)")
+assert.ok(!/transform\s*:/.test(cardIn), "card-in n'anime pas `transform`")
+assert.match(cardIn, /translate\s*:/, "l'entrée garde sa translation (propriété individuelle)")
+assert.match(cssCode, /\.tasks-principal-card \{[^}]*animation: card-in/, "les modes utilisent la cascade tokenisée")
 
 // La règle d'AGENTS.md qui encadre les durées est amendée dans le même changement.
 assert.match(rules, /boucles\s+ambiantes/i, "AGENTS.md §12.4 documente l'exception des boucles ambiantes")
 
-console.log("v10.3.2 verification: OK (motion tokenisée, Réglages lisibles, reduce immédiat, actions découvrables, hub allégé)")
+console.log("v10.3.2 verification: OK (motion tokenisée, Réglages lisibles, reduce immédiat, actions découvrables, hub retiré)")

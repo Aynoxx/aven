@@ -29,9 +29,14 @@ assert.ok(vMaj * 10000 + vMin * 100 + vPatch >= 90103, `version trop ancienne : 
 assert.ok(!/key: "settings"/.test(app), "la carte « Paramètres » doit avoir disparu du hub")
 assert.ok(!/\.hub-card-settings/.test(css), "le CSS .hub-card-settings doit avoir disparu")
 // v9.3.0 : 5 cartes à 72° (Statistiques → Réglages/Usage) — la sonde suit le cercle.
-assert.match(css, /--hub-angle:270deg/) // v9.4.0 : la carte Notes ferme l'orbite (4 cartes à 90°)
+// AMENDEMENT v11.0.0 : plus d'orbite — le hub a été remplacé par le Poste ; la règle
+// conserve son intention (aucune géométrie de carte positionnée ne subsiste).
+assert.ok(!/--hub-angle/.test(css), "v11.0.0 : plus aucune orbite de hub")
 // L'accès aux réglages reste possible hors du hub (barre de fenêtre + barre d'accueil).
-assert.match(app, /Ouvrir les paramètres/)
+// AMENDEMENT v11.0.0 : l'accès aux réglages vit dans le rail du Poste (libellé
+// fonctionnel « Réglages ») et dans le bandeau (espace de travail) — même exigence :
+// joignable sans passer par le hub.
+assert.match(app, /aria-label="Réglages"/, "l'accès aux réglages reste nommé hors du hub")
 
 // ② Plus de bouton Freebuff dans le composeur : override, hint backend et préfixe caché.
 assert.ok(!/freebuffOverride/.test(app), "l'override Freebuff du composeur doit avoir disparu")

@@ -75,8 +75,8 @@ export default function FormDialog(props: { form: Form; onSubmit: (a: FormAnswer
           </div>
         ))}
         <div className="row">
-          <button onClick={() => props.onSubmit(answer)}>Répondre</button>
-          <button onClick={props.onCancel}>Ignorer</button>
+          <button type="button" onClick={() => props.onSubmit(answer)}>Répondre</button>
+          <button type="button" onClick={props.onCancel}>Ignorer</button>
         </div>
       </div>
     </div>

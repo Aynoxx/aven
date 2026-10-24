@@ -63,17 +63,20 @@ assert.match(css, /\.model-select-menu\.down \{ top: calc\(100% \+ 6px\); bottom
 assert.match(app, /usableModelRef\(currentModel\)/, "le modèle affiché est filtré (plus de « null/ »)")
 assert.match(app, /AUTO_MODEL_LABEL/, "une conversation sans modèle est nommée « Auto »")
 
-// ── D. Hub : la recherche filtre, et les conversations restent joignables ──────
-assert.match(app, /chats\.filter\(\(c\) => \(c\.title \|\| "Conversation"\)\.toLocaleLowerCase\("fr-FR"\)\.includes\(needle\)\)/,
-  "la barre du hub filtre les conversations par titre, sans dépendre de la casse locale")
-assert.match(app, /Rechercher une conversation…/,
-  "la barre du hub distingue la recherche de la rédaction d'une demande")
-assert.match(app, /Afficher la liste des conversations/,
-  "la barre de fenêtre porte une entrée « Conversations »")
-assert.match(app, /renamingChat === chatId && !appearance\.showSidebar/,
-  "F2 renomme dans l'en-tête quand la barre latérale est masquée")
-assert.match(css, /\.titlebar-rename/, "le champ de renommage de l'en-tête est stylé")
-assert.match(app, /Ouvrir la conversation/, "le bouton principal dit qu'il ouvre la conversation existante")
+// ── D. Barre de commande : la recherche filtre, les conversations restent
+// joignables, F2 renomme dans l'inspecteur (v11.0.0 : le hub a quitté le Poste). ──
+const workbench = read("web/src/workbench/WorkbenchShell.tsx")
+const commandBar = read("web/src/workbench/CommandBar.tsx")
+assert.match(commandBar, /rankByQuery\(chats, q, \(c\) => c\.title \|\| "Conversation"\)/,
+  "la barre de commande classe les conversations par titre, sans dépendre de la casse locale")
+assert.match(commandBar, /Rechercher une conversation, une note/,
+  "la barre distingue la recherche de la rédaction d'une demande")
+assert.match(read("web/src/workbench/omnibox.ts"), /open-conversations/,
+  "les commandes portent une entrée « conversations »")
+assert.match(workbench, /chatId && renamingChat === chatId/,
+  "F2 renomme dans l'inspecteur, même barre latérale masquée")
+assert.match(css, /\.wb-input/, "le champ de renommage du Poste est stylé")
+assert.match(commandBar, /openHomeConversation\(chat\)/, "le résultat ouvre la conversation existante")
 
 // ── E. Freebuff : un CLI absent est nommé, pas déguisé en démarrage ────────────
 // v10.3.0 : la page lit le gestionnaire PARTAGÉ (vérification + installation au
@@ -84,16 +87,17 @@ assert.match(freebuff, /ensureCli/, "un bouton Installe le CLI depuis la page")
 assert.match(freebuff, /disabled=\{!presence\.online\}/, "« Interrompre » est désactivé sans session")
 
 // ── F. Accessibilité mesurée ───────────────────────────────────────────────────
-assert.match(settings, /role="tablist"/, "les onglets Réglages sont un tablist")
-assert.match(settings, /role="tab" type="button" aria-selected=/, "chaque onglet expose aria-selected")
+// v11.0.0 : les sections de Réglages sont des boutons d'inspecteur nommés.
+assert.match(workbench, /aria-label="Sections des réglages"/, "les sections Réglages sont un groupe nommé")
+assert.match(workbench, /aria-selected=\{settingsSection === id\}/, "chaque section expose aria-selected")
 assert.match(settings, /aria-pressed=\{appearance\.theme === value\}/, "le thème expose aria-pressed")
 assert.match(settings, /aria-label=\{`Clé API \$\{p\.label\}`\}/, "les champs de clés sont nommés")
 assert.match(app, /aria-label="Message à l[’']agent"/, "le composeur est nommé")
-assert.match(app, /aria-label="Citer la sélection dans le composeur"/, "la barre de sélection est nommée")
+assert.match(workbench, /aria-label="Citer la sélection dans le composeur"/, "la barre de sélection est nommée")
 assert.match(app, /if \(selBarRef\.current\) \{ setSelBar\(null\); return \}/,
   "Échap ferme la barre de sélection avant d'interrompre le tour")
-assert.match(app, /role="option" aria-selected=\{!usableModelRef\(currentModel\)\}/,
-  "l'option Auto expose son état")
+assert.match(workbench, /<option value="">Auto — le routeur choisit<\/option>/,
+  "le sélecteur de modèle expose l'option Auto")
 
 // ── G. Notes : épingle, aperçu, dossiers vides, purge ─────────────────────────
 assert.ok(!/["'`]📌/.test(notesView), "l'arbre des notes n'affiche plus d'emoji (icône <Icon name=\"pin\">)")

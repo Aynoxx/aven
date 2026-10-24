@@ -4,7 +4,6 @@ import Markdown from "../Markdown"
 import MessageBubble from "../MessageBubble"
 import { Icon } from "../icons"
 import { usableModelRef } from "../model-label"
-import { TASK_MODES_UI } from "../app/constants"
 import type { AvenApp } from "../app/use-aven-app"
 
 // v10.4.0 : la conversation (barre latérale, fil, composeur, modèle, avis) est un
@@ -19,11 +18,9 @@ export default function ConversationPage({ app }: { app: AvenApp }) {
     appearance,
     applyModelChoice,
     armDelete,
-    changeTaskMode,
     chatGroups,
     chatId,
     chatValue,
-    chats,
     commitChatRename,
     currentModel,
     deleteArmed,
@@ -65,14 +62,11 @@ export default function ConversationPage({ app }: { app: AvenApp }) {
     setModelMenuStyle,
     setRenamingChat,
     setSearch,
-    setShowAgentsPage,
     setShowArchived,
-    setShowHome,
     showArchived,
     signalActivity,
     startRenameChat,
     tab,
-    taskMode,
     textareaRef,
     toggleArchive,
     visibleChats,
@@ -82,7 +76,8 @@ export default function ConversationPage({ app }: { app: AvenApp }) {
     <div className="messages block-card" key="messages" onMouseUp={onMessagesMouseUp}>
       {!chatId && (
         <div className="empty-state">
-          <div className="empty-symbol"><Icon name="sparkle" size={24} /></div>
+          {/* v11.0.2 : un état vide de conversation parle de conversation, pas d'IA. */}
+          <div className="empty-symbol"><Icon name="chat" size={24} /></div>
           <h2>Prêt à commencer</h2>
           <p>Sélectionne une conversation ou crée-en une nouvelle.</p>
         </div>
@@ -230,9 +225,9 @@ export default function ConversationPage({ app }: { app: AvenApp }) {
             )}
           </div>
           {live.busy ? (
-            <button className="button danger" onClick={() => chatId && api.interrupt(chatId).catch(fail)}>Arrêter <kbd>Échap</kbd></button>
+            <button type="button" className="button danger" onClick={() => chatId && api.interrupt(chatId).catch(fail)}>Arrêter <kbd>Échap</kbd></button>
           ) : (
-            <button className="button primary" onClick={send} disabled={!chatId || !input.trim()}>Envoyer</button>
+            <button type="button" className="button primary" onClick={send} disabled={!chatId || !input.trim()}>Envoyer</button>
           )}
         </div>
       </div>
@@ -246,11 +241,16 @@ export default function ConversationPage({ app }: { app: AvenApp }) {
   ])
 
   return (
-          <div className="workspace-layout">
+          // v11.0.1 : la grille réserve var(--sidebar-width) à gauche même quand la barre
+          // est démontée (showSidebar faux par défaut) — la conversation vivait dans 286 px.
+          // v11.1.4 : la position choisie dans les Réglages devient une classe réellement
+          // posée (elle ne l'était nulle part, le réglage était inerte). Barre masquée =
+          // aucune position : `.sidebar-hidden` reste seul et la grille tient en une colonne.
+          <div className={`workspace-layout${appearance.showSidebar ? ` sidebar-${appearance.sidebarPosition}` : " sidebar-hidden"}`}>
             {appearance.showSidebar && (
               <aside className="sidebar">
                 <div className="sidebar-top">
-                  <div className="sidebar-heading"><div><span className="eyebrow">CONVERSATIONS</span><strong>{showArchived ? "Archivées" : agentName(tab)}</strong></div><button className="button primary small" onClick={newChat} disabled={!tab} aria-label="Nouvelle conversation" title="Nouvelle conversation (Ctrl+N)"><Icon name="plus" size={16} /></button></div>
+                  <div className="sidebar-heading"><div><span className="eyebrow">CONVERSATIONS</span><strong>{showArchived ? "Archivées" : agentName(tab)}</strong></div><button type="button" className="button primary small" onClick={newChat} disabled={!tab} aria-label="Nouvelle conversation" title="Nouvelle conversation (Ctrl+N)"><Icon name="plus" size={16} /></button></div>
                   <div className="search-wrap"><span><Icon name="search" size={16} /></span><input ref={searchRef} className="search" placeholder="Rechercher" aria-label="Rechercher une conversation" value={search} onChange={(e) => setSearch(e.target.value)} /></div>
                   <button className={`archive-toggle ${showArchived ? "selected" : ""}`} type="button" onClick={() => { setShowArchived((value) => !value); setChatId(null) }}><span><Icon name="archive-list" size={15} /></span>{showArchived ? "Revenir aux actives" : "Voir les archivées"}</button>
                 </div>
@@ -263,9 +263,9 @@ export default function ConversationPage({ app }: { app: AvenApp }) {
                           {renamingChat === c.id ? (
                             <input className="rename-input" autoFocus value={chatValue} maxLength={120} onFocus={(e) => e.target.select()} onChange={(e) => setChatValue(e.target.value)} onBlur={() => void commitChatRename(c.id)} onKeyDown={(e) => { if (e.key === "Enter") void commitChatRename(c.id); if (e.key === "Escape") { e.stopPropagation(); renameCancelled.current = true; setRenamingChat(null) } }} />
                           ) : (
-                            <button className="chat-main" onClick={() => openConversationFromSidebar(c)} onDoubleClick={() => startRenameChat(c.id)} title="Ouvrir la conversation"><span className="chat-title">{c.title}</span><span className="chat-meta">{c.updated ? new Date(c.updated).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" }) : ""}</span></button>
+                            <button type="button" className="chat-main" onClick={() => openConversationFromSidebar(c)} onDoubleClick={() => startRenameChat(c.id)} title="Ouvrir la conversation"><span className="chat-title">{c.title}</span><span className="chat-meta">{c.updated ? new Date(c.updated).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" }) : ""}</span></button>
                           )}
-                          <div className="chat-actions"><button onClick={() => startRenameChat(c.id)} title="Renommer" aria-label="Renommer"><Icon name="pencil" size={14} /></button><button onClick={() => exportChat(c.id)} title="Exporter" aria-label="Exporter"><Icon name="export" size={14} /></button><button onClick={() => toggleArchive(c.id, !showArchived)} title={showArchived ? "Désarchiver" : "Archiver"} aria-label={showArchived ? "Désarchiver" : "Archiver"}><Icon name={showArchived ? "restore" : "archive"} size={14} /></button><button className={deleteArmed === c.id ? "armed" : ""} onClick={() => armDelete(c.id)} title={deleteArmed === c.id ? "Confirmer la suppression définitive" : "Supprimer"} aria-label={deleteArmed === c.id ? "Confirmer la suppression définitive" : "Supprimer"}><Icon name="trash" size={14} /></button></div>
+                          <div className="chat-actions"><button type="button" onClick={() => startRenameChat(c.id)} title="Renommer" aria-label="Renommer"><Icon name="pencil" size={14} /></button><button type="button" onClick={() => exportChat(c.id)} title="Exporter" aria-label="Exporter"><Icon name="export" size={14} /></button><button type="button" onClick={() => toggleArchive(c.id, !showArchived)} title={showArchived ? "Désarchiver" : "Archiver"} aria-label={showArchived ? "Désarchiver" : "Archiver"}><Icon name={showArchived ? "restore" : "archive"} size={14} /></button><button type="button" className={deleteArmed === c.id ? "armed" : ""} onClick={() => armDelete(c.id)} title={deleteArmed === c.id ? "Confirmer la suppression définitive" : "Supprimer"} aria-label={deleteArmed === c.id ? "Confirmer la suppression définitive" : "Supprimer"}><Icon name="trash" size={14} /></button></div>
                         </div>
                       ))}
                     </div>
@@ -274,44 +274,23 @@ export default function ConversationPage({ app }: { app: AvenApp }) {
                       {renamingChat === c.id ? (
                         <input className="rename-input" autoFocus value={chatValue} maxLength={120} onFocus={(e) => e.target.select()} onChange={(e) => setChatValue(e.target.value)} onBlur={() => void commitChatRename(c.id)} onKeyDown={(e) => { if (e.key === "Enter") void commitChatRename(c.id); if (e.key === "Escape") { e.stopPropagation(); renameCancelled.current = true; setRenamingChat(null) } }} />
                       ) : (
-                        <button className="chat-main" onClick={() => setChatId(c.id)} onDoubleClick={() => startRenameChat(c.id)} title="Ouvrir la conversation"><span className="chat-title">{c.title}</span><span className="chat-meta">{c.updated ? new Date(c.updated).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" }) : ""}</span></button>
+                        <button type="button" className="chat-main" onClick={() => setChatId(c.id)} onDoubleClick={() => startRenameChat(c.id)} title="Ouvrir la conversation"><span className="chat-title">{c.title}</span><span className="chat-meta">{c.updated ? new Date(c.updated).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" }) : ""}</span></button>
                       )}
-                      <div className="chat-actions"><button onClick={() => startRenameChat(c.id)} title="Renommer" aria-label="Renommer"><Icon name="pencil" size={14} /></button><button onClick={() => exportChat(c.id)} title="Exporter" aria-label="Exporter"><Icon name="export" size={14} /></button><button onClick={() => toggleArchive(c.id, !showArchived)} title={showArchived ? "Désarchiver" : "Archiver"} aria-label={showArchived ? "Désarchiver" : "Archiver"}><Icon name={showArchived ? "restore" : "archive"} size={14} /></button><button className={deleteArmed === c.id ? "armed" : ""} onClick={() => armDelete(c.id)} title={deleteArmed === c.id ? "Confirmer la suppression définitive" : "Supprimer"} aria-label={deleteArmed === c.id ? "Confirmer la suppression définitive" : "Supprimer"}><Icon name="trash" size={14} /></button></div>
+                      <div className="chat-actions"><button type="button" onClick={() => startRenameChat(c.id)} title="Renommer" aria-label="Renommer"><Icon name="pencil" size={14} /></button><button type="button" onClick={() => exportChat(c.id)} title="Exporter" aria-label="Exporter"><Icon name="export" size={14} /></button><button type="button" onClick={() => toggleArchive(c.id, !showArchived)} title={showArchived ? "Désarchiver" : "Archiver"} aria-label={showArchived ? "Désarchiver" : "Archiver"}><Icon name={showArchived ? "restore" : "archive"} size={14} /></button><button type="button" className={deleteArmed === c.id ? "armed" : ""} onClick={() => armDelete(c.id)} title={deleteArmed === c.id ? "Confirmer la suppression définitive" : "Supprimer"} aria-label={deleteArmed === c.id ? "Confirmer la suppression définitive" : "Supprimer"}><Icon name="trash" size={14} /></button></div>
                     </div>
                   ))}
-                  {!visibleChats.length && <div className="sidebar-empty"><span><Icon name="sparkle" size={20} /></span><p>Rien à afficher ici.</p></div>}
+                  {!visibleChats.length && <div className="sidebar-empty"><span><Icon name="chat" size={24} /></span><p>Rien à afficher ici.</p></div>}
                 </div>
-                <div className="sidebar-footer"><button className="button secondary full" onClick={newChat} disabled={!tab}><Icon name="plus" size={14} />Nouvelle conversation</button></div>
+                <div className="sidebar-footer"><button type="button" className="button secondary full" onClick={newChat} disabled={!tab}><Icon name="plus" size={14} />Nouvelle conversation</button></div>
               </aside>
             )}
             <main className="main">
-              <div className="chat-titlebar">
-                <div><span className="eyebrow">SESSION · {tab === "projet" ? "Agent principal Aven" : agentName(tab)}</span>
-                  {/* v10.2.2 : F2 renomme ici même quand la barre latérale est masquée. */}
-                  {chatId && renamingChat === chatId && !appearance.showSidebar ? (
-                    <input className="settings-input titlebar-rename" autoFocus value={chatValue} maxLength={120} aria-label="Titre de la conversation"
-                      onFocus={(e) => e.target.select()} onChange={(e) => setChatValue(e.target.value)} onBlur={() => void commitChatRename(chatId)}
-                      onKeyDown={(e) => { if (e.key === "Enter") void commitChatRename(chatId); if (e.key === "Escape") { e.stopPropagation(); renameCancelled.current = true; setRenamingChat(null) } }} />
-                  ) : (
-                    <strong>{chats.find((c) => c.id === chatId)?.title ?? "Nouvelle conversation"}</strong>
-                  )}
-                </div>
-                <div className="row">
-                  {tab === "projet" && (
-                    <div className="tasks-mode-switch" role="group" aria-label="Mode de l'orchestrateur">
-                      {TASK_MODES_UI.map((m) => (
-                        <button key={m.id} className={`button ${taskMode === m.id ? "primary" : "ghost"} tasks-mode-option`} onClick={() => changeTaskMode(m.id)} type="button" title={m.hint} aria-pressed={taskMode === m.id}>
-                          <Icon name={m.icon} size={13} />{m.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  <button className="button ghost back-home-button" onClick={() => { setShowHome(false); setShowAgentsPage(true) }} aria-label="Ouvrir l’orchestration" type="button"><Icon name="agent" size={15} />Orchestration</button>
-                </div>
-              </div>
-              <div className="main-scroll" ref={scrollRef} onScroll={onScroll}>{mainBlocks.map((id) => { if (id === "notices" && !appearance.showNotices) return null; if (id === "model" && !appearance.showModel) return null; if (id === "composer" && !appearance.showComposer) return null; return blocks.get(id)?.() })}</div>
+              {/* v11.0.0 : plus de barre de titre dans la conversation — l'onglet porte
+                  le titre, l'inspecteur porte le modèle, les notices et le mode. Le fil
+                  et le composeur sont les seuls blocs de la scène. */}
+              <div className="main-scroll" ref={scrollRef} onScroll={onScroll}>{mainBlocks.filter((id) => id === "messages" || id === "composer").map((id) => { if (id === "composer" && !appearance.showComposer) return null; return blocks.get(id)?.() })}</div>
               {!followBottom && (
-                <button
+                <button type="button"
                   className="scroll-bottom"
                   onClick={() => {
                     setFollowBottom(true)

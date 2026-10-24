@@ -3,7 +3,9 @@ import { test } from "node:test"
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { seedWorkspace, trackedAgentFiles } from "../host/settings.ts"
+// v11.1.3 : `host/settings.ts` n'était qu'une ré-exportation sans importeur en
+// production ; le test vise le module réellement bundlé, sans perdre sa couverture.
+import { seedWorkspace, trackedAgentFiles } from "../host/workspace-seed.ts"
 
 const temp = mkdtempSync(path.join(tmpdir(), "aven-agent-sync-"))
 process.on("exit", () => { try { rmSync(temp, { recursive: true, force: true }) } catch { /* Windows peut retarder */ } })

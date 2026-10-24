@@ -25,7 +25,8 @@ const pty = read("host/freebuff-pty.ts")
 const main = read("host/aven-app-host.ts")
 const preload = read("web/src/types.ts")
 const types = read("web/src/types.ts")
-const prefs = read("host/prefs.ts")
+// v11.1.3 : `host/prefs.ts` (aucun importeur) est supprimé — les préférences
+// s'écrivent dans aven-app-host.ts, que `main` lit ici déjà.
 const dialog = read("web/src/FreebuffAgentPage.tsx")
 const css = readStyles()
 const readme = read("README.md")
@@ -47,7 +48,7 @@ assert.match(main, /buildAgentsDir\(/, "le pont est resynchronisé à chaque boo
 assert.match(main, /readTemplateAgents\(templateDir\)/, "les agents viennent du gabarit (source de vérité)")
 
 // C. Préférence de reprise, de bout en bout.
-assert.match(prefs, /saveFreebuffResume/, "préférence persistée")
+assert.match(main, /savePrefs\(\{ freebuffResume/, "préférence de reprise persistée par le host exécuté")
 assert.match(main, /case "setFreebuffResume"/, "IPC de la préférence")
 assert.match(preload, /setFreebuffResume/, "preload : setFreebuffResume exposé")
 assert.match(types, /freebuffResume/, "types : freebuffResume typé")

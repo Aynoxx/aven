@@ -1,9 +1,10 @@
 import { useAvenApp } from "./app/use-aven-app"
-import AppShell from "./app/AppShell"
+import WorkbenchShell from "./workbench/WorkbenchShell"
 import "./App.css"
 
-// v10.4.0 : shell minimal — le contrôleur porte l'état, AppShell et les pages le rendu.
+// v11.0.0 : le contrôleur porte l'état, le Poste le rend. AppShell et les « pages »
+// ont disparu : un rail, des onglets, une scène, un inspecteur, une barre.
 export default function App() {
   const app = useAvenApp()
-  return <AppShell app={app} />
+  return <WorkbenchShell app={app} />
 }

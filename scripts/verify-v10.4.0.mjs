@@ -20,9 +20,11 @@ const voice = read("host/voice.ts")
 const routing = read("web/src/dictation-routing.ts")
 const dictation = read("web/src/voice-dictation.ts")
 const app = readApp()
-const appShell = read("web/src/app/AppShell.tsx")
+// v11.0.0 : la coquille est le Poste (workbench/), plus AppShell.
+const appShell = read("web/src/workbench/WorkbenchShell.tsx")
 const conversation = read("web/src/pages/ConversationPage.tsx")
-const home = read("web/src/pages/HomePage.tsx")
+const home = read("web/src/workbench/HomeBoard.tsx")
+const commandBar = read("web/src/workbench/CommandBar.tsx")
 const tasks = read("web/src/pages/TasksPage.tsx")
 const freebuff = read("web/src/FreebuffAgentPage.tsx")
 const notes = read("web/src/NotesView.tsx")
@@ -85,32 +87,30 @@ assert.match(app, /effectiveIntent\(result\.intent, origin, agents\.map\(\(a\) =
   "l'intention effective est calculée à partir de la provenance")
 assert.match(app, /const c = await api\.createChat\(tabRef\.current\)/,
   "la conversation n'est créée qu'à l'arrivée d'un texte (plus de conversation vide)")
-assert.match(home, /dictation\.start\("hub"\)/, "le micro du hub déclare sa provenance")
+assert.match(home, /dictation\.start\("workbench"\)/, "le micro du Poste déclare sa provenance")
+assert.match(commandBar, /dictation\.start\("workbench"\)/, "le micro global déclare la même provenance")
 assert.match(conversation, /dictation\.start\("composer"\)/, "le micro du composeur déclare la sienne")
 
-// ── B1. La barre de fenêtre suit la page ────────────────────────────────────────
-assert.match(appShell, /\{!showSettings && \([\s\S]{0,300}Ouvrir les paramètres d’apparence/,
-  "« Paramètres » disparaît de la barre quand on est dans Réglages")
-assert.match(appShell, /const isPage = showNotes \|\| showFiles \|\| showSettings \|\| showAgentsPage \|\| showFreebuffAgent/,
-  "les pages sont identifiées comme un groupe")
-assert.match(appShell, /!isPage && \([\s\S]{0,300}Accueil/,
-  "« Accueil » n'est proposé que devant une conversation")
-assert.match(appShell, /<FreebuffAgentPage onError=\{fail\} onClose=\{closePage\} \/>/,
-  "la page Freebuff reçoit son propre retour")
+// ── B1. Le cadre est permanent : plus de barre de fenêtre à faire suivre ───────
+// v11.0.0 : le Poste remplace la barre contextuelle — un seul cadre, des onglets.
+assert.match(appShell, /role="tablist" aria-label="Onglets du Poste"/,
+  "les onglets forment une barre nommée")
+assert.match(appShell, /role="tabpanel"/,
+  "la scène est le panneau de l'onglet actif")
+assert.match(appShell, /Fermer l’onglet/,
+  "fermer un onglet est nommé")
+assert.ok(!/Accueil<\/button>/.test(appShell),
+  "aucun retour dupliqué « Accueil » ne subsiste dans la coquille")
 
-// ── B2. Un seul retour par écran ────────────────────────────────────────────────
+// ── B2. Un seul retour par écran : l'onglet est LA sortie ─────────────────────
 for (const [name, source] of [["Notes", notes], ["Fichiers", files], ["Réglages", settings], ["Tâches", tasks], ["Freebuff", freebuff]]) {
-  assert.match(source, /className: "dialog-close"/, `${name} : la page porte son retour (« Fermer »)`)
-  assert.match(source, /key: "close"/, `${name} : le retour est une action déclarée`)
+  assert.ok(!/key: "close"/.test(source), `${name} : aucun second bouton Fermer`)
+  assert.ok(!/className: "dialog-close"/.test(source), `${name} : plus de classe de fermeture de page`)
 }
-assert.ok(!conversation.includes(">Accueil<"),
-  "la conversation n'a plus un second bouton Accueil dans sa barre de titre")
-assert.ok(!/back-home-button[\s\S]{0,160}Accueil/.test(conversation),
-  "aucun retour dupliqué ne subsiste dans la conversation")
 
 // Les deux conventions sont écrites dans les règles, pas seulement dans le code.
 const rules = read("AGENTS.md")
-assert.match(rules, /Un seul retour par écran \(v10\.4\.0\)/, "AGENTS.md §6 énonce le retour unique")
+assert.match(rules, /Un seul retour par écran \(v10\.4\.0/, "AGENTS.md §6 énonce le retour unique")
 assert.match(rules, /Une dictée a une provenance \(v10\.4\.0\)/, "AGENTS.md §6 énonce la provenance de la dictée")
 
 console.log("v10.4.0 verification: OK (provenance de dictée, page Projet distincte, une seule sortie par écran)")

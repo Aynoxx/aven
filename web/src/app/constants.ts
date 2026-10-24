@@ -8,7 +8,18 @@ import type { Agent } from "../types"
 export const HOME_NOTICE_TTL = 6_000
 // Message exact affiché quand le CLI Freebuff est absent : le bandeau du hub reconnaît
 // ce texte pour proposer le bouton « Installer » en direct.
-export const FREEBUFF_MISSING_NOTICE = "Le CLI Freebuff n'est pas installé : Paramètres → Freebuff CLI gratuit → « Installer le CLI (npm) »."
+// v11.0.0 : la section s'appelle « Terminal Freebuff » dans les Réglages — le bandeau
+// citait une destination qui n'existe plus (AGENTS.md §6, libellés fonctionnels).
+export const FREEBUFF_MISSING_NOTICE = "Le CLI Freebuff n'est pas installé : Réglages → Terminal Freebuff → « Installer le CLI (npm) »."
+
+// v11.0.1 : l'inspecteur affichait l'état brut du moteur (« ready ») en anglais, alors
+// que le bandeau disait « EN LIGNE ». Une seule table de libellés pour les deux.
+export function engineStatusLabel(status: string): string {
+  if (status === "ready") return "en ligne"
+  if (status === "starting") return "démarrage"
+  if (status === "error") return "erreur"
+  return status
+}
 
 export type Notice = { id: string; text: string }
 
@@ -29,6 +40,8 @@ export function orderAgents(agents: Agent[], order: string[]) {
 export const TASK_MODES_UI = [
   { id: "auto", icon: "agent", label: "Auto", hint: "L'orchestrateur choisit le meilleur sous-agent pour chaque tâche." },
   { id: "code", icon: "wrench", label: "Code", hint: "Délégation imposée au spécialiste code (l'orchestrateur coordonne et synthétise)." },
-  { id: "analyse", icon: "sparkle", label: "Analyse", hint: "Délégation imposée au spécialiste analyse (l'orchestrateur coordonne et synthétise)." },
+  // v11.0.2 : un mode de délégation porte l'outil du spécialiste (graphique pour
+  // l'analyse), pas l'étoile de la marque.
+  { id: "analyse", icon: "chart", label: "Analyse", hint: "Délégation imposée au spécialiste analyse (l'orchestrateur coordonne et synthétise)." },
   { id: "recherche", icon: "search", label: "Recherche", hint: "Délégation imposée au spécialiste recherche (l'orchestrateur coordonne et synthétise)." },
 ] as const

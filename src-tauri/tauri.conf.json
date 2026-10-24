@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Aven",
-  "version": "10.5.0",
+  "version": "11.5.1",
   "identifier": "com.local.aven",
   "build": {
     "beforeDevCommand": "npm run dev:web",
@@ -45,6 +45,7 @@
       "../aven-mcp-server.mjs": "runtime/template/aven-mcp-server.mjs",
       "resources/nodejs/node.exe": "runtime/node.exe",
       "../node_modules/@lydell/node-pty": "runtime/node_modules/@lydell/node-pty",
+      "resources/piper/": "runtime/piper/",
       "../node_modules/@lydell/node-pty-win32-x64": "runtime/node_modules/@lydell/node-pty-win32-x64"
     },
     "icon": [

@@ -1,0 +1,180 @@
+/* v11.0.0 : DA « DRONE — Mapping OS » (Technical Systems).
+   Champ quasi monochrome olive, grille de points, un seul accent orange signal,
+   typographie aux extrêmes (titres de scène / micro-libellés mono), filets de 1 px,
+   géométrie rectiligne. Toute couleur et toute taille passent par ces jetons.
+   Ce fichier est importé APRÈS base.css : il fait autorité sur la palette. */
+
+:root {
+  color-scheme: dark;
+
+  --font-ui: system-ui, "Segoe UI", sans-serif;
+  /* v11.0.0 : télémétrie et marginalia — pile système, aucune police téléchargée. */
+  --font-mono: ui-monospace, "Cascadia Mono", "Consolas", "Courier New", monospace;
+
+  --font-size-xs: 11px;
+  --font-size-sm: 12px;
+  --font-size-md: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 20px;
+  --font-size-2xl: 28px;
+  --font-size-3xl: 32px;
+
+  /* Champ sombre olive — jamais du noir pur (DA §1). */
+  --bg: #0a0c09;
+  --stage: #0d100b;
+  --panel: #11150e;
+  --panel-solid: #141910;
+  --panel-soft: #1a2015;
+  --text: #e9ece3;
+  --muted: #949c8b;
+  --border: rgba(233, 236, 227, .10);
+  --border-strong: rgba(233, 236, 227, .20);
+  --rule: rgba(233, 236, 227, .08);
+  --grid-dot: rgba(233, 236, 227, .10);
+
+  /* Orange signal : focus, actif, mesure. Jamais décoratif. */
+  --accent: #ff5a00;
+  --accent-fill: var(--accent);
+  --accent-fill-hover: color-mix(in srgb, var(--accent) 88%, #ffb27a);
+  --on-accent: #0a0c09;
+  --accent-ink-light: #a83a08;
+  --accent-ink-dark: #ff7a2e;
+  --accent-ink: var(--accent-ink-dark);
+  --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
+  --accent-border: color-mix(in srgb, var(--accent) 42%, transparent);
+  --signal: var(--accent);
+  --signal-soft: var(--accent-soft);
+  --signal-border: var(--accent-border);
+
+  --danger: #ef4444;
+  --success: #74b45a;
+  --warning: #e0a13a;
+
+  --sidebar-width: 240px;
+  --message-width: 820px;
+  --density-gap: 14px;
+  --density-pad: 16px;
+  --shadow: 0 10px 30px rgba(0, 0, 0, .35);
+  --shadow-dialog: 0 20px 70px rgba(0, 0, 0, .45);
+  --overlay: rgba(5, 7, 4, .72);
+
+  /* Géométrie rectiligne : l'instrument, pas la carte. */
+  --radius-xs: 2px;
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-xl: 8px;
+  --radius-pill: 999px;
+
+  --rose: #f43f5e;
+  --term-bg: #0d100b;
+  --term-fg: #e9ece3;
+  --term-muted: #949c8b;
+  --code-bg: #080a07;
+
+  --panel-workspace-w: min(1000px, calc(100vw - 44px));
+  --panel-workspace-h: min(84vh, 840px);
+
+  /* v11.0.0 : temps de réponse d'instrument (court, sec, sans rebond) — les valeurs
+     vivent UNE fois dans base.css ; la DA n'en redéfinit aucun (sonde v10.3.2). */
+  --stagger-i: 0;
+
+  /* Charpente du Poste. */
+  --wb-status-h: 40px;
+  --wb-rail-w: 56px;
+  --wb-rail-wide: 208px;
+  --wb-tabs-h: 38px;
+  --wb-inspector-w: 320px;
+  --wb-command-h: 56px;
+}
+
+/* Thème clair « blueprint » : papier os, encre olive, même signal assombri.
+   Le thème est un réglage utilisateur ; la DA reste la même grammaire. */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f3f0e7;
+  --stage: #f7f4ec;
+  --panel: #fbf9f3;
+  --panel-solid: #fffdf7;
+  --panel-soft: #ece8dc;
+  --text: #16180f;
+  --muted: #5c6153;
+  --border: rgba(22, 24, 15, .14);
+  --border-strong: rgba(22, 24, 15, .26);
+  --rule: rgba(22, 24, 15, .12);
+  --grid-dot: rgba(22, 24, 15, .12);
+  --accent: #a83a08;
+  --accent-fill: var(--accent);
+  --accent-fill-hover: color-mix(in srgb, var(--accent) 88%, #000);
+  --on-accent: #fff8f1;
+  --accent-ink: var(--accent-ink-light);
+  --accent-soft: color-mix(in srgb, var(--accent) 10%, transparent);
+  --accent-border: color-mix(in srgb, var(--accent) 38%, transparent);
+  --shadow: 0 8px 24px rgba(22, 24, 15, .08);
+  --term-bg: #14170f;
+}
+
+/* ── Primitives ─────────────────────────────────────────────────────────── */
+
+/* Micro-libellé de télémétrie : la voix mono du Poste.
+   v11.1.3 : `.wb-mono`, `.wb-rule`, `.wb-grid`, `.wb-corners` et `.wb-ruler` étaient des
+   primitives jamais employées — le Poste les aurait posées sans les utiliser. */
+.wb-label {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.wb-num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .02em;
+}
+
+/* Filet d'instrument : 1 px, jamais une ombre. */
+
+/* Focus : le signal, jamais un halo doux. */
+:root :focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 1px;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--signal) 30%, transparent);
+  color: var(--text);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border: 2px solid transparent;
+  background-clip: content-box;
+  border-radius: 0;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--muted); background-clip: content-box; }
+
+/* Le Poste n'utilise ni verre ni ombre douce : les surfaces sont opaques. */
+.wb-app,
+.wb-app * {
+  backdrop-filter: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wb-app *,
+  .wb-app *::before,
+  .wb-app *::after {
+    animation-duration: .01ms !important;
+    animation-delay: 0s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    transition-delay: 0s !important;
+  }
+}

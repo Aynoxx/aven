@@ -10,7 +10,18 @@ import { buildPrompt, selectionWithin } from "../selection-actions"
 import { nextArrowIndex, type ArrowKey } from "../arrow-navigation"
 import { groupChatsByAgent } from "../chat-groups"
 import { AUTO_MODEL_LABEL, usableModelRef } from "../model-label"
-import { withViewTransition } from "./with-view-transition"
+import {
+  activeTab as activeWorkbenchTab,
+  bindChat,
+  closeTab,
+  focusTab,
+  initialTabs,
+  openConversation,
+  openInstrument,
+  removeChatTab,
+  type InstrumentKind,
+  type TabsState,
+} from "../workbench/tabs"
 import { HOME_NOTICE_TTL, FREEBUFF_MISSING_NOTICE, orderAgents, type Notice } from "./constants"
 
 // v10.4.0 : le contrôleur porte tout l'état, les effets et les handlers de l'app.
@@ -38,10 +49,20 @@ export function useAvenApp() {
   const [input, setInput] = useState("")
   const [error, setError] = useState<string>()
   const [appState, setAppState] = useState<AppState>({ status: "starting", keys: {}, providers: [] })
-  const [showSettings, setShowSettings] = useState(false)
-  const [settingsSection, setSettingsSection] = useState<"general" | "appearance" | "usage">("general")
+  // v11.1.0 : la section « voice » (agent vocal) rejoint les Réglages du Poste.
+  const [settingsSection, setSettingsSection] = useState<"general" | "appearance" | "usage" | "voice">("general")
   const [notices, setNotices] = useState<Notice[]>([])
-  const [showHome, setShowHome] = useState(true)
+  // v11.0.0 : le Poste remplace les pages. Un état d'onglets unique décide de
+  // l'instrument actif, de l'inspecteur et du retour ; plus de booléens par page.
+  const [tabsState, setTabsState] = useState<TabsState>(initialTabs)
+  const [inspectorOpen, setInspectorOpen] = useState(false)
+  const activeInstrument = activeWorkbenchTab(tabsState)
+  const showHome = activeInstrument.kind === "home"
+  const showNotes = activeInstrument.kind === "notes"
+  const showFiles = activeInstrument.kind === "files"
+  const showSettings = activeInstrument.kind === "settings"
+  const showAgentsPage = activeInstrument.kind === "orchestration"
+  const showFreebuffAgent = activeInstrument.kind === "terminal"
   const [homeNotice, setHomeNotice] = useState<string | null>(null)
   // v9.1.4 : le bandeau d'avis s'efface tout seul (il masquait l'interface indéfiniment).
   useEffect(() => {
@@ -53,16 +74,11 @@ export function useAvenApp() {
   // de choix (sinon le sélecteur resterait masqué sous les Réglages ouverts).
   useEffect(() => {
     if (appState.needsWorkspace) {
-      setShowSettings(false)
-      setShowNotes(false)
-      setShowFiles(false)
-      setShowAgentsPage(false)
+      setTabsState(initialTabs())
       setShowProjectPicker(false)
-      setShowFreebuffAgent(false)
-      setShowHome(true)
+      setShowConversationPicker(false)
     }
   }, [appState.needsWorkspace])
-  const [showAgentsPage, setShowAgentsPage] = useState(false)
   const [agentsLoading, setAgentsLoading] = useState(true)
   const [agentsError, setAgentsError] = useState<string>()
   const [showConversationPicker, setShowConversationPicker] = useState(false)
@@ -70,14 +86,11 @@ export function useAvenApp() {
   // espaces connus, sans passer par les Réglages. Le changement redémarre le moteur
   // côté main (api.switchWorkspace), l'état remonte par le poll de app:state existant.
   const [showProjectPicker, setShowProjectPicker] = useState(false)
-  const [showNotes, setShowNotes] = useState(false)
   const [notesInitialId, setNotesInitialId] = useState<string | undefined>()
   // v9.3.0 : explorateur de fichiers intégré (lecture seule) — remplace l'ouverture
   // externe de l'Explorateur Windows, qui reste disponible depuis la vue elle-même.
-  const [showFiles, setShowFiles] = useState(false)
-  // v9.5.0 : page pleine de l'agent Freebuff (comme la page Agents) — remplace le
-  // dialogue v9.2.0 qui recouvrait l'écran courant.
-  const [showFreebuffAgent, setShowFreebuffAgent] = useState(false)
+  // v11.0.0 : la pastille Freebuff vit dans le rail ; l'instrument Terminal est un
+  // onglet unique (plus de page plein écran).
   // v9.3.0 : pastille d'état Freebuff du hub — "active" (session PTY vivante), "ready"
   // (CLI installé) ou "missing". Rechargée au montage et à chaque fermeture du terminal.
   const [freebuffPillState, setFreebuffPillState] = useState<"active" | "ready" | "missing" | "installing">("missing")
@@ -142,6 +155,8 @@ export function useAvenApp() {
   const messageLoadSeq = useRef(0)
   const chatIdRef = useRef<string | null>(null)
   const preferredChatIdRef = useRef<string | null>(null)
+  // v11.0.0 : un brouillon par conversation — changer d'onglet ne perd pas la saisie.
+  const draftsRef = useRef<Map<string, string>>(new Map())
   const { appearance, updateAppearance, resetAppearance } = useAppearance()
   chatIdRef.current = chatId
 
@@ -172,7 +187,7 @@ export function useAvenApp() {
       // v10.5.0 : la commande vocale annonce la destination visible, Terminal Freebuff.
       // L'identifiant open-project reste interne pour préserver le contrat de routage.
       case "open-project":
-        openFreebuffAgent("project")
+        openFreebuffAgent()
         return "Terminal Freebuff ouvert."
       case "go-home":
         goHome()
@@ -215,9 +230,8 @@ export function useAvenApp() {
         })()
         return "Freebuff…"
       case "open-stats":
-        // v9.3.0 : les statistiques vivent dans les Réglages, onglet « Usage ».
-        openConfiguration()
-        setSettingsSection("usage")
+        // v11.0.0 : les statistiques restent une section de Réglages.
+        openConfiguration(undefined, "usage")
         return "Statistiques ouvertes (Réglages → Usage)."
       case "new-chat":
         void newChat()
@@ -265,23 +279,25 @@ export function useAvenApp() {
       // v10.4.0 : la conversation n'est créée QU'ICI, quand un texte arrive vraiment —
       // l'ancien chemin créait une conversation dès l'appui sur le micro, donc chaque
       // commande du hub (« ouvre les paramètres ») laissait une conversation vide.
-      if (!chatIdRef.current && tabRef.current) {
+      let target = chatIdRef.current
+      if (!target && tabRef.current) {
         try {
           const c = await api.createChat(tabRef.current)
           setChats((prev) => [c, ...prev])
           setChatId(c.id)
+          target = c.id
+          setTabsState((state) => openConversation(state, c.id, undefined, tabRef.current))
         } catch (e) { fail(e); return }
+      } else if (target) {
+        // Le texte d'une dictée rejoint TOUJOURS le composeur de la conversation active.
+        setTabsState((state) => openConversation(state, target!, undefined, tabRef.current))
       }
 
       setInput(text)
+      if (target) draftsRef.current.set(target, text)
       setDictationMeta({ cleaned, warning: result.warning, showRaw: false, rawText: result.raw, cleanedText: text })
-      // La dictée peut partir du HUB : on y voit « Transcription… », mais le texte atterrit
-      // dans le composeur qui n'est PAS visible depuis l'accueil. Sans cette navigation,
-      // l'utilisateur ne voit rien après le relâchement.
-      setShowHome(false)
       setShowConversationPicker(false)
       setShowProjectPicker(false)
-      setShowAgentsPage(false)
       setHomeNotice(null)
       requestAnimationFrame(() => textareaRef.current?.focus())
     },
@@ -362,86 +378,82 @@ export function useAvenApp() {
   const [deleteArmed, setDeleteArmed] = useState<string | null>(null)
   const deleteArmTimer = useRef<number | undefined>(undefined)
 
-  // v10.2.0 (M3) : fermeture de panneau en View Transition — le panneau porte un
-  // view-transition-name: dialog (App.css), sa sortie joue ::view-transition-old(dialog).
-  // v10.3.0 : fermer une page revient à l'ÉCRAN D'ORIGINE. Une page ouverte depuis le
-  // hub y retourne (`pageReturnHome`) ; ouverte depuis une conversation, elle y revient.
-  // Une page est une PAGE (showHome=false) et non un calque : sinon la barre de
-  // fenêtre restait masquée (`.window-chrome-home`) et Notes/Fichiers/Réglages
-  // n'avaient pas la même hauteur que Tâches/Projet.
-  const pageReturnHome = useRef(false)
-  // v10.3.1 : la page retient aussi la CARTE du hub d'où elle vient — la fermeture
-  // rejoue le morph inverse (page → carte) au lieu d'un fondu du root.
-  const pageSource = useRef<"project" | "tasks" | "notes" | "files" | null>(null)
+  // v11.0.0 : navigation du Poste. Ouvrir un instrument = ouvrir ou focus son
+  // onglet ; fermer = fermer l'onglet actif. Plus de mémoire d'écran d'origine :
+  // le rail et la barre d'onglets SONT la carte. Aucune View Transition de hub.
   const closePage = useCallback(() => {
-    // Le nom de transition doit être posé AVANT la capture : on le choisit ici.
-    const source = pageReturnHome.current ? pageSource.current ?? undefined : undefined
-    withViewTransition(() => {
-      setShowNotes(false)
-      setShowFiles(false)
-      setNotesInitialId(undefined)
-      setShowSettings(false)
-      setShowAgentsPage(false)
-      setShowFreebuffAgent(false)
-      setShowConversationPicker(false)
-      setShowProjectPicker(false)
-      pageSource.current = null
-      if (pageReturnHome.current) { pageReturnHome.current = false; setShowHome(true) }
-    }, source)
+    const next = closeTab(tabsState, tabsState.activeId)
+    if (next === tabsState) return
+    setTabsState(next)
+    const tab = activeWorkbenchTab(next)
+    if (tab.kind === "conversation") setChatId(tab.chatId ?? null)
+  }, [tabsState])
+
+  const openInstrumentTab = useCallback((kind: InstrumentKind) => {
+    setTabsState((state) => openInstrument(state, kind))
+    setShowConversationPicker(false)
+    setShowProjectPicker(false)
   }, [])
 
-  // ── Vues Notes et Fichiers (v9.3.0) ──────────────────────────────────────────
-  // Ouvertures centralisées : les deux vues remplacent la surface principale comme
-  // Tâches et Projet (v10.3.0) et retiennent où revenir en les fermant. Ouverture des
-  // Notes depuis une conversation : la note créée hérite de l'agent courant
-  // (pré-étiquetage).
-  // v10.3.1 : `source` = la carte du hub d'où la page est ouverte. Sans elle (raccourci
-  // clavier, commande vocale, conversation), l'ouverture passe quand même par une
-  // View Transition : fondu du root au lieu d'un changement d'écran sec.
-  const openNotesView = (initialId?: string, source?: "notes") => {
-    pageReturnHome.current = pageReturnHome.current || showHome
-    pageSource.current = source ?? null
-    withViewTransition(() => {
-      setShowHome(false)
-      setShowFiles(false)
-      setShowSettings(false)
-      setShowAgentsPage(false)
-      setShowFreebuffAgent(false)
-      setShowConversationPicker(false)
-      setShowProjectPicker(false)
-      setNotesInitialId(initialId)
-      setShowNotes(true)
-    }, source)
+  const closeWorkbenchTab = useCallback((id: string) => {
+    const next = closeTab(tabsState, id)
+    if (next === tabsState) return
+    setTabsState(next)
+    const tab = activeWorkbenchTab(next)
+    if (tab.kind === "conversation") setChatId(tab.chatId ?? null)
+  }, [tabsState])
+
+  const focusWorkbenchTab = useCallback((id: string) => {
+    const tab = tabsState.tabs.find((t) => t.id === id)
+    if (!tab) return
+    setTabsState((state) => focusTab(state, id))
+    if (tab.kind === "conversation") {
+      if (tab.agent && tab.agent !== tabRef.current) {
+        tabRef.current = tab.agent
+        setTab(tab.agent)
+      }
+      setChatId(tab.chatId ?? null)
+    }
+  }, [tabsState])
+
+  const openNotesView = (initialId?: string) => {
+    setNotesInitialId(initialId)
+    openInstrumentTab("notes")
   }
-  const openFilesView = (source?: "files") => {
-    pageReturnHome.current = pageReturnHome.current || showHome
-    pageSource.current = source ?? null
-    withViewTransition(() => {
-      setShowHome(false)
-      setShowNotes(false)
-      setShowSettings(false)
-      setShowAgentsPage(false)
-      setShowFreebuffAgent(false)
-      setShowConversationPicker(false)
-      setShowProjectPicker(false)
-      setShowFiles(true)
-    }, source)
+  const openFilesView = () => openInstrumentTab("files")
+  // v11.0.0 : le rail « Conversations » ouvre un onglet de conversation (draft) au
+  // lieu de changer d'écran ; la première session chargée s'y rattache.
+  const openConversationInstrument = () => {
+    setTabsState((state) => openConversation(state, undefined, undefined, tabRef.current))
+    setShowConversationPicker(false)
+    setShowProjectPicker(false)
   }
+  const openAgentsPage = () => openInstrumentTab("orchestration")
+  const openFreebuffAgent = () => openInstrumentTab("terminal")
+  const openConfiguration = (focus?: "workspaces", section: "general" | "appearance" | "usage" = "general") => {
+    setSettingsSection(section)
+    setSettingsFocus(focus)
+    openInstrumentTab("settings")
+  }
+
   // « Joindre à la conversation » / « Faire analyser » : le texte atterrit dans le
   // composeur de l'onglet actif (créée si besoin), comme la dictée — l'utilisateur valide.
   const composeIntoChat = useCallback(async (text: string) => {
-    setShowNotes(false)
-    setShowFiles(false)
-    setShowHome(false)
-    if (!chatIdRef.current && tabRef.current) {
+    let target = chatIdRef.current
+    if (!target && tabRef.current) {
       try {
         const c = await api.createChat(tabRef.current)
         setChats((prev) => [c, ...prev])
         setChatId(c.id)
+        target = c.id
+        setTabsState((state) => openConversation(state, c.id, undefined, tabRef.current))
       } catch (e) { fail(e); return }
+    } else if (target) {
+      setTabsState((state) => openConversation(state, target ?? undefined, undefined, tabRef.current))
     }
     setDictationMeta({ cleaned: false, showRaw: false, rawText: "", cleanedText: "" })
     setInput(text)
+    if (target) draftsRef.current.set(target, text)
     requestAnimationFrame(() => textareaRef.current?.focus())
   }, [])
 
@@ -614,7 +626,23 @@ export function useAvenApp() {
         void newChat()
       } else if (mod && e.key.toLowerCase() === "k") {
         e.preventDefault()
-        ;(showHome ? homeSearchRef.current : searchRef.current)?.focus()
+        document.querySelector<HTMLInputElement>(".wb-command-input")?.focus()
+      } else if (mod && e.key.toLowerCase() === "w") {
+        // v11.0.0 : fermer l'onglet actif, jamais la fenêtre (le Poste garde Aujourd'hui).
+        e.preventDefault()
+        closePage()
+      } else if (mod && e.key === "Tab") {
+        e.preventDefault()
+        const list = tabsState.tabs
+        const index = list.findIndex((t) => t.id === tabsState.activeId)
+        const next = list[(index + (e.shiftKey ? -1 : 1) + list.length) % list.length]
+        if (next) focusWorkbenchTab(next.id)
+      } else if (mod && /^[1-7]$/.test(e.key)) {
+        e.preventDefault()
+        const kinds: InstrumentKind[] = ["home", "conversation", "notes", "files", "terminal", "orchestration", "settings"]
+        const kind = kinds[Number(e.key) - 1]
+        if (kind === "conversation") setTabsState((state) => openConversation(state, undefined, undefined, tabRef.current))
+        else if (kind) openInstrumentTab(kind)
       } else if (e.key === "F2" && chatId && !showHome) {
         // v10.2.2 : F2 fonctionne même barre latérale masquée — le champ de renommage
         // vit aussi dans l'en-tête de la conversation (le raccourci n'est plus inerte).
@@ -624,7 +652,7 @@ export function useAvenApp() {
         // Push-to-talk clavier : Ctrl+Maj+V maintenue = enregistrer, relâchée = transcrire.
         // (keydown se répète tant que la touche est tenue : on n'agit qu'à la première.)
         e.preventDefault()
-        if (!e.repeat && dictationRef.current.state === "idle") void dictationRef.current.start(showHome ? "hub" : "composer")
+        if (!e.repeat && dictationRef.current.state === "idle") void dictationRef.current.start(showHome ? "workbench" : "composer")
       } else if (e.key === "Escape") {
         if (dictationRef.current.state === "recording") {
           dictationRef.current.cancel()
@@ -634,14 +662,8 @@ export function useAvenApp() {
         // v10.2.2 : la barre de sélection est un popover : Échap la ferme avant tout
         // autre effet (elle restait affichée par-dessus la conversation).
         if (selBarRef.current) { setSelBar(null); return }
-        if (showConversationPicker) withViewTransition(() => setShowConversationPicker(false))
-        else if (showProjectPicker) withViewTransition(() => setShowProjectPicker(false)) // v9.1.6 : le modal projet suit Échap
-        // v10.3.0 : Tâches et Projet sont des PORTES ouvertes depuis le hub — Échap
-        // revient donc à l'accueil (session Freebuff maintenue). Notes/Fichiers/
-        // Réglages, eux, reviennent à l'écran d'origine (conversation comprise).
-        // v10.3.1 : toutes les pages se ferment par le MÊME chemin (closePage), donc
-        // avec le même morph inverse vers la carte d'origine.
-        else if (showFreebuffAgent || showFiles || showAgentsPage || showNotes || showSettings) closePage()
+        if (showConversationPicker) setShowConversationPicker(false)
+        else if (showProjectPicker) setShowProjectPicker(false)
         else if (live.forms[0]) void api.cancelForm(live.forms[0].sessionID, live.forms[0].id).catch(fail)
         else if (live.busy && chatId) void api.interrupt(chatId).catch(fail)
       }
@@ -660,7 +682,7 @@ export function useAvenApp() {
       window.removeEventListener("keydown", onKey)
       window.removeEventListener("keyup", onKeyUp)
     }
-  }, [live.busy, live.forms, chatId, showSettings, showAgentsPage, showConversationPicker, showProjectPicker, showFreebuffAgent, showHome, showNotes, showFiles, tab, closePage, deleteArmed])
+  }, [live.busy, live.forms, chatId, showConversationPicker, showProjectPicker, showHome, tab, closePage, deleteArmed, tabsState, focusWorkbenchTab, openInstrumentTab])
 
   const newChat = async () => {
     if (!tab) return
@@ -670,8 +692,7 @@ export function useAvenApp() {
       setChatId(c.id)
       setShowConversationPicker(false)
       setShowProjectPicker(false)
-      setShowAgentsPage(false)
-      setShowHome(false)
+      setTabsState((state) => openConversation(state, c.id, undefined, tabRef.current))
       requestAnimationFrame(() => textareaRef.current?.focus())
     } catch (e) {
       fail(e)
@@ -681,11 +702,13 @@ export function useAvenApp() {
   const removeChat = async (id: string) => {
     try {
       await api.deleteChat(id)
+      draftsRef.current.delete(id)
       setChats((cs) => {
         const rest = cs.filter((c) => c.id !== id)
         if (chatId === id) setChatId(rest[0]?.id ?? null)
         return rest
       })
+      setTabsState((state) => removeChatTab(state, id))
     } catch (e) {
       fail(e)
     }
@@ -745,6 +768,7 @@ export function useAvenApp() {
     const text = input.trim()
     if (!text) return
     setInput("")
+    if (chatId) draftsRef.current.delete(chatId)
     await sendText(text)
   }
   const sendText = async (text: string) => {
@@ -935,97 +959,22 @@ export function useAvenApp() {
 
 
   // Basculer d’agent sans laisser une requête réseau tardive remplacer la conversation
-  // du nouvel agent. La sélection reste cohérente entre le hub, les onglets et l’assistant vocal.
+  // du nouvel agent. L'onglet de conversation actif est réutilisé (draft) et se
+  // rattachera à la première session chargée.
   const selectAgent = (id: string) => {
     if (!agents.some((a) => a.id === id)) return
     tabRef.current = id
     preferredChatIdRef.current = null
     setTab(id)
     setChatId(null)
-    setShowAgentsPage(false)
+    setTabsState((state) => openConversation(state, undefined, undefined, id))
     setShowConversationPicker(false)
     setShowProjectPicker(false)
-    setShowSettings(false)
-    setShowNotes(false)
-    setShowFiles(false)
-    setShowFreebuffAgent(false)
-    setShowHome(false)
     requestAnimationFrame(() => textareaRef.current?.focus())
   }
 
-  // v9.7.1 : `source` (depuis les cartes du hub) déclenche le shared element carte→page.
-  const openAgentsPage = (source?: "tasks") => {
-    // v10.3.1 : Tâches se ferme désormais par closePage (Échap, « Fermer », Accueil) —
-    // il lui faut donc la même mémoire d'origine que les autres pages.
-    pageReturnHome.current = true
-    pageSource.current = source ?? null
-    withViewTransition(() => {
-      setShowHome(false)
-      setShowSettings(false)
-      setShowNotes(false)
-      setShowFiles(false)
-      setShowConversationPicker(false)
-      setShowProjectPicker(false)
-      setShowFreebuffAgent(false)
-      setShowAgentsPage(true)
-    }, source)
-  }
+  const goHome = () => openInstrumentTab("home")
 
-  // v9.5.0 : la page agent Freebuff se navigue comme la page Agents — une seule vue
-  // à la fois, « Accueil » dans la barre de fenêtre pour en sortir.
-  const openFreebuffAgent = (source?: "project") => {
-    pageReturnHome.current = true
-    pageSource.current = source ?? null
-    withViewTransition(() => {
-      setShowHome(false)
-      setShowSettings(false)
-      setShowNotes(false)
-      setShowFiles(false)
-      setShowConversationPicker(false)
-      setShowProjectPicker(false)
-      setShowAgentsPage(false)
-      setShowFreebuffAgent(true)
-    }, source)
-  }
-
-  // v9.1.0 : retour accueil depuis la barre de fenêtre — ferme les panneaux ouverts.
-  // v10.3.1 : depuis une page, « Accueil » rejoue le retour de la page (morph page →
-  // carte) au lieu d'un fondu du root qui faisait réapparaître la carte de nulle part.
-  const goHome = () => {
-    if (showNotes || showFiles || showSettings || showAgentsPage || showFreebuffAgent) {
-      pageReturnHome.current = true
-      closePage()
-      return
-    }
-    withViewTransition(() => { // v9.7.1 : sans source = fondu root
-      pageReturnHome.current = false // v10.3.0 : le hub est l'écran d'origine
-      setShowAgentsPage(false)
-      setShowSettings(false)
-      setShowNotes(false)
-      setShowConversationPicker(false)
-      setShowProjectPicker(false)
-      setShowFreebuffAgent(false)
-      setShowHome(true)
-    })
-  }
-
-  const openConfiguration = (focus?: "workspaces", section: "general" | "appearance" | "usage" = "general") => {
-    // v10.3.0 : Réglages est une page comme les autres — la barre de fenêtre reste
-    // visible (Accueil, état) et la fermeture rend l'écran d'origine.
-    pageReturnHome.current = pageReturnHome.current || showHome
-    pageSource.current = null // v10.3.1 : aucune carte du hub ne mène aux Réglages
-    setShowHome(false)
-    setShowAgentsPage(false)
-    setShowNotes(false)
-    setShowFiles(false)
-    setShowFreebuffAgent(false)
-    setSettingsSection(section)
-    setSettingsFocus(focus)
-    setShowSettings(true)
-  }
-
-  // v10.4.0 : ouvertures du hub — la page d'accueil lit un contrat de haut niveau et
-  // ne manipule plus les refs internes (sélection préférée, séquence de chargement).
   const openHomeConversation = (chat: Chat) => {
     if (chat.agent && chat.agent !== tab) {
       tabRef.current = chat.agent
@@ -1038,27 +987,26 @@ export function useAvenApp() {
     setHomeCommand("")
     setShowConversationPicker(false)
     setShowProjectPicker(false)
-    setShowAgentsPage(false)
-    setShowHome(false)
+    setTabsState((state) => openConversation(state, chat.id, undefined, chat.agent ?? tabRef.current))
     requestAnimationFrame(() => textareaRef.current?.focus())
   }
 
-  // v10.4.0 : la commande du hub (recherche ou demande) — même chemin qu'avant,
-  // exposé au shell comme une action et non comme cinq setters.
+  // La barre de commande du Poste remplace la commande d'accueil : une recherche
+  // vide n'envoie rien ; un texte prépare le composeur de la conversation ouverte.
   const submitHomeCommand = async (raw: string) => {
     const command = raw.trim()
     if (!command) return
     try {
-      if (!chatId && tab) {
+      let target = chatId
+      if (!target && tab) {
         const c = await api.createChat(tab)
         setChats((prev) => [c, ...prev])
         setChatId(c.id)
+        target = c.id
       }
-      setShowHome(false)
-      setShowAgentsPage(false)
-      setShowConversationPicker(false)
-      setShowProjectPicker(false)
+      if (target) setTabsState((state) => openConversation(state, target!, undefined, tabRef.current))
       setInput(command)
+      if (target) draftsRef.current.set(target, command)
       setHomeCommand("")
       requestAnimationFrame(() => textareaRef.current?.focus())
     } catch (e) {
@@ -1077,6 +1025,23 @@ export function useAvenApp() {
       preferredChatIdRef.current = null
     }
   }
+
+  // v11.0.0 : la session chargée se rattache à l'onglet de conversation actif.
+  useEffect(() => {
+    if (!chatId) return
+    setTabsState((state) => bindChat(state, chatId, tabRef.current))
+  }, [chatId])
+
+  // v11.0.0 : sauvegarde/restauration des brouillons au changement de session.
+  const draftChatRef = useRef<string | null>(null)
+  const draftInputRef = useRef("")
+  draftInputRef.current = input
+  useEffect(() => {
+    const previous = draftChatRef.current
+    if (previous && previous !== chatId) draftsRef.current.set(previous, draftInputRef.current)
+    setInput(chatId ? draftsRef.current.get(chatId) ?? "" : "")
+    draftChatRef.current = chatId
+  }, [chatId])
 
   tabRef.current = tab
   showArchivedRef.current = showArchived
@@ -1197,15 +1162,9 @@ export function useAvenApp() {
     setSelBar,
     setSettingsFocus,
     setSettingsSection,
-    setShowAgentsPage,
     setShowArchived,
     setShowConversationPicker,
-    setShowFiles,
-    setShowFreebuffAgent,
-    setShowHome,
-    setShowNotes,
     setShowProjectPicker,
-    setShowSettings,
     setTab,
     setTaskModeState,
     settingsFocus,
@@ -1221,6 +1180,14 @@ export function useAvenApp() {
     showNotes,
     showProjectPicker,
     showSettings,
+    tabsState,
+    activeInstrument,
+    openInstrumentTab,
+    openConversationInstrument,
+    closeWorkbenchTab,
+    focusWorkbenchTab,
+    inspectorOpen,
+    setInspectorOpen,
     signalActivity,
     startRenameChat,
     tab,

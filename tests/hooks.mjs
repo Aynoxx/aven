@@ -16,6 +16,16 @@ export async function resolve(specifier, context, nextResolve) {
         /* le .ts n'existe pas non plus : erreur d'origine */
       }
     }
+    // v11.3.0 : les modules du renderer s'importent SANS extension (Vite les
+    // résout à la compilation), ce que Node ne fait pas. Sans ce repli, tester
+    // `playback.ts` échouait sur son `./trim` — jamais sur son comportement.
+    if (err?.code === "ERR_MODULE_NOT_FOUND" && specifier.startsWith(".") && !/\.[a-z]+$/i.test(specifier)) {
+      try {
+        return await nextResolve(specifier + ".ts", context)
+      } catch {
+        /* pas de .ts voisin : erreur d'origine */
+      }
+    }
     throw err
   }
 }

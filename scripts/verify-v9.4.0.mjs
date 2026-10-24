@@ -47,9 +47,14 @@ assert.match(css, /.model-select-menu/, "CSS du menu modèle attendu")
 // v10.1.0 : la constante TASK_MODES_UI (switch de mode de l'orchestrateur) a
 // repris le rôle de MODES (cartes de modes séparées retirées de la page).
 assert.match(app, /const TASK_MODES_UI = \[/, "v10.1.0 : la constante TASK_MODES_UI porte les modes")
-assert.match(css, /\.assistants-map \{ display: none; \}/, "v9.6.0 : le tableau v9.4.0 est masqué (sondes d'origine honorées)")
+// v11.1.3 : la règle `display: none` masquait un tableau que plus aucun composant ne
+// rendait ; le CSS et le composant ont été supprimés. La sonde devient plus stricte :
+// le tableau ne peut plus revenir du tout.
+assert.ok(!/\.assistants-map/.test(css), "le tableau v9.4.0 a disparu du CSS, pas seulement masqué")
 assert.ok(!/key: "freebuff", label: "Freebuff"/.test(app), "la carte Freebuff a quitté le cercle du hub")
-assert.match(css, /--hub-angle:90deg/, "4 cartes à 90° attendues")
+// AMENDEMENT v11.0.0 : le hub orbital a disparu (planche « Aujourd'hui ») — la sonde
+// garde son intention : aucune carte positionnée à la main ne revient dans les styles.
+assert.ok(!/--hub-angle/.test(css), "v11.0.0 : plus aucune orbite de hub")
 assert.ok(!/.hub-card-freebuff { --hub-angle/.test(css), "plus d’angle pour la carte Freebuff supprimée")
 
 // C. « Faire relire » : le subagent caché devient une action.

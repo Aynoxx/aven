@@ -122,17 +122,17 @@ try {
   await cdp.send("Log.enable").catch(() => undefined)
   await cdp.send("Page.enable").catch(() => undefined)
 
-  // 1) Origine production + assets embarqués rendus.
-  await waitFor(cdp, `document.readyState === "complete" && document.querySelectorAll(".window-chrome").length >= 1`, 30_000)
+  // 1) Origine production + assets embarqués rendus (v11.0.0 : bandeau du Poste).
+  await waitFor(cdp, `document.readyState === "complete" && document.querySelectorAll(".wb-status").length >= 1`, 30_000)
   const href = await cdp.eval("location.href")
   if (!/tauri\.localhost/.test(href)) fail(`origine inattendue : ${href}`)
   say(`PASS · origine production (${href})`)
 
-  // 2) Espace vide supprimé : sur l'accueil la barre reste au DOM (attendue par
-  //    les sondes) mais n'occupe plus aucune place sous la barre native.
-  const barre = await cdp.eval(`(() => { const el = document.querySelector(".window-chrome"); if (!el) return { absent: true }; const r = el.getBoundingClientRect(); return { display: getComputedStyle(el).display, h: r.height } })()`)
-  if (barre.absent || barre.display !== "none" || barre.h !== 0) fail(`barre vide encore présente sur l'accueil : ${JSON.stringify(barre)}`)
-  say(`PASS · barre vide absente de l'accueil (display=${barre.display}, hauteur=${barre.h}px)`)
+  // 2) Le cadre du Poste occupe toute la fenêtre : bandeau + rail + onglets présents
+  //    au premier écran (v11.0.0 remplace la « barre vide » de l'ancien chrome).
+  const cadre = await cdp.eval(`(() => { const q = (s) => document.querySelectorAll(s).length; return { statut: q(".wb-status"), rail: q(".wb-rail"), onglets: q(".wb-tabs"), app: q(".wb-app") } })()`)
+  if (!(cadre.statut === 1 && cadre.rail === 1 && cadre.onglets === 1 && cadre.app === 1)) fail(`cadre du Poste incomplet : ${JSON.stringify(cadre)}`)
+  say(`PASS · cadre du Poste monté (bandeau, rail, onglets)`)
 
   // 3) Fenêtre maximisée au lancement (1366 d'écran vs 1200 fenêtré).
   const geo = await cdp.eval(`({ iw: innerWidth, aw: screen.availWidth })`)
@@ -161,14 +161,14 @@ try {
 
   for (const theme of ["light", "dark"]) {
     await setTheme(theme)
-    await waitFor(cdp, `document.readyState === "complete" && document.querySelectorAll(".home-hub, .window-chrome").length >= 1 && document.documentElement.dataset.theme === "${theme === "dark" ? "dark" : "light"}"`, 30_000)
+    await waitFor(cdp, `document.readyState === "complete" && document.querySelectorAll(".wb-status").length >= 1 && document.documentElement.dataset.theme === "${theme === "dark" ? "dark" : "light"}"`, 30_000)
     await sleep(700)
-    const file = `${OUT}/prod-hub-${theme}.png`
+    const file = `${OUT}/prod-poste-${theme}.png`
     await cdp.shot(file)
     say(`PASS · capture ${file} (data-theme=${await cdp.eval("document.documentElement.dataset.theme")})`)
     if (theme === "dark") {
-      // Page Tâches en sombre : clic réel sur la carte du hub.
-      await cdp.eval(`[...document.querySelectorAll("button")].find((b) => /Spécialistes par tâche/.test(b.getAttribute("aria-label") || b.textContent))?.click()`)
+      // Instrument Orchestration en sombre : clic réel sur le rail du Poste.
+      await cdp.eval(`[...document.querySelectorAll(".wb-rail-item")].find((b) => /Orchestration/.test(b.getAttribute("aria-label") || b.textContent))?.click()`)
       await waitFor(cdp, `document.querySelectorAll(".tasks-principal-card").length >= 1`, 10_000)
       await sleep(500)
       await cdp.shot(`${OUT}/prod-tasks-dark.png`)

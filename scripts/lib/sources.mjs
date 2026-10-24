@@ -31,10 +31,13 @@ const list = (dir, pattern) =>
     .map((f) => `${dir}/${f}`)
 
 export function readApp() {
+  // v11.0.0 : le Poste a déplacé la coquille et les instruments dans workbench/ —
+  // l'agrégat les inclut, sinon une assertion de présence manquerait du code vivant.
   const files = [
     "web/src/App.tsx",
     ...list("web/src/app", /\.(?:ts|tsx)$/),
     ...list("web/src/pages", /\.tsx$/),
+    ...list("web/src/workbench", /\.tsx$/),
   ]
   return files.map(read).join("\n")
 }

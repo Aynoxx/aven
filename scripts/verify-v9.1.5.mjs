@@ -9,7 +9,9 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const read = (p) => readFileSync(path.join(root, p), "utf8")
 
 const pkg = JSON.parse(read("package.json"))
-const workspaces = read("host/workspaces.ts")
+// v11.1.3 : le registre TypeScript (`host/workspaces.ts`) n'avait plus aucun importeur
+// en production — Rust possède le registre. La sonde lit désormais ce code-là.
+const workspaces = read("src-tauri/src/workspaces.rs")
 const main = read("host/aven-app-host.ts") // v10.0.0 : remplace le main Electron
 const cli = read("host/freebuff-cli.ts")
 const app = readApp()
@@ -21,13 +23,13 @@ const [vMaj, vMin, vPatch] = pkg.version.split(".").map(Number)
 assert.ok(vMaj * 10000 + vMin * 100 + vPatch >= 90105, `version trop ancienne : ${pkg.version}`)
 
 // A. Plus AUCUN espace « Par défaut » imposé : registre vide = état normal de choix.
-assert.ok(!workspaces.includes("Par défaut"), "le nom « Par défaut » doit avoir disparu de workspaces.ts")
-assert.ok(!/defaultWorkspace/.test(workspaces), "defaultWorkspace doit avoir disparu")
-assert.ok(!/ensureDefaultRegistered/.test(workspaces), "ensureDefaultRegistered doit avoir disparu")
+assert.ok(!workspaces.includes("Par défaut"), "le nom « Par défaut » doit avoir disparu du registre")
+assert.ok(!/default_workspace/.test(workspaces), "aucun espace par défaut ne doit être créé")
+assert.ok(!/ensure_default_registered/.test(workspaces), "ensureDefaultRegistered doit avoir disparu")
 assert.ok(!/ensureDefaultRegistered/.test(main), "main.ts ne doit plus appeler ensureDefaultRegistered")
-assert.match(workspaces, /activeWorkspace\(\): WorkspaceEntry \| null/, "activeWorkspace doit pouvoir ne renvoyer aucun espace")
+assert.match(workspaces, /fn active_workspace\(\) -> Result<Option<String>, String>/, "active_workspace doit pouvoir ne renvoyer aucun espace")
 // v9.1.6 : plus AUCUN repli implicite — pas de « premier connu » comme projet par défaut.
-assert.ok(!/st\.list\[0\]/.test(workspaces), "le repli « premier connu » doit avoir disparu de activeWorkspace")
+assert.ok(!/list\[0\]/.test(workspaces), "le repli « premier connu » doit avoir disparu de active_workspace")
 assert.match(read("src-tauri/src/runtime.rs"), /let Some\(workspace\) = active_workspace\(\)\? else/, "boot : aucun espace → état initial (needsWorkspace)")
 
 // B. Boot sans espace : état needsWorkspace, aucun démarrage moteur sur un dossier vide.
@@ -53,8 +55,14 @@ assert.ok(!app.includes("<span>Espaces</span>"), "le bouton Espaces a quitté le
 // v9.6.0 : sondes switchProject / project-item neutralisées (le modal du hub est retiré,
 // la bascule vit dans Réglages → Configuration via settingsDialog, sondée en section D).
 assert.ok(true) // (sondes déplacées)
-assert.match(css, /\.home-project-button/, "CSS du bouton hub attendu")
-assert.match(css, /\.project-item\.current/, "CSS du projet actif attendu")
+// AMENDEMENT v11.0.0 : le bouton du hub a disparu (la bascule vit dans Réglages →
+// Configuration et dans le bandeau du Poste). Le signal du projet actif, lui, doit
+// toujours être non coloriel : fond + bordure + badge.
+assert.match(css, /\.workspace-picker-item/, "l'écran de choix d'espace garde sa liste")
+// Le marqueur du projet actif a suivi la liste dans les Réglages (v11.0.0) : gras + icône,
+// jamais la couleur seule.
+assert.match(css, /\.current-workspace/, "CSS du projet actif attendu")
+assert.match(read("web/src/SettingsDialog.tsx"), /<b className="current-workspace">/, "le projet actif porte un marqueur explicite")
 // Garde v9.1.1 toujours vraie : PAS de nouvelle carte dans le cercle du hub (doublon « Projets »).
 assert.ok(!/key: "projects"/.test(app), "le sélecteur reste hors du cercle de cartes")
 
@@ -73,7 +81,9 @@ assert.match(cli, /export function freebuffBusyMessage/, "freebuffBusyMessage do
 assert.match(cli, /taken over/, "le message doit expliquer l'erreur « taken over » vue par l'utilisateur")
 assert.match(cli, /déjà ouvert/)
 
-// G. Test de non-régression couvrant le nouveau contrat workspaces.
-assert.ok(read("tests/workspaces.test.mjs").includes("registre absent"), "tests workspaces attendus")
+// G. Non-régression : les tests unitaires du registre vivent désormais avec le code
+// Rust qui l'exécute (cargo test). v11.1.3 : `tests/workspaces.test.mjs` testait un
+// module TypeScript sans importeur — supprimé avec lui.
+assert.match(workspaces, /#\[cfg\(test\)\]\s*\nmod tests/, "le registre garde ses tests à côté du code exécuté")
 
 console.log("v9.1.5 verification: OK")

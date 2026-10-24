@@ -75,7 +75,13 @@ assert.ok(!existsSync(path.join(root, "electron", "freebuff-bridge.ts")), "le po
 assert.ok(!existsSync(path.join(root, "web", "src", "freebuff-bridge-client.ts")), "le client WS doit rester supprimé")
 assert.ok(!/freebuffBridgeStart/.test(preload), "preload : les canaux WS doivent avoir disparu")
 assert.ok(!/freebuffBridgeStart/.test(types), "types : les canaux WS doivent avoir disparu")
-assert.ok(!/"ws"/.test(JSON.stringify(pkg.dependencies)), "la dépendance ws doit être retirée (plus aucun WebSocket serveur)")
+// v11.3.0 : la règle n'était pas « aucune dépendance nommée ws » mais « aucun
+// serveur WebSocket local » (le pont du terminal est mort avec le PTY IPC). `ws`
+// est revenu comme CLIENT sortant, pour la seule voix neuronale : la sonde mesure
+// donc l'usage réel — un import, dans le transport vocal, sans aucun serveur.
+const tts = read("host/voice-agent-tts.ts")
+assert.match(tts, /from "ws"/, "le transport vocal est le seul client WebSocket")
+assert.ok(!/WebSocketServer|new WebSocket\.Server|\.Server\(/.test(tts + main), "aucun serveur WS n'est ouvert, ni dans la voix ni dans le host")
 
 // H. UI : rendu par xterm.js (pas un <pre>), thème dérivé, styles chargés.
 assert.match(dialog, /from "@xterm\/xterm"|import\("@xterm\/xterm"\)/, "le rendu passe par xterm.js")

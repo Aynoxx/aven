@@ -79,40 +79,23 @@
      --ease-out : « decelerate » Fluent (entrée d'élément) ; --ease-spring : léger
      dépassement (emphase) ; --dur-fast pour micro-interactions, --dur-med pour
      transitions de vue. La chorégraphie (cascades) décale par --stagger-i. */
-  --dur-fast: 120ms;
-  --dur-med: 240ms;
-  --dur-slow: 380ms;
+  --dur-fast: 90ms;
+  --dur-med: 160ms;
+  --dur-slow: 240ms;
   /* v10.3.2 : TOUT temps de réponse passe par ces tokens (sonde v10.3.2). Les seules
      durées littérales admises sont les boucles AMBIANTES (pulse, présence, dictée,
      shimmer) : une boucle n'est pas un temps de réponse — aucune interaction ne
      l'attend — et son rythme lui est propre. */
-  --ease-out: cubic-bezier(.22, 1, .36, 1);
+  --ease-out: cubic-bezier(.2, 0, 0, 1);
   /* v10.3.1 : miroir de --ease-out (points de contrôle inversés) — une sortie doit
      être la même trajectoire que l'entrée, parcourue à l'envers (skill §7). */
-  --ease-out-mirror: cubic-bezier(.64, 0, .78, 1);
-  --ease-spring: cubic-bezier(.34, 1.56, .64, 1);
+  --ease-out-mirror: cubic-bezier(.8, 0, 1, .2);
+  --ease-spring: cubic-bezier(.34, 1.2, .64, 1);
   --stagger-i: 0;
 }
 
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --bg: color-mix(in srgb, var(--accent) 14%, #05060a);
-  --panel: rgba(18, 21, 29, .9);
-  --panel-solid: #12151d;
-  --panel-soft: #171b24;
-  --border: rgba(255, 255, 255, .08);
-  --border-strong: rgba(255, 255, 255, .14);
-  --text: #f4f5f8;
-  --muted: #9299aa;
-  /* v10.3.1 : en thème sombre c'est l'encre ÉCLAIRCIE qui rend l'accent lisible. */
-  --accent-ink: var(--accent-ink-dark);
-  --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
-  --accent-border: color-mix(in srgb, var(--accent) 35%, transparent);
-  --shadow: 0 18px 70px rgba(0, 0, 0, .32);
-  --home-surface: rgba(18, 21, 29, .78);
-  --home-surface-strong: #12151d;
-  --home-surface-soft: rgba(18, 21, 29, .64);
-}
+/* v11.0.0 : la palette sombre vit dans da.css (racine) ; base.css ne redéfinit
+   plus de thème — sinon sa spécificité `:root[data-theme]` écrasait la DA. */
 
 * { box-sizing: border-box; }
 html, body, #root { width: 100%; height: 100%; }

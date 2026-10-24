@@ -58,22 +58,36 @@ assert.match(css, /font-family:\s*system-ui,\s*"Segoe UI",\s*sans-serif;/,
 assert.match(css, /--font-size-xs:\s*11px;/, "micro-labels xs : 11px (10px sous le seuil de lisibilité)")
 assert.ok(!/--font-size-xs:\s*10px/.test(css), "plus aucune définition xs 10px")
 assert.match(css, /font-optical-sizing:\s*auto;/, "optique active (F4) : opsz suivi automatiquement")
-// F1 : le chrome de fenêtre est opaque SANS backdrop-filter mort (flou sur fond opaque).
-const chrome = css.match(/\.window-chrome \{[^}]*\}/)?.[0] ?? ""
+// F1 — AMENDEMENT v11.0.0 : le chrome de fenêtre (.window-chrome) a disparu avec le
+// hub orbital ; le bandeau de télémétrie (.wb-status) occupe sa place en haut du
+// Poste. La règle ne change pas de sens : ce qui cadre la fenêtre s'appuie sur
+// --panel-solid et ne prétend pas flouter (AGENTS.md §12.3).
+const chrome = css.match(/\.wb-status \{[^}]*\}/)?.[0] ?? ""
 assert.ok(chrome && !/backdrop-filter/.test(chrome) && /var\(--panel-solid\)/.test(chrome),
-  "F1 : .window-chrome opaque, plus de backdrop-filter mensonger")
-// F2 : sous un scrim de dialogue, les couches du hub n'additionnent plus leurs flous.
-assert.match(css, /body:has\(\.overlay\) \.home-toolbar[\s\S]*?\{ backdrop-filter: none; \}/,
-  "F2 : 3 backdrop-filters → 1 quand un dialogue est ouvert")
+  "F1 : le bandeau du Poste s'appuie sur --panel-solid, plus de backdrop-filter mensonger")
+assert.match(css, /\.wb-app,\s*\.wb-app \* \{\s*backdrop-filter: none;/,
+  "F1 (v11.0.0) : aucun verre dans le Poste — la DA interdit le flou sur ses surfaces")
+// F2 — AMENDEMENT v11.0.0 : le hub et ses trois flous superposés ont disparu. La
+// règle garde son intention (« un seul voile, jamais un empilement ») et devient
+// mesurable plus strictement : un SEUL backdrop-filter dans toute la feuille (le
+// scrim de dialogue), neutralisé dans le Poste par la règle ci-dessus.
+assert.equal((css.match(/backdrop-filter: blur/g) ?? []).length, 1,
+  "F2 : un seul voile flouté dans toute l'interface (le scrim de dialogue)")
 // F3 : titres de vue en leading serré.
-assert.match(css, /line-height: 1\.08/, "F3 : h1 de vue en line-height 1.08")
+// v11.1.3 : le h1 de vue a suivi PageShell → InstrumentFrame (titre de scène, 1.05,
+// donc plus serré encore). La sonde mesure l'élément vivant au lieu d'un sélecteur
+// mort ; l'intention « interligne serrée » reste figée.
+assert.match(css, /\.instrument-heading h1 \{[^}]*line-height: 1\.0\d/, "F3 : titre de scène en line-height serré")
 // F8 (amendée v10.3.0) : l'indice compositor `will-change: transform` était le
 // responsable du FLOU au survol — la carte composée était rastérisée puis mise à
 // l'échelle (1.025), texte compris. On fige l'inverse : plus d'indice, plus de scale.
 assert.ok(!/\.hub-card \{[^}]*will-change:\s*transform;/s.test(css), "F8 : plus de will-change sur .hub-card (flou au survol, v10.3.0)")
 assert.ok(!/\.hub-card:hover \{[^}]*scale\(/s.test(css), "F8 : plus de scale au survol des cartes (flou du texte)")
 // F9 : press-state homogène sur les contrôles segmentés.
-for (const sel of [/\.segmented button:active/, /\.settings-tabs button:active/, /\.home-recent-item:active/]) {
+// AMENDEMENT v11.0.0 : la ligne de récents du hub devient `.wb-row` (planche
+// Aujourd'hui) ; les contrôles segmentés des dialogues restent inchangés.
+// v11.1.3 : `.settings-tabs button` a disparu avec les onglets de la modale de réglages.
+for (const sel of [/\.segmented button:active/, /\.wb-row:active/]) {
   assert.match(css, sel, "F9 : :active en scale sur les contrôles segmentés")
 }
 // F5 : plus de boucle infinie décorative sur la pilule Freebuff (un seul foyer vivant).
@@ -92,18 +106,25 @@ const contrast = (a, b) => {
   const [hi, lo] = [relLum(a), relLum(b)].sort((x, y) => y - x)
   return (hi + 0.05) / (lo + 0.05)
 }
-const mutedValues = [...css.matchAll(/--muted:\s*(#[0-9a-fA-F]{6})/g)].map((m) => m[1])
-assert.equal(mutedValues[0], "#5f6579", "muted clair : #5f6579 (l'ancien #707689 tombait à 4,14:1)")
-assert.equal(mutedValues[1], "#9299aa", "muted sombre : #9299aa")
-assert.ok(contrast("#5f6579", "#fbfbfd") >= 4.5,
-  `muted clair sur --bg : ${contrast("#5f6579", "#fbfbfd").toFixed(2)}:1 (≥ 4,5:1 exigé)`)
-assert.ok(contrast("#9299aa", "#05060a") >= 4.5,
-  `muted sombre sur --bg : ${contrast("#9299aa", "#05060a").toFixed(2)}:1 (≥ 4,5:1 exigé)`)
+// AMENDEMENT v11.0.0 : la DA DRONE remplace la paire violette par deux champ/panel
+// olive (da.css). L'exigence ne bouge pas — --muted ≥ 4,5:1 sur --bg ET sur
+// --panel-solid, dans les DEUX thèmes — seules les valeurs mesurées changent.
+const lightMuted = css.match(/:root\[data-theme="light"\][\s\S]{0,400}?--muted:\s*(#[0-9a-fA-F]{6})/)?.[1]
+const darkMuted = css.match(/:root \{[\s\S]{0,800}?--muted:\s*(#[0-9a-fA-F]{6})/)?.[1]
+assert.equal(lightMuted, "#5c6153", "muted clair (DA v11.0.0) : #5c6153")
+assert.equal(darkMuted, "#949c8b", "muted sombre (DA v11.0.0) : #949c8b")
+for (const [name, muted, bg, panel] of [
+  ["clair", lightMuted, "#f3f0e7", "#fffdf7"],
+  ["sombre", darkMuted, "#0a0c09", "#141910"],
+]) {
+  assert.ok(contrast(muted, bg) >= 4.5, `muted ${name} sur --bg : ${contrast(muted, bg).toFixed(2)}:1 (≥ 4,5:1 exigé)`)
+  assert.ok(contrast(muted, panel) >= 4.5, `muted ${name} sur --panel-solid : ${contrast(muted, panel).toFixed(2)}:1 (≥ 4,5:1 exigé)`)
+}
 
 // ── D. Focus structurel PAIRÉ (E4) — le durcissement vit dans verify-conventions ──
 assert.match(css, /\.search-wrap:focus-within/, "recherche sidebar : signaleur sur le conteneur")
 assert.match(css, /\.composer:focus-within/, "composeur : signaleur sur le conteneur")
-assert.match(css, /\.home-command:focus-within/, "commande du hub : signaleur sur le conteneur")
+assert.match(css, /\.wb-command-form:focus-within/, "barre de commande : signaleur sur le conteneur (v11.0.0)")
 assert.match(css, /\.note-editor-content:has\(\.ProseMirror-focused\)/, "éditeur TipTap : signaleur :has(-focused)")
 assert.ok(conventions.includes("(?:0|none)"), "sonde 9b : outline: none couvert au même titre que outline: 0")
 assert.ok(conventions.includes("focusSignal"), "sonde 9b : exige un signal :focus* structuré")
@@ -112,11 +133,13 @@ assert.ok(conventions.includes("cssSelectors") && /paire|PAIRE/i.test(convention
 assert.match(rules, /PAIRE racine du sélecteur/, "AGENTS.md §12.2 : le durcissement est documenté")
 
 // ── E. Dialogues en View Transitions (M3/M12/M13) ─────────────────────────────
-assert.match(css, /\.overlay > \.dialog[^\n]*view-transition-name: dialog/, "le panneau porte son nom de transition")
+// AMENDEMENT v11.0.0 : le Poste ne change jamais de cadre, donc plus de View
+// Transition — ni pour les pages (supprimées), ni pour les dialogues. L'invariant
+// conservé est celui de l'ENTRÉE : un dialogue ponctuel naît en décélération, et
+// aucune règle de transition ne survit sans appelant.
+assert.ok(!/::view-transition-(?:old|new)/.test(css), "v11.0.0 : plus aucune View Transition dans les styles")
 assert.match(css, /@keyframes dialog-in/, "entrée dialog-in")
-assert.match(css, /@keyframes dialog-out/, "sortie dialog-out")
-assert.match(css, /::view-transition-old\(dialog\) \{ animation-name: dialog-out; \}/, "la sortie JOUE dialog-out (fermeture)")
-assert.match(css, /::view-transition-new\(dialog\) \{ animation-name: dialog-in; \}/, "l'entrée joue dialog-in")
+assert.match(css, /\.overlay > \.dialog \{ animation: dialog-in var\(--dur-med\) var\(--ease-out\)/, "l'entrée des dialogues joue dialog-in")
 // AMENDEMENT v10.3.1 (revue apple-design §4 P2) : l'assertion d'origine exigeait le
 // ressort SUR l'entrée des dialogues. Le skill §4 le réserve aux gestes qui portent
 // de l'élan (« overshoot on a menu that just faded in feels wrong ») : la règle est
@@ -129,16 +152,14 @@ assert.match(css, /\.selbar \{[^}]*animation: popover-in var\(--dur-fast\) var\(
   "M13 (amendée v10.3.1) : le ressort reste utilisé par un popover né d'un geste")
 assert.ok(!/\.model-select-menu \{[^}]*--ease-spring/.test(css),
   "M13 (amendée v10.3.1) : un menu ouvert au clic ne rebondit pas")
-// v10.3.0 : la fermeture s'appelle `closePage` — elle ferme TOUTES les pages et
-// revient à l'écran d'origine (plus de `showHome` forcé). La transition est conservée.
-// AMENDEMENT v10.3.1 : closePage garde l'esprit de la règle (toute fermeture passe
-// par une View Transition) et gagne la source du morph — on vérifie les deux.
-assert.match(app, /const closePage = useCallback\(\(\) => \{[\s\S]{0,900}?withViewTransition\(\(\) => \{[\s\S]{0,900}?\}, source\)/,
-  "fermeture des pages en transition, avec la carte d'origine comme source")
-assert.match(app, /withViewTransition\(\(\) => setShowConversationPicker\(false\)\)/, "conversation : fermeture en transition")
-assert.match(app, /withViewTransition\(\(\) => setShowSettings\(false\)\)/, "réglages : fermeture en transition")
-assert.match(app, /showFreebuffAgent \|\| showFiles \|\| showAgentsPage \|\| showNotes \|\| showSettings\) closePage\(\)/,
-  "page Tâches : fermeture en transition, par le chemin commun (v10.3.1)")
+// AMENDEMENT v11.0.0 : les pages et `closePage` ont disparu — la fermeture est
+// celle d'un ONGLET, décidée par le modèle pur. L'esprit de la règle survit : une
+// fermeture ne laisse jamais un écran vide, elle rend le voisin (et Aujourd'hui ne
+// se ferme pas). La View Transition, elle, n'a plus d'appelant.
+const tabModel1020 = read("web/src/workbench/tabs.ts")
+assert.match(tabModel1020, /export function closeTab/, "fermer un onglet passe par le modèle pur d'onglets")
+assert.match(tabModel1020, /if \(tab\.kind === "home"\) return state/, "Aujourd'hui ne se ferme pas")
+assert.ok(!/withViewTransition/.test(app), "plus de machine de View Transition dans le renderer")
 
 // ── F. Thème en fondu (M4) + signaux d'accessibilité complets (M5/M6) ────────
 assert.match(css, /\.theme-easing \*/, "fondu de bascule : classe CSS posée pendant 250 ms")
@@ -146,7 +167,7 @@ assert.match(appearance, /classList\.add\("theme-easing"\)/, "appearance.ts pose
 assert.match(appearance, /applyTheme\(/, "application centralisée du thème (état principal + écoute système)")
 assert.match(css, /@media \(prefers-reduced-transparency: reduce\)/, "M5 : surfaces opaques si l'OS refuse la transparence")
 assert.match(css, /@media \(prefers-contrast: more\)/, "M5 : bordures renforcées si l'OS exige plus de contraste")
-assert.match(css, /\.main-scroll, \.home-modal-list, \.home-recent-list \{ scroll-behavior: auto; \}/,
+assert.match(css, /@media \(prefers-reduced-motion: reduce\)[\s\S]*?scroll-behavior: auto/,
   "M6 : défilement lissé coupé sous prefers-reduced-motion")
 
 // ── G. Signaux de contrôle (M7/M8/M9/M10) ────────────────────────────────────
@@ -172,8 +193,11 @@ assert.match(dictation, /const pause = useCallback/, "pause : le micro reste ouv
 assert.match(dictation, /const resume = useCallback/, "reprise : aucune parole perdue")
 assert.match(dictation, /return \{ state, paused, start, stop, pause, resume, cancel, resetError \}/, "contrat du hook complet")
 assert.match(app, /dictationPointerRef/, "doigt engagé suivi côté App")
-assert.match(app, /dictation\.pause\(\)/, "pointerleave → pause")
-assert.match(app, /dictation\.resume\(\)/, "pointerenter → reprise")
+// AMENDEMENT v11.0.0 : le doigt est suivi par l'instrument qui porte le micro
+// (composeur, barre de commande) ; l'état partagé reste dans use-aven-app.
+const composer1020 = read("web/src/pages/ConversationPage.tsx")
+assert.match(composer1020, /dictation\.pause\(\)/, "pointerleave → pause")
+assert.match(composer1020, /dictation\.resume\(\)/, "pointerenter → reprise")
 assert.match(app, /releaseDictation/, "relâchement (même hors bouton) → transcription")
 assert.match(css, /\.dictation-paused/, "signal visuel de pause (pulse figé)")
 

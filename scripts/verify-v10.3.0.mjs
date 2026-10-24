@@ -20,59 +20,53 @@ const notes = read("web/src/NotesView.tsx")
 const files = read("web/src/FilesView.tsx")
 const settings = read("web/src/SettingsDialog.tsx")
 const freebuff = read("web/src/FreebuffAgentPage.tsx")
-const pageShell = read("web/src/PageShell.tsx")
+// v11.0.0 : PageShell a cédé la place au cadre d'instrument du Poste.
+const instrument = read("web/src/InstrumentFrame.tsx")
+const workbench = read("web/src/workbench/WorkbenchShell.tsx")
 const agents = read("AGENTS.md")
 const host = read("host/aven-app-host.ts")
 const manager = read("host/freebuff-cli-manager.ts")
 const tauri = JSON.parse(read("src-tauri/tauri.conf.json"))
 
-// ── A. Pages pleines (AGENTS.md §6) ─────────────────────────────────────────────
-// Une seule charpente : la barre supérieure est déclarative (actions par page).
-assert.match(pageShell, /export default function PageShell/, "PageShell est la charpente commune des pages")
-assert.match(pageShell, /className="page-topbar"/, "la barre supérieure est commune")
-assert.match(pageShell, /role="toolbar" aria-label=/, "la barre d'actions est nommée (accessibilité)")
+// ── A. Instruments du Poste (AGENTS.md §6, v11.0.0) ───────────────────────────
+// La charpente commune est InstrumentFrame : micro-libellé, titre de scène,
+// description, actions déclarées PAR l'instrument (jamais une barre recopiée).
+assert.match(instrument, /export default function InstrumentFrame/, "InstrumentFrame est la charpente commune des instruments")
+assert.match(instrument, /className="instrument-head"/, "l'en-tête d'instrument est commun")
+assert.match(instrument, /role="toolbar" aria-label=/, "la barre d'actions est nommée (accessibilité)")
 
-for (const [name, source] of [["Notes", notes], ["Fichiers", files], ["Réglages", settings], ["Tâches", app], ["Freebuff", freebuff]]) {
-  assert.match(source, /<PageShell|import PageShell/, `la page ${name} utilise la charpente PageShell`)
+for (const [name, source] of [["Notes", notes], ["Fichiers", files], ["Réglages", settings], ["Orchestration", app], ["Terminal", freebuff]]) {
+  assert.match(source, /<InstrumentFrame|import InstrumentFrame/, `l'instrument ${name} utilise la charpente InstrumentFrame`)
 }
-// Aucun de ces écrans n'est plus un dialogue superposé : c'est la cause racine
-// (« impression de fenêtre contextuelle ») et non un simple ajustement visuel.
+// Aucun de ces écrans n'est un dialogue superposé (cause racine de la v10.3.0).
 for (const [name, source] of [["Notes", notes], ["Fichiers", files], ["Réglages", settings]]) {
-  assert.ok(!/className="overlay"/.test(source), `la page ${name} n'est plus un overlay`)
-  assert.ok(!/className="dialog[ "]/.test(source), `la page ${name} n'est plus un dialogue`)
+  assert.ok(!/className="overlay"/.test(source), `l'instrument ${name} n'est plus un overlay`)
+  assert.ok(!/className="dialog[ \"]/.test(source), `l'instrument ${name} n'est plus un dialogue`)
 }
 
-// Une page n'est PAS un calque posé sur l'accueil : Notes, Fichiers et Réglages
-// quittent le hub comme Tâches/Projet. Sinon la barre de fenêtre restait masquée
-// (`.window-chrome-home`) et la page n'avait pas la même hauteur que les autres.
-// Fermer rend l'écran d'origine (hub si la page a été ouverte du hub).
-assert.match(app, /const pageReturnHome = useRef\(false\)/, "une page retient l'écran d'où elle vient")
-assert.match(app, /if \(pageReturnHome\.current\) \{ pageReturnHome\.current = false; setShowHome\(true\) \}/, "fermer une page rend l'écran d'origine")
-for (const [fn, label] of [["openNotesView", "Notes"], ["openFilesView", "Fichiers"], ["openConfiguration", "Réglages"]]) {
-  const body = app.match(new RegExp(`const ${fn} = [\\s\\S]*?\\n  \\}`))?.[0] ?? ""
-  assert.ok(body.length > 0, `${label} : l'ouverture de page est centralisée`)
-  assert.match(body, /pageReturnHome\.current = .*showHome/, `${label} : la page retient d'où elle vient`)
-  assert.match(body, /setShowHome\(false\)/, `${label} : la page remplace le hub (barre de fenêtre visible)`)
-}
-assert.match(css, /\.window-chrome\.window-chrome-home \{ display: none; \}/, "la barre de fenêtre ne se masque que sur le hub")
+// La scène et la coquille : un seul cadre, des onglets, Aujourd'hui non fermable.
+assert.match(workbench, /className="wb-stage"/, "les instruments vivent dans la scène")
+assert.match(workbench, /role="tablist" aria-label="Onglets du Poste"/, "les onglets nomment leur groupe")
+// v11.1.0 : plus de croix par onglet (barre allégée, plan approuvé) ; le rôle
+// ARIA et le modèle pur portent la règle « Aujourd'hui ne se ferme pas ».
+assert.match(workbench, /aria-selected=\{selected\}/, "l'onglet sélectionné est annoncé")
+const tabs = read("web/src/workbench/tabs.ts")
+assert.match(tabs, /if \(tab\.kind === "home"\) return state/, "le modèle refuse de fermer Aujourd'hui")
+assert.match(tabs, /export function nextTabFocus/, "la navigation clavier des onglets est pure et testable")
 
-// Défilement : la fenêtre ne défile jamais, le corps de page non plus ; seuls les
+// Défilement : la fenêtre ne défile jamais, la coquille non plus ; seuls les
 // conteneurs internes (liste, éditeur, terminal) défilent.
 assert.match(css, /body \{ margin: 0; overflow: hidden;/, "la fenêtre ne défile pas globalement")
-assert.match(css, /\.page-main \{[^}]*overflow:hidden/, "une page pleine ne défile pas")
-assert.match(css, /\.page-body \{[^}]*overflow:hidden/, "le corps de page ne défile pas")
-assert.match(css, /\.page-body \.notes-layout, \.page-body \.files-layout \{ flex:1; min-height:0; height:100%/, "les listes internes gardent leur propre défilement")
+assert.match(css, /\.wb-app \{[^}]*overflow: hidden;/, "le Poste ne défile pas globalement")
+assert.match(css, /\.instrument-body \{[^}]*overflow: hidden;/, "le corps d'instrument borne son propre défilement")
+assert.match(css, /\.wb-stage \.notes-layout,[\s\S]{0,80}\.files-layout \{ flex: 1; min-height: 0; height: 100%;/, "les listes internes gardent leur propre défilement")
 
-// Règle permanente écrite dans AGENTS.md (et non seulement dans le code).
-assert.match(agents, /occupant l'intégralité de la surface de contenu/, "AGENTS.md §6 énonce la règle des pages pleines")
-assert.match(agents, /défiler globalement ; tout défilement nécessaire/, "AGENTS.md §6 énonce l'absence de défilement global")
+// Règle permanente écrite dans AGENTS.md.
+assert.match(agents, /cadre ne change jamais/, "AGENTS.md §6 énonce le cadre permanent")
+assert.match(agents, /seul le conteneur concerné défile/, "AGENTS.md §6 énonce l'absence de défilement global")
 
-// Le flou au survol des cartes du hub : `scale()` + `will-change` étaient la cause.
-const hubCard = css.match(/\.hub-card \{[\s\S]*?\}/)?.[0] ?? ""
-const hubHover = css.match(/\.hub-card:hover \{[^}]*\}/)?.[0] ?? ""
-assert.ok(hubHover.length > 0, "la règle de survol des cartes existe toujours")
-assert.ok(!/scale\(/.test(hubCard) && !/scale\(/.test(hubHover), "aucun scale() au survol des cartes (cause du texte flou)")
-assert.ok(!/will-change/.test(hubCard), "plus de will-change sur les cartes (rastérisation fractionnaire = flou)")
+// Les cartes du hub n'existent plus : aucune règle de scale/will-change ne traîne.
+assert.ok(!/\.hub-card \{/.test(css), "les cartes du hub ont disparu de la feuille")
 
 // ── B. CLI Freebuff : un seul gestionnaire, au démarrage ────────────────────────
 assert.ok(has("host/freebuff-cli-manager.ts"), "le gestionnaire du CLI existe")

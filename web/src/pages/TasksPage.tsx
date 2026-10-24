@@ -1,4 +1,4 @@
-import PageShell from "../PageShell"
+import InstrumentFrame from "../InstrumentFrame"
 import { api } from "../api"
 import { Icon } from "../icons"
 import { TASK_MODES_UI } from "../app/constants"
@@ -11,7 +11,6 @@ export default function TasksPage({ app }: { app: AvenApp }) {
     agentsError,
     agentsLoading,
     changeTaskMode,
-    closePage,
     selectAgent,
     setAgents,
     setAgentsError,
@@ -21,7 +20,7 @@ export default function TasksPage({ app }: { app: AvenApp }) {
   } = app
 
   return (
-        <PageShell
+        <InstrumentFrame
           eyebrow="ORCHESTRATION"
           title="Modes de délégation de l’agent principal"
           description="Choisis comment l’agent principal traite les prochaines demandes dans cet espace de travail."
@@ -36,9 +35,6 @@ export default function TasksPage({ app }: { app: AvenApp }) {
               disabled: !agents.some((a) => a.id === "projet"),
               title: "Ouvre la conversation de l’agent principal avec le mode de délégation actif",
             },
-            // v10.4.0 : une page porte SON retour — la barre de fenêtre ne double plus
-            // ce bouton par « Accueil » (deux affordances pour la même sortie).
-            { key: "close", label: "Fermer", icon: "close", variant: "ghost", onClick: closePage, className: "dialog-close", title: "Revenir à l'écran précédent (Échap)" },
           ]}
           className="agents-main"
           bodyClassName="agents-page tasks-page"
@@ -47,7 +43,7 @@ export default function TasksPage({ app }: { app: AvenApp }) {
             {/* v10.1.0 : UNE carte orchestrateur + switch de mode (Auto par défaut). */}
             <div className="tasks-principal">
               <article className={`agent-card tasks-principal-card ${agents.some((a) => a.id === "projet") ? "agent-card-orchestrator" : "tasks-card-off"}`}>
-                <div className="agent-card-icon"><Icon name="sparkle" size={24} /></div>
+                <div className="agent-card-icon"><Icon name="agent" size={24} /></div>
                 <div className="agent-card-body">
                   <span className="agent-card-id"><em className="orchestrator-badge">Agent principal · délégation</em></span>
                   <h2>Aven · agent principal</h2>
@@ -55,7 +51,7 @@ export default function TasksPage({ app }: { app: AvenApp }) {
                   <div className="tasks-mode-switch" role="group" aria-label="Mode de l'orchestrateur">
                     {TASK_MODES_UI.map((m) => (
                       <button key={m.id} className={`button ${taskMode === m.id ? "primary" : "ghost"} tasks-mode-option`} onClick={() => changeTaskMode(m.id)} type="button" title={m.hint} aria-pressed={taskMode === m.id}>
-                        <Icon name={m.icon} size={13} />{m.label}
+                        <Icon name={m.icon} size={14} />{m.label}
                       </button>
                     ))}
                   </div>
@@ -78,6 +74,6 @@ export default function TasksPage({ app }: { app: AvenApp }) {
                 <strong>Aucun agent disponible.</strong> Les spécialistes apparaîtront ici dès leur installation. En attendant, ouvre une conversation avec l'agent principal : il découpe la demande, délègue aux spécialistes puis synthétise.
               </div>
             )}
-        </PageShell>
+        </InstrumentFrame>
   )
 }

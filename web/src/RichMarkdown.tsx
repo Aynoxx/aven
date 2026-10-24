@@ -28,7 +28,7 @@ function CopyBlock({ children }: { children: ReactNode }) {
     <div className="codeblock">
       <div className="codeblock-bar">
         <span />
-        <button onClick={copy} title="Copier">
+        <button type="button" onClick={copy} title="Copier">
           Copier
         </button>
       </div>

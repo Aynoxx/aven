@@ -1,0 +1,601 @@
+import { useState, type KeyboardEvent as ReactKeyboardEvent } from "react"
+import { api } from "../api"
+import { Icon, type IconName } from "../icons"
+import FormDialog from "../FormDialog"
+import SettingsDialog from "../SettingsDialog"
+import NotesView from "../NotesView"
+import FilesView from "../FilesView"
+import FreebuffAgentPage from "../FreebuffAgentPage"
+import TasksPage from "../pages/TasksPage"
+import ConversationPage from "../pages/ConversationPage"
+import type { AvenApp } from "../app/use-aven-app"
+import type { AppAction } from "../types"
+import { useVoiceAgent } from "../voice-agent/use-voice-agent"
+// v11.4.0 : le titre de la note dictée vient du contenu, pas d'un horodatage.
+import { noteTitleFromDraft } from "../voice-agent/note"
+import { TASK_MODES_UI, engineStatusLabel } from "../app/constants"
+import { displayPath } from "../display-path"
+import { planFor } from "./actions"
+import { nextTabFocus } from "./tabs"
+import CommandBar from "./CommandBar"
+import HomeBoard from "./HomeBoard"
+
+// v11.0.0 : coquille du Poste. Le contrôleur porte l'état ; cette coquille rend le
+// bandeau de télémétrie, le rail d'instruments, la barre d'onglets, la scène et
+// l'inspecteur. Aucun instrument n'est une « page » : tous vivent dans la scène.
+
+const RAIL_ITEMS: { kind: "home" | "conversation" | "notes" | "files" | "terminal" | "orchestration"; label: string; icon: IconName }[] = [
+  { kind: "home", label: "Aujourd’hui", icon: "grid" },
+  // v11.0.2 : une conversation porte une bulle, la délégation une ramification ;
+  // `agent` ne désigne plus qu'un agent et `sparkle` que la marque d'Aven.
+  { kind: "conversation", label: "Conversations", icon: "chat" },
+  { kind: "notes", label: "Notes", icon: "file" },
+  { kind: "files", label: "Fichiers", icon: "folder" },
+  { kind: "terminal", label: "Terminal", icon: "terminal" },
+  { kind: "orchestration", label: "Orchestration", icon: "branch" },
+]
+
+function tabLabel(app: AvenApp, kind: string, chatId?: string): string {
+  if (kind === "conversation") {
+    return app.chats.find((c) => c.id === chatId)?.title || "Nouvelle conversation"
+  }
+  switch (kind) {
+    case "home": return "Aujourd’hui"
+    case "notes": return "Notes"
+    case "files": return "Fichiers"
+    case "terminal": return "Terminal"
+    case "orchestration": return "Orchestration"
+    case "settings": return "Réglages"
+    default: return kind
+  }
+}
+
+function tabKindLabel(kind: string): string {
+  if (kind === "conversation") return "CONV"
+  if (kind === "home") return "POSTE"
+  if (kind === "orchestration") return "MODE"
+  if (kind === "terminal") return "PTY"
+  return kind.slice(0, 4).toUpperCase()
+}
+
+export default function WorkbenchShell({ app }: { app: AvenApp }) {
+  const {
+    activeInstrument,
+    answer,
+    answerForm,
+    appState,
+    appearance,
+    applySelection,
+    cancelForm,
+    captureRequested,
+    closePage,
+    // v11.3.0 : la croix de chaque onglet revient — sans elle, une souris ne pouvait
+    // plus fermer quoi que ce soit (Ctrl+W seulement).
+    closeWorkbenchTab,
+    error,
+    fail,
+    focusWorkbenchTab,
+    form,
+    goHome,
+    inspectorOpen,
+    live,
+    openConfiguration,
+    openConversationInstrument,
+    openInstrumentTab,
+    openNotesView,
+    orderedAgents,
+    resetAppearance,
+    resetForWorkspace,
+    routeAppAction,
+    selBar,
+    setCaptureRequested,
+    setInspectorOpen,
+    setSelBar,
+    setSettingsSection,
+    settingsFocus,
+    settingsSection,
+    tab,
+    tabsState,
+    taskMode,
+    changeTaskMode,
+    newChat,
+    updateAppearance,
+    workspaceName,
+    currentModel,
+    activeModelLabel,
+    modelChain,
+    applyModelChoice,
+    agentName,
+    notices,
+    composeIntoChat,
+    chats,
+    chatId,
+    chatValue,
+    commitChatRename,
+    renameCancelled,
+    renamingChat,
+    setChatValue,
+    setRenamingChat,
+    startRenameChat,
+  } = app
+
+  const [railWide, setRailWide] = useState(false)
+  // v11.1.0 : l'agent vocal vit dans la coquille — il écoute tant que l'app est
+  // prête et que le micro n'est pas coupé. La navigation passe par le routeur
+  // unique des commandes vocales (même contrat que la dictée historique).
+  const voice = useVoiceAgent({
+    enabled: appState.status === "ready" && !appState.needsWorkspace,
+    onAction: (action) => routeAppAction(action as AppAction),
+    // v11.4.0 : ce rappel n'est atteint qu'après un « oui » explicite (le hook
+    // décide). Le Poste crée la note dans l'espace actif PUIS l'affiche : l'écrit
+    // doit être visible, pas seulement annoncé à la voix.
+    onCreateNote: async (draft) => {
+      const note = await api.noteQuickCapture(noteTitleFromDraft(draft), draft)
+      openNotesView(note.id)
+      return note.title
+    },
+  })
+  const ask = live.asks[0]
+  const showNoKeyBanner = appState.status === "ready" && !Object.values(appState.keys).some(Boolean)
+  const lastAssistant = [...app.messages].reverse().find((m) => m.role === "assistant" && m.text.trim())
+  const activeKind = activeInstrument.kind
+
+  const openRail = (kind: typeof RAIL_ITEMS[number]["kind"]) => {
+    if (kind === "conversation") openConversationInstrument()
+    else openInstrumentTab(kind)
+  }
+
+  const citeLast = async () => {
+    if (!lastAssistant) return
+    const plan = planFor("cite", { kind: "message", body: lastAssistant.text, title: lastAssistant.agent || "Réponse" })
+    if (!plan || plan.mode !== "note") return
+    try {
+      const note = await api.noteQuickCapture("", plan.text)
+      openNotesView(note.id)
+    } catch (e) { fail(e) }
+  }
+
+  const inspectorTitle = activeKind === "conversation" ? "SESSION" : activeKind === "settings" ? "SECTIONS" : "CONTEXTE"
+  const activeChat = chats.find((c) => c.id === chatId)
+
+  // v11.0.0 : le tablist se pilote aux flèches horizontales (ARIA), le focus suit
+  // l'onglet sélectionné — même contrat que les listes verticales du Poste.
+  const onTabsKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    const index = tabsState.tabs.findIndex((t) => t.id === tabsState.activeId)
+    const next = nextTabFocus(e.key, index, tabsState.tabs.length)
+    if (next === null) return
+    e.preventDefault()
+    const id = tabsState.tabs[next].id
+    focusWorkbenchTab(id)
+    requestAnimationFrame(() => document.getElementById(`wb-tab-${id}`)?.focus())
+  }
+
+  return (
+    <div className="wb-app">
+      <header className="wb-status">
+        <div className="wb-status-left">
+          <button className="wb-status-workspace" type="button" onClick={() => openConfiguration("workspaces", "general")} title="Changer d’espace de travail" aria-label={`Espace de travail : ${workspaceName || "aucun"}. Changer`}>
+            <Icon name="folder" size={14} />
+            <span>{workspaceName || "Aucun espace"}</span>
+          </button>
+          <span className="wb-status-sep" aria-hidden="true" />
+          <span className="wb-status-path" title={displayPath(appState.workspace)}>{displayPath(appState.workspace) || "—"}</span>
+        </div>
+        <div className="wb-status-center">
+          <span className="wb-status-engine" data-state={appState.status}>
+            <span className={`status-dot ${appState.status}`} aria-hidden="true" />
+            {appState.status === "ready" ? "EN LIGNE" : appState.status === "starting" ? "DÉMARRAGE" : "ERREUR"}
+          </span>
+          <span className="wb-status-sep" aria-hidden="true" />
+          <span className="wb-status-key"><b>{agentName(tab) || "—"}</b></span>
+          <span className="wb-status-sep" aria-hidden="true" />
+          <span className="wb-status-key">{activeModelLabel}</span>
+        </div>
+        <div className="wb-status-right">
+          {/* v11.1.0 : l'agent vocal est visible en permanence : micro, phase et
+              possibilité d'interrompre la lecture. Le libellé reste du TEXTE — la
+              couleur seule ne porte jamais l'information. */}
+          <div className="wb-voice" data-phase={voice.phase}>
+            <button
+              className="button ghost wb-voice-button"
+              type="button"
+              onClick={voice.toggleMic}
+              aria-pressed={!voice.muted}
+              aria-label={voice.muted ? "Activer le micro de l’agent vocal" : "Couper le micro de l’agent vocal"}
+              title={voice.error ?? (voice.muted ? "Micro coupé — clique pour écouter" : `${voice.label} — dis « Aven » pour parler`)}
+            >
+              <Icon name={voice.muted ? "microphone-off" : "microphone"} size={14} />
+            </button>
+            {/* v11.1.1 : l'erreur réelle s'affiche au lieu du seul mot « Erreur
+                vocale » (clé absente, quota, micro refusé…) ; la transcription
+                entendue reste lisible en infobulle pour diagnostiquer un réveil
+                manqué. */}
+            <span
+              className={voice.error ? "wb-voice-label wb-voice-error" : "wb-voice-label"}
+              role="status" aria-live="polite"
+              title={voice.error ?? (voice.heard ? `Entendu : « ${voice.heard} »` : undefined)}
+            >{voice.error ?? voice.label}</span>
+            {(voice.phase === "speaking" || voice.phase === "thinking") && (
+              <button
+                className="button ghost wb-voice-stop"
+                type="button"
+                onClick={voice.stop}
+                aria-label="Interrompre l’agent vocal"
+                title="Interrompre l’agent vocal"
+              >
+                <Icon name="stop" size={12} />
+              </button>
+            )}
+          </div>
+          <button
+            className="button ghost wb-status-toggle"
+            type="button"
+            onClick={() => setInspectorOpen(!inspectorOpen)}
+            aria-pressed={inspectorOpen}
+            aria-label={inspectorOpen ? "Masquer l’inspecteur" : "Afficher l’inspecteur"}
+            title={inspectorOpen ? "Masquer l’inspecteur" : "Afficher l’inspecteur"}
+          >
+            <Icon name="panel" size={14} />
+          </button>
+        </div>
+      </header>
+
+      <div className="wb-body" data-rail={railWide ? "wide" : "narrow"} data-inspector={inspectorOpen ? "open" : "closed"}>
+        <aside className="wb-rail" aria-label="Instruments du Poste">
+          <div className="wb-rail-top">
+            <button className="wb-rail-brand" type="button" onClick={goHome} aria-label="Aujourd’hui — retour au Poste">
+              <span className="brand-mark" aria-hidden="true"><Icon name="sparkle" size={15} /></span>
+              <span className="wb-rail-brand-copy">
+                <strong>Aven</strong>
+                <small>{workspaceName || "Poste"}</small>
+              </span>
+            </button>
+            <button className="wb-rail-item" type="button" onClick={() => setRailWide((v) => !v)} aria-pressed={railWide} aria-label={railWide ? "Replier le rail" : "Déployer le rail"}>
+              <Icon name="menu" size={17} />
+              <span>{railWide ? "Replier" : "Déployer"}</span>
+            </button>
+          </div>
+
+          <nav className="wb-rail-nav" aria-label="Instruments">
+            <span className="wb-rail-label eyebrow">INSTRUMENTS</span>
+            {RAIL_ITEMS.map((item) => {
+              const current = item.kind === "conversation"
+                ? activeKind === "conversation"
+                : activeKind === item.kind
+              return (
+                <button
+                  key={item.kind}
+                  className="wb-rail-item"
+                  type="button"
+                  aria-current={current ? "page" : undefined}
+                  aria-label={item.label}
+                  title={item.label}
+                  onClick={() => openRail(item.kind)}
+                >
+                  <Icon name={item.icon} size={17} />
+                  <span>{item.label}</span>
+                  {item.kind === "conversation" && <span className="wb-rail-count">{app.chats.length}</span>}
+                </button>
+              )
+            })}
+          </nav>
+
+          <div className="wb-rail-bottom">
+            <div className="wb-rail-status">
+              <span className={`status-dot ${appState.status}`} aria-hidden="true" />
+              <span>{appState.status === "ready" ? "Moteur prêt" : appState.status === "starting" ? "Démarrage" : "Hors ligne"}</span>
+            </div>
+            <button className="wb-rail-item" type="button" onClick={() => openConfiguration(undefined, "general")} aria-current={activeKind === "settings" ? "page" : undefined} aria-label="Réglages" title="Réglages">
+              <Icon name="settings" size={17} />
+              <span>Réglages</span>
+            </button>
+          </div>
+        </aside>
+
+        <main className="wb-main">
+          <div className="wb-tabs" role="tablist" aria-label="Onglets du Poste" onKeyDown={onTabsKeyDown}>
+            {tabsState.tabs.map((t) => {
+              const selected = t.id === tabsState.activeId
+              const label = tabLabel(app, t.kind, t.chatId)
+              return (
+                <div key={t.id} className="wb-tab" data-selected={selected || undefined}>
+                  <button
+                    className="wb-tab-main"
+                    id={`wb-tab-${t.id}`}
+                    type="button"
+                    role="tab"
+                    aria-selected={selected}
+                    aria-controls="wb-stage"
+                    tabIndex={selected ? 0 : -1}
+                    onClick={() => focusWorkbenchTab(t.id)}
+                    title={label}
+                  >
+                    <span className="wb-tab-kind">{tabKindLabel(t.kind)}</span>
+                    <span className="wb-tab-label">{label}</span>
+                  </button>
+                  {/* v11.3.0 : bouton frère du libellé (jamais un bouton dans un bouton).
+                      Aujourd'hui est le plancher du Poste : il n'a pas de croix. */}
+                  {t.kind !== "home" && (
+                    <button
+                      className="wb-tab-close"
+                      type="button"
+                      aria-label={`Fermer ${label}`}
+                      title={`Fermer ${label}`}
+                      tabIndex={selected ? 0 : -1}
+                      onClick={() => closeWorkbenchTab(t.id)}
+                    >
+                      <Icon name="close" size={12} />
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+            <span className="wb-tabs-spacer" />
+            <div className="wb-tabs-tools">
+              <button className="button ghost" type="button" onClick={() => void newChat()} disabled={!tab} aria-label="Nouvelle conversation" title="Nouvelle conversation (Ctrl N)">
+                <Icon name="plus" size={15} />
+              </button>
+            </div>
+          </div>
+
+          <div className="wb-stage" id="wb-stage" role="tabpanel" aria-labelledby={`wb-tab-${tabsState.activeId}`}>
+            {activeKind === "home" ? (
+              <HomeBoard app={app} />
+            ) : activeKind === "conversation" ? (
+              <ConversationPage app={app} />
+            ) : activeKind === "notes" ? (
+              <NotesView
+                autoCapture={captureRequested}
+                onCaptureHandled={() => setCaptureRequested(false)}
+                initialId={app.notesInitialId}
+                agents={orderedAgents.map((a) => ({ id: a.id, name: a.name }))}
+                currentAgent={tab}
+                onCompose={(text) => void composeIntoChat(text)}
+                onClose={closePage}
+                onError={fail}
+              />
+            ) : activeKind === "files" ? (
+              <FilesView
+                agents={orderedAgents.map((a) => ({ id: a.id, name: a.name }))}
+                currentAgent={tab}
+                onCompose={(text) => void composeIntoChat(text)}
+                onClose={closePage}
+                onError={fail}
+              />
+            ) : activeKind === "terminal" ? (
+              <FreebuffAgentPage onError={fail} onClose={closePage} />
+            ) : activeKind === "orchestration" ? (
+              <TasksPage app={app} />
+            ) : (
+              <SettingsDialog
+                state={appState}
+                appearance={appearance}
+                agents={orderedAgents}
+                section={settingsSection}
+                onSectionChange={setSettingsSection}
+                focusWorkspaces={settingsFocus === "workspaces"}
+                onAppearanceChange={updateAppearance}
+                onAppearanceReset={resetAppearance}
+                onClose={closePage}
+                onError={fail}
+                onAppStateChanged={resetForWorkspace}
+              />
+            )}
+          </div>
+        </main>
+
+        <aside className="wb-inspector" aria-label="Inspecteur" aria-hidden={!inspectorOpen}>
+          <div className="wb-inspector-head">
+            <span className="wb-inspector-title">{inspectorTitle}</span>
+            <button className="button ghost" type="button" onClick={() => setInspectorOpen(false)} aria-label="Masquer l’inspecteur" title="Masquer l’inspecteur">
+              <Icon name="close" size={14} />
+            </button>
+          </div>
+          <div className="wb-inspector-body">
+            {activeKind === "conversation" ? (
+              <>
+                <section className="wb-inspector-section">
+                  <span className="wb-label">SESSION</span>
+                  {chatId && renamingChat === chatId ? (
+                    <input
+                      className="wb-input"
+                      autoFocus
+                      value={chatValue}
+                      maxLength={120}
+                      aria-label="Titre de la conversation"
+                      onFocus={(e) => e.target.select()}
+                      onChange={(e) => setChatValue(e.target.value)}
+                      onBlur={() => void commitChatRename(chatId)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") void commitChatRename(chatId)
+                        if (e.key === "Escape") { e.stopPropagation(); renameCancelled.current = true; setRenamingChat(null) }
+                      }}
+                    />
+                  ) : (
+                    <div className="wb-inspector-kv">
+                      <span>Titre</span>
+                      <button
+                        className="wb-link"
+                        type="button"
+                        disabled={!chatId}
+                        onClick={() => chatId && startRenameChat(chatId)}
+                        title="Renommer la conversation (F2)"
+                        aria-label="Renommer la conversation"
+                      >
+                        {activeChat?.title || "Nouvelle conversation"}
+                      </button>
+                    </div>
+                  )}
+                </section>
+                <section className="wb-inspector-section">
+                  <span className="wb-label">AGENT</span>
+                  <div className="wb-inspector-kv"><span>Nom</span><span>{agentName(tab) || "—"}</span></div>
+                  <div className="wb-inspector-kv"><span>Modèle</span><span>{activeModelLabel}</span></div>
+                  <select
+                    className="wb-select"
+                    aria-label="Modèle de la conversation"
+                    value={currentModel ?? ""}
+                    onChange={(e) => applyModelChoice(e.target.value || undefined)}
+                  >
+                    <option value="">Auto — le routeur choisit</option>
+                    {modelChain.map((m) => <option key={m.ref} value={m.ref}>{m.label}</option>)}
+                  </select>
+                </section>
+                {tab === "projet" && (
+                  <section className="wb-inspector-section">
+                    <span className="wb-label">DÉLÉGATION</span>
+                    <div className="tasks-mode-switch" role="group" aria-label="Mode de l’orchestrateur">
+                      {TASK_MODES_UI.map((m) => (
+                        <button key={m.id} className={`button ${taskMode === m.id ? "primary" : "ghost"} tasks-mode-option`} onClick={() => changeTaskMode(m.id)} type="button" title={m.hint} aria-pressed={taskMode === m.id}>
+                          <Icon name={m.icon} size={14} />{m.label}
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                )}
+                <section className="wb-inspector-section">
+                  <span className="wb-label">ÉVÉNEMENTS</span>
+                  <div className="wb-notice-list">
+                    {notices.slice(-5).reverse().map((n) => <p key={n.id} className="wb-notice">{n.text}</p>)}
+                    {!notices.length && <p className="wb-inspector-empty">Aucun événement de routage.</p>}
+                  </div>
+                </section>
+                {lastAssistant && (
+                  <section className="wb-inspector-section">
+                    <span className="wb-label">DERNIÈRE RÉPONSE</span>
+                    <div className="wb-inspector-actions">
+                      <button className="button secondary" type="button" onClick={() => void composeIntoChat(lastAssistant.text)} title="Prépare la réponse dans le composeur, sans l’envoyer">Transmettre</button>
+                      <button className="button ghost" type="button" onClick={() => void citeLast()} title="Crée une note citant la réponse">Citer</button>
+                      <button className="button ghost" type="button" onClick={() => void navigator.clipboard.writeText(lastAssistant.text)}>Copier</button>
+                    </div>
+                  </section>
+                )}
+              </>
+            ) : activeKind === "settings" ? (
+              <nav className="wb-inspector-tabs" aria-label="Sections des réglages">
+                {([["general", "Configuration"], ["appearance", "Apparence"], ["voice", "Agent vocal"], ["usage", "Usage"]] as const).map(([id, label]) => (
+                  <button key={id} className="wb-inspector-tab" type="button" aria-selected={settingsSection === id} onClick={() => setSettingsSection(id)}>{label}</button>
+                ))}
+              </nav>
+            ) : activeKind === "notes" ? (
+              <>
+                <section className="wb-inspector-section">
+                  <span className="wb-label">ESPACE</span>
+                  <div className="wb-inspector-kv"><span>Nom</span><span>{workspaceName || "—"}</span></div>
+                  <p className="wb-inspector-empty">Les liens sortants et les rétroliens d’une note restent dans la colonne de lecture.</p>
+                </section>
+                <section className="wb-inspector-section">
+                  <span className="wb-label">ACTIONS</span>
+                  <div className="wb-inspector-actions">
+                    <button className="button secondary" type="button" onClick={() => { setCaptureRequested(true); openNotesView() }}>Capture rapide</button>
+                  </div>
+                </section>
+              </>
+            ) : activeKind === "files" ? (
+              <section className="wb-inspector-section">
+                <span className="wb-label">LECTURE</span>
+                <p className="wb-inspector-empty">Explorateur en lecture seule, cloisonné à la racine de l’espace. L’aperçu reste borné et l’analyse passe par le composeur.</p>
+                <div className="wb-inspector-kv"><span>Espace</span><span>{workspaceName || "—"}</span></div>
+              </section>
+            ) : activeKind === "terminal" ? (
+              <section className="wb-inspector-section">
+                <span className="wb-label">SESSION PTY</span>
+                <p className="wb-inspector-empty">Session indépendante des conversations. Fermer l’onglet n’arrête pas Freebuff ; « Redémarrer la session » vit dans l’instrument.</p>
+              </section>
+            ) : activeKind === "orchestration" && (
+              <section className="wb-inspector-section">
+                <span className="wb-label">MODE</span>
+                <p className="wb-inspector-empty">Le mode choisi reste actif pour les prochaines demandes adressées à l’agent principal dans cet espace.</p>
+              </section>
+            )}
+            {activeKind === "home" && (
+              <>
+                <section className="wb-inspector-section">
+                  <span className="wb-label">POSTE</span>
+                  <div className="wb-inspector-kv"><span>Espace</span><span>{workspaceName || "—"}</span></div>
+                  <div className="wb-inspector-kv"><span>État</span><span>{engineStatusLabel(appState.status)}</span></div>
+                  <div className="wb-inspector-kv"><span>Moteur</span><span>{appState.version || "—"}</span></div>
+                  <div className="wb-inspector-kv"><span>Dictée</span><span>{appState.keys.groq ? "prête" : "clé Groq absente"}</span></div>
+                </section>
+                <section className="wb-inspector-section">
+                  <span className="wb-label">ACTIONS</span>
+                  <div className="wb-inspector-actions">
+                    <button className="button secondary" type="button" onClick={() => openConfiguration(undefined, "appearance")}>Apparence</button>
+                    <button className="button ghost" type="button" onClick={() => setCaptureRequested(true)}>Capture</button>
+                  </div>
+                </section>
+              </>
+            )}
+          </div>
+        </aside>
+
+        <CommandBar app={app} />
+      </div>
+
+      {appState.needsWorkspace && (
+        <div className="overlay">
+          <div className="dialog workspace-picker" role="dialog" aria-modal="true" aria-label="Choisir un espace de travail">
+            <span className="eyebrow">PREMIERS PAS</span>
+            <h3>Choisis ton espace de travail</h3>
+            <p className="hint">Un espace correspond à un dossier de projet. Aven y conserve ses conversations, agents et priorités ; les fichiers explorés restent limités à ce dossier.</p>
+            {!!appState.workspaces?.length && (
+              <div className="workspace-picker-list">
+                {appState.workspaces.map((w) => (
+                  <button key={w.path} className="workspace-picker-item" onClick={() => api.switchWorkspace(w.path).catch(fail)} type="button">
+                    <span className="workspace-picker-name"><Icon name="folder" size={15} />{w.name}</span>
+                    <span className="workspace-picker-path">{w.path}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="row">
+              <button className="button primary" onClick={() => api.createWorkspace("").catch(fail)} type="button">Créer un nouvel espace…</button>
+              <button className="button secondary" onClick={() => api.addExistingWorkspace().catch(fail)} type="button">Ouvrir un dossier existant…</button>
+            </div>
+            {error && <p className="err">{error}</p>}
+          </div>
+        </div>
+      )}
+
+      {appState.status !== "ready" && !appState.needsWorkspace && (
+        <div className="status-banner">
+          <span className="status-dot warning" />
+          {appState.status === "starting" ? "Démarrage d’Aven…" : <><b>Aven n’a pas démarré.</b> {appState.error}</>}
+        </div>
+      )}
+      {showNoKeyBanner && (
+        <div className="status-banner subtle"><span className="status-dot" /> Aucun fournisseur avec clé API n’est configuré. Les modèles sans clé restent disponibles.</div>
+      )}
+
+      {form && <FormDialog key={form.id} form={form} onSubmit={answerForm} onCancel={cancelForm} />}
+
+      {selBar && (
+        <div className="selbar" role="toolbar" aria-label="Actions sur la sélection" style={{ top: selBar.top, left: selBar.left }}>
+          <button type="button" title="Copier la sélection" aria-label="Copier la sélection" onClick={() => { void navigator.clipboard.writeText(selBar.text); setSelBar(null) }}><Icon name="copy" size={15} /></button>
+          <button type="button" title="Corriger ce code (agent code)" aria-label="Corriger ce code avec l’agent code" onClick={() => applySelection("fix")}><Icon name="wrench" size={15} /></button>
+          <button type="button" title="Expliquer ce code (agent recherche)" aria-label="Expliquer ce code avec l’agent recherche" onClick={() => applySelection("explain")}><Icon name="wand" size={15} /></button>
+          <button type="button" title="Faire relire ce code (agent code-reviewer)" aria-label="Faire relire ce code avec l’agent code-reviewer" onClick={() => applySelection("review")}><Icon name="eye" size={15} /></button>
+          <button type="button" title="Citer dans le composeur" aria-label="Citer la sélection dans le composeur" onClick={() => applySelection("send")}><Icon name="quote" size={15} /></button>
+          <button type="button" className="selbar-close" title="Fermer" aria-label="Fermer les actions de sélection" onClick={() => setSelBar(null)}><Icon name="close" size={15} /></button>
+        </div>
+      )}
+
+      {ask && (
+        <div className="overlay">
+          <div className="dialog permission-dialog" role="dialog" aria-modal="true" aria-label="Autorisation demandée">
+            <span className="eyebrow">AUTORISATION</span>
+            <h3>L’agent demande l’autorisation</h3>
+            <p className="permission-action"><b>{ask.action}</b></p>
+            <pre>{ask.resources.join("\n")}</pre>
+            {ask.message && <p>{ask.message}</p>}
+            <div className="row end">
+              <button type="button" className="button ghost" onClick={() => answer("reject")}>Refuser</button>
+              <button type="button" className="button secondary" onClick={() => answer("once")}>Une fois</button>
+              <button type="button" className="button primary" onClick={() => answer("always")}>Toujours</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

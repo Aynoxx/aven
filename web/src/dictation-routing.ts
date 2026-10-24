@@ -13,7 +13,7 @@
 // Pur : testable avec Node seul, sans dépendance desktop.
 import type { DictationIntent } from "./types"
 
-export type DictationOrigin = "hub" | "composer"
+export type DictationOrigin = "workbench" | "composer"
 
 /**
  * Intention EFFECTIVE d'une dictée selon l'endroit où elle a été prononcée.

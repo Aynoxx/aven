@@ -35,15 +35,20 @@ assert.match(settingsDialog, /cliInstalling/)
 assert.match(settingsDialog, /Installation en cours/)
 
 // B. Bandeau du hub : coin bas-gauche (plus au centre), éphémère et actionnable.
-assert.match(css, /\.home-notice \{ position:absolute; z-index:8; left:8px; bottom:8px/)
+// AMENDEMENT v11.0.0 : l'avis n'est plus un coin absolu du hub mais un bandeau de
+// la planche Aujourd'hui. L'invariant conservé : éphémère (TTL), actionnable.
+assert.match(css, /\.wb-home-notice \{[^}]*margin: 10px 20px 0;/)
 assert.match(app, /HOME_NOTICE_TTL/)
 assert.match(app, /FREEBUFF_MISSING_NOTICE/)
-assert.match(app, /home-notice-action/)
-assert.match(app, /home-notice-close/)
+assert.match(app, /wb-home-notice-action/, "l'avis reste actionnable (il mène à sa destination)")
+assert.match(app, /wb-home-notice-close/, "l'avis reste refermable")
 
-// C. Hub contenu dans le viewport : rayon réduit + marge haute resserrée.
-assert.match(css, /calc\(100vh - 130px\)/)
-assert.match(css, /--hub-r: clamp\(196px, 37cqw, 272px\)/)
+// C — AMENDEMENT v11.0.0 : l'orbite du hub a disparu, donc son rayon et sa marge
+// haute aussi. L'invariant conservé : le contenu tient dans le viewport, il ne
+// pousse pas la fenêtre à défiler (le Poste est en overflow: hidden, seul l'intérieur
+// de l'instrument défile).
+assert.match(css, /\.wb-app \{[^}]*height: 100dvh;[^}]*overflow: hidden;/s, "le Poste tient dans la fenêtre")
+assert.match(css, /\.wb-home-scroll \{[^}]*overflow-y: auto;/, "seule la planche Aujourd'hui défile")
 
 // D. Page Agents allégée : 2 conversations max + compteur, badge lecture seule, grille fluide.
 // v9.6.0 : la grille d'agents devient la page « Tâches » (orchestrateur + modes) ; les
@@ -52,6 +57,10 @@ assert.match(css, /--hub-r: clamp\(196px, 37cqw, 272px\)/)
 // v10.1.0 : les cartes modes ont quitté la page — UNE carte orchestrateur porte un
 // switch segmenté (Auto par défaut), rejoué dans le bandeau de conversation.
 assert.match(app, /tasks-mode-switch/, "v10.1.0 : le switch de mode remplace les cartes de modes")
-assert.match(css, /repeat\(auto-fill, minmax\(340px, 1fr\)\)|repeat\(auto-fit, minmax\(230px, 1fr\)\)/)
+// v11.1.3 : les deux grilles visées (cartes agents 340 px, cartes modes 230 px) ont
+// disparu — la vue Orchestration ne porte plus qu'une carte principale. L'invariant
+// « une grille reste fluide, jamais un nombre de colonnes fixe » se vérifie sur la
+// grille vivante des tuiles de statistiques.
+assert.match(css, /\.stats-grid \{[^}]*repeat\(auto-fit, minmax\(150px, 1fr\)\)/, "les grilles restantes restent fluides (auto-fit)")
 
 console.log("v9.1.4 verification: OK")

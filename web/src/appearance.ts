@@ -2,7 +2,7 @@ import { useEffect, useState } from "react"
 import { accentInks } from "./accent-contrast"
 
 export type Theme = "system" | "dark" | "light"
-export type Accent = "violet" | "blue" | "emerald" | "rose" | "amber" | "custom"
+export type Accent = "signal" | "violet" | "blue" | "emerald" | "rose" | "amber" | "custom"
 export type Density = "compact" | "comfortable"
 export type SidebarPosition = "left" | "right"
 
@@ -33,7 +33,9 @@ const LEGACY_APPEARANCE_KEY = "opencodeapp.appearance.v2"
 
 export const defaultAppearance: AppearanceConfig = {
   theme: "light",
-  accent: "emerald",
+  // v11.0.0 : la DA DRONE n'a qu'un accent — l'orange signal. Les presets hérités
+  // restent disponibles pour qui les choisit, mais le défaut suit l'identité.
+  accent: "signal",
   density: "comfortable",
   sidebarPosition: "left",
   sidebarWidth: 286,
@@ -52,6 +54,7 @@ export const defaultAppearance: AppearanceConfig = {
 }
 
 export const presetAccents: Record<Exclude<Accent, "custom">, { label: string; value: string }> = {
+  signal: { label: "Orange signal", value: "#ff5a00" },
   violet: { label: "Violet", value: "#8b5cf6" },
   blue: { label: "Bleu", value: "#3b82f6" },
   emerald: { label: "Émeraude", value: "#10b981" },
