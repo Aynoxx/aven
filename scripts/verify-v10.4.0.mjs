@@ -94,8 +94,10 @@ assert.match(conversation, /dictation\.start\("composer"\)/, "le micro du compos
 // v11.0.0 : le Poste remplace la barre contextuelle — un seul cadre, des onglets.
 assert.match(appShell, /role="tablist" aria-label="Onglets du Poste"/,
   "les onglets forment une barre nommée")
-assert.match(appShell, /role="tabpanel"/,
-  "la scène est le panneau de l'onglet actif")
+// v12.0.0 : le bandeau ne liste que des conversations — la scène n'est un
+// `tabpanel` que lorsqu'un de ces onglets est affiché (sinon : région nommée).
+assert.match(appShell, /role=\{stageIsTab \? "tabpanel" : "region"\}/,
+  "la scène est le panneau de l'onglet actif quand il existe")
 assert.match(appShell, /Fermer l’onglet/,
   "fermer un onglet est nommé")
 assert.ok(!/Accueil<\/button>/.test(appShell),

@@ -68,14 +68,64 @@ Captures : `artifacts/v12-constellation.png`, `artifacts/v12-notes.png`,
   pour réelle ». Seuls les états réels sont affichés (micro, espace, moteur).
 - **Profil utilisateur** : l'application n'a pas de compte ; aucun avatar factice.
 
+## Finition du 2026-10-29 — corrigé et mesuré
+
+- **Parcours fonctionnel réécrit pour la v12** : `scripts/test-features-tauri.mjs`
+  n'emploie plus aucun sélecteur du rail (`.wb-rail*`) ni des tuiles d'accueil. Il
+  ouvre la constellation, vérifie les **cinq destinations dans l'ordre**, la phase de
+  sortie (cercle choisi, autres écartés), le repli de la sphère sur l'ancre d'en-tête
+  (écart mesuré 0×1 px), le retour par la marque, la réouverture depuis Notes sans
+  agrandir la sphère, Échap et le retour du focus à la poignée, puis l'absence de
+  rail, de dock et de panneau fantôme. Résultat : `PARCOURS FONCTIONNEL : OK`,
+  **0 échec, 0 avertissement**, zéro erreur console.
+- **Accueil minimal** : la barre de commande n'est plus permanente ; `Ctrl+K`
+  l'ouvre et y place le focus, un second Échap (saisie vide) la referme. Le micro
+  d'en-tête n'est plus rendu à l'accueil (un seul contrôle vocal, celui de la
+  sphère) ; l'arrêt d'une réponse reste offert. Sans barre, le corps reprend une
+  seule rangée et la poignée descend au bord inférieur au lieu de flotter.
+- **Conversations** : une configuration neuve montre l'historique (`showSidebar`
+  vrai par défaut, réglage toujours maître). Mesuré : historique ≈ 0,25 de la
+  largeur, fil et composeur rendus.
+- **ARIA de la scène** : `.wb-stage` n'est `tabpanel` que si le bandeau de
+  conversations existe réellement ; sinon c'est une région nommée par la
+  destination. Plus de `aria-labelledby` vers un onglet démonté.
+- **Sphère et thèmes** : le canvas relit `--text`, `--accent` et `--panel-solid`
+  sur mutation du document et sur changement `prefers-color-scheme`, sans
+  rechargement. Mesuré sur la WebView réelle : la signature du rendu change de
+  `2731240830` à `404477864` en passant au sombre, puis change encore au changement
+  d'accent.
+- **Mouvement réduit** : cascade, dispersion et repli mesurés instantanés
+  (`animation-duration`, `animation-delay`, `transition-duration` ≤ 0,02 ms).
+- **Géométries** : 1280×820, 1024×700 et 900×680 — aucun débordement, titre
+  entier, cinq cercles dans le cadre, en-tête 54 px.
+- **Accessibilité mesurée** : tous les contrôles visibles ont un nom accessible,
+  aucune cible interactive sous 24 px, `:focus-visible` présent, contrastes texte
+  15,6:1 (clair) / 15,9:1 (sombre) et texte secondaire ≥ 5,7:1.
+- **Voix de bout en bout** : `npm run test:voice-note` passe sur la WebView de
+  développement réelle (voix SAPI française injectée, STT réel). La demande est
+  transcrite, le contenu est **rédigé** (blocs `for`/`while`, 200+ caractères) et non
+  recopié, la confirmation relit le texte, la note est créée une seule fois puis
+  purgée.
+- **Chaîne de contrôles** : `typecheck:host`, `typecheck:tests`, `tsc -b`,
+  `npm test` (**436 tests, 0 échec**), `build:web`, `npm run verify` (exit 0),
+  `cargo check`, `cargo test` (0 test Rust défini, exit 0), `test:features` (exit 0),
+  `visual:prod` (exit 0), `smoke:tauri` (5 PASS, 0 FAIL).
+
 ## Ce qui n'a pas été exécuté
 
-- `npm run test:features` (`scripts/test-features-tauri.mjs`) : il pilote encore le
-  rail v11 (`.wb-rail-*`), les tuiles d'accueil et un onglet par instrument. Il n'est
-  pas dans `npm run verify` et n'a pas été réécrit ici — il échouera au premier
-  contrôle de cadre. `npm run visual:prod` a été adapté et passe.
-- Parcours vocal réel (micro, STT, TTS) : hors périmètre de la refonte ; la sphère
-  consomme `voice.phase` sans le modifier, et `npm test` couvre les modules purs.
+- **CI distante** : aucun push n'a été demandé ; les étapes du workflow
+  `ci-windows.yml` ont été rejouées localement, pas sur un runner GitHub.
+- **Fumée, étape dev** : ignorée localement car un Vite Aven occupait déjà
+  `127.0.0.1:5173` (le script ne touche pas un serveur existant). Le binaire de
+  production, lui, a été fumé (CSP, origine, barre native).
+- **Voix Pocket et repli Windows à l'oreille** : le parcours de note passe par le
+  STT et la synthèse réels, mais je n'ai pas écouté le timbre produit ni provoqué
+  l'indisponibilité de Pocket pour vérifier que le repli Windows est annoncé.
+- **Interruption vocale par une parole adressée** : couverte par les tests purs
+  (`barge-in`, `echo`, `voice-agent-addressed`), pas par une voix physique dans la
+  pièce ; l'écho réel des haut-parleurs n'a pas été mesuré.
+- **Thème système** : le changement d'apparence a été émulé par CDP ; un changement
+  réel du thème Windows pendant que l'app tourne n'a pas été observé.
 
 ## Limites connues
 

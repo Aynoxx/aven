@@ -47,9 +47,17 @@ assert.doesNotMatch(shell, /className="wb-rail"/, "aucun rail permanent")
 assert.match(shell, /<NavigationConstellation/, "la coquille rend la constellation")
 assert.match(read("web/src/workbench/constellation.ts"), /export function arcLayout/, "l'arc est un module pur")
 assert.match(shell, /role="tablist" aria-label="Onglets du Poste"/, "barre d'onglets nommée")
-assert.match(shell, /className="wb-stage" id="wb-stage" role="tabpanel"/, "scène = panneau de l'onglet actif")
+// v12.0.0 : le bandeau d'onglets ne liste QUE plusieurs conversations. La scène
+// ne peut donc être un `tabpanel` que lorsqu'un de ces onglets est affiché ;
+// sinon c'est une région nommée — pointer `wb-tab-…` sans bandeau laissait une
+// référence ARIA morte (le défaut corrigé avec la règle).
+assert.match(shell, /role=\{stageIsTab \? "tabpanel" : "region"\}/, "la scène suit ce qui est réellement rendu")
+assert.match(shell, /aria-labelledby=\{stageIsTab \? `wb-tab-\$\{tabsState\.activeId\}` : undefined\}/, "le libellé d'onglet n'est référencé que s'il existe")
+assert.match(shell, /aria-label=\{stageIsTab \? undefined : \(isHome \? HOME_DESTINATION\.label : activeSection\.label\)\}/, "région nommée par la destination en cours")
 assert.match(shell, /className="wb-inspector"/, "inspecteur permanent")
-assert.match(shell, /<CommandBar app=\{app\} \/>/, "barre de commande permanente")
+// v12.0.0 : la barre reste le point d'entrée du Poste, mais l'accueil la demande
+// (Ctrl+K) au lieu de la subir en permanence.
+assert.match(shell, /commandVisible && <CommandBar app=\{app\}/, "barre de commande rendue par la coquille")
 // v12.0.0 : plus de rail à déployer — la poignée ouvre la même constellation,
 // que l'on soit à l'accueil ou dans un espace de travail.
 assert.match(shell, /open={navOpen}/, "la poignée pilote l'ouverture de la constellation")

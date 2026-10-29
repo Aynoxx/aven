@@ -1,4 +1,4 @@
-# Audit — interface utilisateur (captures 2026-11-01)
+# Audit — interface utilisateur (captures du 2026-10-29)
 
 > Ces captures proviennent de la session avec l'utilisateur ("regarde l'écran Aven"), **pas** du pipeline de vérification du projet. Les mesures ci-dessous sont des lectures vidéo : je ne peux pas les relire dans la machine cible comme le faisait `scripts/visual-prod-tauri.mjs`. Je l'ai rappelé ci-dessous. Pour les déclarer vérifiées, il faut les relancer dans la webview réelle.
 
@@ -72,7 +72,7 @@
 - **Superposition de métadonnées** : deux blocs « AVEN / SYSTEM: IDLE » en haut, l'un à gauche, l'autre à droite. En règle générale, c'est du bruit saillant : le même message est affiché deux fois, ailleurs, ce qui attire l'œil sans apporter d'information nouvelle.
 - **Double statut vocal** : la capture laisse penser à une hiérarchie de statuts (AVEN CORE / USER / SYSTEM puis AVEN / SYSTEM) qui n'est pas ordonnée de façon lisible dans l'espace. Au premier coup d'œil, on ne sait pas quel statut est le « vrai ».
 - **Dock + rail d'icônes** : le rail se comporte comme une répétition partielle de la navigation, ce qui ajoute un second canal visuel.
-- **Textes de menu peu lisibles** sur la capture (titres de conversation avec caractères stylisés, heures datées de 2023/2022 sur un écran de 2026-11-01 — ou du contenu de test/peu réaliste). Même si c'est une image, le contraste et la forme des mots rendent la lisibilité douteuse sur certains noms.
+- **Textes de menu peu lisibles** sur la capture (titres de conversation avec caractères stylisés, heures datées de 2023/2022 sur un écran de 2026-10-29 — ou du contenu de test/peu réaliste). Même si c'est une image, le contraste et la forme des mots rendent la lisibilité douteuse sur certains noms.
 - **Étiquettes flottantes** autour de la sphère : des annotations orthodromiques/géographiques stylisées (`33:32 N`, `-3:54° W`, etc.) qui paraissent être un choix graphique fort, mais qui ressemblent à un hors-sujet technique dans une interface utilisateur vocale ; à part si c'est volontaire, c'est du bruit perçu.
 
 ---
@@ -221,11 +221,17 @@ Vu les fichiers source de référence et les captures, voici les écarts les plu
 - `tests/view-transitions.test.mjs`
 - `tests/voice-agent-session.test.mjs`
 
-**Correctifs à apporter (non encore réalisés dans cette audit)**
+**Correctifs à apporter (constats de cette audit, avant la finition v12)**
 - Supprimer/réduire le double bloc d'état vocal.
 - Résoudre la superposition de métadonnées en haut à gauche / droite.
 - Nettoyer les annotations de repères sur l'agent sphérique (peut-être les déplacer ou les supprimer).
 - Remplir les lacunes de lisibilité dans la liste d'historique (si elle appartient bien à l'écran-boutique).
+
+> **Suites (2026-10-29)** : ces constats portent sur des captures v11.0.0. La refonte
+> v12 a retiré la télémétrie décorative, le second bloc d'état et les annotations de
+> la sphère ; l'historique des conversations est désormais visible par défaut. Les
+> preuves d'exécution sont consignées dans
+> `docs/audits/2026-10-29-refonte-poste-agent.md` (section « Finition du 2026-10-29 »).
 
 **Observations sans validation**
 - Tout ce qui concerne le comportement interactif réel de la constellation et de l'agent vocal (transitions, focus, capture, réponse vocale, etc.) n'est **pas vérifié ici** et demeure à tester dans une session sur l'app Tauri.

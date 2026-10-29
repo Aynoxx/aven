@@ -242,7 +242,9 @@ export default function ConversationPage({ app }: { app: AvenApp }) {
 
   return (
           // v11.0.1 : la grille réserve var(--sidebar-width) à gauche même quand la barre
-          // est démontée (showSidebar faux par défaut) — la conversation vivait dans 286 px.
+          // est démontée — la conversation vivait dans 286 px. v12.0.0 : la barre est
+          // visible par défaut dans une configuration neuve (l'historique est le contenu
+          // de la destination Conversations) ; le réglage permet toujours de la masquer.
           // v11.1.4 : la position choisie dans les Réglages devient une classe réellement
           // posée (elle ne l'était nulle part, le réglage était inerte). Barre masquée =
           // aucune position : `.sidebar-hidden` reste seul et la grille tient en une colonne.

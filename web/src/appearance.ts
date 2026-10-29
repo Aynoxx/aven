@@ -41,7 +41,11 @@ export const defaultAppearance: AppearanceConfig = {
   sidebarWidth: 286,
   messageWidth: 860,
   showHeader: false,
-  showSidebar: false,
+  // v12.0.0 : une configuration NEUVE montre l'historique des conversations —
+  // la destination Conversations n'exposait rien sans lui (colonne vide, aucun
+  // moyen de choisir une session). Le réglage reste maître : qui le désactive
+  // garde une scène pleine largeur.
+  showSidebar: true,
   showModel: true,
   showNotices: true,
   showToolActivity: true,

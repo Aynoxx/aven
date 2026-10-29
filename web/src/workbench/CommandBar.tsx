@@ -19,7 +19,7 @@ type Result = {
   run: () => void
 }
 
-export default function CommandBar({ app }: { app: AvenApp }) {
+export default function CommandBar({ app, onDismiss }: { app: AvenApp; onDismiss?: () => void }) {
   const {
     appState,
     chats,
@@ -147,8 +147,11 @@ export default function CommandBar({ app }: { app: AvenApp }) {
       runResult(results[active])
     } else if (e.key === "Escape") {
       e.preventDefault()
-      setQuery("")
+      // v12.0.0 : premier Échap = vider la saisie ; second (déjà vide) = rendre la
+      // barre demandée à l'accueil, sans laisser un champ vide en travers de la scène.
+      if (query) { setQuery(""); return }
       inputRef.current?.blur()
+      onDismiss?.()
     }
   }
 

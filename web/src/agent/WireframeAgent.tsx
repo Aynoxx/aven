@@ -82,10 +82,34 @@ export default function WireframeAgent({ phase, size, className }: Props) {
   // Un repaint à la demande : en mouvement réduit, aucune boucle ne tourne — un
   // changement de phase doit quand même se voir tout de suite.
   const redrawRef = useRef<(() => void) | null>(null)
+  // v12.0.0 : les jetons (--text, --accent, --panel-solid) changent avec le thème
+  // et l'accent SANS que la taille du canvas bouge. Une seule lecture au montage
+  // laissait la sphère peinte dans l'ancienne palette jusqu'au rechargement.
+  const recolorRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
     redrawRef.current?.()
   }, [phase])
+
+  // Le thème « système » peut changer sans qu'aucune propriété du document ne
+  // bouge : on écoute aussi le média, sinon la sphère gardait la palette d'avant
+  // le changement d'apparence de l'OS.
+  useEffect(() => {
+    let frame = 0
+    const refresh = () => {
+      if (frame) return
+      frame = window.requestAnimationFrame(() => { frame = 0; recolorRef.current?.() })
+    }
+    const observer = new MutationObserver(refresh)
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["style", "class", "data-theme"] })
+    const media = window.matchMedia("(prefers-color-scheme: dark)")
+    media.addEventListener("change", refresh)
+    return () => {
+      if (frame) window.cancelAnimationFrame(frame)
+      observer.disconnect()
+      media.removeEventListener("change", refresh)
+    }
+  }, [])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -97,7 +121,7 @@ export default function WireframeAgent({ phase, size, className }: Props) {
     canvas.width = Math.round(size * dpr)
     canvas.height = Math.round(size * dpr)
 
-    const { ink, accent, panel } = readColors(canvas)
+    let { ink, accent, panel } = readColors(canvas)
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)")
     let raf = 0
     let last = 0
@@ -292,6 +316,15 @@ export default function WireframeAgent({ phase, size, className }: Props) {
     }
 
     redrawRef.current = () => draw(phaseEnergy(phaseRef.current), performance.now())
+    // v12.0.0 : relire les jetons puis repeindre — c'est la MÊME fonction draw,
+    // jamais une seconde palette devinée.
+    recolorRef.current = () => {
+      const next = readColors(canvas)
+      ink = next.ink
+      accent = next.accent
+      panel = next.panel
+      draw(phaseEnergy(phaseRef.current), performance.now())
+    }
 
     const start = () => {
       stopped = false
@@ -318,6 +351,7 @@ export default function WireframeAgent({ phase, size, className }: Props) {
     return () => {
       stopped = true
       redrawRef.current = null
+      recolorRef.current = null
       window.cancelAnimationFrame(raf)
       reduced.removeEventListener("change", onMotion)
       document.removeEventListener("visibilitychange", onVisibility)

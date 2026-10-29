@@ -96,6 +96,9 @@
   letter-spacing: .04em;
   cursor: pointer;
   padding: 3px 6px;
+  /* v12.0.0 : la cible mesurait 22 px de haut — sous le seuil de 24 px que le
+     parcours fonctionnel vérifie pour tout contrôle cliquable. */
+  min-height: 24px;
   max-width: 34vw;
 }
 .wb-status-workspace span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -137,6 +140,11 @@
   min-height: 0;
   overflow: hidden;
 }
+/* v12.0.0 : sur l'accueil, la barre de commande se demande (Ctrl+K). Sans elle,
+   la rangée n'existe pas et le tiroir reprend le bas du corps — sinon un vide
+   de 56 px restait sous le contenu et la poignée flottait au-dessus de rien. */
+.wb-body[data-command="closed"] { grid-template-rows: minmax(0, 1fr); }
+.wb-body[data-command="closed"] .wb-inspector { bottom: 0; }
 
 /* ── Colonne principale ──────────────────────────────────────────────────── */
 
@@ -669,6 +677,9 @@
   padding-bottom: 6px;
   pointer-events: auto;
 }
+/* v12.0.0 : sans barre de commande, la poignée prend le bord inférieur au lieu
+   de rester suspendue à la hauteur d'une barre absente. */
+.wb-body[data-command="closed"] .wb-nav { bottom: 12px; }
 .wb-nav-zone[data-open="false"] { pointer-events: none; }
 .wb-nav-zone[data-open="false"] .wb-nav-trigger { pointer-events: auto; }
 
