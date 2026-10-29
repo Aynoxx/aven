@@ -2,14 +2,16 @@ import { useEffect, useState, type CSSProperties, type KeyboardEvent as ReactKey
 import { api } from "./api"
 import { Icon } from "./icons"
 import InstrumentFrame from "./InstrumentFrame"
-import type { Agent, AppState, AggregatedStats, FreebuffCliStatus, VoiceAgentPrefs } from "./types"
+import type { Agent, AppState, AggregatedStats, FreebuffCliStatus, VoiceAgentPrefs, VoiceCloneStatus } from "./types"
 import type { AppearanceConfig, BlockId } from "./appearance"
 import { displayPath } from "./display-path"
 // v11.1.0 : agent vocal — libellés miroir de host/voice-agent-personality.ts.
 import { VOICE_PERSONALITY_OPTIONS } from "./voice-agent/personalities"
 // v11.3.0 : voix neuronales (Edge) et lecture du MP3 dans la webview.
 import { playVoiceSpeech } from "./voice-agent/playback"
-import { isNeuralVoice, voiceIdOf, voiceLabel } from "./voice-agent/voices"
+// v11.11.0 : POCKET_CLONE_TERMS_URL — la page du modèle de clonage, citée par les
+// Réglages (miroir commenté de host/pocket-tts.ts).
+import { POCKET_CLONE_TERMS_URL, voiceIdOf, voiceLabel } from "./voice-agent/voices"
 
 const SYNC_LABEL: Record<string, string> = {
   created: "créé",
@@ -71,10 +73,17 @@ export default function SettingsDialog(props: {
   const [voicePrefs, setVoicePrefs] = useState<VoiceAgentPrefs | null>(null)
   const [voiceNames, setVoiceNames] = useState<string[]>([])
   const [voicePreviewing, setVoicePreviewing] = useState(false)
+  // v11.11.0 : clonage de voix — l'état vient du host (moteur présent, modèle de
+  // clonage téléchargé, profil posé, jeton enregistré), jamais d'une supposition.
+  const [cloneStatus, setCloneStatus] = useState<VoiceCloneStatus | null>(null)
+  const [cloneBusy, setCloneBusy] = useState(false)
+  const [cloneMessage, setCloneMessage] = useState("")
+  const [cloneToken, setCloneToken] = useState("")
   useEffect(() => {
     if (section !== "voice") return
     api.voiceAgentPrefs().then(setVoicePrefs).catch((e) => props.onError(e))
     api.voiceAgentVoices().then(setVoiceNames).catch(() => setVoiceNames([]))
+    api.voiceCloneStatus().then(setCloneStatus).catch(() => setCloneStatus(null))
   }, [section, props.onError])
   const saveVoicePrefs = async (patch: { voiceName?: string; personality?: VoiceAgentPrefs["personality"]; micMuted?: boolean }) => {
     try { setVoicePrefs(await api.setVoiceAgentPrefs(patch)) } catch (e) { props.onError(e) }
@@ -87,6 +96,51 @@ export default function SettingsDialog(props: {
       const speech = await api.voiceAgentPreview("Bonjour, je suis l'agent vocal d'Aven. Voici ma voix.", voicePrefs?.voiceName)
       await playVoiceSpeech(speech)
     } catch (e) { props.onError(e) } finally { setVoicePreviewing(false) }
+  }
+  // v11.11.0 : le clonage se fait dans l'app : elle télécharge elle-même le modèle
+  // de clonage dans ses données et le moteur pose le profil. Rien n'est envoyé sur
+  // Internet (le moteur est local), et le profil ne part jamais avec l'installeur.
+  const cloneVoice = async () => {
+    setCloneBusy(true)
+    setCloneMessage("")
+    try {
+      const result = await api.voiceCloneFromAudio()
+      // Dialogue annulé : aucune promesse à tenir, aucun message à afficher.
+      if (!result) return
+      setVoiceNames(await api.voiceAgentVoices().catch(() => voiceNames))
+      setVoicePrefs(await api.voiceAgentPrefs().catch(() => voicePrefs))
+      setCloneStatus(await api.voiceCloneStatus().catch(() => cloneStatus))
+      setCloneMessage(
+        result.downloaded
+          ? "Voix clonée créée, après téléchargement du modèle de clonage (209 Mo, une seule fois). Elle est maintenant la voix de l'agent — « Tester la voix » pour l'entendre."
+          : "Voix clonée créée. Elle est maintenant la voix de l'agent — « Tester la voix » pour l'entendre.",
+      )
+    } catch (e) {
+      props.onError(e)
+    } finally {
+      setCloneBusy(false)
+    }
+  }
+  const removeClone = async () => {
+    try {
+      await api.voiceCloneRemove()
+      setVoiceNames(await api.voiceAgentVoices().catch(() => voiceNames))
+      setVoicePrefs(await api.voiceAgentPrefs().catch(() => voicePrefs))
+      setCloneStatus(await api.voiceCloneStatus().catch(() => cloneStatus))
+      setCloneMessage("Voix clonée retirée : la voix intégrée du moteur reprend la main.")
+    } catch (e) {
+      props.onError(e)
+    }
+  }
+  const saveCloneToken = async () => {
+    try {
+      const saved = await api.setVoiceCloneToken(cloneToken)
+      setCloneToken("")
+      setCloneStatus(await api.voiceCloneStatus().catch(() => cloneStatus))
+      setCloneMessage(saved.token ? "Jeton enregistré." : "Jeton effacé.")
+    } catch (e) {
+      props.onError(e)
+    }
   }
   const cliAction = async (action: "launch" | "login" | "install") => {
     try {
@@ -212,7 +266,7 @@ export default function SettingsDialog(props: {
 
   const accentChoices = [
     // v11.0.0 : l'orange signal est le défaut de la DA ; les anciens presets restent.
-    ["signal", "Orange signal", "#ff5a00"],
+    ["signal", "Orange braise", "#d77a43"],
     ["violet", "Violet", "#8b5cf6"],
     ["blue", "Bleu", "#3b82f6"],
     ["emerald", "Émeraude", "#10b981"],
@@ -351,7 +405,7 @@ export default function SettingsDialog(props: {
         <p className="hint">Le micro reste à l’écoute tant qu’il n’est pas coupé. Dis « Aven » puis ta demande ; après une réponse, tu as dix secondes pour enchaîner sans répéter le mot. Le bouton micro du bandeau coupe et réactive l’écoute.</p>
         <div className="settings-callout">
           <b>Ce qui part en ligne</b>
-          <span>La transcription et la réponse passent par Groq (palier gratuit) : les segments audio sont envoyés au STT distant, rien n’est conservé sur disque. Avec une voix neuronale, le texte de la réponse part aussi au service de lecture d’Edge pour la synthèse. Les quotas gratuits ne sont pas illimités ; en cas de dépassement, l’agent s’arrête — aucun service payant n’est utilisé.</span>
+          <span>La transcription et la réponse passent par Groq (palier gratuit) : les segments audio sont envoyés au STT distant, rien n’est conservé sur disque. La synthèse, elle, est locale (Pocket TTS ou voix Windows) : le texte de la réponse ne quitte pas la machine. Les quotas gratuits ne sont pas illimités ; en cas de dépassement, l’agent s’arrête — aucun service payant n’est utilisé.</span>
         </div>
       </section>
       <section className="settings-section">
@@ -361,26 +415,70 @@ export default function SettingsDialog(props: {
           <span>Voix</span>
           <select aria-label="Voix de l’agent vocal" value={voiceIdOf(voicePrefs?.voiceName)} onChange={(e) => void saveVoicePrefs({ voiceName: e.target.value })}>
             <option value="">Voix par défaut</option>
-            {voiceNames.some(isNeuralVoice) && (
-              <optgroup label="Neuronales (Edge, en ligne)">
-                {voiceNames.filter(isNeuralVoice).map((id) => <option key={id} value={id}>{voiceLabel(id)}</option>)}
-              </optgroup>
-            )}
-            {voiceNames.some((id) => !isNeuralVoice(id)) && (
-              // v11.5.0 : le groupe ne dit plus « Windows » — il contient aussi la voix
-              // Piper, qui est locale sans être une voix Windows.
-              <optgroup label="Locales (hors ligne)">
-                {voiceNames.filter((id) => !isNeuralVoice(id)).map((id) => <option key={id} value={id}>{voiceLabel(id)}</option>)}
-              </optgroup>
-            )}
+            {/* v11.14.0 : toutes les voix restantes sont locales */}
+            <optgroup label="Locales (hors ligne)">
+              {voiceNames.map((id) => (
+                <option key={id} value={id}>{voiceLabel(id)}</option>
+              ))}
+            </optgroup>
           </select>
         </div>
         <div className="row">
           <button type="button" className="button secondary" onClick={() => void previewVoice()} disabled={voicePreviewing}>{voicePreviewing ? "Lecture…" : "Tester la voix"}</button>
           <button type="button" className="button ghost" onClick={() => { void api.voiceAgentStop().catch((e) => props.onError(e)) }}>Arrêter la lecture</button>
-          {voicePrefs && !voiceNames.some((id) => !isNeuralVoice(id)) && <span className="hint">Aucune voix Windows détectée.</span>}
+          {voicePrefs && voiceNames.length === 0 && <span className="hint">Aucune voix locale détectée.</span>}
         </div>
-        <p className="hint">Les voix neuronales passent par le service de lecture d’Edge : gratuit, sans compte ni clé, mais en ligne — le texte de la réponse y est envoyé pour la synthèse. Si le service ne répond pas, Aven le signale et lit avec la voix Windows locale, qui fonctionne hors ligne.</p>
+        {/* v11.10.0 : la voix locale Pocket TTS télécharge son modèle au premier
+            usage — le dire évite de prendre ces minutes pour une panne.
+            v11.14.0 : le repli est la voix Windows, hors ligne, toujours annoncé. */}
+        <p className="hint">Pocket TTS est un moteur local : rien ne sort de la machine. Son modèle français (209 Mo) se télécharge au premier usage, une seule fois ; si le moteur n’est pas disponible, Aven le signale et lit avec la voix Windows.</p>
+        {/* v11.11.0 : la voix clonée se crée DANS l’app. Tout ce dont elle a
+            besoin est installé ou téléchargé par Aven, dans ses propres données —
+            y compris le modèle de clonage (209 Mo), dont l’accès est soumis à
+            conditions : c’est le seul geste qui reste à faire, et le jeton
+            correspondant ne quitte jamais le host. */}
+        <div className="row">
+          <button
+            type="button"
+            className="button secondary"
+            onClick={() => void cloneVoice()}
+            disabled={cloneBusy || cloneStatus?.engine === false}
+          >
+            {cloneBusy ? "Clonage en cours…" : cloneStatus?.profile ? "Remplacer la voix clonée…" : "Créer une voix à partir d’un fichier…"}
+          </button>
+          {cloneStatus?.profile && (
+            <button type="button" className="button danger" onClick={() => void removeClone()} disabled={cloneBusy}>Retirer la voix clonée</button>
+          )}
+        </div>
+        {cloneStatus?.engine === false && <p className="hint">Le moteur Pocket TTS n’est pas installé : le clonage passe par lui.</p>}
+        {cloneBusy && (
+          <p className="hint" role="status">
+            {cloneStatus?.weights
+              ? "Conversion de l’enregistrement…"
+              : "Téléchargement du modèle de clonage (209 Mo), puis conversion : cela peut prendre plusieurs minutes."}
+          </p>
+        )}
+        {cloneStatus && !cloneStatus.weights && !cloneBusy && (
+          <>
+            <div className="setting-row">
+              <span>Jeton Hugging Face</span>
+              <input
+                className="settings-input"
+                type="password"
+                aria-label="Jeton Hugging Face pour le clonage de voix"
+                placeholder={cloneStatus.token ? "Jeton enregistré — remplacer…" : "Coller le jeton…"}
+                value={cloneToken}
+                onChange={(e) => setCloneToken(e.target.value)}
+              />
+              <button type="button" className="button secondary" disabled={!cloneToken.trim()} onClick={() => void saveCloneToken()}>Enregistrer</button>
+              <button type="button" className="button ghost" onClick={() => void api.openExternal(POCKET_CLONE_TERMS_URL)}>Ouvrir la page du modèle</button>
+            </div>
+            <p className="hint">Le modèle de clonage (209 Mo) est la seule pièce dont l’accès est soumis à conditions : accepte-les sur la page du modèle, crée un jeton en lecture, puis colle-le ici. Aven télécharge ensuite le modèle lui-même dans ses données — le jeton ne sert qu’une fois.</p>
+          </>
+        )}
+        {cloneMessage && <p className="hint" role="status">{cloneMessage}</p>}
+        {/* v11.10.0 : le profil vit dans les données de l’app, jamais dans l’installeur. */}
+        <p className="hint">Quinze secondes de parole suffisent comme enregistrement de référence. Le clonage reste sur cette machine : le moteur travaille en local, et le profil — un dérivé de ta voix — n’est ni livré ni téléversé. « Retirer la voix clonée » l’efface.</p>
       </section>
       <section className="settings-section">
         <h4>Personnalité</h4>

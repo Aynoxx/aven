@@ -74,7 +74,15 @@ assert.match(hook, /speaking: sessionRef\.current\.phase === "speaking"/, "la le
 // ── E. L'échec est sûr : rien n'est écrit par le garde ─────────────────────
 const guardBlock = hook.slice(echoAt, answerAt)
 assert.doesNotMatch(guardBlock, /onCreateNote|noteQuickCapture|writeConfirmedNote/, "le garde ne peut pas écrire")
-assert.match(guardBlock, /commit\(\{ type: "interrupt" \}\)/, "le garde ramène simplement à l'écoute")
+// v11.11.1 : le garde ne ramène plus SYSTÉMATIQUEMENT à l'écoute — il ne touche
+// pas à une réponse en cours de lecture (l'écho la changeait de requête, et la fin
+// de la phrase disparaissait). L'exigence tient : le garde ne fait rien d'autre que
+// replacer l'état, jamais exécuter ni écrire.
+assert.match(
+  guardBlock,
+  /commit\(reading \? \{ type: "ignored", reading: true \} : \{ type: "interrupt" \}\)/,
+  "le garde replace l'état — lecture préservée, sinon retour à l'écoute",
+)
 assert.equal((hook.match(/optionsRef\.current\.onCreateNote\(/g) ?? []).length, 1, "l'unique chemin d'écriture n'a pas bougé")
 assert.match(note, /export function classifyNoteReply/, "la décision de note reste dans son module")
 // La prose est repliée à 80 colonnes : le libellé peut être coupé sur deux lignes.

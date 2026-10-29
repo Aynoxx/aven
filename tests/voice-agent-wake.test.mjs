@@ -3,6 +3,7 @@ import { test } from "node:test"
 import {
   detectWakeWord,
   hasWakeWord,
+  isSleepPhrase,
   normalizeVoiceText,
   stripPoliteness,
   stripWakeWord,
@@ -36,6 +37,35 @@ test("mot d'activation : variantes acceptées", () => {
     "haven, stop",
   ]) {
     assert.equal(hasWakeWord(phrase), true, `${phrase} réveille l'agent`)
+  }
+})
+
+// v11.11.1 : « Aven » prononcé à la française revient souvent transcrit « Raven »
+// (le STT entend une consonne avant le « A »). Chaque graphie mesurée doit
+// réveiller l'agent — et les mots français proches ne doivent pas.
+test("mot d'activation : « Raven » (consonne entendue avant le A)", () => {
+  for (const phrase of ["Raven, ouvre les notes", "raven quelle heure est-il", "Ravenne, ouvre une note"]) {
+    assert.equal(hasWakeWord(phrase), true, `${phrase} réveille l'agent`)
+  }
+  assert.equal(stripWakeWord("Raven, ouvre les notes"), "ouvre les notes")
+  assert.equal(detectWakeWord("Raven, note que la réunion est à 14 h").command, "note que la réunion est à 14 h")
+  // Le « r » n'est admis que sur la famille en « e » : ravin et ravine sont des
+  // mots français, et une phrase ordinaire ne réveille rien.
+  for (const phrase of ["un ravin profond", "la ravine est sèche", "le ravin longe la route"]) {
+    assert.equal(hasWakeWord(phrase), false, `${phrase} ne réveille pas l'agent`)
+  }
+})
+
+// v11.12.0 : la veille se quitte par un ordre NOMMÉ. La phrase doit être entière —
+// « comment je dors mieux ? » est une demande, et « silence »/« stop » restent les
+// commandes d'interruption qu'elles étaient (elles coupent la lecture sans fermer
+// la conversation).
+test("ordre de repos : la phrase entière, jamais un mot dans une demande", () => {
+  for (const phrase of ["dors", "Dors.", "rendors-toi", "mets-toi en veille", "au repos", "tu peux te reposer", "s'il te plaît dors"]) {
+    assert.equal(isSleepPhrase(phrase), true, `${phrase} rendort l'agent`)
+  }
+  for (const phrase of ["comment je dors mieux ?", "la dorsale du dossier", "je dors mal la nuit", "silence", "stop", "arrête", "repose la note sur le bureau"]) {
+    assert.equal(isSleepPhrase(phrase), false, `${phrase} n'est pas un ordre de repos`)
   }
 })
 

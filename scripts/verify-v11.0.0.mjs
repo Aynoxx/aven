@@ -29,7 +29,7 @@ const css = readStyles()
 const cssCode = css.replace(/\/\*[\s\S]*?\*\//g, "")
 
 const shell = read("web/src/workbench/WorkbenchShell.tsx")
-const home = read("web/src/workbench/HomeBoard.tsx")
+const home = read("web/src/workbench/HomeStage.tsx")
 const command = read("web/src/workbench/CommandBar.tsx")
 const tabs = read("web/src/workbench/tabs.ts")
 const omnibox = read("web/src/workbench/omnibox.ts")
@@ -41,17 +41,21 @@ const workbenchCss = read("web/src/styles/workbench.css")
 
 // ── A. Le cadre permanent ────────────────────────────────────────────────────
 assert.match(shell, /className="wb-status"/, "bandeau de télémétrie permanent")
-assert.match(shell, /className="wb-rail"/, "rail d'instruments permanent")
+// v12.0.0 : le rail permanent a disparu. La navigation primaire est une
+// CONSTELLATION temporaire : aucun meuble ne survit à la fermeture de l'arc.
+assert.doesNotMatch(shell, /className="wb-rail"/, "aucun rail permanent")
+assert.match(shell, /<NavigationConstellation/, "la coquille rend la constellation")
+assert.match(read("web/src/workbench/constellation.ts"), /export function arcLayout/, "l'arc est un module pur")
 assert.match(shell, /role="tablist" aria-label="Onglets du Poste"/, "barre d'onglets nommée")
 assert.match(shell, /className="wb-stage" id="wb-stage" role="tabpanel"/, "scène = panneau de l'onglet actif")
 assert.match(shell, /className="wb-inspector"/, "inspecteur permanent")
 assert.match(shell, /<CommandBar app=\{app\} \/>/, "barre de commande permanente")
-assert.match(shell, /data-rail=\{railWide \? "wide" : "narrow"\}/, "le rail se déploie sans quitter la scène")
+// v12.0.0 : plus de rail à déployer — la poignée ouvre la même constellation,
+// que l'on soit à l'accueil ou dans un espace de travail.
+assert.match(shell, /open={navOpen}/, "la poignée pilote l'ouverture de la constellation")
 
 // Le cadre ne défile pas ; le scroll vit dans les conteneurs de contenu.
 assert.match(cssCode, /\.wb-app \{[^}]*overflow: hidden;/, "le Poste ne défile pas globalement")
-assert.match(cssCode, /\.wb-home-scroll \{[^}]*overflow-y: auto;/, "la planche Aujourd'hui a son propre scroll")
-assert.match(cssCode, /\.wb-tile-body \{[^}]*overflow-y: auto;/, "chaque tuile borne son défilement")
 
 // Un instrument = InstrumentFrame, jamais une page plein écran ni un dialogue.
 for (const file of ["web/src/NotesView.tsx", "web/src/FilesView.tsx", "web/src/pages/TasksPage.tsx", "web/src/FreebuffAgentPage.tsx", "web/src/SettingsDialog.tsx"]) {
@@ -100,7 +104,6 @@ assert.match(command, /openConversationInstrument/, "la barre ouvre les conversa
 assert.doesNotMatch(command, /setInput\(/, "la barre de commande n'écrit jamais dans le composeur")
 assert.doesNotMatch(command, /api\.(send|prompt|createChat)/, "la barre ne crée ni n'envoie de conversation")
 
-assert.match(home, /dictation\.start\("workbench"\)/, "le micro de la planche déclare sa provenance")
 assert.match(command, /dictation\.start\("workbench"\)/, "le micro global déclare la même provenance")
 assert.match(controller, /effectiveIntent\(result\.intent, origin, agents\.map\(\(a\) => a\.id\)\)/, "la provenance décide avant toute action")
 assert.match(controller, /setInput\(text\)/, "une dictée ordinaire rejoint le composeur")
@@ -115,12 +118,14 @@ assert.match(shell, /planFor\("cite"/, "citer une réponse crée une note")
 
 // ── D. DA et surfaces ────────────────────────────────────────────────────────
 assert.match(da, /--font-mono: ui-monospace/, "la deuxième voix est monospace système")
-assert.match(da, /--accent: #ff5a00;/, "un seul accent signal orange")
+// v12.0.0 : l'orange braise du brief remplace le #ff5a00 de la DA DRONE. Un seul
+// accent dans le Poste — la règle tient, sa valeur change.
+assert.match(da, /--accent: #d77a43;/, "un seul accent orange braise")
 // La DA ne vaut que si le boot ne l'écrase pas : `appearance.ts` posait l'accent
 // Émeraude par défaut, donc l'interface rendait du vert sur le champ olive pendant
 // que cette sonde lisait la feuille. Le défaut suit désormais le signal.
 assert.match(read("web/src/appearance.ts"), /accent: "signal"/, "l'accent par défaut est le signal orange")
-assert.match(read("web/src/appearance.ts"), /signal: \{ label: "Orange signal", value: "#ff5a00" \}/, "le preset signal vit dans la table des accents")
+assert.match(read("web/src/appearance.ts"), /signal: \{ label: "Orange braise", value: "#d77a43" \}/, "le preset signal vit dans la table des accents")
 assert.match(da, /--radius-xs: 2px;/, "la géométrie est resserrée par la DA")
 assert.match(da, /:root\[data-theme="light"\]/, "la DA fournit les deux thèmes")
 assert.match(da, /@media \(prefers-reduced-motion: reduce\)/, "la DA neutralise le mouvement")

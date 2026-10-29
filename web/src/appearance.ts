@@ -54,7 +54,7 @@ export const defaultAppearance: AppearanceConfig = {
 }
 
 export const presetAccents: Record<Exclude<Accent, "custom">, { label: string; value: string }> = {
-  signal: { label: "Orange signal", value: "#ff5a00" },
+  signal: { label: "Orange braise", value: "#d77a43" },
   violet: { label: "Violet", value: "#8b5cf6" },
   blue: { label: "Bleu", value: "#3b82f6" },
   emerald: { label: "Émeraude", value: "#10b981" },

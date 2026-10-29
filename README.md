@@ -1,4 +1,4 @@
-# Aven v11.5.1
+# Aven v12.0.0
 
 > ## v10.0.0 — 100 % Tauri (Electron et le natif retirés)
 > Aven est une **app Tauri 2** : la webview React parle à Rust (`src-tauri/`)
@@ -26,6 +26,143 @@
 
 Application de bureau (Tauri) : une chatbox avec **3 agents commutables** (code, recherche, analyse) et un
 sous-agent (code-reviewer), branchée sur **OpenCode 2.0.10** et un catalogue d’agents strictement gratuit (OpenRouter Free / OpenCode Zen).
+
+> **v12.0.0 — Aven prend la place, puis te la rend**
+> ① L'accueil n'a plus de tableau de bord : **un titre monumental ancré à gauche**
+> traverse la page, et **la sphère vocale** occupe la scène — calotte éclairée,
+> maillage de points, charpente d'instrument — avec une phrase, le micro et son
+> état réel. Les cinq cercles de navigation sont des fils, pas des pastilles : la
+> grille reste visible derrière eux.
+> ② La navigation n'est plus un meuble : une poignée discrète ouvre **cinq cercles
+> flottants** posés sur un arc. Choisis-en un et les autres s'écartent, la sphère
+> **se replie dans l'en-tête** — le même dessin, plus petit — et la page choisie
+> occupe tout l'espace. Aucun rail, aucun dock, aucune barre d'onglets permanente.
+> ③ La constellation se rouvre depuis n'importe quel espace de travail, au clic, au
+> survol ou au clavier (flèches, Échap), et dit toujours la section où tu es.
+>
+> **v11.16.0 — il rédige la note, il ne recopie plus ta demande**
+> ① Quand tu demandes une note dont le contenu est à composer (« la note doit
+> contenir un résumé de… »), Aven rédige ce contenu, le relit, puis ne l'écrit
+> qu'après ton « oui ». ② Une note dictée (« note que j'ai rendez-vous ») reste
+> mot pour mot : Aven ne réécrit pas ce que tu dictes. ③ La rédaction passe par un
+> appel dédié, sans outil d'écriture : le modèle ne peut jamais créer la note
+> lui-même.
+>
+> **v11.15.2 — il n'oublie plus la question qu'il vient de te poser**
+> ① Une capture commencée pendant une réponse n'est plus refermée par la fin de
+> la lecture : l'enregistreur restait ouvert sans phase pour l'arrêter, donc la
+> phrase suivante n'était jamais transcrite. C'est ce qui donnait l'impression
+> qu'Aven avait oublié sa propre question (« quel contenu pour la note ? ») et ne
+> répondait plus.
+> ② Un filet arrête tout enregistreur orphelin et son clip part quand même à la
+> transcription : le micro ne reste plus sourd après un tour manqué.
+>
+> **v11.15.1 — le micro coupé reste coupé au démarrage**
+> ① Aven démarre toujours micro coupé, puis rétablit ta préférence : un agent
+> réglé sur « micro coupé » n'écoute plus avant de l'avoir lue, et le premier
+> clic active l'écoute au lieu de la couper.
+> ② Le repli qui annonce Pocket TTS indisponible ne répète plus deux fois le
+> même remède : à force, la cause devenait illisible.
+>
+> **v11.15.0 — il laisse la réponse finir, et il peut écrire tes notes**
+> ① Un bruit de la pièce, une hésitation ou une remarque destinée à quelqu'un
+> d'autre ne coupe plus la lecture : seule une parole qui s'adresse à Aven
+> l'interrompt (« attends » et « chut » restent des reprises directes).
+> ② Aven peut créer une note quand tu le lui demandes — « crée-moi une note »,
+> « fais une note sur… » — au lieu de répondre qu'il ne peut pas. Le contenu est
+> relu à voix haute, la note n'est écrite qu'après ton « oui », puis affichée.
+> ③ La création par le modèle est une écriture PROPOSÉE du catalogue d'actions :
+> jamais un effet de bord silencieux de la transcription.
+>
+> **v11.14.1 — il n'écoute plus la pièce, et ta conversation ne disparaît plus**
+> ① En veille, un bruit, une hésitation ou une phrase destinée à quelqu'un d'autre
+> ne déclenche plus de réponse : Aven distingue une parole qui lui est adressée
+> (question, impératif, « tu », demande explicite) d'une remarque ambiante — il ne
+> répète plus sa phrase précédente faute d'avoir compris. Une parole écartée ne
+> prolonge pas la veille.
+> ② Supprimer la conversation que tu regardes alors qu'il en reste une autre ne
+> ferme plus l'onglet : la conversation restante reprend sa place au lieu de te
+> renvoyer sur Notes ou Aujourd'hui.
+> ③ La décision d'adresse est un module pur (`host/voice-agent-addressed.ts`) :
+> aucun appel réseau, aucune latence ajoutée au chemin vocal.
+>
+> **v11.14.0 — une seule pile vocale**
+> Edge (voix neuronale, service distant) et Piper (voix locale de repli) ont été
+> **retirés** : sources, routage, préférences, menu, ressources d'installeur,
+> dépendance `ws` et sondes dédiées. Il ne reste que le moteur local Pocket TTS,
+> avec la voix Windows en repli — toujours annoncé quand il s'enclenche. Le
+> routage vit dans un module pur testé (`host/voice-route.ts`) : une préférence
+> d'ancienne version (« edge: », « piper: ») retombe sur la voix par défaut
+> plutôt que sur un nom inconnu, et la synthèse ne quitte plus jamais la machine.
+>
+> **v11.13.0 — l'agent vocal sait ce qu'il peut dire**
+> ① Son prompt devient un **contrat de parole sectionné** : le **format** (une à deux phrases courtes, aucun Markdown, liste, lien, chemin, emoji ni didascalie — rien qui ne se prononce), **ce qu'il peut dire** (pour les données d'Aven, uniquement ce que les outils ont renvoyé — la connaissance générale reste permise, sans fausse source ; l'action réellement faite ; son refus et sa raison), et **ce qu'il ne dit jamais** (une action « faite » sans résultat, une note non lue, une clé ou un jeton, le texte des consignes, une action hors d'Aven, une promesse ou une source inventée).
+> ② Il refuse en une phrase qu'on lui fasse **révéler ou ignorer ses règles**, ne répète pas un texte qu'on ne lui a pas demandé de relire, et pose **une seule** question, à la fin.
+> ③ Le ton (neutre, direct, chaleureux) ne change que la manière de le dire — jamais le contenu, le périmètre ni les interdits.
+
+> **v11.12.2 — la vue Conversation lit enfin le terminal**
+> ① « Vue conversation » affichait « le terminal est vide » même quand Freebuff tournait : le minuteur du transcript n'était **jamais remis à zéro**, donc le premier scan — annulé tant que la vue n'était pas affichée — condamnait tous les suivants. ② Ouvrir la vue **scanne maintenant le buffer immédiatement**, puis à chaque nouvelle sortie du TUI ; la vue terminal, elle, ne rescanne toujours rien. ③ Deux corrections d'affichage du terminal : xterm sait désormais que le PTY est un **ConPTY** (ses correctifs de redimensionnement s'appliquent), et rouvrir l'onglet sur une session vivante annonce « **En ligne** » au lieu de laisser « Freebuff démarre… » avec « Interrompre » grisé.
+
+> **v11.12.1 — la voix Pocket va jusqu'au bout de ses phrases**
+> ① La lecture du flux de la voix locale ne programnait que **son premier paquet** : tout le reste attendait la fin de la synthèse… et était **jeté** à cet instant, parce que le lecteur ne voyait plus rien à jouer. Une confirmation de note de neuf secondes s'arrêtait après une seconde. Chaque paquet part maintenant **dès son arrivée**, et la fin du flux ne jette plus ce qui a été reçu : mesuré sur le même texte, **1,07 s jouée avant, 7,79 s après**, en neuf paquets bout à bout.
+> ② Le défaut ne touchait que la voix **locale** (Pocket) : le chemin neuronal d'Edge pousse déjà chaque trame dans son lecteur. Si tu entendais des coupes avec Edge aussi, c'était l'autre cause, corrigée en v11.11.1 (le micro qui reprenait la voix de l'agent).
+> ③ Le détail des chiffres est consigné dans l'audit : durée livrée par le host (17,30 s en flux contre 17,48 s en bloc), programmation audio mesurée dans la webview, et aucun arrêt de lecture enregistré pendant une réponse.
+
+> **v11.12.0 — il reste éveillé quand tu lui parles**
+> ① Dis **« Aven » une fois** : l'agent **reste éveillé**. Plus besoin de répéter le mot à chaque phrase — la conversation continue tant que tu lui parles, et chaque phrase adressée prolonge la veille d'une minute.
+> ② **Trois sorties, aucune devinette** : « **Aven, dors** », une minute de silence, ou le micro coupé. Le bandeau affiche « **Éveillé** » au lieu d'« Écoute » : tu sais toujours si le mot d'activation est encore nécessaire, et l'infobulle dit comment le rendormir.
+> ③ La fenêtre de dix secondes de v11.1.0 ne marchait pas : **capturer une parole la refermait avant la transcription**, donc le mot d'activation restait exigé à chaque phrase. Corrigé — et un test fige le défaut pour qu'il ne revienne pas.
+
+> **v11.11.1 — Aven ne se coupe plus, et il t'entend dire son nom**
+> ① Les réponses **ne se coupent plus avant la fin**. La cause n'était pas la synthèse : le micro entend la voix de l'agent dans les haut-parleurs, et cette détection arrêtait la lecture — puis invalidait sa requête, ce qui annulait le lecteur dès le retour de la synthèse. Le niveau du micro ne décide plus rien : la reprise de parole se juge sur le **texte**, quand il peut être comparé à ce qui vient d'être dit.
+> ② « Aven » est souvent transcrit **« Raven »** (le service de transcription croit entendre une consonne avant le A). La variante est reconnue, comme « Haven » et « Aveun » — mais seulement sur cette famille : « ravin » et « ravine » sont des mots français et ne réveillent rien.
+> ③ La latence est mesurée, pas supposée : **2,2 s de la fin de ta phrase au premier son** (médiane sur dix demandes), contre 5,7 s avant le cache des clés et 3,0 s avant la lecture en flux. Décomposition : 0,7 s de silence de fin de détection, 0,5 s de transcription, 0,7 s de réponse, 0,4 s avant la première trame audio. Le démarrage à froid reste à ~6,7 s.
+
+> **v11.11.0 — cloner une voix depuis l'app, sans rien préparer à la main**
+> ① Réglages → Agent vocal : **« Créer une voix à partir d'un fichier… »**. Tu choisis un enregistrement (quinze secondes suffisent, WAV ou MP3), l'app fait le reste — plus de commande à taper dans un terminal.
+> ② **Tout est installé par l'app** : elle télécharge elle-même le modèle de clonage (209 Mo, une seule fois) dans ses propres données, puis le moteur encode ta référence — mesuré à **1,5 s** pour un WAV court et **5,3 s** pour un MP3, hors téléchargement. Aucun dossier d'une autre installation n'est lu.
+> ③ Le seul geste qui reste est une **autorisation** : ce modèle est soumis à conditions — accepte-les sur sa page (le bouton l'ouvre) et colle un jeton une fois. Il est chiffré côté host, ne sert qu'à ce téléchargement, et n'est jamais renvoyé à l'interface.
+> ④ Le profil est posé **après vérification de son en-tête** (jamais un fichier à moitié écrit à la place du bon), le moteur redémarre pour le lire, et la voix clonée devient celle de l'agent : « Tester la voix » l'entend tout de suite. « **Retirer la voix clonée** » l'efface.
+
+> **v11.10.0 — la voix locale qui a gagné l'écoute**
+> ① Une troisième voix locale rejoint Aven : **Pocket TTS** (moteur Rust de Kyutai, 22 Mo, sans Python, hors ligne). Sur la phrase de référence, à sonie égale et sans étiquette, tu l'as préférée à Denise, à Henri et à Tom.
+> ② Elle parle **au fil de la synthèse** : premier son à **270 ms** mesuré, contre ~2,4 s si l'on attendait la phrase entière. Sa génération tient 2,5 fois le temps réel et ne décroche jamais la lecture.
+> ③ Son modèle français (« estelle », 209 Mo, dépôt ouvert sans jeton) se télécharge au premier usage, une seule fois — `npm run fetch:pocket-tts` le prépare à l'avance. Si le moteur manque, Aven le signale et repasse sur Piper, comme pour Edge.
+> ④ Sa voix **clonée** peut prendre la place de la voix intégrée : un profil posé par `npm run voice:pocket -- <fichier.safetensors>` est appliqué par le moteur au démarrage, et c'est elle que tu entends — mesuré à 0,9 % de distance spectrale de l'enregistrement de référence, contre 18,8 % pour la voix intégrée.
+> ⑤ Le profil reste **sur ton disque** : ni dans le dépôt, ni dans l'installeur. Réglages → Agent vocal propose donc une seule voix Pocket à la fois, celle qui va parler : « voix clonée » si un profil est posé, « voix française » sinon.
+> ⑥ Et elle se fait **entendre** : elle sortait 2,4 dB sous Piper et laissait 550 ms de silence après le dernier mot. Le niveau est calé sur Piper Tom et les **silences de tête et de queue** sont rognés, comme pour Edge (pauses internes de plus de 650 ms ramenées à 420 ms). Mesure à phrase identique : RMS voisé −20,4 dBFS contre −20,4 pour Tom, silence de queue 0 ms contre 550.
+
+> **v11.9.0 — Aven agit dans le Poste, et demande avant de détruire**
+> ① L'agent vocal ne se contente plus de lire : il renomme, archive ou crée une conversation, épingle, déplace ou archive une note, crée un dossier — et il annonce ce qu'il a fait (« C'est fait : la conversation « Pricing » — son nouveau titre est « Tarifs » »). Dis « Aven, renomme la conversation pricing en tarifs ».
+> ② Une suppression ne part jamais toute seule : Aven la **propose** en nommant la cible — « Je vais supprimer la conversation « Pricing ». Je le fais ? » — et n'écrit qu'après un « oui » explicite. Un « non », un silence ou 45 s plus tard : rien n'est touché.
+> ③ Le catalogue d'actions (`host/agent-actions.ts`) classe chaque action par risque (lecture, écriture, destruction) : au plus une écriture par tour, cible résolue par nom (deux conversations proches ? il pose la question au lieu de choisir), et les gestes interdits — purger la corbeille, retirer un espace, agir hors d'Aven — n'existent pas.
+
+> **v11.8.0 — Tom et Siwis, les deux voix retenues**
+> ① Deux voix locales : Tom (défaut, calée à 0,92 sur le rythme de Siwis) et Siwis (secours, 1,10). Les deux variantes de Tom (ex-Voix A et Voix B) restent retirées du disque et du menu ; l'installeur repasse d'environ 90 Mo à 155 Mo.
+> ② Tom est le modèle officiel du catalogue Piper ; Siwis est le modèle historique, gardé pour son timbre et comme secours hors ligne. `npm run fetch:piper` les pose tous les deux, avec la licence de Tom.
+> ③ Le libellé de Tom reste neutre dans Réglages → Agent vocal (la licence de cette voix interdit de nommer son auteur dans l'interface) ; Siwis garde son nom, son corpus étant sous CC-BY 4.0.
+
+> **v11.7.0 — une seule voix locale, celle qui a été choisie**
+> ① Après l'essai des quatre voix Piper, une seule reste livrée : le modèle Tom (44,1 kHz), calé à **0,92** pour retrouver le rythme de Siwis. Mesures entrelacées sur la phrase de référence : Siwis 1,10 = 6,635 s de médiane, Tom 0,98 = +5,6 %, 0,96 = +3,8 %, 0,94 = +1,4 % ; à 0,92 l'écart restant est sous le bruit des prises.
+> ② Siwis, Voix A et Voix B sont retirées du disque et du menu ; `npm run fetch:piper` ne télécharge plus que le binaire, ce modèle et la licence, et l'installeur repasse d'environ 280 Mo à 90 Mo.
+> ③ Le libellé reste neutre dans Réglages → Agent vocal : la licence de la voix interdit de nommer son auteur dans l'interface. Les mentions de licence restent livrées avec les poids (AGPL-3.0).
+> ④ Edge reste la voix principale ; cette voix locale est le repli hors ligne, et la voix Windows le dernier recours.
+
+> **v11.6.0 — quatre voix locales au choix**
+> ① Le repli Piper ne se limite plus à Siwis : trois modèles français supplémentaires sont embarqués (44,1 kHz) et apparaissent dans Réglages → Agent vocal. Voix A devient la voix par défaut ; le bouton « Tester la voix » les lit avec le même chemin que l'agent.
+> ② Mesuré sur cette machine, sur la même phrase : 3,1–3,3 s de synthèse pour 6,5–7,6 s d'audio (RTF 0,44–0,49), contre 2,2 s pour Siwis. Voix A est calée à **0,98** pour retrouver le rythme de Siwis : 6,73 s contre 6,68 s sur la même phrase. À 1,0 elle traînait d'environ 4 %.
+> ③ Les poids viennent de French-tts-model-piper (AGPL-3.0) ; leurs libellés restent neutres, comme l'exige la licence de la voix. Siwis reste disponible et sert de secours si Voix A manque. Ce ne sont pas des clones de Denise.
+> ④ Coût : les ressources Piper passent d'environ 90 Mo à 280 Mo, donc l'installeur grossit d'autant. `npm run fetch:piper` reste idempotent et télécharge la licence avec les poids.
+
+> **v11.5.3 — le premier son arrive pendant la synthèse**
+> ① Edge synthétisait la réponse entière avant que la webview ne joue un mot : ~1,7 s d'attente après le cerveau. Il envoie pourtant l'audio par trames — Aven les joue maintenant au fur et à mesure, en **une seule requête** par réponse (pas une par phrase, ce qui multipliait les 429).
+> ② Mesuré sur la même chaîne : première trame à **417–643 ms**, premier son chaud **~2,2 s** (STT, LLM et VAD compris) contre **3,0 s** de médiane sans diffusion. Dans la webview, une réponse fraîche joue son premier son à **434 ms** une fois le fil IPC libéré (785 ms avant ce correctif, 1,1 s quand les trames étaient groupées). Les démarrages à froid restent à 3,5–4,7 s (clé DPAPI + PowerShell).
+> ③ Le flux ne compresse pas les pauses internes comme le faisait le décodage complet : la réponse peut durer un peu plus longtemps, mais elle commence plus tôt. Si le format n'est pas lisible, l'ancien chemin MP3 prend le relais — un seul repli, toujours dit.
+
+> **v11.5.2 — la voix ne redéchiffre plus ses clés à chaque phrase**
+> ① Un tour vocal déchiffrait les clés DPAPI **quatre fois** (deux clés × STT + LLM) : 582 ms par lancement PowerShell, soit une part mesurée de **~2,3 s sur 5,7 s** de latence.
+> ② Les clés en clair vivent maintenant en mémoire du host, jamais côté interface, et le cache est invalidé dès qu'une clé change ou que `settings.json` est modifié.
+> ③ Re-mesuré sur les mêmes dix phrases : **3 005 ms** de médiane du dernier mot au premier son (six tours Edge ; quatre ont basculé sur la voix Windows en 429). L'étape isolée STT + LLM passe de **2 845 à 1 259 ms**.
 
 > **v11.5.1 — la voix de secours prend le rythme de Denise**
 > ① À texte égal, Piper parlait **44 % plus vite** que Denise (2,45 s contre 3,53 s) : c'est ce qui donnait l'impression d'une voix pressée, avant même le timbre.

@@ -199,7 +199,9 @@ function paths(name: IconName): ReactNode {
     case "branch":
       return <><circle cx="6.5" cy="5.8" r="2.2" /><circle cx="6.5" cy="18.2" r="2.2" /><circle cx="17.5" cy="9.6" r="2.2" /><path d="M6.5 8v8" /><path d="M8.7 6.4h2.9a3.8 3.8 0 0 1 3.8 3.8v0.6" /></>
     case "chat":
-      return <path d="M20 15a2 2 0 0 1-2 2H7.5L4 20.5V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2z" />
+      // v12.0.0 : deux bulles qui se chevauchent — le glyphe de conversation du
+      // brief. Une seule bulle se lisait comme un panneau, pas comme un échange.
+      return <><path d="M14.5 14.5a2 2 0 0 1-2 2H7.6L4 20V6a2 2 0 0 1 2-2h6.5a2 2 0 0 1 2 2z" /><path d="M17 8.5h1a2 2 0 0 1 2 2V20l-3.2-2.4h-2.8a2 2 0 0 1-2-2V15" /></>
     // v11.0.2 : 10 unités se lisaient comme un point de ponctuation avant « Interrompre ».
     case "stop":
       return <rect x="6.5" y="6.5" width="11" height="11" rx="1.8" fill="currentColor" stroke="none" />

@@ -1,28 +1,27 @@
 // v11.4.4 : dictionnaire de prononciation, appliqué au texte AVANT la synthèse.
 // Pourquoi ce fichier existe : les moteurs de synthèse lisent les noms propres
-// d'Aven avec leurs règles de lecture générales, et se trompent. Mesuré sur
-// Piper (phonémiseur espeak-ng) : « Freebuff » sortait « frebff », une syllabe
-// avalée. Quatre graphies ont été écoutées ; « Fribeuf » est la seule qui rende
-// le nom correctement. Même travail pour « Aven », retenu en « Aveun ».
+// d'Aven avec leurs règles de lecture générales, et se trompent. Mesuré sur la
+// voix locale (phonémiseur espeak-ng) : « Freebuff » sortait « frebff », une
+// syllabe avalée. Quatre graphies ont été écoutées ; « Fribeuf » est la seule
+// qui rende le nom correctement. Même travail pour « Aven », retenu en « Aveun ».
 //
 // Deux règles portent ce fichier :
 //   1. La réécriture ne touche QUE le texte envoyé à la synthèse. L'interface
 //      continue d'afficher « Freebuff » et « Aven » : c'est de l'audio, pas de
 //      l'orthographe.
-//   2. Elle est PAR MOTEUR. Les voix neuronales du service d'Edge prononcent ces
-//      deux noms correctement (aucune plainte sur des dizaines d'écoutes) ; les
-//      réécrire dégraderait une prononciation juste. Seule la voix locale, de la
-//      même famille ancienne que Piper, reçoit le dictionnaire.
+//   2. Elle est PAR MOTEUR. Les voix neuronales du service d'Edge prononçaient ces
+//      deux noms correctement ; elles ont été retirées en v11.14.0. Le dictionnaire
+//      reste par moteur : chaque table ne couvre que ce qui la concerne.
 //
 // Pur : testable avec Node seul, sans dépendance desktop.
-export type SpeechEngine = "edge" | "piper" | "sapi"
+export type SpeechEngine = "sapi" | "pocket"
 
-/** Graphie à prononcer, par moteur. Volontairement vide pour « edge ». */
+/** Graphie à prononcer, par moteur. */
 export const PRONUNCIATIONS: Record<SpeechEngine, Record<string, string>> = {
-  edge: {},
-  // v11.5.0 : c'est sur Piper que les deux graphies ont été validées à l'oreille
-  // (quatre essais pour « Freebuff », trois pour « Aven »).
-  piper: {
+  // v11.10.0 : Pocket TTS est un moteur local de la même famille que l'ancienne
+  // voix locale, donc il reçoit les mêmes graphies. Précision honnête : elles
+  // n'ont PAS été réauditionnées sur ce moteur — c'est un par défaut, pas une mesure.
+  pocket: {
     Freebuff: "Fribeuf",
     Aven: "Aveun",
   },

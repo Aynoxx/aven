@@ -13,7 +13,7 @@ const read = (p) => readFileSync(path.join(root, p), "utf8")
 
 const icon = read("web/src/icons/Icon.tsx")
 const shell = read("web/src/workbench/WorkbenchShell.tsx")
-const home = read("web/src/workbench/HomeBoard.tsx")
+const home = read("web/src/workbench/HomeStage.tsx")
 const notesView = read("web/src/NotesView.tsx")
 const conversation = read("web/src/pages/ConversationPage.tsx")
 const tasks = read("web/src/pages/TasksPage.tsx")
@@ -36,7 +36,7 @@ for (const name of ["wand", "branch", "chat", "stop", "paperclip"]) {
 // ── B. Une seule marque ──────────────────────────────────────────────────────
 // `sparkle` n'apparaît plus qu'au bandeau de marque du rail : ni état vide, ni mode,
 // ni action de génération ne l'empruntent.
-const sparkleSites = ["web/src/workbench/WorkbenchShell.tsx", "web/src/workbench/HomeBoard.tsx",
+const sparkleSites = ["web/src/workbench/WorkbenchShell.tsx", "web/src/workbench/HomeStage.tsx",
   "web/src/pages/ConversationPage.tsx", "web/src/pages/TasksPage.tsx", "web/src/NotesView.tsx",
   "web/src/app/constants.ts", "web/src/FilesView.tsx", "web/src/FreebuffAgentPage.tsx"]
   .flatMap((file) => read(file).split("\n").map((line, i) => ({ file, line: i + 1, text: line })))
@@ -50,15 +50,13 @@ assert.match(shell, /applySelection\("explain"\)}><Icon name="wand"/, "« Expliq
 
 // ── D. Une conversation n'est pas un agent ni un fichier ─────────────────────
 assert.match(shell, /kind: "conversation", label: "Conversations", icon: "chat"/, "le rail nomme les conversations par une bulle")
-assert.match(home, /<strong>Reprendre<\/strong>/, "la planche garde sa tuile de reprise")
-assert.match(home, /<span className="wb-row-icon"><Icon name="chat" size=\{15\} \/><\/span>/, "une ligne de conversation porte la bulle")
 assert.match(conversation, /<div className="empty-symbol"><Icon name="chat" size=\{24\} \/><\/div>/, "l'état vide d'une conversation parle de conversation")
 assert.match(tasks, /<div className="agent-card-icon"><Icon name="agent" size=\{24\} \/><\/div>/, "la carte d'un agent porte l'icône agent")
 assert.match(constants, /id: "analyse", icon: "chart"/, "un mode de délégation porte l'outil du spécialiste")
 
 // ── E. La délégation a son glyphe ────────────────────────────────────────────
 assert.match(shell, /kind: "orchestration", label: "Orchestration", icon: "branch"/, "le rail nomme la délégation par une ramification")
-assert.match(home, /onClick=\{\(\) => openAgentsPage\(\)\}><Icon name="branch"/, "l'accès à Orchestration porte la ramification")
+assert.match(shell, /kind: "orchestration", label: "Orchestration", icon: "branch"/, "la constellation nomme la délégation par une ramification")
 
 // ── F. Interrompre ≠ fermer, joindre ≠ naviguer, citer ≠ chevron ─────────────
 assert.match(freebuff, /<Icon name="stop" size=\{14\} \/>Interrompre/, "« Interrompre » affiche un carré d'arrêt")

@@ -7,7 +7,9 @@ import { fileURLToPath } from "node:url"
 // risque — une note mal écrite est une erreur invisible :
 //   A. aucun chemin d'écriture ne s'ouvre sans une réponse classée « confirm » ;
 //   B. la question RÉPÈTE le contenu, et le refus est classé avant l'accord ;
-//   C. une demande de note ne part jamais au LLM (il répondrait « c'est noté ») ;
+//   C. une note dictée ne part jamais au LLM conversationnel (il répondrait
+//      « c'est noté ») ; une note demandée comme contenu passe par l'appel de
+//      composition dédié, qui ne peut pas écrire ;
 //   D. consulter une note reste une navigation, jamais une création ;
 //   E. l'écriture passe par l'IPC existant, l'écrit est rendu visible ;
 //   F. la décision expire : un « oui » tardif n'écrit rien.
@@ -72,13 +74,17 @@ assert.match(note, /n\['’\]enregistre\\s\+pas/, "« n'enregistre pas » est un
 assert.match(note, /NOTE_CONFIRM_MS = 45_000/, "la fenêtre de décision est figée")
 assert.match(note, /NOTE_CANCELLED_REPLY/, "le refus a sa phrase, dite à l'utilisateur")
 
-// ── C. Une demande de note ne part JAMAIS au LLM ───────────────────────────
+// ── C. Une note dictée ne part JAMAIS au LLM conversationnel ───────────────
 const parseAt = hook.indexOf("const note = parseNoteDraft(interpreted.demand)")
 const askAt = hook.indexOf("await ask(interpreted.demand)")
 assert.ok(parseAt > 0, "le hook extrait le brouillon de la demande interprétée")
 assert.ok(askAt > 0, "le hook garde le chemin de demande libre")
 assert.ok(parseAt < askAt, "le brouillon est décidé avant tout envoi au LLM")
-assert.match(hook, /if \(note\.draft\.trim\(\)\) await askNoteConfirmation\(note\.draft\)/, "un contenu dicté ouvre la confirmation")
+// v11.16.0 : une phrase qui décrit le contenu à rédiger ne devient pas un
+// brouillon littéral ; elle passe par l'appel de composition dédié, qui n'écrit
+// pas. Le contenu dicté, lui, garde sa confirmation littérale.
+assert.match(hook, /if \(note\.draft\.trim\(\) && noteNeedsComposition\(interpreted\.demand\)\) await composeNote\(interpreted\.demand\)/, "une note à rédiger est composée")
+assert.match(hook, /else if \(note\.draft\.trim\(\)\) await askNoteConfirmation\(note\.draft\)/, "un contenu dicté ouvre la confirmation")
 assert.match(hook, /else await askNoteContent\(\)/, "une note sans contenu demande le texte au lieu de deviner")
 // « oui » n'a pas besoin de « Aven » : la réponse est consommée avant le réveil.
 const answerAt = hook.indexOf("await answerPendingNote(text)")

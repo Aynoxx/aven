@@ -34,12 +34,16 @@ export function normalizeVoiceText(text: string): string {
 
 // v11.2.1 : graphies acceptées, une PAR MOT entier (la normalisation a déjà retiré
 // accents et ponctuation) :
-//   av(e|ai|ei)?n+  → aven, avène, avenne, avenes ; haven, havenne…
-//   av(in|ain|ein)  → avin, avain (le « e » final de « avine » reste toléré)
-//   av(e|i|ai)un    → aveun, aviun
+//   [hr]?av(e|ai|ei)?n+  → aven, avène, avenne, haven, havenne…
+//   h?av(in|ain|ein)     → avin, avain (le « e » final de « avine » reste toléré)
+//   h?av(e|i|ai)un       → aveun, aviun
+// v11.11.1 : le STT écrit souvent « Raven » — il croit entendre une consonne avant
+// le « A ». Le « r » est donc admis lui aussi, mais SEULEMENT sur la famille en
+// « e » : « ravin » et « ravine » sont des mots français, une phrase ordinaire ne
+// doit jamais réveiller l'agent.
 // Le « Avent »/« Avant » de Whisper n'est PAS ici : il est traité plus bas, avec
 // une pause obligatoire, parce que ce sont aussi des mots français courants.
-const WAKE_TOKEN_RE = /^(?:h?av(?:e|ai|ei)?n{1,3}e?s?|h?av(?:in|ain|ein)e?s?|h?av(?:e|i|ai)un)$/
+const WAKE_TOKEN_RE = /^(?:[hr]?av(?:e|ai|ei)?n{1,3}e?s?|h?av(?:in|ain|ein)e?s?|h?av(?:e|i|ai)un)$/
 // « a ven » en deux mots (le STT coupe parfois le mot d'activation).
 const SPLIT_WAKE_NEXT_RE = /^v(?:en|in|ain)$/
 
@@ -118,6 +122,18 @@ export function stripPoliteness(text: string): string {
     if (value === before) break
   }
   return value.replace(/^[,.:;!\s]+/, "").replace(/[,.:;!\s]+$/, "").trim()
+}
+
+// v11.12.0 : sortie du mode éveillé. « Aven, dors » rendort l'agent — c'est le
+// SEUL ordre qui termine la veille, avec le silence et la coupure du micro. La
+// phrase doit être ENTIÈRE : « comment je dors mieux ? » est une demande, pas un
+// ordre de repos, et « silence »/« stop » restent les commandes d'interruption
+// qu'elles étaient (elles coupent la lecture, sans fermer la conversation).
+const SLEEP_PHRASE_RE = /^(?:dors|rendors-toi|rendors toi|rends-toi|au repos|en veille|en mode veille|mets-toi en veille|mets toi en veille|mets-toi en repos|va te reposer|repose-toi|repose toi|tu peux te reposer)$/i
+
+/** Vrai si la phrase demande explicitement à l'agent de se rendormir. */
+export function isSleepPhrase(text: string): boolean {
+  return SLEEP_PHRASE_RE.test(stripPoliteness(String(text ?? "")).trim())
 }
 
 export type WakeDetection = {

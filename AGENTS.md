@@ -94,7 +94,8 @@ par les variables `:root` existantes, sinon thèmes et densités cassent.
 | Usage | Variable | Valeur |
 |---|---|---|
 | Police | `var(--font-ui)` | `system-ui, "Segoe UI", sans-serif` — pile système honnête, chargée au premier pixel (jamais autre chose, v10.2.0) |
-| Télémétrie, micro-libellés | `var(--font-mono)` | pile monospace système (`ui-monospace`, Cascadia, Consolas) — deuxième voix du Poste, jamais une police téléchargée (v11.0.0) |
+| Télémétrie, micro-libellés, titres d'instrument | `var(--font-mono)` | pile monospace système (`ui-monospace`, Cascadia, Consolas) — deuxième voix du Poste, jamais une police téléchargée (v11.0.0) |
+| Titre d'accueil uniquement | `var(--font-display)` | `Bahnschrift SemiCondensed`, Bahnschrift, `Segoe UI Semibold`, system-ui — la condensée technique du brief, **livrée avec Windows** : aucun fichier, aucun téléchargement (v12.0.0) |
 | Micro-labels, métadonnées | `var(--font-size-xs)` | 11px (10px était sous le seuil de lisibilité, v10.2.0) |
 | Libellés secondaires, hints | `var(--font-size-sm)` | 12px |
 | Texte courant, boutons | `var(--font-size-md)` | 14px |
@@ -102,6 +103,7 @@ par les variables `:root` existantes, sinon thèmes et densités cassent.
 | Titres de vue | `var(--font-size-xl)` | 20px |
 | Chiffres clés, stats | `var(--font-size-2xl)` | 28px |
 | Grands titres de vue (plafond d'un `clamp`) | `var(--font-size-3xl)` | 32px |
+| **Titre d'accueil seulement** | `var(--font-size-display)` | `clamp(44px, min(9vw, 18vh), 170px)` — le brief demande un titre massif ; ce token ne sert QUE là, jamais au texte courant (v12.0.0) |
 
 - **Graisse** : texte courant 400–500 ; semi-gras 600 (titres de liste, badges,
   valeurs) ; boutons `font-weight: 680` (classe `.button`) ; titres `700–800`.
@@ -180,34 +182,57 @@ par les variables `:root` existantes, sinon thèmes et densités cassent.
 
 ## 6. Poste, instruments et composants React (renderer)
 
-> **Règle d'architecture (v11.0.0).** Aven est un **Poste de travail** : une seule
-> fenêtre dont le cadre ne change jamais. Bandeau de télémétrie, rail d'instruments,
-> barre d'onglets, scène et inspecteur restent visibles en permanence. Une section
-> principale (Aujourd'hui, conversation, Notes, Fichiers, Terminal, Orchestration,
-> Réglages) est un **instrument rendu dans la scène**, jamais une page plein écran ni
-> un dialogue superposé. La navigation vit dans le modèle d'onglets pur
-> (`web/src/workbench/tabs.ts`) : Aujourd'hui est le premier onglet et ne se ferme pas,
-> un instrument n'a qu'un onglet, une conversation peut en avoir plusieurs. Le Poste ne
-> défile pas globalement ; seul le conteneur concerné défile. Toute exception doit être
-> explicitement justifiée par le besoin fonctionnel.
+> **Règle d'architecture (v12.0.0, remplace v11.0.0).** Aven est un **Poste de travail
+> « agent d'abord »** : une seule fenêtre dont le cadre ne change jamais — la sphère
+> vocale occupe l'accueil, puis **se replie dans l'en-tête** pour laisser la scène au
+> travail. L'agent est **un seul canvas**
+> (`web/src/agent/WireframeAgent.tsx`) qui mesure son ancre (`agent-home-anchor` /
+> `agent-toolbar-anchor`) et se transforme : deux rendus séparés divergeraient au
+> premier ajustement. La **navigation est temporaire** : cinq cercles frères posés sur
+> un arc (`web/src/workbench/constellation.ts`), aucun rail, aucun dock, aucun ovale,
+> aucun filet de liaison, rien qui survive à la fermeture. Les cinq destinations
+> viennent d'**une seule table** (`DESTINATIONS` dans `WorkbenchShell.tsx`) : icône,
+> titre de section et surbrillance ne peuvent pas diverger. Aujourd'hui est une
+> destination explicite (la marque), jamais la poignée de navigation. Les conversations
+> restent dans le modèle d'onglets pur (`web/src/workbench/tabs.ts`) : plusieurs
+> conversations cohabitent et Aujourd'hui ne se ferme pas. Le Poste ne défile pas
+> globalement ; seul le conteneur concerné défile.
+> `scripts/verify-v12.0.0.mjs` refuse le retour à un rail, à un second canvas ou à une
+> table de destinations dupliquée.
 
-- **Un instrument = `InstrumentFrame`** (`web/src/InstrumentFrame.tsx`) : micro-libellé,
-  titre de scène, description, et **actions déclarées par l'instrument** (`actions`),
-  jamais une barre recopiée. Notes, Fichiers, Terminal, Orchestration et Réglages
-  passent par lui ; une nouvelle section principale s'ajoute comme un instrument, pas
-  comme un dialogue.
-- **La coquille ne recopie aucune action** (`web/src/workbench/WorkbenchShell.tsx`) : le
-  rail et les onglets naviguent, l'inspecteur porte le contexte de l'instrument actif
-  (titre de session et renommage, modèle, mode de délégation, événements, sections de
-  Réglages). Un bouton sans usage sur l'instrument où il figure est un bug.
+- **Une constellation se mesure, elle ne se devine pas** (`web/src/workbench/NavigationConstellation.tsx`) :
+  la poignée passe **avant** l'arc dans le DOM (Tab entre dans les cercles), le survol
+  ouvre sans voler le focus, et la grâce de fermeture empêche la scintillation entre la
+  poignée et les cercles. Le cercle courant porte `aria-current="page"` ; Échap ferme
+  le panneau en capture, avant tout autre effet du Poste.
+- **Un instrument = `InstrumentFrame`** (`web/src/InstrumentFrame.tsx`) : description et
+  **actions déclarées par l'instrument** (`actions`), jamais une barre recopiée. En
+  `compact`, l'instrument ne répète pas le titre que l'en-tête du Poste porte déjà.
+  Notes, Fichiers, Terminal, Orchestration et Réglages passent par lui ; une nouvelle
+  section principale s'ajoute comme un instrument, pas comme un dialogue.
+- **La coquille ne recopie aucune action** (`web/src/workbench/WorkbenchShell.tsx`) :
+  la marque ramène à Aujourd'hui, la constellation navigue, l'inspecteur (tiroir, fermé
+  par défaut) porte le contexte de l'instrument actif — titre de session et renommage,
+  modèle, mode de délégation, événements, sections de Réglages. Un bouton sans usage
+  sur l'instrument où il figure est un bug.
 - **Pas de défilement global** : `body` et `.wb-app` sont en `overflow: hidden`. Le
-  scroll vit dans le conteneur qui en a besoin (`.wb-home-scroll`, `.wb-tile-body`,
+  scroll vit dans le conteneur qui en a besoin (`.wb-stage .main-scroll`,
   `.notes-preview`, `.files-list-panel`, `.unified-settings-scroll`, l'émulateur de
   terminal).
 - **Un vrai dialogue ponctuel** = un composant-fichier (`FormDialog.tsx`, dialogue de
   permission, choix d'espace) ; une sur-structure d'interface partageant son état reste
   une fonction de rendu dans les instruments (`web/src/pages/`, `web/src/workbench/`).
   Tout texte déjà affiché passe par `Markdown`/`RichMarkdown`, jamais de HTML brut.
+- **Un transcript suspendu se rattrape à l'ouverture (v11.12.2)** : la vue
+  conversation du terminal Freebuff ne scanne rien tant qu'elle est masquée ; elle
+  lit le buffer xterm **à l'ouverture** puis à chaque sortie du TUI. Un minuteur de
+  rendu se remet à zéro **en tirant** : sinon le premier scan, annulé tant que la vue
+  n'est pas affichée, condamne tous les suivants — c'est ce défaut silencieux qui a
+  laissé « le terminal est vide » de v9.5 à v11.12.1 alors que le TUI tournait. Une
+  vue qui se rattache à une session PTY **vivante** reçoit son état « En ligne » : le
+  badge ne peut pas rester sur « démarre… » avec « Interrompre » grisé.
+  `scripts/verify-v11.12.2.mjs` refuse le retour au minuteur collant ou au silence
+  sur l'état d'une session déjà démarrée.
 - Les états de panneau sont fermés dans TOUTES les navigations (`selectAgent`,
   `goHome`, `openInstrumentTab`, `openConversationInstrument`, `openAgentsPage`,
   Échap, effet `needsWorkspace`) — un modal oublié ouvert est un bug.
@@ -226,70 +251,226 @@ par les variables `:root` existantes, sinon thèmes et densités cassent.
   Capturer) exécute les commandes d'application. La décision vit dans
   `web/src/dictation-routing.ts` (module pur testé).
 - **L'agent vocal est une provenance distincte (v11.1.0)** : il n'exécute une
-  commande que si le mot **« Aven »** a été prononcé (ou pendant la fenêtre de suivi
-  de dix secondes après une réponse). Le micro se coupe depuis le bandeau, l'état
+  commande que si le mot **« Aven »** a été prononcé, ou pendant la veille
+  (v11.12.0). Le micro se coupe depuis le bandeau, l'état
   est du texte (jamais la couleur seule), et l'audio n'est jamais écrit sur disque.
   Le routage vit dans `host/voice-agent-commands.ts` et l'état de session dans
   `web/src/voice-agent/session.ts` — deux modules purs testés.
-- **Une note dictée se confirme (v11.4.0)** : « Aven, note que… » ne crée jamais
-  la note dans la foulée. Le contenu est **relu**, puis attendu un « oui »
-  explicite — la décision vit dans `web/src/voice-agent/note.ts` (module pur
-  testé). Un refus, une parole incomprise, l'arrêt de la lecture, la coupure du
-  micro ou 45 s de silence annulent la note. Une demande de note ne part jamais
-  au LLM, qui répondrait « c'est noté » sans rien écrire ; une seule ligne écrit
-  la note (`onCreateNote`, appelée dans la branche « confirm » uniquement), et
-  `scripts/verify-v11.4.0.mjs` refuse tout autre chemin.
+- **Une fois réveillé, Aven reste éveillé (v11.12.0)** : dire « Aven » ouvre une
+  veille d'une minute, que **chaque parole adressée prolonge** — le mot d'activation
+  n'est plus un sésame à répéter à chaque phrase. Trois sorties seulement : l'ordre
+  de repos (« Aven, dors », phrase **entière** reconnue dans `host/voice-agent-wake.ts`,
+  une seule liste — le renderer n'en tient pas une seconde), le silence
+  (`AWAKE_IDLE_MS`), ou le micro coupé ; **interrompre une lecture ne rendort pas**
+  (on reprend la parole pour parler). La veille est DITE (« Éveillé » remplace
+  « Écoute », jamais la couleur seule) et la **capture d'une parole ne la referme
+  pas** : c'était le défaut de la fenêtre de dix secondes de v11.1.0, refermée par
+  `speech-start` avant la transcription.  `scripts/verify-v11.12.0.mjs` refuse le
+  retour à une fenêtre refermée à la capture ou à une liste d'ordres dupliquée.
+- **La fin d'une lecture ne referme pas une capture (v11.15.2)** : une parole
+  commencée pendant la réponse — écho de l'agent ou vraie reprise — garde sa
+  phase `capturing` quand le lecteur rend la main. La forcer en « écoute »
+  laissait l'enregistreur ouvert sans phase pour l'arrêter : son `speech-end`
+  était ignoré et la phrase suivante, la réponse à la question que l'agent venait
+  de poser, n'était jamais transcrite. Un enregistreur orphelin est arrêté par un
+  filet et son clip part quand même à la transcription.
+  `scripts/verify-v11.15.2.mjs` refuse le retour au `done` qui écrase la capture.
+- **Un micro coupé n'écoute pas au démarrage (v11.15.1)** : la session vocale
+  démarre coupée, lit la préférence quand le Poste est prêt, puis ne l'ouvre que
+  si elle l'autorise. Avant, l'écoute démarrait au montage et la préférence
+  arrivait après coup — parfois en échec, le runtime n'étant pas prêt : le micro
+  s'ouvrait malgré le choix, et le premier clic le recoupait.
+- **Une parole qui n'est pas adressée ne reçoit pas de réponse (v11.14.1)** : en
+  veille, le bruit de la pièce (« euh », une remarque pour quelqu'un d'autre, une
+  hallucination du STT sur le silence) ne part pas au LLM — n'ayant rien de neuf
+  à dire, il répétait sa phrase précédente. La décision vit dans
+  `host/voice-agent-addressed.ts` (module pur testé, sans réseau ni horloge) :
+  question, impératif, deuxième personne ou demande explicite = adressée ; un
+  énoncé long reste adressé (le doute profite à la conversation), un énoncé court
+  sans marque est écarté. Une parole écartée ne prolonge pas la veille.
+  `scripts/verify-v11.14.1.mjs` refuse un envoi au LLM avant ce filtre.
+- **Supprimer la conversation ouverte garde une conversation (v11.14.1)** :
+  l'onglet de la conversation supprimée se rattache à la conversation qui reste
+  (`removeChatTab`, modèle pur testé) au lieu de rendre le dernier onglet voisin
+  (Notes, Aujourd'hui…). Sans conversation restante, l'onglet se ferme
+  normalement et le voisin devient actif.
+- **Une note dictée se confirme (v11.4.0, étendu v11.15.0 et v11.16.0)** : « Aven,
+  note que… » ne crée jamais la note dans la foulée. Le contenu est **relu**,
+  puis attendu un « oui » explicite — la décision vit dans
+  `web/src/voice-agent/note.ts` (module pur testé). Un refus, une parole
+  incomprise, l'arrêt de la lecture, la coupure du micro ou 45 s de silence
+  annulent la note. `parseNoteDraft` **décide ce qui se compose et ce qui se
+  dicte** ; une seule ligne écrit la note, dans la branche « confirm »
+  uniquement (`onCreateNote`), et `scripts/verify-v11.4.0.mjs` refuse un second
+  chemin pour elle. Le modèle peut aussi **proposer** une note (`create_note`) :
+  la question relit le contenu, et l'écriture n'a lieu qu'après le même « oui »
+  (`actionConfirmationText`, `commitVoiceAction`) ; la note créée s'affiche.
+- **Une note se comprend, elle ne se recopie pas (v11.16.0)** : « crée une note
+  qui résume comment fonctionne une boucle python » attend un **résumé rédigé**,
+  pas la phrase prononcée. Le tri est déterministe dans `parseNoteDraft` :
+  l'infinitif sans destinataire (« résumer… », « expliquer… »), le sujet relatif
+  (« qui résume », « sur… ») et la consigne à l'agent (« ta réponse doit… ») se
+  **composent** ; un contenu à la première personne et un calcul restent une
+  dictée. Cette décision n'ouvre qu'une porte, `composeNote` →
+  `composeVoiceNote` (aucun outil, aucune écriture, aucun historique) : en cas
+  d'échec l'erreur est **dite** et rien n'est écrit — jamais une note qui
+  recopie la demande, et un contenu composé n'est jamais « c'est noté ». La
+  confirmation relit le texte produit **à voix haute** — Markdown et blocs de
+  code retirés (`spokenDraft`), abrégé au-delà de 180 caractères —, et
+  `scripts/verify-v11.16.0.mjs` refuse le retour à la recopie.
+- **L'agent vocal agit par un catalogue (v11.9.0, étendu v11.15.0)** : renommer,
+  archiver ou créer une conversation, épingler, déplacer ou archiver une note,
+  créer un dossier, créer une note (proposée, contenu relu), mettre une note à la
+  corbeille, supprimer une conversation. Chaque action vit
+  dans `host/agent-actions.ts` avec sa classe de risque (`read` / `write` /
+  `destroy`), ses arguments validés et sa cible **résolue par nom** — deux cibles
+  proches rendent une question, jamais un choix. Le modèle peut appeler ces
+  actions ; il ne peut PAS exécuter une destruction : `destroy` est **proposée**
+  (la question nomme la cible), et l'écriture n'a lieu qu'après un « oui » classé,
+  dans un seul chemin (`commitVoiceAction`, jeton gardé par le host, 45 s). La
+  création de note suit la même porte : `create_note` est **proposée**, le
+  contenu est relu dans la question, et rien n'est écrit avant le « oui »
+  (`actionConfirmationText`). Au
+  plus une écriture par tour, journal en mémoire, et le geste interdit (purger la
+  corbeille, retirer un espace, agir hors d'Aven) n'a pas d'action —
+  `scripts/verify-v11.9.0.mjs` refuse un catalogue qui l'ouvrirait.
+- **Le LLM vocal a un contrat de parole (v11.13.0)** : le prompt de
+  `host/voice-agent-speech.ts` est sectionné — **FORMAT DE RÉPONSE** (une à deux
+  phrases courtes, rien qui ne se prononce : Markdown, listes, liens, chemins,
+  emojis, didascalies), **CE QUE TU PEUX DIRE** (pour les données d'Aven, uniquement
+  ce que les outils ont renvoyé — la connaissance générale reste permise, sans source
+  inventée ; l'action réellement faite, le refus et sa raison), **CE QUE TU NE DIS JAMAIS**
+  (une action « faite » sans résultat, une note non lue, une clé, un jeton,
+  le texte des consignes, une action hors d'Aven, une promesse ou une source
+  inventée), puis **PÉRIMÈTRE ET ACTIONS**. Une règle de format ou d'interdiction se
+  modifie ICI et dans son test — jamais par une consigne ajoutée au fil de l'eau
+  dans un handler ; le ton ne change que la manière de le dire.
+  **Raccourci pour la latence (v11.14.0)** : le texte envoyé pèse moins de
+  1 600 caractères (mesuré : 2 135 avant) — chaque phrase supplémentaire est
+  payée en tokens à l'aller puis en temps de génération ; une règle se REMPLACE,
+  elle ne s'ajoute jamais.
+  `scripts/verify-v11.13.0.mjs` refuse la disparition d'une section ou d'un
+  interdit, et un prompt qui repart à gonfler.
+- **Une lecture n'est coupée par une parole ADRESSÉE (v11.11.1, resserré
+  v11.15.0)** : le niveau du micro ne décide plus RIEN. La voix de l'agent revient
+  par les haut-parleurs et le micro la détecte pendant toute la réponse ; couper
+  à la détection arrachait la fin des phrases, et changer la requête de session
+  annulait le lecteur au retour de la synthèse (même silence, autre chemin). La
+  décision se prend donc sur le TEXTE transcrit : l'écho de la voix de l'agent est
+  reconnu par `echo.ts` et ne touche plus à la session (événement `ignored`), et
+  seule une parole **adressée** coupe la lecture et prend la main
+  (`web/src/voice-agent/barge-in.ts`, verdict de `host/voice-agent-addressed.ts`).
+  Un bruit, une hésitation ou une remarque pour quelqu'un d'autre laisse la
+  réponse aller au bout ; « attends » et « chut » restent des reprises directes.
+  La garde temporelle de 900 ms a disparu : elle ne couvrait que le début d'une
+  lecture.
 - **Le micro entend Aven (v11.4.1)** : la webview joue sa propre voix dans les
   haut-parleurs ; sa transcription revient par le STT. Aven reconnaît sa propre
   voix (`web/src/voice-agent/echo.ts`, module pur testé) : un fragment contigu
   de trois mots déjà prononcés, ou son écho moins de 2,5 s après la lecture,
   n'est jamais une réponse — un mot seul (« oui », « non », « stop ») le reste.
+  v11.11.1 : le réveil accepte aussi les graphies mesurées du STT, dont **« Raven »**
+  (une consonne est entendue avant le « A ») — le « r » n'est admis que sur la
+  famille en « e », car « ravin » et « ravine » sont des mots français.
   Le garde s'exécute avant toute décision de note et ne peut rien écrire.
   `scripts/verify-v11.4.1.mjs` refuse un garde acoustique opaque ou un seuil à
   un mot. Pendant une question de note, la lecture n'est PAS coupée à la
   détection de parole (`web/src/voice-agent/barge-in.ts`, module pur testé) : la
   question va au bout, et s'arrête dès que le texte prouve une vraie reprise
   (v11.4.2).
-- **Le repli parle avec Piper (v11.5.0)** : quand le service neuronal est
-  injoignable (429, réseau), Aven bascule sur **Piper** (`host/piper-tts.ts`,
-  binaire et modèle posés par `npm run fetch:piper` dans
-  `src-tauri/resources/piper`, embarqués par l'installeur, dossier reçu par
-  `AVEN_PIPER_DIR`). Pas de PyTorch, pas de Python, pas de réseau : le repli ne
-  peut pas tomber en 429. La voix Windows (Hortense) ne sert plus que si Piper
-  manque — et la bascule est toujours **dite** (`warning`). Une voix locale
-  ajoutée se choisit par le préfixe `piper:` et passe par le dictionnaire de
-  prononciation. Le débit vit dans `PIPER_LENGTH_SCALE` (1,10 en v11.5.1) : la
-  parité avec Denise avait été mesurée à 1,44, mais **écoutée puis rejetée** —
-  trop lente. Un réglage de prosodie se mesure sur une phrase de référence,
-  puis s'écoute dans l'app : la mesure fixe l'ordre de grandeur, l'oreille
-  tranche la valeur.
-- **La voix neuronale est gratuite et sans compte (v11.3.0)** : les voix françaises
-  passent par le service de lecture d'Edge, gratuit (aucune clé, aucune carte),
-  jamais par un service facturé. Ce service n'est pas contractuel : un échec ou une
-  limite (429) ne rend jamais l'agent muet — Aven repasse sur la voix locale Piper
-  (v11.5.0, la voix Windows n'étant plus que le dernier recours)
-  **et le dit** (`warning` rendu par l'IPC), sinon le changement de timbre serait
-  inexplicable. La décision et le jeton vivent dans `host/voice-agent-edge.ts`
-  (module pur testé), le transport WebSocket dans `host/voice-agent-tts.ts` — le
-  protocole est à nous, la bibliothèque `msedge-tts` ne passait plus la poignée de
-  main le 23/10/2026 (HTTP 200 au lieu de 101, 3 fois sur 3) — et la synthèse dans
-  `host/voice-agent-speech.ts` ; l'audio arrive en base64 au renderer, qui le joue —
-  aucun fichier audio n'est écrit sur disque. **Une réponse = une synthèse** :
-  découper par phrase ajoutait ~1,5 s de silence à chaque frontière ; la lecture
-  coupe le silence de tête et de queue (`web/src/voice-agent/trim.ts`) et ramène
-  les pauses internes de plus de 650 ms à ~420 ms (`web/src/voice-agent/pause.ts`),
-  deux modules purs testés. Le débit (`rate`) reste à 0 % : c'est la longueur des
-  silences qui faisait paraître la voix lente, pas la vitesse des mots.
-  **Une phrase déjà synthétisée n'est pas redemandée** (`host/voice-cache.ts`,
-  cache borné en mémoire) et un 429 ouvre un blocage d'une minute respecté sans
-  aucune requête (`EDGE_COOLDOWN_MS`) : insister entretient la limite du service
-  et coûte 1,2 s par phrase (v11.4.3). Le repli reste toujours dit.
+- **Une seule pile vocale (v11.14.0)** : Edge (voix neuronale, service distant) et
+  Piper (voix locale de repli) ont été **retirés** — sources, routage, préférences,
+  menu, ressources d'installeur et sondes dédiées. Il ne reste que le moteur local
+  Pocket TTS et, en repli, la voix Windows (PowerShell, hors ligne) — la bascule
+  est toujours **dite** (`warning` rendu par l'IPC), sinon le changement de timbre
+  serait inexplicable. Le routage vit dans `host/voice-route.ts` (module pur
+  testé) : « pocket: » pour le moteur, « sapi: » pour Windows, et toute
+  préférence héritée (« edge: », « piper: », nom Windows brut v11.1.0) retombe
+  sur la voix Windows par défaut — jamais un nom de voix inconnu. Un préfixe
+  retiré n'entre plus au menu (`voiceIdOf` rend la voix par défaut). La
+  synthèse ne sort donc plus jamais de la machine : le texte de la réponse n'est
+  envoyé nulle part pour la voix.
+- **Une troisième voix locale : Pocket TTS (v11.10.0)** : le moteur Rust de
+  Kyutai (`host/pocket-tts.ts`, binaire de 22 Mo posé par
+  `npm run fetch:pocket-tts`, dossier reçu par `AVEN_POCKET_DIR`) est la voix
+  locale de l'app — désormais la SEULE (v11.14.0). Retenu à l'oreille, il livre du PCM
+  16 bits mono 24 kHz par paquets de ~0,55 s : le host retire l'en-tête WAV **une
+  fois** (`wavDataOffset`) et pousse chaque paquet, la webview les empile dans
+  une horloge audio (`web/src/voice-agent/pcm-stream.ts`, planification pure dans
+  `pcm-schedule.ts`) — premier son mesuré à 270 ms, 0,40 de facteur temps réel,
+  avance positive sur toute la phrase. Le lecteur est choisi AVANT l'appel
+  (`voiceAgentStreamKind`) : `MediaSource` ne lit pas d'échantillons nus, et un
+  abonné branché après la commande perdrait toutes les trames (v11.5.3). Le
+  modèle français (« estelle », 209 Mo, CC-BY 4.0, dépôt ouvert sans jeton) est
+  mis en cache sous les données de l'app ; absent, la voix retombe sur la voix
+  Windows **et le dit**. Une voix **clonée** peut remplacer la voix intégrée : le profil
+  (`.safetensors`) se pose dans les données de l'app par
+  `npm run voice:pocket -- <fichier>`, jamais dans l'installeur ni dans le dépôt
+  (c'est un dérivé d'un enregistrement de référence, qu'on ne redistribue pas), et
+  le host le transmet au moteur par `--default-voice` **au démarrage** — le
+  moteur n'accepte pas de voix par requête. Le menu propose donc une seule voix
+  Pocket à la fois, celle qui parlera (« voix clonée » ou « voix française »), et
+  jamais le nom d'une personne. Le PCM passe par `host/pcm-audio.ts` (pur) :
+  **+2,5 dB** quand un profil cloné est posé (mesuré à phrase identique : −22,8
+  contre −20,4 dBFS de RMS voisé), **silence de tête et
+  de queue rognés**, pauses internes de plus de 650 ms ramenées à 420 ms — les
+  mêmes seuils que `trim.ts` et `pause.ts`, pour que les deux voix s'entendent
+  pareil. Rogner la tête ne retarde pas le premier mot : le moteur livre sa
+  première parole dans son 3ᵉ paquet (~490 ms, silence compris), donc le mot
+  s'entend au même instant — c'est le silence qui n'est plus joué.
+- **Un paquet reçu se joue tout de suite (v11.12.1)** : le lecteur PCM programme
+  chaque paquet **dès son arrivée** (`web/src/voice-agent/pcm-stream.ts`), et la fin
+  du flux ne jette **jamais** l'audio reçu mais non encore programmé. La leçon a
+  coûté une régression visible : seul le premier lot partait, et la fin du flux
+  fermait le lecteur avec le reste en attente — une réponse de neuf secondes
+  s'arrêtait après une. Mesuré (`docs/audits/2026-10-28-coupe-lecture-pcm.md`, host
+  et webview réels) : **1,07 s jouée avant, 7,79 s après**, à texte identique. Une
+  fin de flux n'est pas une raison de rendre la main : `maybeFinish` refuse de
+  conclure tant qu'il reste des échantillons en attente. Le second lecteur
+  (WebM/Opus de `stream.ts`) a été retiré en v11.14.0 avec les voix neuronales :
+  le PCM est le seul flux, et sa file reste vidée avant toute conclusion — ne la
+  casse pas en le « simplifiant ».
+- **L'app installe ce qu'elle utilise (v11.11.0)** : le clonage de voix se fait
+  dans l'app (Réglages → Agent vocal → « Créer une voix à partir d'un fichier… »,
+  `voiceCloneFromAudio` : le renderer choisit le fichier et transmet un CHEMIN,
+  il n'en lit jamais un octet), et Aven télécharge lui-même ce dont il a besoin
+  **dans ses propres données** (`HF_HOME` = données de l'app) : jamais le cache
+  Hugging Face de la machine, qui appartient à une autre installation. La
+  conversion est le `export-voice` du binaire embarqué — mesurée à 1,5 s pour un
+  WAV court et 5,3 s pour un MP3, hors téléchargement du modèle de clonage
+  (209 Mo, une fois). Le seul maillon sous conditions se **dit** : la page du
+  modèle est citée, et le jeton Hugging Face vit chiffré côté host, ne sert qu'au
+  premier téléchargement, et n'est jamais renvoyé au renderer (seul son booléen
+  remonte). Un profil n'est posé qu'après vérification de son en-tête, par
+  renommage, et le moteur est redémarré ensuite — `--default-voice` ne se lit
+  qu'au démarrage. `scripts/verify-v11.11.0.mjs` refuse un chemin qui lirait le
+  cache d'une autre installation, renverrait le jeton, ou poserait un profil sans
+  vérifier son en-tête.
+- **La voix neuronale a été retirée (v11.14.0)** : les voix françaises d'Edge
+  (service gratuit, non contractuel) et leur transport WebSocket, leur cache de
+  phrases et leur blocage de 429 ont été supprimés — ainsi que Piper et son
+  binaire embarqué. **Une réponse = une synthèse**, et la synthèse est locale :
+  découper par phrase ajoutait ~1,5 s de silence à chaque frontière (mesuré à
+  l'époque neuronale). La lecture coupe le silence de tête et de queue
+  (`web/src/voice-agent/trim.ts`) et ramène les pauses internes de plus de 650 ms
+  à ~420 ms (`web/src/voice-agent/pause.ts`), deux modules purs testés — ils
+  servent aujourd'hui au PCM du moteur local. Un échec du moteur Pocket n'est
+  jamais muet : la voix Windows prend la parole **et le repli est dit**.
+- **L'audio se joue au fil de l'eau (v11.5.3)** : le PCM du moteur local arrive
+  par trames et la webview joue dès la première — le lecteur est choisi AVANT
+  l'appel (`voiceAgentStreamKind`). Deux pièges de livraison ont été mesurés, pas
+  devinés : l'abonné branché après la commande perdrait toutes les trames (v11.5.3),
+  donc l'abonnement aux trames est installé **au chargement**
+  (`installVoiceStreamListener`), jamais au moment de la réponse ; et `aven_call`
+  est **asynchrone**, sinon Tauri l'exécute sur le fil principal et retient les `aven:event`
+  jusqu'au retour (7 trames reçues groupées à 1,1 s au lieu de la première à
+  ~0,5 s ; après correctif, 26 trames de 554 à 1 015 ms sur un texte long).
 - **Un nom propre se prononce (v11.4.4)** : les moteurs de synthèse lisent les
   noms d'Aven avec leurs règles générales et les mangent (« Freebuff » sortait
   « frebff » sur la voix locale). La correction vit dans `host/pronunciation.ts`
-  (module pur testé) : une table **par moteur**, appliquée au texte de synthèse
-  seulement — jamais au texte affiché — et **vide pour la voix neuronale**, qui
-  prononce juste. Une entrée nouvelle s'accompagne d'une écoute et d'un test.
+  (module pur testé) : une table **par moteur** — `sapi` et `pocket` aujourd'hui —
+  appliquée au texte de synthèse seulement, jamais au texte affiché. Une entrée
+  nouvelle s'accompagne d'une écoute et d'un test.
 - **Barre de commande et nouvelle conversation (v11.0.0)** : la barre permanente
   (Ctrl+K) sert à retrouver une conversation ou une note, à exécuter une commande
   (`>`), ou à cibler une portée (`/`). Une recherche vide n'exécute aucune action
@@ -313,6 +494,10 @@ par les variables `:root` existantes, sinon thèmes et densités cassent.
 - **Le renderer ne voit JAMAIS de secret** : clés stockées côté host
   (`host/aven-app-host.ts`, DPAPI Windows), seuls les booléens `keys[provider]` remontent.
   Toute nouvelle donnée sensible suit ce schéma.
+- **Les clés se déchiffrent une fois (v11.5.2)** : le host garde le clair en mémoire,
+  jamais côté renderer, et l'invalide sur `setKey` comme sur toute modification de
+  `settings.json` (`host/key-cache.ts`). Un déchiffrement DPAPI coûtait 582 ms par
+  clé et quatre lancements par tour vocal — 2,3 s sur 5,7 s mesurés.
 - **Nouvelle fonctionnalité** = module autonome `host/*.ts` si elle est
   testable sans Tauri (comme `host/atomic-file.ts`, `host/archive.ts`, `host/stats.ts`,
   `host/notes-meta.ts`, `host/freebuff-cli.ts`), branchée dans `host/aven-app-host.ts`
@@ -367,6 +552,11 @@ par les variables `:root` existantes, sinon thèmes et densités cassent.
 - `npm test` : les tests unitaires Node (`tests/*.test.mjs`). Tout module pur
   nouveau s'accompagne de son `.test.mjs` ; un test flaky temporel se rejoue avant
   d'être « corrigé ».
+- `npm run test:voice-note` : test de bout en bout de la note vocale sans micro
+  physique (`scripts/test-voice-note-e2e.mjs`) — voix SAPI française injectée par
+  `getUserMedia`, STT réel, confirmation vocale, création puis purge de la note.
+  Il exige le binaire de debug, Vite, une clé Groq et une voix SAPI fr-FR ; il
+  n'entre pas dans `npm run verify` (dépendances externes).
 - `npm run verify` : chaîne `verify-conventions.mjs` + `verify-docs.mjs` +
   `scripts/verify-v*.mjs` + `verify-build.mjs`. **Chaque version fige ses
   conventions dans une sonde** — c'est ainsi que le projet se souvient de ses

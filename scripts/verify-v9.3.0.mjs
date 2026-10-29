@@ -31,7 +31,7 @@ const readme = read("README.md")
 // v11.0.0 : le hub a cédé la place au Poste — les entrées sont les instruments
 // du rail et les tuiles d'Aujourd'hui. Les intentions v9.3.0 restent figées.
 const workbench = read("web/src/workbench/WorkbenchShell.tsx")
-const homeBoard = read("web/src/workbench/HomeBoard.tsx")
+const homeBoard = read("web/src/workbench/HomeStage.tsx")
 
 // A. Les quatre destinations restent nommées ; Usage vit dans Réglages.
 // v11.0.0 : les clés internes du hub disparaissent avec lui.
@@ -45,7 +45,6 @@ assert.ok(!/\.hub-card \{/.test(css), "le hub orbital et ses cartes ont disparu"
 // B. L'état Freebuff reste visible (le second assistant n'est pas enterré).
 assert.match(app, /freebuffPillState/, "l'état Freebuff vit dans le contrôleur")
 assert.match(app, /freebuffPtyActive/, "l'état actif lit le PTY embarqué")
-assert.match(homeBoard, /freebuffPillState === "active"/, "la tuile En cours affiche la session Terminal")
 
 // C. Renommage « Espaces » (affichage seul — IPC workspace:* inchangé).
 // v9.6.0 : le modal espaces du hub est retiré — la gestion vit dans Réglages → Configuration.

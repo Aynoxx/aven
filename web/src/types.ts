@@ -83,12 +83,39 @@ export type DictationResult = {
 // et commentée des contrats IPC, comme les autres types du fichier).
 export type VoicePersonality = "neutre" | "direct" | "chaleureux"
 export type VoiceAgentPrefs = { voiceName: string; personality: VoicePersonality; micMuted: boolean }
-export type VoiceInterpretation = { woken: boolean; command: string | null; demand: string }
-export type VoiceAnswer = { text: string; sentences: string[] }
-// v11.3.0 : la voix est soit neuronale (audio MP3 rendu à la webview, qui le joue),
-// soit Windows locale (le host a déjà parlé : `spoken`). `warning` signale un repli
-// sur la voix locale : l'utilisateur doit savoir pourquoi le timbre a changé.
+// v11.12.0 : `sleep` dit que la phrase est un ordre de repos (« Aven, dors ») —
+// le mode éveillé se termine par un ordre nommé, jamais par un mot deviné.
+// v11.14.1 : `addressed` dit que la parole s'adresse vraiment à Aven — en veille,
+// le bruit de la pièce est écarté sans réponse (host/voice-agent-addressed.ts).
+export type VoiceInterpretation = { woken: boolean; command: string | null; demand: string; sleep: boolean; addressed: boolean }
+// v11.9.0 : une action destructive n'est jamais exécutée par le modèle — il la
+// propose, et `pending` porte le jeton que le renderer rappellera après un
+// « oui » oral. `prompt` est la question canonique, déjà dite par le host.
+export type VoiceAnswer = { text: string; sentences: string[]; pending?: { token: string; prompt: string } }
+// v11.15.0 : `noteId` permet d'afficher la note que l'agent vient de créer —
+// une note confirmée mais invisible serait une parole en l'air.
+export type VoiceActionResult = { text: string; sentences: string[]; noteId?: string }
+// v11.14.0 : la voix est soit locale en flux (PCM rendu à la webview, qui
+// l'empile), soit Windows locale (le host a déjà parlé : `spoken`). `warning`
+// signale un repli : l'utilisateur doit savoir pourquoi le timbre a changé.
 export type VoiceSpeech = { audio?: string; mime?: string; spoken?: boolean; warning?: string }
+// v11.5.3 : flux audio — le host pousse des trames, le renderer joue dès la
+// première. `fallback` signifie qu'aucun son n'a été joué et que le host a
+// parlé par un autre chemin (voix Windows).
+export type VoiceStreamResult = {
+  mime?: string
+  streamed?: boolean
+  cached?: boolean
+  fallback?: VoiceSpeech
+  warning?: string
+}
+// v11.11.0 : état du clonage de voix côté host. Aucun secret ici : le jeton
+// Hugging Face ne remonte que sous forme de booléen. `weights` dit si le modèle de
+// clonage est déjà dans les données de l'app ; `engine` si le moteur est installé.
+export type VoiceCloneStatus = { engine: boolean; weights: boolean; profile: boolean; token: boolean }
+// v11.11.0 : résultat d'un clonage — `downloaded` signale que le modèle a été
+// téléchargé pour l'occasion (209 Mo, une seule fois).
+export type VoiceCloneResult = { profile: boolean; voiceName: string; downloaded?: boolean }
 
 // Miroir de host/stats.ts (AgregatedStats) : chiffres affichables du panneau de stats.
 export type AggregatedStats = {
@@ -199,11 +226,30 @@ export type OpenCodeApi = {
   setVoiceAgentPrefs: (patch: { voiceName?: string; personality?: VoicePersonality; micMuted?: boolean }) => Promise<VoiceAgentPrefs>
   voiceAgentVoices: () => Promise<string[]>
   voiceAgentTranscribe: (audio: Uint8Array, mimeType: string) => Promise<{ text: string }>
-  voiceAgentInterpret: (text: string) => Promise<VoiceInterpretation>
+  // v11.14.1 : `expectsAnswer` dit qu'Aven vient de poser une question — une
+  // réponse courte (« oui », « non ») lui est alors adressée.
+  voiceAgentInterpret: (text: string, expectsAnswer?: boolean) => Promise<VoiceInterpretation>
   voiceAgentAsk: (question: string) => Promise<VoiceAnswer>
+  // v11.16.0 : rédige le contenu d'une note demandée (jamais écrit par le modèle).
+  voiceAgentComposeNote: (demand: string) => Promise<{ content: string }>
+  // v11.9.0 : confirmation orale d'une action proposée (suppression, corbeille).
+  voiceAgentConfirmAction: (token: string) => Promise<VoiceActionResult>
+  voiceAgentCancelAction: (token: string) => Promise<void>
   voiceAgentSpeak: (text: string, voice?: string) => Promise<void>
   // v11.3.0 : chemin unique de lecture — le host choisit la voix neuronale ou Windows.
   voiceAgentSay: (text: string) => Promise<VoiceSpeech>
+  // v11.5.3 : un flux PCM, des trames jouées au fur et à mesure.
+  voiceAgentSayStream: (text: string, streamId: string) => Promise<VoiceStreamResult>
+  // v11.10.0 : le host dit quel lecteur préparer avant la demande — « pcm » pour la
+  // voix locale Pocket (échantillons nus), « none » quand l'audio sera rendu d'un
+  // bloc (voix Windows).
+  voiceAgentStreamKind: () => Promise<"pcm" | "none">
+  // v11.11.0 : la voix clonée se crée dans l'app. `voiceCloneFromAudio` ouvre le
+  // choix d'un enregistrement (annulation → null) ; le jeton est un secret du host.
+  voiceCloneStatus: () => Promise<VoiceCloneStatus>
+  voiceCloneFromAudio: () => Promise<VoiceCloneResult | null>
+  voiceCloneRemove: () => Promise<VoiceCloneResult>
+  setVoiceCloneToken: (token: string) => Promise<{ token: boolean }>
   voiceAgentPreview: (text: string, voice?: string) => Promise<VoiceSpeech>
   voiceAgentStop: () => Promise<void>
   announcerActivity: () => Promise<void>

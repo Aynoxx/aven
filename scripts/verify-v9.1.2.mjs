@@ -53,7 +53,9 @@ assert.ok(!css.includes(".hub-card-freebuff"), "v9.4.0 : la carte Freebuff a qui
 // (le Poste garde son cadre). L'assertion ne peut plus mesurer un angle de carte :
 // elle mesure l'absence de la géométrie d'orbite et la présence de la grille de tuiles.
 assert.ok(!/--hub-angle/.test(css), "v11.0.0 : plus aucune orbite de hub")
-assert.match(css, /\.wb-home-grid/, "la planche Aujourd'hui porte la grille de tuiles")
+// v12.0.0 : la grille de tuiles a disparu avec la planche. L'accueil porte
+// désormais une pile centrée autour de l'agent (titre, ancre, question, micro).
+assert.match(css, /\.wb-home-stack/, "la scène d'accueil porte sa pile centrée")
 assert.match(settingsDialog, /Terminal Freebuff/, "v10.5.0 : réglages du terminal nommés comme la destination réelle")
 // v9.2.0 : le lancement quotidien vit dans le terminal intégré (carte hub) ; les
 // Réglages gardent connexion (console externe) et installation.

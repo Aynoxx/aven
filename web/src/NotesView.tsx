@@ -266,6 +266,7 @@ export default function NotesView(props: Props) {
 
   return (
     <InstrumentFrame
+      compact
       eyebrow="NOTES"
       title="Notes de l'espace"
       description={<>

@@ -13,7 +13,24 @@
 //   - aucune valeur sensible : l'état ne porte que le NOM de l'espace, jamais
 //     son chemin complet (il ne doit pas partir chez le fournisseur distant).
 //
+// v11.9.0 : les outils de l'agent ne sont plus une liste écrite à la main. Le
+// catalogue `host/agent-actions.ts` fournit les actions de données (lecture,
+// écriture, destruction) ; ce module les propose au modèle, valide leurs
+// arguments, et n'exécute une destruction qu'en la PROPOSANT. Une seule écriture
+// par tour : une demande ne peut pas enchaîner dix gestes.
+//
 // Pur : testable avec Node seul, sans dépendance desktop ni Tauri.
+
+import {
+  ACTION_NAMES,
+  MAX_WRITES_PER_TURN,
+  actionSpec,
+  actionToolDefinitions,
+  isAgentActionName,
+  validateActionArgs,
+  type AgentAction,
+  type AgentLogEntry,
+} from "./agent-actions.js"
 
 /** Nombre maximal de tours d'outils avant la réponse parlée finale. */
 export const MAX_TOOL_STEPS = 3
@@ -31,7 +48,7 @@ export function isToolName(value: string): value is VoiceToolName {
   return (TOOL_NAMES as readonly string[]).includes(value)
 }
 
-export const VOICE_TOOLS = [
+const READ_TOOLS = [
   {
     type: "function",
     function: {
@@ -75,11 +92,28 @@ export const VOICE_TOOLS = [
   },
 ] as const
 
+/**
+ * Outils proposés au modèle : les trois lectures de v11.2.0, puis les actions
+ * du catalogue. Une action ajoutée au catalogue est immédiatement disponible —
+ * et une action retirée l'est aussi, sans liste parallèle à tenir.
+ */
+export const VOICE_TOOLS = [...READ_TOOLS, ...actionToolDefinitions()]
+/** Tous les noms d'outils acceptés (lectures + actions), pour les refus lisibles. */
+export const ALL_TOOL_NAMES: readonly string[] = [...TOOL_NAMES, ...ACTION_NAMES]
+
 /** Un appel d'outil tel que le modèle l'a demandé, arguments déjà décodés. */
 export type VoiceToolCall = { id: string; name: string; args: Record<string, unknown> }
 
-/** Résultat d'outil : le texte part au modèle, `ok` sert aux tests et aux sondes. */
-export type VoiceToolOutcome = { ok: boolean; text: string }
+/**
+ * Résultat d'outil : le texte part au modèle, `ok` sert aux tests et aux sondes.
+ *
+ * v11.9.0 : `pending` signale qu'une destruction a été PROPOSÉE et `announce`
+ * qu'une écriture a été EXÉCUTÉE. Dans les deux cas la boucle remplace la
+ * réponse du modèle par la phrase du catalogue : un modèle qui paraphrase
+ * (« c'est fait » pour une action refusée) est exactement le mensonge qu'on
+ * cherche à éviter, et la phrase canonique évite un aller-retour de plus.
+ */
+export type VoiceToolOutcome = { ok: boolean; text: string; pending?: VoicePendingAction; announce?: string }
 export type VoiceToolRunner = (call: VoiceToolCall) => Promise<VoiceToolOutcome>
 
 export type VoiceAppState = { workspace: string; notes: number; version: string }
@@ -87,14 +121,38 @@ export type VoiceNoteHit = { id: string; title: string; snippet: string }
 export type VoiceNoteRow = { id: string; title: string; markdown: string }
 
 /**
- * Données que l'agent peut consulter. Le host fournit les implémentations
- * réelles ; les tests fournissent des objets en mémoire.
+ * Issue d'une action exécutée par le host. `confirm` n'est rendue QUE par les
+ * actions `destroy` : rien n'a été exécuté, et la cible résolue voyage avec la
+ * proposition pour que la confirmation s'applique exactement à elle.
+ */
+export type VoiceActionOutcome =
+  | { status: "done"; spoken: string }
+  | { status: "confirm"; label: string; args: Record<string, string> }
+  | { status: "refused"; text: string }
+
+export type VoiceActionExecutor = (action: AgentAction, args: Record<string, string>) => Promise<VoiceActionOutcome>
+
+/**
+ * Données que l'agent peut consulter ou modifier. Le host fournit les
+ * implémentations réelles ; les tests fournissent des objets en mémoire.
  */
 export type VoiceToolSources = {
   appState: () => VoiceAppState
   searchNotes: (query: string) => VoiceNoteHit[]
   readNote: (id: string) => VoiceNoteRow
+  /** Exécution des actions du catalogue — refusée pour `destroy`, proposée. */
+  runAction: VoiceActionExecutor
 }
+
+/**
+ * Action `destroy` proposée, en attente de la confirmation orale de
+ * l'utilisateur. `args` porte les identifiants RÉSOLUS : la confirmation ne
+ * relance pas une recherche qui pourrait tomber sur une autre cible.
+ */
+export type VoicePendingAction = { name: string; label: string; args: Record<string, string> }
+
+/** Journal des actions, en mémoire seulement (voir `host/agent-actions.ts`). */
+export type VoiceActionLog = readonly AgentLogEntry[]
 
 function parseArgs(raw: unknown): Record<string, unknown> {
   if (raw && typeof raw === "object") return raw as Record<string, unknown>
@@ -169,32 +227,69 @@ export function formatNote(row: VoiceNoteRow): string {
  * Exécute un appel d'outil. Ne lève JAMAIS : toute erreur (outil inconnu,
  * argument invalide, note absente) devient un message lisible que le modèle peut
  * exploiter pour répondre honnêtement ou demander une précision.
+ *
+ * v11.9.0 : les actions du catalogue passent par `sources.runAction`, avec deux
+ * garde-fous ici — arguments validés avant l'appel, et AU PLUS UNE écriture par
+ * tour. Une destruction n'est jamais exécutée par cette fonction : l'exécutant
+ * rend `confirm`, la boucle en fait une question posée à l'utilisateur.
  */
 export function createVoiceToolRunner(sources: VoiceToolSources): VoiceToolRunner {
+  // Compteur par tour : l'exécutant est créé pour une demande.
+  let writes = 0
   return async (call) => {
-    if (!isToolName(call.name)) {
-      return { ok: false, text: `Outil inconnu « ${call.name} ». Outils disponibles : ${TOOL_NAMES.join(", ")}.` }
+    if (isToolName(call.name)) {
+      try {
+        switch (call.name) {
+          case "app_state":
+            return { ok: true, text: formatAppState(sources.appState()) }
+          case "search_notes": {
+            const query = String(call.args.query ?? "").trim()
+            if (!query) return { ok: false, text: "La recherche exige un champ « query » non vide." }
+            if (query.length > 120) return { ok: false, text: "Recherche trop longue : reformule en quelques mots." }
+            return { ok: true, text: formatNoteHits(sources.searchNotes(query), query) }
+          }
+          case "read_note": {
+            const id = safeNoteId(call.args.id)
+            if (!id) return { ok: false, text: "Identifiant de note invalide : il doit venir de search_notes." }
+            return { ok: true, text: formatNote(sources.readNote(id)) }
+          }
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        return { ok: false, text: `Lecture impossible : ${message}` }
+      }
+      return { ok: false, text: "Outil non traité." }
+    }
+    const action = isAgentActionName(call.name) ? actionSpec(call.name) : undefined
+    if (!action) {
+      return { ok: false, text: `Outil inconnu « ${call.name} ». Outils disponibles : ${ALL_TOOL_NAMES.join(", ")}.` }
+    }
+    const validated = validateActionArgs(action, call.args)
+    if (!validated.ok) return { ok: false, text: validated.text }
+    if (action.risk !== "read") {
+      if (writes >= MAX_WRITES_PER_TURN) {
+        return { ok: false, text: "Une seule modification par tour : cette action n'a pas été exécutée." }
+      }
+      writes += 1
     }
     try {
-      switch (call.name) {
-        case "app_state":
-          return { ok: true, text: formatAppState(sources.appState()) }
-        case "search_notes": {
-          const query = String(call.args.query ?? "").trim()
-          if (!query) return { ok: false, text: "La recherche exige un champ « query » non vide." }
-          if (query.length > 120) return { ok: false, text: "Recherche trop longue : reformule en quelques mots." }
-          return { ok: true, text: formatNoteHits(sources.searchNotes(query), query) }
-        }
-        case "read_note": {
-          const id = safeNoteId(call.args.id)
-          if (!id) return { ok: false, text: "Identifiant de note invalide : il doit venir de search_notes." }
-          return { ok: true, text: formatNote(sources.readNote(id)) }
-        }
+      const outcome = await sources.runAction(action, validated.args)
+      switch (outcome.status) {
+        case "done":
+          // Une écriture est ANNONCÉE par sa phrase, pas commentée par le modèle.
+          return { ok: true, text: outcome.spoken, ...(action.risk === "read" ? {} : { announce: outcome.spoken }) }
+        case "refused":
+          return { ok: false, text: outcome.text }
+        case "confirm":
+          return {
+            ok: true,
+            text: `Action proposée : ${outcome.label}. RIEN n'a été exécuté : l'utilisateur doit confirmer oralement. Ne dis pas que c'est fait.`,
+            pending: { name: action.name, label: outcome.label, args: outcome.args },
+          }
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      return { ok: false, text: `Lecture impossible : ${message}` }
+      return { ok: false, text: `Action impossible : ${message}` }
     }
-    return { ok: false, text: "Outil non traité." }
   }
 }

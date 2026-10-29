@@ -32,7 +32,9 @@ const tauri = JSON.parse(read("src-tauri/tauri.conf.json"))
 // La charpente commune est InstrumentFrame : micro-libellé, titre de scène,
 // description, actions déclarées PAR l'instrument (jamais une barre recopiée).
 assert.match(instrument, /export default function InstrumentFrame/, "InstrumentFrame est la charpente commune des instruments")
-assert.match(instrument, /className="instrument-head"/, "l'en-tête d'instrument est commun")
+// v12.0.0 : l'instrument a deux formes du MÊME en-tête — complète, ou compacte
+// quand le Poste porte déjà le titre de section. La charpente reste unique.
+assert.match(instrument, /instrument-head instrument-head-compact/, "l'en-tête d'instrument est commun")
 assert.match(instrument, /role="toolbar" aria-label=/, "la barre d'actions est nommée (accessibilité)")
 
 for (const [name, source] of [["Notes", notes], ["Fichiers", files], ["Réglages", settings], ["Orchestration", app], ["Terminal", freebuff]]) {

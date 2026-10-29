@@ -66,8 +66,8 @@ const fontFamilies = [...css.matchAll(/font-family:\s*([^;]+);/g)].map((m) => m[
 for (const f of fontFamilies) {
   // v11.0.0 : le Poste a DEUX voix typographiques — --font-ui (texte, pile système)
   // et --font-mono (télémétrie, micro-libellés). Aucune police téléchargée.
-  assert.ok(/var\(--font-ui\)|var\(--font-mono\)|^system-ui/.test(f),
-    `Règle « Typographie par tokens » (AGENTS.md §2) : font-family non standard « ${f} ». Utilise var(--font-ui) (pile système : system-ui, "Segoe UI", sans-serif) ou var(--font-mono).`)
+  assert.ok(/var\(--font-ui\)|var\(--font-mono\)|var\(--font-display\)|^system-ui/.test(f),
+    `Règle « Typographie par tokens » (AGENTS.md §2) : font-family non standard « ${f} ». Utilise var(--font-ui) (pile système), var(--font-mono) (télémétrie) ou var(--font-display) (titre d'accueil, v12.0.0).`)
 }
 
 // ── Règle 3 : les icônes passent toutes par la bibliothèque centralisée ──────────

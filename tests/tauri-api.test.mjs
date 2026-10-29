@@ -165,6 +165,35 @@ test("noteOpenFolder : noteOpenFolder puis openPath", async () => {
   assert.deepEqual(methods, ["noteOpenFolder", "openPath"])
 })
 
+// v11.11.0 : le clonage de voix part d'un fichier choisi par l'utilisateur — le
+// renderer n'en lit pas un octet, il transmet le chemin au host.
+test("voiceCloneFromAudio : dialogue audio → conversion côté host", async () => {
+  const { deps, calls } = makeDeps({
+    openDialog: async () => "C:/ref/ma-voix.wav",
+    invoke: async () => ({ profile: true, voiceName: "pocket:clone", downloaded: true }),
+  })
+  const api = createTauriApi(deps)
+
+  const result = await api.voiceCloneFromAudio()
+
+  assert.equal(result.voiceName, "pocket:clone")
+  const dialog = calls.find((c) => c.kind === "openDialog")
+  assert.equal(dialog.options.directory, false)
+  assert.deepEqual(dialog.options.filters, [{ name: "Audio", extensions: ["wav", "mp3", "flac", "ogg", "opus", "m4a"] }])
+  assert.deepEqual(calls.find((c) => c.kind === "invoke").args, {
+    method: "voiceCloneFromAudio",
+    args: ["C:/ref/ma-voix.wav"],
+  })
+})
+
+test("voiceCloneFromAudio : dialogue annulé → null, aucun appel RPC", async () => {
+  const { deps, calls } = makeDeps()
+  const api = createTauriApi(deps)
+
+  assert.equal(await api.voiceCloneFromAudio(), null)
+  assert.equal(calls.filter((c) => c.kind === "invoke").length, 0)
+})
+
 test("onEvent : abonnement à aven:event, désabonnement à l'arrêt", async () => {
   const { deps, calls } = makeDeps()
   const api = createTauriApi(deps)

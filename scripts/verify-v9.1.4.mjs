@@ -48,7 +48,10 @@ assert.match(app, /wb-home-notice-close/, "l'avis reste refermable")
 // pousse pas la fenêtre à défiler (le Poste est en overflow: hidden, seul l'intérieur
 // de l'instrument défile).
 assert.match(css, /\.wb-app \{[^}]*height: 100dvh;[^}]*overflow: hidden;/s, "le Poste tient dans la fenêtre")
-assert.match(css, /\.wb-home-scroll \{[^}]*overflow-y: auto;/, "seule la planche Aujourd'hui défile")
+// v12.0.0 : la planche à tuiles a disparu ; l'accueil de l'agent ne défile pas.
+// Le défilement reste local aux conteneurs qui en ont besoin (notes, fichiers,
+// terminal, conversation), jamais au cadre.
+assert.match(css, /\.wb-home \{[^}]*overflow: hidden;/, "l'accueil de l'agent ne défile pas")
 
 // D. Page Agents allégée : 2 conversations max + compteur, badge lecture seule, grille fluide.
 // v9.6.0 : la grille d'agents devient la page « Tâches » (orchestrateur + modes) ; les

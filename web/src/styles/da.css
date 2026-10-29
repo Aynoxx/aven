@@ -19,26 +19,30 @@
   --font-size-2xl: 28px;
   --font-size-3xl: 32px;
 
-  /* Champ sombre olive — jamais du noir pur (DA §1). */
-  --bg: #0a0c09;
-  --stage: #0d100b;
-  --panel: #11150e;
-  --panel-solid: #141910;
-  --panel-soft: #1a2015;
-  --text: #e9ece3;
-  --muted: #949c8b;
-  --border: rgba(233, 236, 227, .10);
-  --border-strong: rgba(233, 236, 227, .20);
-  --rule: rgba(233, 236, 227, .08);
-  --grid-dot: rgba(233, 236, 227, .10);
+  /* v12.0.0 : champ forêt du brief AVEN — vert-noir, jamais du noir pur. */
+  --bg: #0b100e;
+  --stage: #0d1310;
+  --panel: #131b17;
+  --panel-solid: #131b17;
+  --panel-soft: #1a241f;
+  --text: #e7ebe7;
+  --muted: #939f96;
+  --border: rgba(231, 235, 231, .10);
+  /* v12.0.0 : le gris-vert du brief pour les filets techniques — la valeur du
+     visuel de référence, pas un blanc translucide qui tirait vers le gris neutre. */
+  --border-strong: #46534b;
+  --rule: rgba(231, 235, 231, .075);
+  --grid-dot: rgba(231, 235, 231, .10);
 
-  /* Orange signal : focus, actif, mesure. Jamais décoratif. */
-  --accent: #ff5a00;
+  /* v12.0.0 : orange braise du brief. Traits et remplissages seulement — le TEXTE
+     d'accent prend `--accent-ink` (règle §3 : sur Émeraude, --accent en texte
+     mesurait 2,32:1). */
+  --accent: #d77a43;
   --accent-fill: var(--accent);
-  --accent-fill-hover: color-mix(in srgb, var(--accent) 88%, #ffb27a);
-  --on-accent: #0a0c09;
-  --accent-ink-light: #a83a08;
-  --accent-ink-dark: #ff7a2e;
+  --accent-fill-hover: color-mix(in srgb, var(--accent) 88%, #f0b78f);
+  --on-accent: #0b100e;
+  --accent-ink-light: #9c4f22;
+  --accent-ink-dark: #e08a56;
   --accent-ink: var(--accent-ink-dark);
   --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
   --accent-border: color-mix(in srgb, var(--accent) 42%, transparent);
@@ -78,39 +82,53 @@
   /* v11.0.0 : temps de réponse d'instrument (court, sec, sans rebond) — les valeurs
      vivent UNE fois dans base.css ; la DA n'en redéfinit aucun (sonde v10.3.2). */
   --stagger-i: 0;
+  /* v12.0.0 : cap de sortie d'un nœud de constellation (posé en style calculé). */
+  --exit-x: 0px;
 
   /* Charpente du Poste. */
-  --wb-status-h: 40px;
-  --wb-rail-w: 56px;
-  --wb-rail-wide: 208px;
   --wb-tabs-h: 38px;
   --wb-inspector-w: 320px;
   --wb-command-h: 56px;
+  /* v12.0.0 : en-tête unique (marque · section · agent · contrôles) et
+     constellation. Aucune barre de navigation permanente. */
+  --wb-header-h: 54px;
+  --wb-nav-size: 64px;
+  --wb-nav-size-sm: 56px;
+
+  /* v12.0.0 : TROISIÈME voix, pour les seuls titres d'accueil — la condensée
+     technique du brief. Bahnschrift est livrée avec Windows (aucun fichier, aucun
+     téléchargement) ; ailleurs la pile retombe sur la sans-serif système. */
+  --font-display: "Bahnschrift SemiCondensed", "Bahnschrift", "Segoe UI Semibold", system-ui, sans-serif;
+  /* Le brief demande un titre massif : ce plafond ne sert QU'à l'accueil, jamais au
+     texte courant. v12.0.0 (passe graphique) : la référence fait du titre une masse
+     qui traverse la page — le plancher monte à 44 px et la borne de hauteur (14 vh)
+     empêche la ligne de pousser la sphère hors de la scène sur un écran court. */
+  --font-size-display: clamp(44px, min(9vw, 18vh), 170px);
 }
 
 /* Thème clair « blueprint » : papier os, encre olive, même signal assombri.
    Le thème est un réglage utilisateur ; la DA reste la même grammaire. */
 :root[data-theme="light"] {
   color-scheme: light;
-  --bg: #f3f0e7;
-  --stage: #f7f4ec;
+  --bg: #f1efe8;
+  --stage: #f7f5ee;
   --panel: #fbf9f3;
   --panel-solid: #fffdf7;
-  --panel-soft: #ece8dc;
-  --text: #16180f;
-  --muted: #5c6153;
-  --border: rgba(22, 24, 15, .14);
-  --border-strong: rgba(22, 24, 15, .26);
-  --rule: rgba(22, 24, 15, .12);
-  --grid-dot: rgba(22, 24, 15, .12);
-  --accent: #a83a08;
+  --panel-soft: #eae7db;
+  --text: #14180f;
+  --muted: #55604f;
+  --border: rgba(20, 24, 15, .15);
+  --border-strong: rgba(20, 24, 15, .28);
+  --rule: rgba(20, 24, 15, .12);
+  --grid-dot: rgba(20, 24, 15, .13);
+  --accent: #a54f1d;
   --accent-fill: var(--accent);
   --accent-fill-hover: color-mix(in srgb, var(--accent) 88%, #000);
   --on-accent: #fff8f1;
   --accent-ink: var(--accent-ink-light);
   --accent-soft: color-mix(in srgb, var(--accent) 10%, transparent);
   --accent-border: color-mix(in srgb, var(--accent) 38%, transparent);
-  --shadow: 0 8px 24px rgba(22, 24, 15, .08);
+  --shadow: 0 8px 24px rgba(20, 24, 15, .08);
   --term-bg: #14170f;
 }
 

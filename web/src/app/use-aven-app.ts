@@ -703,12 +703,16 @@ export function useAvenApp() {
     try {
       await api.deleteChat(id)
       draftsRef.current.delete(id)
-      setChats((cs) => {
-        const rest = cs.filter((c) => c.id !== id)
-        if (chatId === id) setChatId(rest[0]?.id ?? null)
-        return rest
-      })
-      setTabsState((state) => removeChatTab(state, id))
+      // v11.14.1 : supprimer la conversation OUVERTE alors qu'une autre reste
+      // fermait son onglet et rendait le dernier voisin (Notes, Aujourd'hui…).
+      // La conversation qui reste reprend l'onglet — elle est choisie AVANT de
+      // retirer le tab, sinon le Poste n'a plus rien à remettre à sa place.
+      const rest = chatsRef.current.filter((c) => c.id !== id)
+      const next = chatId === id ? rest[0] : undefined
+      // Mise à jour fonctionnelle : une création concurrente n'est pas écrasée.
+      setChats((cs) => cs.filter((c) => c.id !== id))
+      if (chatId === id) setChatId(next?.id ?? null)
+      setTabsState((state) => removeChatTab(state, id, next ? { chatId: next.id, agent: next.agent } : null))
     } catch (e) {
       fail(e)
     }

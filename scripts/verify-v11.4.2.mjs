@@ -42,25 +42,29 @@ assert.equal(pkg.scripts["verify:v11.4.2"], "node scripts/verify-v11.4.2.mjs", "
 assert.ok(existsSync(path.join(root, "web/src/voice-agent/barge-in.ts")), "la décision vit dans son module")
 assert.match(barge, /Pur : testable avec Node seul/, "le module se déclare pur")
 assert.match(barge, /export function shouldInterruptSpeech/, "la décision est une fonction exportée")
-assert.match(barge, /input\.phase === "speaking"/, "la lecture en cours est reconnue")
+// v11.11.1 : la décision ne regarde plus la phase ni le niveau du micro, mais ce
+// qui a été TRANSCRIT — l'écho et la lecture en cours sont les deux entrées.
+assert.match(barge, /if \(input\.reading !== true\) return false/, "la lecture en cours est reconnue")
 assert.match(hook, /import \{ shouldInterruptSpeech \} from "\.\/barge-in"/, "le hook importe la décision")
 assert.ok(existsSync(path.join(root, "tests/voice-agent-barge-in.test.mjs")), "les tests de la décision existent")
 
 // ── B. Pendant une question de note, on ne coupe pas ───────────────────────
+// v11.11.1 : la règle de v11.4.2 est devenue générale — AUCUNE lecture n'est
+// coupée par le niveau du micro (la voix de l'agent revient par les haut-parleurs),
+// et l'écho non plus ne coupe rien. L'exigence tient, la ligne a changé.
 assert.match(
   hook,
-  /shouldInterruptSpeech\(\{ phase: previous, awaitingNote: pendingNoteRef\.current !== null \}\)/,
-  "l'attente de note est transmise à la décision",
+  /if \(shouldInterruptSpeech\(\{ echo: false, reading, addressed: true, heard: text \}\)\) stopPlayback\(\)/,
+  "la reprise de parole se décide sur le texte ADRESSÉ, pas sur le niveau du micro",
 )
 // La coupe inconditionnelle de v11.1.0 a disparu : c'est elle qui tronquait la question.
 assert.doesNotMatch(hook, /if \(previous === "speaking" \|\| previous === "thinking"\) \{/, "la coupe inconditionnelle a disparu")
-assert.match(hook, /if \(cutNow\) \{\s*\/\/ v11\.3\.0 : couper la lecture coupe aussi l'audio neuronal déjà décodé\.\s*stopPlayback\(\)/, "la coupe est conditionnée par la décision")
-assert.match(barge, /return !input\.awaitingNote/, "l'attente de note désarme la coupe")
-assert.match(tests, /pendant une question de note, la lecture n'est pas coupée/, "le test verrouille la non-coupe")
+assert.match(barge, /if \(input\.echo\) return false/, "un écho ne coupe rien")
+assert.match(tests, /l'écho de la voix de l'agent ne coupe jamais rien/, "le test verrouille la non-coupe")
 
 // ── C. Une vraie reprise coupe toujours ────────────────────────────────────
-assert.match(tests, /une reprise de parole coupe la lecture en cours/, "le test verrouille la coupe réelle")
-assert.match(barge, /if \(!playing\) return false/, "hors lecture, rien n'est coupé")
+assert.match(tests, /une parole adressée coupe la lecture en cours/, "le test verrouille la coupe réelle")
+assert.match(barge, /if \(input\.addressed\) return true/, "hors lecture, rien n'est coupé ; une parole adressée prend la main")
 assert.match(
   hook,
   /if \(pendingNoteRef\.current\) stopPlayback\(\)/,

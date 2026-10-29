@@ -10,7 +10,10 @@
 //     qu'un seul routeur.
 //
 // Pur : testable avec Node seul, sans dépendance desktop.
-import { detectWakeWord, startsWithWakeHomophone, stripWakeWord } from "./voice-agent-wake.js"
+import { detectWakeWord, isSleepPhrase, startsWithWakeHomophone, stripWakeWord } from "./voice-agent-wake.js"
+// v11.14.1 : en veille, la parole ambiante n'est pas une demande. La décision
+// vit dans un module pur, avant tout envoi au LLM.
+import { isAddressedToAgent } from "./voice-agent-addressed.js"
 
 export type VoiceCommand =
   | "open-notes"
@@ -76,6 +79,18 @@ export type VoiceInterpretation = {
   command: VoiceCommand | null
   /** Demande libre, mot d'activation et politesses retirés. */
   demand: string
+  /**
+   * v11.12.0 : ordre de repos (« dors », « mets-toi en veille »). Reconnu ici,
+   * côté host, pour que le renderer n'ait pas sa propre liste à tenir à jour ;
+   * c'est une phrase ENTIÈRE, jamais un mot au milieu d'une demande.
+   */
+  sleep: boolean
+  /**
+   * v11.14.1 : la parole paraît adressée à Aven (mot d'activation, commande,
+   * question, impératif, deuxième personne). En veille, une parole non adressée
+   * est écartée sans réponse — c'est le bruit de la pièce, pas une demande.
+   */
+  addressed: boolean
 }
 
 /**
@@ -83,7 +98,7 @@ export type VoiceInterpretation = {
  * commande ou demande libre. Ne lève jamais : une transcription vide donne
  * `woken: false`, `command: null`, `demand: ""`.
  */
-export function interpretVoiceText(text: string): VoiceInterpretation {
+export function interpretVoiceText(text: string, options?: { expectsAnswer?: boolean }): VoiceInterpretation {
   const { woken, command: cleaned } = detectWakeWord(text)
   // v11.1.1 : Whisper écrit souvent « Aven » en « Avant ». Si la phrase ouvre
   // sur cet homophone ET qu'une commande est reconnue derrière, le réveil est
@@ -93,6 +108,14 @@ export function interpretVoiceText(text: string): VoiceInterpretation {
   const useful = homophone && !woken ? stripWakeWord(text) : cleaned
   const command = routeVoiceCommand(useful)
   const wokenFinal = woken || (homophone && command !== null && ACTION_START.test(useful))
-  if (!useful) return { woken: wokenFinal, command: null, demand: "" }
-  return { woken: wokenFinal, command, demand: command ? "" : useful }
+  // v11.14.1 : une commande, un ordre de repos ou un mot d'activation sont
+  // TOUJOURS adressés ; sinon le module pur tranche sur le texte.
+  const sleep = isSleepPhrase(useful)
+  const addressed = wokenFinal || command !== null || sleep || isAddressedToAgent(useful, options)
+  // v11.12.0 : l'ordre de repos sort de la conversation — aucune commande, aucune
+  // demande, rien qui parte au LLM. Il vaut avec ou sans mot d'activation ; c'est
+  // le renderer qui décide de n'y obéir qu'en veille (session.ts).
+  if (sleep) return { woken: wokenFinal, command: null, demand: "", sleep: true, addressed: true }
+  if (!useful) return { woken: wokenFinal, command: null, demand: "", sleep: false, addressed: wokenFinal }
+  return { woken: wokenFinal, command, demand: command ? "" : useful, sleep: false, addressed }
 }

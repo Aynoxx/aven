@@ -17,6 +17,25 @@ test("commandes de navigation reconnues", () => {
   assert.equal(routeVoiceCommand("nouvelle conversation"), "new-chat")
 })
 
+// v11.12.0 : l'ordre de repos est reconnu par le host et signalé à part : aucune
+// commande, aucune demande, rien qui parte au LLM.
+test("ordre de repos : reconnu seul ou derrière le mot d'activation", () => {
+  const alone = interpretVoiceText("dors")
+  assert.equal(alone.sleep, true)
+  assert.equal(alone.command, null)
+  assert.equal(alone.demand, "")
+  assert.equal(alone.woken, false)
+  const woken = interpretVoiceText("Aven, mets-toi en veille")
+  assert.equal(woken.sleep, true)
+  assert.equal(woken.woken, true)
+})
+
+test("une demande qui parle de sommeil ou de repos n'est pas un ordre de repos", () => {
+  for (const phrase of ["comment je dors mieux ?", "Aven, explique-moi le sommeil", "Aven, range la note dans le dossier repos"]) {
+    assert.equal(interpretVoiceText(phrase).sleep, false, phrase)
+  }
+})
+
 test("commandes locales : micro et lecture", () => {
   assert.equal(routeVoiceCommand("coupe le micro"), "mute-microphone")
   assert.equal(routeVoiceCommand("arrête de parler"), "stop-speaking")
@@ -44,6 +63,8 @@ test("sourdine : les formulations naturelles sont des commandes", () => {
     woken: true,
     command: "mute-microphone",
     demand: "",
+    sleep: false,
+    addressed: true,
   })
 })
 
@@ -75,6 +96,8 @@ test("interprétation : mot d'activation puis commande", () => {
     woken: true,
     command: "open-notes",
     demand: "",
+    sleep: false,
+    addressed: true,
   })
 })
 
@@ -83,6 +106,8 @@ test("interprétation : demande libre sans commande", () => {
     woken: true,
     command: null,
     demand: "quelle heure est-il ?",
+    sleep: false,
+    addressed: true,
   })
 })
 
@@ -94,11 +119,15 @@ test("interprétation : « Aven, ouvre une note » ouvre les notes", () => {
     woken: true,
     command: "open-notes",
     demand: "",
+    sleep: false,
+    addressed: true,
   })
   assert.deepEqual(interpretVoiceText("Avant, ouvre une note"), {
     woken: true,
     command: "open-notes",
     demand: "",
+    sleep: false,
+    addressed: true,
   })
 })
 
@@ -107,11 +136,15 @@ test("interprétation : « Avant » suivi d'une commande réveille l'agent", () 
     woken: true,
     command: "open-notes",
     demand: "",
+    sleep: false,
+    addressed: true,
   })
   assert.deepEqual(interpretVoiceText("Avent, quelle heure est-il ?"), {
     woken: true,
     command: null,
     demand: "quelle heure est-il ?",
+    sleep: false,
+    addressed: true,
   })
 })
 
@@ -120,6 +153,8 @@ test("interprétation : « avant » dans une phrase ne réveille pas l'agent", (
     woken: false,
     command: "open-notes",
     demand: "",
+    sleep: false,
+    addressed: true,
   })
 })
 
@@ -128,6 +163,35 @@ test("interprétation : sans mot d'activation, le renderer décide", () => {
     woken: false,
     command: "open-notes",
     demand: "",
+    sleep: false,
+    addressed: true,
   })
-  assert.deepEqual(interpretVoiceText(""), { woken: false, command: null, demand: "" })
+  assert.deepEqual(interpretVoiceText(""), { woken: false, command: null, demand: "", sleep: false, addressed: false })
+})
+
+// v11.14.1 : en veille, le bruit de la pièce n'est pas une demande. Le host
+// marque la parole non adressée ; le renderer s'en sert pour ne rien répondre.
+test("interprétation : le bruit et la remarque ambiante ne sont pas adressés", () => {
+  for (const phrase of ["Euh… hum", "bah", "merci", "il fait beau aujourd'hui", "[Musique]"]) {
+    assert.equal(interpretVoiceText(phrase).addressed, false, phrase)
+  }
+})
+
+test("interprétation : une vraie demande reste adressée sans mot d'activation", () => {
+  for (const phrase of [
+    "tu peux me résumer mes notes",
+    "quelle heure est-il ?",
+    "fais-moi un résumé",
+    "j'aimerais une note sur Paul",
+  ]) {
+    assert.equal(interpretVoiceText(phrase).addressed, true, phrase)
+  }
+})
+
+// v11.14.1 : après une question d'Aven, « oui » ou « non » lui répondent ; sans
+// question ouverte, les mêmes mots sont du bruit de pièce.
+test("interprétation : une réponse courte dépend de la question posée", () => {
+  assert.equal(interpretVoiceText("oui").addressed, false)
+  assert.equal(interpretVoiceText("oui", { expectsAnswer: true }).addressed, true)
+  assert.equal(interpretVoiceText("non", { expectsAnswer: true }).demand, "non")
 })

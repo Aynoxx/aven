@@ -8,8 +8,10 @@ import {
   noteConfirmPrompt,
   noteConfirmationOpen,
   noteCreatedReply,
+  noteNeedsComposition,
   noteTitleFromDraft,
   parseNoteDraft,
+  spokenDraft,
 } from "../web/src/voice-agent/note.ts"
 
 // v11.4.0 : la création de note à la voix n'écrit qu'après un « oui » explicite.
@@ -23,12 +25,21 @@ test("brouillon extrait des formulations naturelles", () => {
   assert.deepEqual(parseNoteDraft("crée une note pour la réunion de demain"), { draft: "la réunion de demain" })
   assert.deepEqual(parseNoteDraft("prends note que Paul doit un livre"), { draft: "Paul doit un livre" })
   assert.deepEqual(parseNoteDraft("ajoute un mémo : réviser le protocole"), { draft: "réviser le protocole" })
+  // v11.15.0 : les formulations qui partaient au LLM, faute de motif, et qui
+  // recevaient « je ne peux pas créer de note ».
+  assert.deepEqual(parseNoteDraft("crée-moi une note pour la réunion"), { draft: "la réunion" })
+  assert.deepEqual(parseNoteDraft("fais une note sur le client"), { draft: "le client" })
+  assert.deepEqual(parseNoteDraft("peux-tu créer une note"), { draft: "" })
+  assert.deepEqual(parseNoteDraft("je voudrais que tu crées une note sur Paul"), { draft: "Paul" })
+  assert.deepEqual(parseNoteDraft("génère une note sur demain"), { draft: "demain" })
 })
 
 test("une note demandée sans contenu ne devine rien", () => {
   assert.deepEqual(parseNoteDraft("crée une note"), { draft: "" })
   assert.deepEqual(parseNoteDraft("nouvelle note"), { draft: "" })
   assert.deepEqual(parseNoteDraft("prends une note"), { draft: "" })
+  assert.deepEqual(parseNoteDraft("crée-moi une note"), { draft: "" })
+  assert.deepEqual(parseNoteDraft("fais une note"), { draft: "" })
 })
 
 // Le piège : « ouvre une note » est une NAVIGATION (open-notes). Si la création
@@ -37,12 +48,47 @@ test("consulter une note n'est pas en créer une", () => {
   for (const phrase of ["ouvre une note", "affiche mes notes", "supprime la note", "montre-moi les notes"]) {
     assert.equal(parseNoteDraft(phrase), null, phrase)
   }
+  // Une création sans contenu est une demande ; une suppression reste une
+  // destruction, elle ne crée jamais de note par accident.
+  assert.deepEqual(parseNoteDraft("crée une note"), { draft: "" })
+  assert.equal(parseNoteDraft("supprime une note"), null)
 })
 
 test("brouillon nettoyé : politesses, guillemets, ponctuation de tête", () => {
   assert.deepEqual(parseNoteDraft("note que j'ai rendez-vous demain s'il te plaît"), { draft: "j'ai rendez-vous demain" })
   assert.deepEqual(parseNoteDraft("note : « acheter du pain »"), { draft: "acheter du pain" })
   assert.deepEqual(parseNoteDraft("note : , appel Paul"), { draft: "appel Paul" })
+})
+
+// v11.15.0 : une note à COMPOSER (« qui résume… ») n'est pas un brouillon dicté.
+// Elle part au modèle, qui peut désormais la proposer via create_note.
+test("une note à composer par l'agent n'est pas interceptée", () => {
+  assert.equal(parseNoteDraft("crée une note qui résume la réunion"), null)
+  assert.equal(parseNoteDraft("fais une note qui explique le protocole"), null)
+})
+
+// v11.16.0 : la réponse à « Quel texte dois-je noter ? » peut décrire le contenu
+// au lieu de le dicter. La distinguer d'une dictée est la condition pour qu'Aven
+// rédige un vrai résumé au lieu de recopier la demande.
+test("composer une note n'est pas la dicter", () => {
+  for (const phrase of [
+    "La note doit contenir un résumé de comment faire une boucle en Python.",
+    "je veux une note qui explique les boucles",
+    "fais une note sur les itérations Python",
+    "un résumé de la réunion",
+  ]) {
+    assert.equal(noteNeedsComposition(phrase), true, phrase)
+  }
+  for (const phrase of [
+    "J'ai rendez-vous demain à 14 h.",
+    "acheter du pain",
+    "Note que j'ai rendez-vous demain.",
+    "Note : acheter du pain.",
+    "Note bien que le résumé est prêt.",
+    "penser à appeler Paul",
+  ]) {
+    assert.equal(noteNeedsComposition(phrase), false, phrase)
+  }
 })
 
 test("une phrase de conversation n'est pas une demande de note", () => {
@@ -79,6 +125,23 @@ test("la question de confirmation répète le contenu et demande un accord", () 
   // Un brouillon très long est abrégé : on ne lit pas 600 caractères avant de demander.
   const long = noteConfirmPrompt("mot ".repeat(200))
   assert.ok(long.length < 260, `phrase trop longue : ${long.length}`)
+})
+
+// v11.16.0 : la note composée porte du Markdown, la question est PRONONCÉE.
+// Le texte écrit garde tout ; seule la relecture orale est aplatie — sinon la
+// voix lit « ### », « ** » et le contenu d'un bloc de code.
+test("la relecture orale retire le Markdown, jamais le texte écrit", () => {
+  const note = "# Boucle\n\nUn **résumé** :\n```python\nfor i in range(3):\n    print(i)\n```\n- indentation obligatoire"
+  const spoken = spokenDraft(note)
+  assert.doesNotMatch(spoken, /```|#{1,6}|\*\*|`/)
+  assert.doesNotMatch(spoken, /print\(i\)/, "un bloc de code ne se lit pas à voix haute")
+  assert.match(spoken, /résumé/)
+  assert.match(spoken, /indentation obligatoire/)
+  const prompt = noteConfirmPrompt(note)
+  assert.doesNotMatch(prompt, /```|###|\*\*/)
+  assert.match(prompt, /Je l’enregistre \?$/)
+  // Une note faite uniquement de code n'a rien à relire : on le dit.
+  assert.match(noteConfirmPrompt("```python\nprint(1)\n```"), /un texte rédigé/)
 })
 
 test("confirmation après écriture et refus sont des phrases fixes", () => {

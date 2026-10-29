@@ -245,8 +245,15 @@ export function startFreebuffPty(opts: { cwd: string; cols?: number; rows?: numb
     // (revue v9.2.1) Si le boot est en cours, ré-armer le timer de grâce pour CET attach :
     // le timer du spawn d'origine n'est plus lié à la nouvelle vue et son expiration
     // émettrait un faux « running » (ou couvrirait la mauvaise fenêtre de temps).
+    // v11.12.2 : une session DÉJÀ sortie de la grâce doit annoncer « En ligne » à la
+    // vue qui se rattache. `bootAttempts` vaut toujours ≥ 1 après un spawn, donc
+    // l'ancienne condition n'était jamais vraie : à la réouverture de l'onglet, le
+    // badge restait « Freebuff démarre… » et « Interrompre » restait grisé, alors
+    // que le TUI tournait — écran rejoué mais état faux.
+    const booting = bootTimer !== null
     if (bootTimer) { clearTimeout(bootTimer); bootTimer = null }
-    if (bootAttempts === 0) bootTimer = setTimeout(() => { bootTimer = null; events?.onStatus("running") }, PTY_BOOT_GRACE_MS)
+    if (booting) bootTimer = setTimeout(() => { bootTimer = null; events?.onStatus("running") }, PTY_BOOT_GRACE_MS)
+    else events?.onStatus("running")
     return { replay: current.scrollback }
   }
   // Nouveau démarrage : le compteur de boot repart de zéro (un stop l'a peut-être épuisé).

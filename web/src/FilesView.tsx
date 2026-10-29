@@ -74,6 +74,7 @@ export default function FilesView(props: Props) {
 
   return (
     <InstrumentFrame
+      compact
       eyebrow="FICHIERS"
       title="Fichiers de l'espace"
       description={<>

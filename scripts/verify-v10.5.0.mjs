@@ -15,7 +15,7 @@ const readme = read("README.md")
 const rules = read("AGENTS.md")
 // v11.0.0 : le hub orbital a cédé la place à la planche Aujourd'hui ; les intentions
 // figées ici (destinations nommées, état vide informatif) vivent dans le Poste.
-const home = read("web/src/workbench/HomeBoard.tsx")
+const home = read("web/src/workbench/HomeStage.tsx")
 const commandBar = read("web/src/workbench/CommandBar.tsx")
 const tasks = read("web/src/pages/TasksPage.tsx")
 const conversation = read("web/src/pages/ConversationPage.tsx")
@@ -57,13 +57,11 @@ assert.match(commandBar, /Rechercher une conversation, une note/, "la recherche 
 assert.match(commandBar, /const parsed = parseOmnibox\(query\)/, "la barre de commande analyse sa portée")
 assert.match(commandBar, /if \(!q\) \{ setNotes\(\[\]\); return \}/, "une recherche vide ne déclenche aucun appel implicite")
 assert.match(commandBar, /Aucun résultat\./, "aucun résultat est un état informatif")
-assert.match(home, /Aucune conversation\. Crée la première pour commencer\./, "la planche vide informe sans faux bouton")
 
 assert.match(tasks, /title="Modes de délégation de l’agent principal"/, "la page est décrite comme de l'orchestration")
 assert.match(tasks, /Ce choix reste actif pour les prochaines demandes/, "la portée du mode est explicitée")
 assert.match(tasks, /Aven · agent principal/, "l'identifiant interne n'est pas affiché comme nom produit")
 assert.match(shell, /<span>Nom<\/span><span>\{agentName\(tab\) \|\| "—"\}<\/span>/, "l'inspecteur indique quel agent répond")
-assert.match(home, />Orchestration<\/button>/, "l'accès contextuel porte le nom de sa destination")
 assert.match(controller, /case "open-project":[\s\S]{0,100}return "Terminal Freebuff ouvert\."/,"la confirmation vocale annonce le nom actuel de la page Freebuff")
 assert.match(controller, /case "open-agents":[\s\S]{0,80}return "Orchestration ouverte\."/,"la confirmation vocale annonce la destination Orchestration")
 assert.match(freebuff, /title="Terminal Freebuff"/, "Freebuff est présenté comme un terminal distinct")

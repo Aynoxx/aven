@@ -79,9 +79,19 @@ assert.match(shell, /className="wb-voice"/, "le bandeau porte le contrôle vocal
 assert.match(shell, /role="status" aria-live="polite"/, "l'état vocal est annoncé")
 assert.match(shell, /microphone-off/, "le micro coupé a son icône propre")
 assert.match(shell, /Interrompre l’agent vocal/, "la lecture peut être interrompue")
-assert.match(hook, /TTS_ECHO_BARRIER_MS/, "l'écho de la voix ne coupe pas la lecture elle-même")
-assert.match(hook, /acceptsFollowUp/, "la fenêtre de dix secondes est appliquée")
-assert.match(session, /FOLLOW_UP_MS = 10_000/, "la fenêtre de suivi dure dix secondes")
+// v11.11.1 : la garde temporelle (TTS_ECHO_BARRIER_MS) a disparu — elle ne
+// protégeait que les 900 premières millisecondes, alors que le micro entend
+// l'agent pendant TOUTE la réponse. L'exigence tient, autrement : l'écho est
+// reconnu par le texte et ne touche plus à la session (echo.ts, barge-in.ts).
+assert.match(hook, /const echo = isSelfEcho\(\{/, "l'écho de la voix ne coupe pas la lecture elle-même")
+assert.doesNotMatch(hook, /TTS_ECHO_BARRIER_MS/, "plus de garde temporelle : la décision tient au texte")
+// v11.12.0 : la fenêtre de suivi de dix secondes est remplacée par la VEILLE (mode
+// éveillé, sonde scripts/verify-v11.12.0.mjs). Son défaut est daté : `speech-start`
+// la remettait à zéro avant la transcription, donc le mot d'activation restait exigé
+// à chaque phrase. Ce qui reste de la règle d'origine est vérifié ici : une parole
+// sans mot d'activation n'est adressée à l'agent que par la veille.
+assert.match(hook, /isAwake\(sessionRef\.current\)/, "l'adresse à l'agent se décide sur la veille")
+assert.match(session, /AWAKE_IDLE_MS/, "la veille a remplacé la fenêtre de suivi")
 
 // ── H. Réglages : voix Windows, aperçu, personnalité, section dédiée ────────
 assert.match(app, /"voice"/, "la section Réglages « voice » existe")
@@ -90,7 +100,8 @@ assert.match(settings, /voiceAgentVoices\(\)/, "les voix Windows sont listées")
 assert.match(settings, /Tester la voix/, "la voix peut être entendue avant de choisir")
 assert.match(settings, /Personnalité/, "les personnalités sont réglables")
 assert.match(settings, /les segments audio sont envoyés au STT distant/, "l'envoi audio au STT est annoncé")
-assert.match(settings, /Aucune voix Windows détectée/, "l'absence de voix est dite, pas silencieuse")
+// v11.6.0 : le groupe local contient aussi Piper ; le message dit « locale ».
+assert.match(settings, /Aucune voix locale détectée/, "l'absence de voix est dite, pas silencieuse")
 
 // ── I. Styles : tokens uniquement, pas de taille en dur ────────────────────
 assert.match(css, /\.wb-voice \{/, "le contrôle vocal a sa règle")

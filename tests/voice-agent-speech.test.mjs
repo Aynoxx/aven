@@ -4,12 +4,14 @@ import {
   QUOTA_MESSAGE,
   SPEAK_SCRIPT,
   answerVoiceQuestion,
+  cleanComposedNote,
+  composeNoteSystemPrompt,
+  composeVoiceNote,
   describeGroqFailure,
   listWindowsVoices,
   sanitizeSpeechText,
   speakWithWindowsVoice,
   splitSentences,
-  synthesizeEdgeSpeech,
   transcribeVoiceSegment,
   voiceSystemPrompt,
 } from "../host/voice-agent-speech.ts"
@@ -62,21 +64,100 @@ test("consigne : périmètre limité à l'intérieur d'Aven", () => {
   assert.match(prompt, /ne peux agir que dans Aven/i)
 })
 
+// v11.9.0 : l'agent agit, mais une suppression ne se raconte jamais comme faite.
+test("consigne : les actions existent, une suppression se propose", () => {
+  const prompt = voiceSystemPrompt("neutre")
+  assert.match(prompt, /ACTIONS sur les données/)
+  assert.match(prompt, /JAMAIS exécutée par toi/)
+  assert.match(prompt, /Destruction ou note : proposée/)
+  assert.match(prompt, /confirmation orale/)
+})
+
+// v11.13.0 : le prompt est un contrat de parole SECTIONNÉ, pas une suite de
+// conseils fondus dans un paragraphe. Le format oral et les interdits se testent.
+test("consigne : contrat de format oral", () => {
+  const prompt = voiceSystemPrompt("neutre")
+  assert.match(prompt, /FORMAT DE RÉPONSE/)
+  assert.match(prompt, /1 à 2 phrases/)
+  assert.match(prompt, /Pas de Markdown/)
+  assert.match(prompt, /pas de préambule ni de remerciement/i)
+  assert.match(prompt, /prochaine étape : une seule, courte, à la fin/i)
+  // L'ancienne consigne contenait une expression anglaise hors sujet.
+  assert.doesNotMatch(prompt, /according to/i)
+})
+
+test("consigne : ce qui ne se dit jamais (secret, consignes, action non faite)", () => {
+  const prompt = voiceSystemPrompt("neutre")
+  assert.match(prompt, /CE QUE TU PEUX DIRE/)
+  assert.match(prompt, /CE QUE TU NE DIS JAMAIS/)
+  assert.match(prompt, /PÉRIMÈTRE ET ACTIONS/)
+  assert.match(prompt, /Ce que les outils t'ont réellement renvoyé pour les données d'Aven/)
+  // La connaissance générale ne passe pas par un outil : elle reste permise.
+  assert.match(prompt, /Pour une connaissance générale, réponds depuis ton savoir/)
+  assert.match(prompt, /clé d'API/)
+  assert.match(prompt, /nom de tes outils/)
+  assert.match(prompt, /réponds depuis ton savoir/)
+  assert.match(prompt, /une intention n'est pas une action/i)
+  assert.match(prompt, /opinion présentée comme un fait/i)
+})
+
 test("réponse : modèle gratuit, consigne deux phrases et personnalité", async () => {
   let captured
   const fetchImpl = async (url, init) => {
     captured = { url, body: JSON.parse(init.body) }
     return ok({ choices: [{ message: { content: "  Bonjour. Comment vas-tu ?  " } }] })
   }
-  const text = await answerVoiceQuestion("Salut", { apiKey: "cle", fetchImpl, personality: "direct" })
+  // v11.9.0 : la réponse rendue porte le texte et, éventuellement, la
+  // proposition d'action en attente de confirmation.
+  const { text, pending } = await answerVoiceQuestion("Salut", { apiKey: "cle", fetchImpl, personality: "direct" })
   assert.equal(text, "Bonjour. Comment vas-tu ?")
+  assert.equal(pending, undefined)
   assert.match(captured.url, /\/chat\/completions$/)
   assert.equal(captured.body.model, "openai/gpt-oss-20b")
   assert.match(captured.body.messages[0].content, /FRANÇAIS/)
-  assert.match(captured.body.messages[0].content, /deux phrases/)
+  assert.match(captured.body.messages[0].content, /1 à 2 phrases/)
   assert.match(captured.body.messages[0].content, /direct/i)
   assert.doesNotMatch(JSON.stringify(captured.body), /openrouter/i)
   assert.doesNotMatch(JSON.stringify(captured.body), /paid/i)
+})
+
+// v11.16.0 : une note demandée comme CONTENU est rédigée par un appel dédié.
+// Le modèle ne reçoit aucun outil d'écriture et doit produire le texte, jamais
+// recopier la demande.
+test("composition de note : le modèle rédige, sans outil et sans recopier", async () => {
+  let captured
+  const fetchImpl = async (url, init) => {
+    captured = { url, body: JSON.parse(init.body) }
+    return ok({ choices: [{ message: { content: "  Une boucle `for` répète un bloc pour chaque élément d'une séquence.  " } }] })
+  }
+  const result = await composeVoiceNote("La note doit contenir un résumé de comment faire une boucle en Python.", {
+    apiKey: "cle",
+    fetchImpl,
+  })
+  assert.match(result.content, /boucle/)
+  assert.match(captured.url, /\/chat\/completions$/)
+  assert.equal(captured.body.model, "openai/gpt-oss-20b")
+  assert.equal(captured.body.tools, undefined, "aucun outil d'écriture dans la composition")
+  assert.ok(captured.body.max_tokens >= 700, "assez de place pour un vrai résumé")
+  assert.match(captured.body.messages[0].content, /ne recopies pas la demande/i)
+  assert.match(captured.body.messages[0].content, /sans titre/i)
+  assert.equal(captured.body.messages[1].content, "La note doit contenir un résumé de comment faire une boucle en Python.")
+  assert.doesNotMatch(JSON.stringify(captured.body), /openrouter|paid/i)
+})
+
+test("composition de note : une réponse vide est un échec dit, pas une note", async () => {
+  const fetchImpl = async () => ok({ choices: [{ message: { content: "   " } }] })
+  await assert.rejects(
+    composeVoiceNote("fais une note sur les boucles", { apiKey: "cle", fetchImpl }),
+    /aucun contenu/i,
+  )
+})
+
+test("composition de note : nettoyage des habits de réponse", () => {
+  assert.equal(cleanComposedNote("```markdown\nUne boucle.\n```"), "Une boucle.")
+  assert.equal(cleanComposedNote("Voici un résumé : Une boucle."), "Une boucle.")
+  assert.match(composeNoteSystemPrompt(), /français/)
+  assert.match(composeNoteSystemPrompt(), /ne recopies pas la demande/i)
 })
 
 test("réponse : un 429 lève le message de quota", async () => {
@@ -115,56 +196,8 @@ test("nettoyage avant synthèse : Markdown, liens et code retirés", () => {
   assert.equal(sanitizeSpeechText("**Aven** : fini."), "Aven : fini.")
 })
 
-// v11.3.0 : la synthèse neuronale est testée sans réseau — le transport est
-// injecté. Deux comportements comptent : une limite de débit se retente UNE fois,
-// une panne ordinaire ne se retente pas et garde un message lisible.
-test("voix neuronale : un 429 est retenté une fois, avec le texte nettoyé", async () => {
-  let calls = 0
-  const requests = []
-  const waits = []
-  const audio = await synthesizeEdgeSpeech("Bonjour **Aven**. Voici `du code`.", "fr-FR-DeniseNeural", {
-    request: async (text) => {
-      requests.push(text)
-      calls++
-      if (calls === 1) throw new Error("Le service vocal Edge a refusé la connexion (HTTP 429).")
-      return new Uint8Array([1, 2, 3])
-    },
-    wait: async (ms) => { waits.push(ms) },
-  })
-  assert.deepEqual([...audio], [1, 2, 3])
-  assert.equal(calls, 2, "une seule seconde tentative")
-  assert.deepEqual(waits, [1_200], "le délai vient de la constante, pas d'un littéral")
-  assert.deepEqual(requests, ["Bonjour Aven. Voici du code.", "Bonjour Aven. Voici du code."])
-})
-
-test("voix neuronale : une panne ordinaire n'est pas retentée", async () => {
-  let calls = 0
-  await assert.rejects(
-    synthesizeEdgeSpeech("Bonjour.", "fr-FR-DeniseNeural", {
-      request: async () => {
-        calls++
-        throw new Error("Le service vocal Edge a refusé la connexion (HTTP 503).")
-      },
-      wait: async () => undefined,
-    }),
-    /HTTP 503/,
-  )
-  assert.equal(calls, 1)
-})
-
-test("voix neuronale : un texte vide n'appelle pas le réseau", async () => {
-  let calls = 0
-  await assert.rejects(
-    synthesizeEdgeSpeech("   ", "fr-FR-DeniseNeural", {
-      request: async () => {
-        calls++
-        return new Uint8Array([1])
-      },
-    }),
-    /Aucun texte à prononcer/,
-  )
-  assert.equal(calls, 0)
-})
+// v11.14.0 : la synthèse neuronale (Edge) et ses tests ont été retirées avec
+// le service : il ne reste que la synthèse Windows locale, testée ci-dessous.
 
 test("voix Windows : liste nettoyée", async () => {
   const voices = await listWindowsVoices(async () => "Microsoft Hortense\r\nMicrosoft Paul\r\n\r\n")

@@ -1,76 +1,117 @@
-/* v11.0.0 : charpente du « Poste » — bandeau d'état, rail d'instruments,
-   onglets, scène, inspecteur, barre de commande. DA DRONE : filets de 1 px,
-   grille de points, orange signal, mono. Aucune ombre douce, aucun verre,
-   aucun rayon large. */
+/* v12.0.0 : charpente du « Poste » — en-tête unique (marque, section, agent
+   compact, contrôles), scène, inspecteur en tiroir, barre de commande, et la
+   constellation flottante. Aucun rail permanent, aucun dock : la navigation
+   est temporaire. DA : filets de 1 px, grille de points, orange braise, mono. */
 
 .wb-app {
+  position: relative;
   height: 100dvh;
   display: grid;
-  grid-template-rows: var(--wb-status-h) minmax(0, 1fr);
+  grid-template-rows: var(--wb-header-h) minmax(0, 1fr);
   background-color: var(--bg);
+  /* v12.0.0 : grille de points du brief, plus large et plus discrète qu'en
+     v11.0.0 — elle doit se lire dans le vide, jamais derrière du texte dense. */
   background-image:
-    radial-gradient(circle at 50% -20%, color-mix(in srgb, var(--signal) 6%, transparent), transparent 55%),
+    radial-gradient(circle at 50% 18%, color-mix(in srgb, var(--signal) 5%, transparent), transparent 58%),
     radial-gradient(circle, var(--grid-dot) 1px, transparent 1px);
-  background-size: 100% 100%, 18px 18px;
+  background-size: 100% 100%, 22px 22px;
   color: var(--text);
   font-family: var(--font-ui);
   font-size: var(--font-size-md);
   overflow: hidden;
 }
+/* v12.0.0 : le cadre de fenêtre du brief — un filet gris-vert de 1 px, posé
+   au-dessus de tout et transparent au pointeur. Il ne concurrence jamais le
+   contenu : il passe par `--border-strong` et ne porte aucune autre fonction. */
+.wb-app::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  border: 1px solid var(--border-strong);
+  pointer-events: none;
+  z-index: 45;
+}
 
-/* ── Bandeau d'état : télémétrie ─────────────────────────────────────────── */
+/* ── En-tête : la seule barre permanente ─────────────────────────────────── */
 
 .wb-status {
+  /* Trois colonnes : la colonne centrale est centrée sur la FENÊTRE (1fr auto 1fr),
+     pas sur l'espace restant — l'agent reste au milieu optique du Poste. */
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  gap: 16px;
-  min-height: var(--wb-status-h);
-  padding: 0 14px;
+  gap: 12px;
+  min-height: var(--wb-header-h);
+  padding: 0 12px;
   border-bottom: 1px solid var(--border);
-  /* v11.0.0 : le bandeau porte du texte mono 11 px sur la grille de points —
-     surface ≥ 90 % opaque (AGENTS.md §12.3), jamais du texte sur du verre. */
-  background: color-mix(in srgb, var(--panel-solid) 94%, transparent);
-  font-family: var(--font-mono);
-  font-size: var(--font-size-xs);
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  color: var(--muted);
+  background: color-mix(in srgb, var(--panel-solid) 96%, transparent);
+  position: relative;
+  z-index: 5;
 }
 
 .wb-status-left,
-.wb-status-right { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.wb-status-right { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .wb-status-right { justify-content: flex-end; }
-.wb-status-center { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
+/* v12.0.0 : la colonne centrale ne fait QUE la largeur de l'ancre (42 px). L'état
+   est posé à côté en absolu : sans cela, le texte décalait la sphère d'une demi-
+   largeur de libellé et l'agent n'était plus au centre de la fenêtre (mesuré :
+   639 px au lieu de 683). */
+.wb-status-center { position: relative; display: flex; align-items: center; justify-content: center; width: 42px; white-space: nowrap; }
+
+/* Marque : le retour à l'accueil est une action distincte, jamais la poignée. */
+.wb-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px 4px 2px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+.wb-brand .brand-mark { width: 24px; height: 24px; border-radius: var(--radius-sm); display: grid; place-items: center; background: color-mix(in srgb, var(--signal) 12%, transparent); color: var(--accent-ink); }
+.wb-brand-word { font-size: var(--font-size-sm); font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
+.wb-brand:hover .wb-brand-word { color: var(--accent-ink); }
+.wb-status-sep { width: 1px; height: 14px; background: var(--border-strong); flex: 0 0 auto; }
+
+/* Section active : icône + titre, la même vérité que la constellation. */
+.wb-section { display: inline-flex; align-items: center; gap: 7px; min-width: 0; color: var(--text); }
+.wb-section > svg { color: var(--accent-ink); flex: 0 0 auto; }
+/* v12.0.0 : le titre de section porte la voix TECHNIQUE du brief (mono, petites
+   capitales, interlettrage) — c'est un libellé d'instrument, pas un titre de page. */
+.wb-section-title { margin: 0; font-family: var(--font-mono); font-size: var(--font-size-xs); font-weight: 600; letter-spacing: .16em; text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wb-section-count { font-family: var(--font-mono); font-size: var(--font-size-xs); color: var(--muted); }
 
 .wb-status-workspace {
   display: inline-flex;
   align-items: center;
   gap: 7px;
   min-width: 0;
-  border: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--text);
-  font: inherit;
-  letter-spacing: inherit;
-  text-transform: none;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  letter-spacing: .04em;
   cursor: pointer;
-  padding: 2px 0;
-  max-width: 46vw;
+  padding: 3px 6px;
+  max-width: 34vw;
 }
-.wb-status-workspace span:last-child {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.wb-status-workspace:hover { color: var(--signal); }
-.wb-status-path { color: var(--muted); text-transform: none; letter-spacing: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.wb-status-sep { width: 1px; height: 12px; background: var(--border-strong); }
-.wb-status-engine { display: inline-flex; align-items: center; gap: 6px; color: var(--text); }
+.wb-status-workspace span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wb-status-workspace:hover { color: var(--text); border-color: var(--border); }
+.wb-status-path { color: var(--muted); font-family: var(--font-mono); font-size: var(--font-size-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 26vw; }
+.wb-status-engine { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-family: var(--font-mono); font-size: var(--font-size-xs); letter-spacing: .08em; text-transform: uppercase; }
 .wb-status-engine .status-dot { width: 6px; height: 6px; box-shadow: none; }
 .wb-status-engine[data-state="error"] { color: var(--danger); }
-.wb-status-key { color: var(--muted); }
+.wb-status-key { color: var(--muted); font-family: var(--font-mono); font-size: var(--font-size-xs); max-width: 18ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wb-status-key b { color: var(--text); font-weight: 600; }
+
+/* L'ancre de l'agent compact : c'est ELLE que la sphère unique mesure, jamais
+   un rectangle deviné. Le calque dédié (plus bas) porte le canvas. */
+.wb-agent-anchor { display: block; width: 42px; height: 42px; flex: 0 0 auto; }
+.wb-agent-state { position: absolute; left: calc(100% + 10px); top: 50%; transform: translateY(-50%); font-family: var(--font-mono); font-size: var(--font-size-xs); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); max-width: 34ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wb-agent-state[data-error="true"] { color: var(--danger); text-transform: none; letter-spacing: 0; font-family: var(--font-ui); }
 /* v11.1.0 : agent vocal — micro, phase et interruption dans le bandeau. L'état
    est porté par le libellé (role=status), la couleur ne fait que renforcer. */
 .wb-voice { display: inline-flex; align-items: center; gap: 6px; padding-left: 10px; border-left: 1px solid var(--rule); }
@@ -86,140 +127,50 @@
 .wb-voice-error { font-family: var(--font-ui); text-transform: none; letter-spacing: 0; max-width: 34ch; overflow: hidden; text-overflow: ellipsis; }
 .wb-voice-stop { width: 24px; height: 24px; padding: 0; }
 
-/* ── Corps : rail · scène · inspecteur ───────────────────────────────────── */
+/* ── Corps : scène · inspecteur (tiroir) · commande ─────────────────────── */
 
 .wb-body {
+  position: relative;
   display: grid;
-  grid-template-columns: var(--wb-rail-w) minmax(0, 1fr) var(--wb-inspector-w);
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) var(--wb-command-h);
   min-height: 0;
   overflow: hidden;
 }
 
-.wb-body[data-rail="wide"] { grid-template-columns: var(--wb-rail-wide) minmax(0, 1fr) var(--wb-inspector-w); }
-.wb-body[data-inspector="closed"] { grid-template-columns: var(--wb-rail-w) minmax(0, 1fr) 0; }
-.wb-body[data-rail="wide"][data-inspector="closed"] { grid-template-columns: var(--wb-rail-wide) minmax(0, 1fr) 0; }
-
-.wb-rail {
-  grid-row: 1 / 3;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  border-right: 1px solid var(--border);
-  background: color-mix(in srgb, var(--panel) 70%, transparent);
-  overflow: hidden;
-}
-
-.wb-rail-top {
-  display: grid;
-  gap: 2px;
-  padding: 8px 6px;
-  border-bottom: 1px solid var(--rule);
-}
-.wb-rail-brand {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  min-height: 34px;
-  padding: 0 6px;
-  border: 0;
-  background: transparent;
-  color: var(--text);
-  cursor: pointer;
-  text-align: left;
-}
-.wb-rail-brand .brand-mark { width: 26px; height: 26px; border-radius: var(--radius-sm); flex: 0 0 auto; }
-.wb-rail-brand-copy { display: grid; min-width: 0; line-height: 1.1; }
-.wb-rail-brand-copy strong { font-size: var(--font-size-sm); font-weight: 700; letter-spacing: -.01em; }
-.wb-rail-brand-copy small { font-family: var(--font-mono); font-size: var(--font-size-xs); color: var(--muted); text-transform: uppercase; letter-spacing: .08em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-.wb-rail-nav { display: grid; gap: 1px; padding: 8px 6px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
-.wb-rail-label { padding: 10px 8px 4px; }
-.wb-rail-item {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 34px;
-  padding: 0 8px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--muted);
-  font: inherit;
-  font-size: var(--font-size-sm);
-  font-weight: 500;
-  text-align: left;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.wb-rail-item svg { flex: 0 0 auto; }
-.wb-rail-item span:last-child { overflow: hidden; text-overflow: ellipsis; }
-.wb-rail-item:hover { color: var(--text); background: color-mix(in srgb, var(--text) 4%, transparent); }
-.wb-rail-item[aria-current="page"] {
-  color: var(--text);
-  background: color-mix(in srgb, var(--signal) 8%, transparent);
-  border-color: color-mix(in srgb, var(--signal) 28%, transparent);
-}
-.wb-rail-item[aria-current="page"]::before {
-  content: "";
-  position: absolute;
-  left: -6px;
-  top: 6px;
-  bottom: 6px;
-  width: 2px;
-  background: var(--signal);
-}
-.wb-rail-item[aria-current="page"] svg { color: var(--signal); }
-.wb-rail-count {
-  margin-left: auto;
-  font-family: var(--font-mono);
-  font-size: var(--font-size-xs);
-  color: var(--muted);
-}
-
-.wb-rail-bottom { margin-top: auto; display: grid; gap: 2px; padding: 8px 6px; border-top: 1px solid var(--rule); }
-.wb-rail-status { display: flex; align-items: center; gap: 8px; min-height: 28px; padding: 0 8px; font-family: var(--font-mono); font-size: var(--font-size-xs); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
-.wb-rail-status .status-dot { width: 6px; height: 6px; box-shadow: none; }
-
-/* Rail replié : icônes seules, libellés masqués (le titre reste l'infobulle). */
-.wb-body[data-rail="narrow"] .wb-rail-brand-copy,
-.wb-body[data-rail="narrow"] .wb-rail-item span:not(.wb-rail-count),
-.wb-body[data-rail="narrow"] .wb-rail-label,
-.wb-body[data-rail="narrow"] .wb-rail-status span:last-child { display: none; }
-.wb-body[data-rail="narrow"] .wb-rail-item { justify-content: center; padding: 0; }
-.wb-body[data-rail="narrow"] .wb-rail-count { display: none; }
-
 /* ── Colonne principale ──────────────────────────────────────────────────── */
 
 .wb-main {
-  grid-column: 2;
   grid-row: 1;
   display: grid;
-  grid-template-rows: var(--wb-tabs-h) minmax(0, 1fr);
+  /* v12.0.0 : UNE rangée par défaut. La rangée 0 des onglets n'existait que par
+     le gabarit : sans bandeau, la scène tombait dans la rangée de hauteur nulle
+     et tout son contenu était rogné (la sphère, en calque fixe, restait seule
+     visible — le défaut ne se voyait qu'à l'écran). */
+  grid-template-rows: minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
-  border-right: 1px solid var(--border);
 }
+/* v12.0.0 : le bandeau de sessions n'existe QUE s'il y a plusieurs
+   conversations ouvertes. Un instrument n'a jamais de « barre d'onglets » :
+   la navigation primaire est la constellation, jamais une rangée permanente. */
+.wb-main[data-sessions="true"] { grid-template-rows: var(--wb-tabs-h) minmax(0, 1fr); }
 
 .wb-tabs {
   display: flex;
   align-items: stretch;
-  gap: 0;
   min-width: 0;
-  border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--panel) 62%, transparent);
+  border-bottom: 1px solid var(--rule);
+  background: color-mix(in srgb, var(--panel) 55%, transparent);
   overflow-x: auto;
   overflow-y: hidden;
 }
-/* Onglet = conteneur + deux boutons frères (libellé / fermer) : jamais un bouton
-   dans un bouton (HTML invalide, lecteurs d'écran perdus). */
 .wb-tab {
   position: relative;
   display: inline-flex;
   align-items: stretch;
-  max-width: 230px;
-  min-width: 92px;
+  max-width: 220px;
+  min-width: 88px;
   border-right: 1px solid var(--rule);
   color: var(--muted);
   white-space: nowrap;
@@ -232,18 +183,17 @@
   left: 0;
   right: 0;
   top: 0;
-  height: 2px;
+  height: 1px;
   background: var(--signal);
   z-index: 1;
 }
 .wb-tab-main {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   flex: 1;
   min-width: 0;
-  /* v11.3.0 : 2 px à droite — la croix occupe le reste de la marge. */
-  padding: 0 2px 0 12px;
+  padding: 0 2px 0 10px;
   border: 0;
   background: transparent;
   color: inherit;
@@ -255,12 +205,10 @@
 }
 .wb-tab-main:focus-visible { outline-offset: -2px; }
 .wb-tab-kind { font-family: var(--font-mono); font-size: var(--font-size-xs); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
-.wb-tab[data-selected="true"] .wb-tab-kind { color: var(--signal); }
+.wb-tab[data-selected="true"] .wb-tab-kind { color: var(--accent-ink); }
 .wb-tab-label { overflow: hidden; text-overflow: ellipsis; }
-/* v11.3.0 : la croix revient. v11.1.0 l'avait retirée pour alléger la barre, mais
-   une souris ne pouvait alors plus fermer d'onglet du tout (Ctrl+W seulement) : la
-   lisibilité de la barre ne vaut pas une action impossible. Discrète au repos,
-   nette au survol et au focus ; Aujourd'hui n'en a pas (plancher du Poste). */
+/* Chaque onglet fermable porte sa croix (v11.3.0) : un raccourci ne remplace
+   jamais une action visible. */
 .wb-tab-close {
   display: inline-flex;
   align-items: center;
@@ -280,8 +228,10 @@
 .wb-tab:hover .wb-tab-close,
 .wb-tab[data-selected="true"] .wb-tab-close { color: var(--text); }
 .wb-tab-close:hover { background: color-mix(in srgb, var(--text) 10%, transparent); }
-.wb-tab-close:active { background: color-mix(in srgb, var(--text) 16%, transparent); }
 .wb-tab-close:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+/* v12.0.0 : press-state homogène des surfaces cliquables (règle F9 de v10.2.0) —
+   le même geste que les contrôles segmentés, avec les tokens de temps du projet. */
+.wb-tab:active { transform: scale(.99); transition: transform var(--dur-fast) var(--ease-out); }
 .wb-tabs-spacer { flex: 1; min-width: 8px; }
 .wb-tabs-tools { display: flex; align-items: center; gap: 2px; padding: 0 6px; }
 .wb-tabs-tools .button { min-height: 26px; padding: 0 7px; }
@@ -300,24 +250,33 @@
   position: absolute;
   inset: 0;
   background-image: radial-gradient(circle, var(--grid-dot) 1px, transparent 1px);
-  background-size: 18px 18px;
-  opacity: .55;
+  background-size: 22px 22px;
+  opacity: .5;
   pointer-events: none;
 }
 .wb-stage > * { position: relative; z-index: 1; }
 
 /* ── Inspecteur ──────────────────────────────────────────────────────────── */
 
+/* v12.0.0 : l'inspecteur n'est plus une colonne. C'est un tiroir fermé par
+   défaut : le Poste ne perd jamais de largeur au profit d'un panneau dormant.
+   Son contenu (session, modèle, mode, sections de Réglages, événements) est
+   inchangé — seule sa présence permanente disparaît. */
 .wb-inspector {
-  grid-column: 3;
-  grid-row: 1;
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: var(--wb-command-h);
+  z-index: 20;
   display: flex;
   flex-direction: column;
-  min-width: 0;
+  width: var(--wb-inspector-w);
+  max-width: 82vw;
   min-height: 0;
-  border-left: 1px solid var(--border);
-  background: color-mix(in srgb, var(--panel) 78%, transparent);
+  border-left: 1px solid var(--border-strong);
+  background: var(--panel-solid);
   overflow: hidden;
+  box-shadow: -18px 0 40px rgba(0, 0, 0, .28);
 }
 .wb-body[data-inspector="closed"] .wb-inspector { display: none; }
 
@@ -402,7 +361,7 @@
 /* ── Barre de commande ───────────────────────────────────────────────────── */
 
 .wb-command {
-  grid-column: 2 / 4;
+  grid-column: 1;
   grid-row: 2;
   position: relative;
   display: flex;
@@ -412,7 +371,7 @@
   border-top: 1px solid var(--border);
   background: color-mix(in srgb, var(--panel) 90%, transparent);
 }
-.wb-body[data-inspector="closed"] .wb-command { grid-column: 2 / 4; }
+
 
 .wb-command-form {
   flex: 1;
@@ -543,83 +502,327 @@
 .instrument-actions .button { min-height: 30px; padding: 0 9px; font-size: var(--font-size-xs); }
 .instrument-body { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 
-/* ── Aujourd'hui : planche de données ────────────────────────────────────── */
+/* ── Accueil : la scène de l'agent ────────────────────────────────────────── */
 
-.wb-home { display: flex; flex-direction: column; min-height: 0; height: 100%; overflow: hidden; }
-.wb-home-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; padding: 18px 20px 14px; border-bottom: 1px solid var(--rule); }
-.wb-home-head h1 { margin: 2px 0 0; font-size: var(--font-size-3xl); line-height: 1; letter-spacing: -.04em; }
-.wb-home-head p { margin: 4px 0 0; color: var(--muted); font-size: var(--font-size-sm); }
-.wb-home-meta { display: flex; align-items: center; gap: 14px; font-family: var(--font-mono); font-size: var(--font-size-xs); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
-.wb-home-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 14px 20px 24px; }
-.wb-home-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 12px; }
-.wb-tile {
-  grid-column: span 6;
+.wb-home {
+  position: relative;
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  min-width: 0;
-  min-height: 180px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  /* v12.0.0 (passe graphique) : la référence laisse une marge large à gauche —
+     le titre part du bord intérieur, pas du centre de la fenêtre. */
+  padding: clamp(16px, 3.2vh, 30px) clamp(20px, 4vw, 64px) clamp(12px, 2.2vh, 22px);
   overflow: hidden;
 }
-.wb-tile[data-span="4"] { grid-column: span 4; }
-.wb-tile[data-span="8"] { grid-column: span 8; }
-.wb-tile[data-span="12"] { grid-column: span 12; }
-.wb-tile-head { display: flex; align-items: center; gap: 9px; min-height: 34px; padding: 0 12px; border-bottom: 1px solid var(--rule); }
-.wb-tile-head strong { font-family: var(--font-mono); font-size: var(--font-size-xs); font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--text); }
-.wb-tile-head .wb-num { margin-left: auto; color: var(--signal); }
-.wb-tile-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 8px; display: grid; align-content: start; gap: 2px; }
-.wb-tile-empty { padding: 12px 6px; color: var(--muted); font-size: var(--font-size-sm); }
-.wb-tile-action { margin: 0 8px 8px; }
-
-.wb-row {
-  display: flex;
-  align-items: center;
-  gap: 9px;
+/* Cadre de mesure : quatre équerres de 1 px, la signature d'instrument de la
+   référence. Purement décoratif — il ne capte aucun pointeur et ne dit rien de
+   faux : ce sont des repères de cadre, pas des coordonnées. */
+.wb-home::before {
+  content: "";
+  position: absolute;
+  inset: 12px 18px;
+  pointer-events: none;
+  opacity: .5;
+  background:
+    linear-gradient(var(--border-strong), var(--border-strong)) left top / 16px 1px no-repeat,
+    linear-gradient(var(--border-strong), var(--border-strong)) left top / 1px 16px no-repeat,
+    linear-gradient(var(--border-strong), var(--border-strong)) right top / 16px 1px no-repeat,
+    linear-gradient(var(--border-strong), var(--border-strong)) right top / 1px 16px no-repeat,
+    linear-gradient(var(--border-strong), var(--border-strong)) left bottom / 16px 1px no-repeat,
+    linear-gradient(var(--border-strong), var(--border-strong)) left bottom / 1px 16px no-repeat,
+    linear-gradient(var(--border-strong), var(--border-strong)) right bottom / 16px 1px no-repeat,
+    linear-gradient(var(--border-strong), var(--border-strong)) right bottom / 1px 16px no-repeat;
+}
+.wb-home-stack {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  justify-items: center;
   width: 100%;
-  min-height: 38px;
-  padding: 5px 7px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text);
-  font: inherit;
+  text-align: center;
+}
+.wb-home-title {
+  margin: 0;
+  /* v12.0.0 : la seule occurrence de la voix condensée du brief. La référence en
+     fait la PREMIÈRE masse de la page : alignée à gauche, une seule ligne, à
+     l'échelle de la fenêtre — le token est borné par la hauteur pour ne jamais
+     manger la sphère. */
+  font-family: var(--font-display);
+  font-size: var(--font-size-display);
+  line-height: .84;
+  letter-spacing: -.015em;
+  font-weight: 700;
+  font-stretch: 87.5%;
+  text-transform: uppercase;
   text-align: left;
+  white-space: nowrap;
+  color: var(--text);
+  justify-self: stretch;
+}
+/* L'ancre de la sphère au repos : une boîte réelle, mesurée par le calque de
+   l'agent. Elle ne peint rien — le canvas vit au-dessus. */
+.wb-home-agent {
+  width: min(44vh, 340px);
+  height: min(44vh, 340px);
+  margin-top: clamp(6px, 1.4vh, 14px);
+  pointer-events: none;
+}
+.wb-home-ask { margin: 4px 0 0; font-size: var(--font-size-md); color: var(--text); letter-spacing: .005em; }
+.wb-home-voice { margin-top: clamp(8px, 2vh, 20px); }
+.wb-home-mic {
+  position: relative;
+  width: 34px;
+  min-height: 34px;
+  height: 34px;
+  padding: 0;
+  border-color: transparent;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+/* Un glyphe, pas une pastille : le survol éclaire le signe, sans lever la cible. */
+.wb-home-mic:hover:not(:disabled) { transform: none; box-shadow: none; border-color: transparent; background: var(--accent-soft); color: var(--text); }
+.wb-home-mic[data-live="true"] { color: var(--text); }
+.wb-home-mic[data-live="true"]::after {
+  content: "";
+  position: absolute;
+  right: 1px;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  margin-top: -2px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+.wb-home-status {
+  margin-top: 7px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: var(--muted);
+  min-height: 1.4em;
+}
+.wb-home-status[data-error="true"] { color: var(--danger); text-transform: none; letter-spacing: 0; font-family: var(--font-ui); }
+
+/* v12.0.0 : quand la constellation s'ouvre, l'accueil LIBÈRE le bas de la scène.
+   Les cercles flottent là où vivaient la question, le micro et l'état — sinon ils
+   se peignent par-dessus (mesuré à l'écran : trois textes sous cinq cercles).
+   L'agent, le titre et l'en-tête (avec son micro) ne bougent pas. */
+.wb-app[data-nav="open"] .wb-home-ask,
+.wb-app[data-nav="open"] .wb-home-voice,
+.wb-app[data-nav="open"] .wb-home-status {
+  opacity: 0;
+  transform: translateY(6px);
+  pointer-events: none;
+  transition: opacity var(--dur-med) var(--ease-out), transform var(--dur-med) var(--ease-out);
+}
+
+/* ── L'agent : un seul canvas, deux ancres ───────────────────────────────── */
+
+/* Le calque est fixe pour traverser l'en-tête et la scène sans être rogné par
+   un ancêtre en overflow: hidden. Il ne capte jamais le pointeur. */
+.aven-agent-layer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 6;
+  pointer-events: none;
+  /* v12.0.0 : le repli est une étape ≤ 300 ms ; deux étapes qui se chevauchent
+     donnent la transition perçue de ~450 ms demandée par le brief, sans jamais
+     dépasser le plafond de mouvement d'AGENTS.md §12.4. */
+  transition: transform var(--dur-slow) var(--ease-out);
+  will-change: transform;
+  /* Mesure en haut-gauche : le scale doit partir du coin que le JS positionne. */
+  transform-origin: top left;
+}
+.aven-agent-layer[data-motion="instant"] { transition-duration: .01ms; }
+.aven-agent-canvas { display: block; }
+
+/* ── Constellation de navigation ─────────────────────────────────────────── */
+
+/* v12.0.0 : les cercles flottent INDÉPENDAMMENT. Aucun ovale, aucun dock, aucun
+   conteneur peint, aucun filet entre eux : la purge du brief est structurelle. */
+.wb-nav {
+  /* v12.0.0 : ancrée sur le CORPS, pas sur la fenêtre. Un bandeau d'état posé en
+     bas de fenêtre décalait la poignée de 28 px — elle tombait dans la barre de
+     commande. Dans .wb-body, elle reste juste au-dessus de la barre, toujours. */
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--wb-command-h) + 2px);
+  z-index: 30;
+  display: grid;
+  justify-items: center;
+  pointer-events: none;
+}
+.wb-nav-zone {
+  position: relative;
+  width: 100%;
+  display: grid;
+  justify-items: center;
+  padding-bottom: 6px;
+  pointer-events: auto;
+}
+.wb-nav-zone[data-open="false"] { pointer-events: none; }
+.wb-nav-zone[data-open="false"] .wb-nav-trigger { pointer-events: auto; }
+
+.wb-nav-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 26px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  letter-spacing: .14em;
+  text-transform: uppercase;
   cursor: pointer;
 }
-.wb-row:hover { border-color: var(--border); background: color-mix(in srgb, var(--text) 4%, transparent); }
-.wb-row:focus-visible { border-color: var(--signal); }
-/* v11.0.0 : press-state homogène des surfaces cliquables du Poste (règle F9 de
-   v10.2.0) — mêmes tokens de temps que le reste, aucun mouvement hors transform. */
-.wb-row:active,
-.wb-rail-item:active,
-.wb-tab:active { transform: scale(.99); transition: transform var(--dur-fast) var(--ease-out); }
-.wb-row-icon { color: var(--muted); display: grid; place-items: center; flex: 0 0 auto; }
-.wb-row-copy { display: grid; gap: 1px; min-width: 0; flex: 1; }
-.wb-row-copy strong { font-size: var(--font-size-sm); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.wb-row-copy small { font-family: var(--font-mono); font-size: var(--font-size-xs); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.wb-row-meta { font-family: var(--font-mono); font-size: var(--font-size-xs); color: var(--muted); }
-
-.wb-capture { display: grid; gap: 8px; padding: 10px 12px 12px; }
-.wb-capture textarea {
-  width: 100%;
-  min-height: 76px;
-  resize: vertical;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--panel-solid);
-  color: var(--text);
-  font: inherit;
-  font-size: var(--font-size-sm);
-  padding: 8px;
+/* v12.0.0 : au repos, le repère est un SYMBOLE (trois points), pas un bouton
+   libellé — le brief demande un point ou un trait fin au bord inférieur. Le mot
+   se révèle au survol et au clavier ; l'aria-label le dit toujours. */
+.wb-nav-word {
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: max-width var(--dur-med) var(--ease-out), opacity var(--dur-med) var(--ease-out);
 }
-.wb-capture textarea:focus { outline: 0; border-color: var(--accent-border); }
-.wb-capture-actions { display: flex; gap: 6px; justify-content: flex-end; }
+.wb-nav-trigger:hover .wb-nav-word,
+.wb-nav-trigger:focus-visible .wb-nav-word,
+.wb-nav-trigger[aria-expanded="true"] .wb-nav-word { max-width: 12ch; opacity: 1; }
+.wb-nav-trigger:hover,
+.wb-nav-trigger[aria-expanded="true"] { color: var(--text); border-color: var(--border); background: color-mix(in srgb, var(--panel-solid) 80%, transparent); }
+/* v12.0.0 : le repère du bas est une petite anse, pas trois points — la
+   référence n'a qu'un trait courbe au bord inférieur. Le libellé reste au
+   survol/focus, la surface cliquable ne change pas. */
+.wb-nav-dots {
+  display: inline-block;
+  width: 20px;
+  height: 6px;
+  border: 1px solid currentColor;
+  border-top: 0;
+  /* Quatre tokens : la sonde de conventions refuse un 0 littéral dans un rayon. */
+  border-radius: var(--radius-xs) var(--radius-xs) var(--radius-pill) var(--radius-pill);
+  opacity: .75;
+}
+.wb-nav-dots i { display: none; }
+
+.wb-nav-arc {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  /* L'arc occupe TOUTE la largeur de la fenêtre : les nœuds se placent par
+     rapport au centre (left: calc(50% + x)). Un left:50% ici décalerait l'arc
+     d'une demi-fenêtre et pousserait les cercles hors écran. */
+  left: 0;
+  width: 100%;
+  height: 190px;
+  pointer-events: none;
+}
+.wb-nav-node {
+  position: absolute;
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  transform: translateX(-50%);
+  pointer-events: auto;
+}
+.wb-nav-circle {
+  display: grid;
+  place-items: center;
+  width: var(--wb-nav-size);
+  height: var(--wb-nav-size);
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  /* v12.0.0 : le cercle est un FIL, pas une pastille — la grille et la sphère
+     restent visibles derrière, comme dans la référence. */
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: transform var(--dur-med) var(--ease-out), border-color var(--dur-med) var(--ease-out), color var(--dur-med) var(--ease-out), background-color var(--dur-med) var(--ease-out);
+}
+.wb-nav-circle:hover,
+.wb-nav-circle:focus-visible { transform: scale(1.07); border-color: var(--accent-border); color: var(--text); background: var(--accent-soft); }
+.wb-nav-node[data-current="true"] .wb-nav-circle { border-color: var(--accent); color: var(--accent-ink); background: var(--accent-soft); }
+.wb-nav-label {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.wb-nav-circle:hover + .wb-nav-label,
+.wb-nav-circle:focus-visible + .wb-nav-label { color: var(--text); }
+.wb-nav-node[data-current="true"] .wb-nav-label { color: var(--accent-ink); }
+/* Ouverture : chaque cercle monte depuis la poignée, l'écart vient de l'arc pur. */
+.wb-nav-arc[data-open="true"] .wb-nav-node { animation: wb-nav-in var(--dur-slow) var(--ease-out) both; animation-delay: calc(var(--stagger-i) * 28ms); }
+@keyframes wb-nav-in { from { opacity: 0; transform: translate(-50%, 12px) scale(.92); } to { opacity: 1; transform: translate(-50%, 0) scale(1); } }
+/* Sortie : le cercle choisi reste, les autres s'écartent vers les bords et fondent. */
+.wb-nav-arc[data-leaving="true"] .wb-nav-node[data-chosen="false"] {
+  animation: wb-nav-out var(--dur-slow) var(--ease-out) both;
+  animation-delay: calc(var(--stagger-i) * 12ms);
+}
+.wb-nav-arc[data-leaving="true"] .wb-nav-node[data-chosen="true"] .wb-nav-circle {
+  /* Phase 1 du brief : le cercle choisi grandit et s'allume AVANT que les autres
+     ne partent — c'est lui le point focal de la transition. */
+  transform: scale(1.1);
+  border-color: var(--accent);
+  color: var(--on-accent);
+  background: var(--accent-fill);
+}
+@keyframes wb-nav-out {
+  to { opacity: 0; transform: translate(calc(-50% + var(--exit-x)), 40px) scale(.8); }
+}
+
+/* ── Inspecteur : tiroir, jamais une colonne permanente ──────────────────── */
 
 /* ── Surfaces existantes réhousées ───────────────────────────────────────── */
 
+/* v12.0.0 : le titre de section vit dans l'en-tête du Poste. L'instrument ne le
+   répète pas — il ne garde que ses actions, alignées à droite. */
+.instrument-compact .instrument-head-compact {
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 8px 12px;
+  background: transparent;
+  border-bottom: 1px solid var(--rule);
+}
+.instrument-compact .instrument-head-compact .instrument-description {
+  margin-right: auto;
+  max-width: 640px;
+  font-size: var(--font-size-xs);
+}
+
+/* v12.0.0 : l'historique de conversation occupe ~25 % de la largeur, l'échange
+   ~75 % (brief §5). Le réglage d'apparence reste maître : barre masquée =
+   une seule colonne, aucune position inventée. */
 .wb-stage .workspace-layout { height: 100%; min-height: 0; }
+/* v12.0.0 : l'état vide de conversation mesurait 55 vh et poussait le composeur
+   SOUS la barre de commande (mesuré : contenu 601 px dans une scène de 541 px).
+   Réduit ici : l'état vide reste aéré, le composeur redevient visible sans
+   défilement. Le réglage ne touche que le Poste, pas les autres surfaces. */
+.wb-stage .workspace-layout .empty-state { min-height: min(38vh, 280px); }
+/* Le champ de recherche des notes reprend la largeur disponible : à 76 px il
+   affichait « Recherches » tronqué dans la colonne de 285 px. */
+.wb-stage .notes-actions-row .settings-input { flex: 1 1 150px; min-width: 120px; width: auto; }
+/* Le chemin du dossier en deuxième ligne du descriptif était coupé à « ~ » :
+   il vit dans le title de l'action, pas dans une ligne tronquée. */
+.instrument-compact .instrument-description code { display: none; }
+.wb-stage .workspace-layout.sidebar-left { grid-template-columns: clamp(220px, 25%, 380px) minmax(0, 1fr); }
+.wb-stage .workspace-layout.sidebar-right { grid-template-columns: minmax(0, 1fr) clamp(220px, 25%, 380px); }
 .wb-stage .main { height: 100%; }
 .wb-stage .main-scroll { scroll-behavior: auto; }
 .wb-stage .sidebar { background: color-mix(in srgb, var(--panel) 88%, transparent); }
@@ -653,25 +856,33 @@
 /* ── Adaptations ─────────────────────────────────────────────────────────── */
 
 @media (max-width: 1180px) {
-  .wb-body,
-  .wb-body[data-rail="wide"] { grid-template-columns: var(--wb-rail-w) minmax(0, 1fr) 280px; }
-  .wb-body[data-inspector="closed"] { grid-template-columns: var(--wb-rail-w) minmax(0, 1fr) 0; }
-  :root { --wb-inspector-w: 280px; }
+  :root { --wb-inspector-w: 296px; }
 }
 
 @media (max-width: 980px) {
-  .wb-body,
-  .wb-body[data-rail="wide"],
-  .wb-body[data-inspector="closed"] { grid-template-columns: var(--wb-rail-w) minmax(0, 1fr) 0; }
-  .wb-inspector { display: none; }
-  .wb-status-center { display: none; }
-  .wb-tile, .wb-tile[data-span="4"], .wb-tile[data-span="8"] { grid-column: span 12; }
+  /* L'agent reste centré : on retire du contexte, jamais le centre. */
+  .wb-status-path,
+  .wb-status-key { display: none; }
+  .wb-agent-state { display: none; }
+  .wb-home-agent { width: min(38vh, 300px); height: min(38vh, 300px); }
+  .wb-nav-arc { height: 168px; }
+}
+
+@media (max-width: 860px) {
+  .wb-status-workspace span:last-child { display: none; }
+  :root { --wb-nav-size: var(--wb-nav-size-sm); }
 }
 
 @media (max-width: 720px) {
-  .wb-status { grid-template-columns: minmax(0, 1fr) auto; }
-  .wb-status-right { display: none; }
-  .wb-home-head { flex-direction: column; align-items: flex-start; }
-  .wb-home-meta { flex-wrap: wrap; }
-  .wb-home-scroll { padding: 12px; }
+  /* v12.0.0 : une seule rangée, toujours. Passer l'agent en deuxième ligne
+     agrandissait l'en-tête au-delà de sa hauteur de grille — donc sous la scène.
+     On retire du CONTEXTE (espace, état, commentaire), jamais les contrôles. */
+  .wb-status { gap: 8px; padding: 0 8px; }
+  .wb-status-workspace { display: none; }
+  .wb-status-sep { display: none; }
+  .wb-agent-state { display: none; }
+  .wb-home { padding: 12px 16px 16px; }
+  .wb-home-title { letter-spacing: -.02em; white-space: normal; }
+  .wb-nav-arc { height: 150px; }
+  .wb-nav-label { letter-spacing: .06em; }
 }

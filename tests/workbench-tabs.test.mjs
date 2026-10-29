@@ -96,6 +96,40 @@ test("removeChatTab : la conversation supprimée emporte son onglet", () => {
   assert.equal(state.activeId, "conv-a")
 })
 
+// v11.14.1 : supprimer la conversation OUVERTE alors qu'une autre reste ne
+// fermait pas seulement l'onglet — le Poste rendait le dernier voisin (Notes,
+// Aujourd'hui…). La conversation restante reprend l'onglet ACTIF.
+test("removeChatTab : la conversation restante reprend l'onglet actif", () => {
+  let state = openConversation(initialTabs(), "chat-a", "conv-a")
+  state = openInstrument(state, "notes")
+  state = focusTab(state, "conv-a")
+  state = removeChatTab(state, "chat-a", { chatId: "chat-b", agent: "code" })
+  assert.equal(state.activeId, "conv-a")
+  assert.equal(state.tabs.find((t) => t.id === "conv-a")?.chatId, "chat-b")
+  assert.equal(state.tabs.find((t) => t.id === "conv-a")?.agent, "code")
+  assert.equal(state.tabs.some((t) => t.chatId === "chat-a"), false)
+})
+
+// Si la conversation restante a déjà son onglet, c'est lui qui prend le focus :
+// la supprimée disparaît, l'écran reste sur une conversation.
+test("removeChatTab : l'onglet déjà ouvert de la conversation restante prend le focus", () => {
+  let state = openConversation(initialTabs(), "chat-a", "conv-a")
+  state = openConversation(state, "chat-b", "conv-b")
+  state = focusTab(state, "conv-a")
+  state = removeChatTab(state, "chat-a", { chatId: "chat-b" })
+  assert.equal(state.activeId, "conv-b")
+  assert.equal(state.tabs.some((t) => t.id === "conv-a"), false)
+  assert.equal(state.tabs.some((t) => t.chatId === "chat-a"), false)
+})
+
+// Sans conversation restante, l'onglet se ferme comme avant : le voisin.
+test("removeChatTab : sans conversation restante, le voisin devient actif", () => {
+  const state = openConversation(initialTabs(), "chat-a", "conv-a")
+  const next = removeChatTab(state, "chat-a", null)
+  assert.equal(next.activeId, "home")
+  assert.equal(next.tabs.some((t) => t.kind === "conversation"), false)
+})
+
 // v11.0.0 : le tablist se pilote aux flèches horizontales, avec Home/End.
 test("nextTabFocus : flèches horizontales avec bouclage, Home/End", () => {
   assert.equal(nextTabFocus("ArrowRight", 0, 3), 1)

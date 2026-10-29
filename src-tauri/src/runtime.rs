@@ -71,10 +71,11 @@ impl NodeRuntime {
         let (node, host, cwd) = runtime_command(app)?;
 
         let mut command = Command::new(&node);
-        // v11.5.0 : le host a besoin du dossier Piper (binaire + modèle) pour
-        // parler hors ligne. Absent, il se rabat sur la voix Windows en le disant.
-        if let Some(piper) = bundled_piper(app) {
-            command.env("AVEN_PIPER_DIR", piper);
+        // v11.10.0 : le host a besoin du dossier du moteur Pocket TTS (binaire +
+        // cache du modèle) pour parler hors ligne. v11.14.0 : absent, il se rabat
+        // sur la voix Windows en le disant — jamais un silence.
+        if let Some(pocket) = bundled_pocket(app) {
+            command.env("AVEN_POCKET_DIR", pocket);
         }
         command
             .arg(&host)
@@ -311,21 +312,21 @@ pub(crate) fn runtime_command(app: &AppHandle) -> Result<(String, PathBuf, PathB
     }
 }
 
-/// v11.5.0 : dossier de la voix locale Piper, posé par `npm run fetch:piper`.
-/// En développement il vit dans le dépôt ; en production, l'installeur l'embarque
-/// sous `runtime/piper`.
-pub(crate) fn bundled_piper(app: &AppHandle) -> Option<PathBuf> {
+/// v11.10.0 : dossier du moteur Pocket TTS, embarqué sous `runtime/pocket-tts`.
+/// v11.14.0 : absent, le host se rabat sur la voix Windows en le disant — jamais
+/// un silence.
+pub(crate) fn bundled_pocket(app: &AppHandle) -> Option<PathBuf> {
     #[cfg(debug_assertions)]
     {
         let _ = app;
-        let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/piper");
+        let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/pocket-tts");
         return if dev.is_dir() { Some(dev) } else { None };
     }
 
     #[cfg(not(debug_assertions))]
     {
         app.path()
-            .resolve("runtime/piper", BaseDirectory::Resource)
+            .resolve("runtime/pocket-tts", BaseDirectory::Resource)
             .ok()
             .filter(|path| path.is_dir())
     }

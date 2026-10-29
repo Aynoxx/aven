@@ -7,7 +7,14 @@ import type { OpenCodeApi } from "./types"
 export type TauriDeps = {
   invoke: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>
   listen: <T>(event: string, handler: (event: { payload: T }) => void) => Promise<() => void>
-  openDialog: (options: { directory: boolean; multiple: boolean; title?: string }) => Promise<string | null>
+  // v11.11.0 : le dialogue sait aussi choisir un FICHIER (avec filtres) — le
+  // clonage de voix part d'un enregistrement de référence.
+  openDialog: (options: {
+    directory: boolean
+    multiple: boolean
+    title?: string
+    filters?: { name: string; extensions: string[] }[]
+  }) => Promise<string | null>
   saveDialog: (options: {
     title?: string
     defaultPath?: string
@@ -135,6 +142,26 @@ export function createTauriApi(deps: TauriDeps): OpenCodeApi {
           return invoke<string>("aven_call", {
             method: "writeTextFile",
             args: [selected, note.markdown],
+          })
+        }
+      }
+
+      // v11.11.0 : la création de la voix clonée commence par le choix d'un
+      // enregistrement de référence. Le renderer ne lit JAMAIS ce fichier : il
+      // transmet son chemin, et le host — qui a accès au disque — fait le reste.
+      // Annuler ne déclenche aucun appel RPC.
+      if (property === "voiceCloneFromAudio") {
+        return async () => {
+          const selected = await openDialog({
+            directory: false,
+            multiple: false,
+            title: "Choisir un enregistrement de référence",
+            filters: [{ name: "Audio", extensions: ["wav", "mp3", "flac", "ogg", "opus", "m4a"] }],
+          })
+          if (typeof selected !== "string" || !selected) return null
+          return invoke<unknown>("aven_call", {
+            method: "voiceCloneFromAudio",
+            args: [selected],
           })
         }
       }

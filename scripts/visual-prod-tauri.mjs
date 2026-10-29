@@ -128,11 +128,11 @@ try {
   if (!/tauri\.localhost/.test(href)) fail(`origine inattendue : ${href}`)
   say(`PASS · origine production (${href})`)
 
-  // 2) Le cadre du Poste occupe toute la fenêtre : bandeau + rail + onglets présents
-  //    au premier écran (v11.0.0 remplace la « barre vide » de l'ancien chrome).
-  const cadre = await cdp.eval(`(() => { const q = (s) => document.querySelectorAll(s).length; return { statut: q(".wb-status"), rail: q(".wb-rail"), onglets: q(".wb-tabs"), app: q(".wb-app") } })()`)
-  if (!(cadre.statut === 1 && cadre.rail === 1 && cadre.onglets === 1 && cadre.app === 1)) fail(`cadre du Poste incomplet : ${JSON.stringify(cadre)}`)
-  say(`PASS · cadre du Poste monté (bandeau, rail, onglets)`)
+  // 2) v12.0.0 : le cadre est l'accueil « agent d'abord » — en-tête, sphère, poignée
+  //    de navigation. Aucun rail, aucun dock : leur absence est un critère, pas un oubli.
+  const cadre = await cdp.eval(`(() => { const q = (s) => document.querySelectorAll(s).length; return { statut: q(".wb-status"), app: q(".wb-app"), accueil: q(".wb-home"), agent: q("canvas.aven-agent-canvas"), poignee: q(".wb-nav-trigger"), rail: q(".wb-rail") } })()`)
+  if (!(cadre.statut === 1 && cadre.app === 1 && cadre.accueil === 1 && cadre.agent === 1 && cadre.poignee === 1 && cadre.rail === 0)) fail(`cadre du Poste incomplet : ${JSON.stringify(cadre)}`)
+  say(`PASS · cadre du Poste monté (en-tête, accueil de l'agent, poignée ; aucun rail)`)
 
   // 3) Fenêtre maximisée au lancement (1366 d'écran vs 1200 fenêtré).
   const geo = await cdp.eval(`({ iw: innerWidth, aw: screen.availWidth })`)
@@ -167,9 +167,12 @@ try {
     await cdp.shot(file)
     say(`PASS · capture ${file} (data-theme=${await cdp.eval("document.documentElement.dataset.theme")})`)
     if (theme === "dark") {
-      // Instrument Orchestration en sombre : clic réel sur le rail du Poste.
-      await cdp.eval(`[...document.querySelectorAll(".wb-rail-item")].find((b) => /Orchestration/.test(b.getAttribute("aria-label") || b.textContent))?.click()`)
-      await waitFor(cdp, `document.querySelectorAll(".tasks-principal-card").length >= 1`, 10_000)
+      // Instrument Orchestration en sombre : ouverture réelle de la constellation
+      // puis clic sur le cercle, jamais un raccourci interne.
+      await cdp.eval(`document.querySelector(".wb-nav-trigger")?.click()`)
+      await waitFor(cdp, `document.querySelectorAll(".wb-nav-circle").length === 5`, 5_000)
+      await cdp.eval(`document.querySelector('.wb-nav-circle[aria-label="Orchestration"]')?.click()`)
+      await waitFor(cdp, `document.querySelectorAll(".tasks-principal-card").length >= 1 && document.querySelectorAll(".wb-nav-circle").length === 0`, 10_000)
       await sleep(500)
       await cdp.shot(`${OUT}/prod-tasks-dark.png`)
       say(`PASS · capture ${OUT}/prod-tasks-dark.png`)
@@ -177,8 +180,10 @@ try {
   }
 
   // 7) Restauration du réglage de thème d'origine.
+  // « system » ne se relit pas dans data-theme (il est résolu en clair/sombre) :
+  // la préférence se vérifie donc dans le réglage enregistré, pas dans le rendu.
   await setTheme(theme0)
-  await waitFor(cdp, `document.documentElement.dataset.theme === "${theme0 === "dark" ? "dark" : "light"}"`, 15_000)
+  await waitFor(cdp, `document.readyState === "complete" && JSON.parse(localStorage.getItem("aven.appearance.v3") || "{}").theme === ${JSON.stringify(theme0)}`, 15_000)
   say(`PASS · thème restauré (${theme0})`)
   say("VISUEL PROD : OK")
   finish(0)

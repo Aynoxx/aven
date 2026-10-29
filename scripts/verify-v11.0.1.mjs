@@ -17,7 +17,7 @@ const cargo = read("src-tauri/Cargo.toml")
 const css = readStyles()
 const conversation = read("web/src/pages/ConversationPage.tsx")
 const shell = read("web/src/workbench/WorkbenchShell.tsx")
-const home = read("web/src/workbench/HomeBoard.tsx")
+const home = read("web/src/workbench/HomeStage.tsx")
 const notes = read("web/src/NotesView.tsx")
 const settings = read("web/src/SettingsDialog.tsx")
 
@@ -73,7 +73,10 @@ assert.doesNotMatch(shell, /v\{appState\.version/, "plus de « v2.0.10 » prése
 assert.match(shell, /engineStatusLabel\(appState\.status\)/, "l'inspecteur traduit l'état du moteur")
 assert.doesNotMatch(shell, /\{appState\.status\}<\/span>/, "l'état brut n'est plus rendu tel quel")
 assert.ok(read("web/src/display-path.ts").includes("export function displayPath"), "un formateur de chemin existe")
-for (const [file, source] of [["shell", shell], ["notes", notes], ["settings", settings]]) {
+// v12.0.0 : l'en-tête du Poste n'affiche plus le chemin complet (bruit de
+// télémétrie que le brief retire) — il nomme l'espace. Notes et Réglages continuent
+// de nettoyer tout chemin qu'ils montrent.
+for (const [file, source] of [["notes", notes], ["settings", settings]]) {
   assert.match(source, /displayPath\(/, `le chemin affiché par ${file} est nettoyé`)
 }
 assert.ok(read("tests/display-path.test.mjs").includes("displayPath"), "le formateur est testé")
@@ -116,8 +119,10 @@ const files = walk("web/src")
 const withoutType = files.flatMap((file) => buttonTags(read(file)).filter((tag) => !/\btype="button"/.test(tag)).map((tag) => `${file}: ${tag.slice(0, 60)}`))
 assert.deepEqual(withoutType, [], "tout bouton hors formulaire déclare type=\"button\"")
 
+// v12.0.0 : l'accueil n'est plus une planche d'actions — l'agent en est l'unique
+// action. La règle « jamais deux actions primaires » tient, sa mesure devient <= 1.
 const primaryInHome = (home.match(/className="button primary/g) ?? []).length
-assert.equal(primaryInHome, 1, "Aujourd'hui garde une seule action primaire")
+assert.ok(primaryInHome <= 1, "Aujourd'hui ne porte jamais deux actions primaires")
 
 // ── G. Icônes sur la grille documentée (12 / 14–16 / 17 / 24 / 30) ───────────
 const allowed = new Set([12, 14, 15, 16, 17, 24, 30])

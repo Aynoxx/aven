@@ -12,6 +12,14 @@ import { compressPauses } from "./pause"
 
 let context: AudioContext | null = null
 let current: AudioBufferSourceNode | null = null
+// v11.5.3 : le flux MSE (stream.ts) s'enregistre ici. Une interruption coupe
+// alors TOUTE lecture — y compris un flux en cours — sans import circulaire.
+const stoppers = new Set<() => void>()
+
+export function registerVoicePlaybackStopper(stop: () => void): () => void {
+  stoppers.add(stop)
+  return () => { stoppers.delete(stop) }
+}
 
 function ensureContext(): AudioContext {
   if (!context) context = new AudioContext()
@@ -26,8 +34,11 @@ export function decodeBase64(value: string): Uint8Array {
   return bytes
 }
 
-/** Coupe la phrase en cours. Idempotent. */
+/** Coupe la phrase ou le flux en cours. Idempotent. */
 export function stopVoicePlayback(): void {
+  for (const stop of [...stoppers]) {
+    try { stop() } catch { /* déjà arrêté */ }
+  }
   if (!current) return
   try { current.stop() } catch { /* déjà terminé */ }
   current = null

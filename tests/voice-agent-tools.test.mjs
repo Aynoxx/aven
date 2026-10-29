@@ -1,14 +1,17 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 import {
+  ALL_TOOL_NAMES,
   MAX_TOOL_RESULT_CHARS,
   TOOL_NAMES,
+  VOICE_TOOLS,
   clip,
   createVoiceToolRunner,
   formatNoteHits,
   readToolCalls,
   safeNoteId,
 } from "../host/voice-agent-tools.ts"
+import { AGENT_ACTIONS, MAX_ACTION_ARG_CHARS, MAX_WRITES_PER_TURN } from "../host/agent-actions.ts"
 import { answerVoiceQuestion } from "../host/voice-agent-speech.ts"
 import { DEFAULT_VOICE_PERSONALITY } from "../host/voice-agent-personality.ts"
 
@@ -35,6 +38,8 @@ const sources = (overrides = {}) => ({
   appState: () => ({ workspace: "aven", notes: 12, version: "11.2.0" }),
   searchNotes: () => [{ id: "projets/pricing.md", title: "Pricing", snippet: "offre gratuite" }],
   readNote: (id) => ({ id, title: "Pricing", markdown: "# Pricing\n\nL'offre reste gratuite." }),
+  // v11.9.0 : exécutant des actions du catalogue (remplacé par les tests).
+  runAction: async () => ({ status: "done", spoken: "C'est fait." }),
   ...overrides,
 })
 
@@ -134,7 +139,7 @@ test("boucle : l'outil est appelé, son résultat revient au modèle, la répons
     requests.push(JSON.parse(init.body))
     return ok(responses.shift() ?? say("Rien de plus."))
   }
-  const text = await answerVoiceQuestion("qu'est-ce que j'ai noté sur le pricing ?", {
+  const { text } = await answerVoiceQuestion("qu'est-ce que j'ai noté sur le pricing ?", {
     apiKey: "cle",
     fetchImpl,
     personality: DEFAULT_VOICE_PERSONALITY,
@@ -143,7 +148,12 @@ test("boucle : l'outil est appelé, son résultat revient au modèle, la répons
   assert.equal(text, "Une note s'appelle Pricing.")
   assert.equal(requests.length, 2)
   assert.equal(requests[0].tool_choice, "auto")
-  assert.deepEqual(requests[0].tools.map((tool) => tool.function.name), ["app_state", "search_notes", "read_note"])
+  // v11.9.0 : les outils portent les lectures ET les actions du catalogue.
+  assert.deepEqual(
+    requests[0].tools.map((tool) => tool.function.name).slice(0, 3),
+    ["app_state", "search_notes", "read_note"],
+  )
+  assert.ok(requests[0].tools.some((tool) => tool.function.name === "rename_chat"), "le catalogue est proposé au modèle")
   const toolMessage = requests[1].messages.find((message) => message.role === "tool")
   assert.ok(toolMessage, "le résultat d'outil revient au modèle")
   assert.equal(toolMessage.tool_call_id, "call_1")
@@ -162,7 +172,7 @@ test("boucle bornée : trois tours d'outils au plus, puis une réponse sans outi
     if (requests.length <= 3) return ok(toolCall("app_state", {}, `call_${requests.length}`))
     return ok(say("Je n'arrive pas à conclure."))
   }
-  const text = await answerVoiceQuestion("fais quelque chose", {
+  const { text } = await answerVoiceQuestion("fais quelque chose", {
     apiKey: "cle",
     fetchImpl,
     personality: DEFAULT_VOICE_PERSONALITY,
@@ -179,7 +189,7 @@ test("boucle : un modèle qui ne rend que du texte n'appelle aucun outil", async
     requests.push(JSON.parse(init.body))
     return ok(say("Bonjour."))
   }
-  const text = await answerVoiceQuestion("salut", {
+  const { text } = await answerVoiceQuestion("salut", {
     apiKey: "cle",
     fetchImpl,
     personality: DEFAULT_VOICE_PERSONALITY,
@@ -196,9 +206,146 @@ test("sans outils, la requête ne porte aucun champ tools", async () => {
     requests.push(JSON.parse(init.body))
     return ok(say("Bonjour."))
   }
-  const text = await answerVoiceQuestion("salut", { apiKey: "cle", fetchImpl, personality: DEFAULT_VOICE_PERSONALITY })
+  const { text } = await answerVoiceQuestion("salut", { apiKey: "cle", fetchImpl, personality: DEFAULT_VOICE_PERSONALITY })
   assert.equal(text, "Bonjour.")
   assert.equal(requests[0].tools, undefined)
   assert.equal(requests[0].tool_choice, undefined)
   assert.equal(requests[0].temperature, 0.4)
+})
+
+// ── H. v11.9.0 : le catalogue d'actions, et sa classe dangereuse ────────────
+test("catalogue : les outils du modèle sont les lectures plus les actions", () => {
+  const names = VOICE_TOOLS.map((tool) => tool.function.name)
+  assert.deepEqual(names.slice(0, 3), [...TOOL_NAMES])
+  assert.deepEqual(names.slice(3), AGENT_ACTIONS.map((action) => action.name))
+  assert.deepEqual([...ALL_TOOL_NAMES], names)
+  const destroy = AGENT_ACTIONS.filter((action) => action.risk === "destroy")
+  assert.ok(destroy.length >= 2, "les destructives déclarées sont présentes")
+  for (const action of destroy) assert.match(action.description, /PROPOSE/, `« ${action.name} » se propose`)
+})
+
+test("action : les arguments sont validés avant tout appel", async () => {
+  let called = 0
+  const run = createVoiceToolRunner(sources({ runAction: async () => { called += 1; return { status: "done", spoken: "ok" } } }))
+  const missing = await run({ id: "1", name: "rename_chat", args: { chat: "Pricing" } })
+  assert.equal(missing.ok, false)
+  assert.match(missing.text, /Argument « title » manquant/)
+  const tooLong = await run({ id: "2", name: "rename_chat", args: { chat: "Pricing", title: "x".repeat(MAX_ACTION_ARG_CHARS + 1) } })
+  assert.equal(tooLong.ok, false)
+  assert.match(tooLong.text, /trop long/)
+  const notAString = await run({ id: "3", name: "rename_chat", args: { chat: 42, title: "Tarifs" } })
+  assert.equal(notAString.ok, false)
+  assert.match(notAString.text, /chaîne est attendue/)
+  assert.equal(called, 0, "aucune action n'est appelée sur des arguments invalides")
+})
+
+test("action refusée : le message du host revient au modèle", async () => {
+  const run = createVoiceToolRunner(sources({
+    runAction: async () => ({ status: "refused", text: "Plusieurs cibles correspondent : « Pricing », « Tarifs »." }),
+  }))
+  const outcome = await run({ id: "1", name: "rename_chat", args: { chat: "pri", title: "X" } })
+  assert.equal(outcome.ok, false)
+  assert.match(outcome.text, /Plusieurs cibles/)
+})
+
+test("action destroy : proposée, jamais exécutée, la question nomme la cible", async () => {
+  let executed = 0
+  const run = createVoiceToolRunner(sources({
+    runAction: async (action, args) => {
+      assert.equal(action.name, "delete_chat")
+      assert.deepEqual(args, { chat: "Pricing" })
+      return { status: "confirm", label: "Pricing", args: { chat: "session-1" } }
+    },
+  }))
+  const proposal = await run({ id: "1", name: "delete_chat", args: { chat: "Pricing" } })
+  assert.equal(proposal.ok, true)
+  assert.equal(proposal.pending?.label, "Pricing")
+  assert.deepEqual(proposal.pending?.args, { chat: "session-1" }, "la confirmation garde la cible RÉSOLUE")
+  assert.match(proposal.text, /RIEN n'a été exécuté/)
+  assert.equal(executed, 0, "rien n'est exécuté à la proposition")
+
+  const requests = []
+  const fetchImpl = async (_url, init) => {
+    requests.push(JSON.parse(init.body))
+    if (requests.length === 1) return ok(toolCall("delete_chat", { chat: "Pricing" }))
+    return ok(say("C'est fait, j'ai supprimé la conversation."))
+  }
+  const answer = await answerVoiceQuestion("supprime la conversation Pricing", {
+    apiKey: "cle",
+    fetchImpl,
+    personality: DEFAULT_VOICE_PERSONALITY,
+    run: createVoiceToolRunner(sources({
+      runAction: async () => ({ status: "confirm", label: "Pricing", args: { chat: "session-1" } }),
+    })),
+  })
+  assert.equal(answer.text, "Je vais supprimer la conversation « Pricing ». Je le fais ?")
+  assert.equal(answer.pending?.name, "delete_chat")
+  assert.equal(requests.length, 1, "la boucle s'arrête à la proposition — le modèle ne commente pas")
+})
+
+// v11.15.0 : le modèle peut créer une note, mais seulement en la PROPOSANT.
+// L'écriture reste derrière le « oui » ; la question relit le contenu, pas le titre.
+test("création de note : proposée avec son contenu, jamais écrite dans la boucle", async () => {
+  const requests = []
+  const fetchImpl = async (_url, init) => {
+    requests.push(JSON.parse(init.body))
+    return ok(toolCall("create_note", { title: "Idées", content: "ligne 1\nligne 2" }))
+  }
+  let proposed = 0
+  const answer = await answerVoiceQuestion("crée une note sur mes idées", {
+    apiKey: "cle",
+    fetchImpl,
+    personality: DEFAULT_VOICE_PERSONALITY,
+    run: createVoiceToolRunner(sources({
+      runAction: async (action, args) => {
+        assert.equal(action.name, "create_note")
+        assert.deepEqual(args, { title: "Idées", content: "ligne 1\nligne 2" })
+        proposed += 1
+        return { status: "confirm", label: "Idées", args }
+      },
+    })),
+  })
+  assert.equal(proposed, 1, "l'exécutant est appelé pour proposer, pas pour écrire")
+  assert.equal(answer.text, "Je note : « ligne 1 ligne 2 ». Je l’enregistre ?")
+  assert.equal(answer.pending?.name, "create_note")
+  assert.equal(requests.length, 1, "la boucle s'arrête à la proposition")
+})
+
+test("écriture : l'annonce est celle du catalogue, sans second appel au modèle", async () => {
+  const requests = []
+  const fetchImpl = async (_url, init) => {
+    requests.push(JSON.parse(init.body))
+    return ok(toolCall("archive_chat", { chat: "Pricing" }))
+  }
+  const answer = await answerVoiceQuestion("archive la conversation Pricing", {
+    apiKey: "cle",
+    fetchImpl,
+    personality: DEFAULT_VOICE_PERSONALITY,
+    run: createVoiceToolRunner(sources({
+      runAction: async () => ({ status: "done", spoken: "C'est fait : la conversation « Pricing » est archivée." }),
+    })),
+  })
+  assert.equal(answer.text, "C'est fait : la conversation « Pricing » est archivée.")
+  assert.equal(requests.length, 1, "l'annonce du catalogue remplace le tour du modèle")
+})
+
+test("lecture : aucune annonce imposée — le modèle parle, et seulement des faits", async () => {
+  const run = createVoiceToolRunner(sources())
+  const read = await run({ id: "1", name: "list_chats", args: {} })
+  assert.equal(read.ok, true)
+  assert.equal(read.announce, undefined)
+  const write = await run({ id: "2", name: "archive_note", args: { note: "pricing.md" } })
+  assert.equal(write.announce, "C'est fait.")
+})
+
+test(`écriture : au plus ${MAX_WRITES_PER_TURN} action par tour`, async () => {
+  const run = createVoiceToolRunner(sources())
+  const first = await run({ id: "1", name: "archive_chat", args: { chat: "Pricing" } })
+  assert.equal(first.ok, true)
+  const second = await run({ id: "2", name: "archive_note", args: { note: "pricing.md" } })
+  assert.equal(second.ok, false)
+  assert.match(second.text, /Une seule modification par tour/)
+  // Les lectures restent libres : elles ne modifient rien.
+  const read = await run({ id: "3", name: "list_chats", args: {} })
+  assert.equal(read.ok, true)
 })

@@ -1,56 +1,57 @@
 // v11.3.0 : catalogue des voix tel que l'interface le présente.
-// Duplication volontaire et commentée de `host/voice-agent-edge.ts` : le renderer
-// n'importe pas le host (deux graphes de compilation). Seule la LISTE de libellés
-// est doublée ; la décision de parler, elle, reste dans le host.
+// v11.14.0 : les voix neuronales (Edge) et la voix locale Piper ont été retirées ;
+// il ne reste que le moteur local Pocket TTS, la voix Windows héritée des
+// préférences anciennes, et les voix Windows listées par le host.
+// Duplication volontaire et commentée : le renderer n'importe pas le host (deux
+// graphes de compilation). Seule la LISTE de libellés est doublée ; la décision
+// de parler, elle, reste dans le host.
 // Pur : testable avec Node seul.
 
 export type VoiceOption = { id: string; label: string }
 
-/** Miroir de EDGE_VOICES côté host — les identifiants doivent rester identiques. */
-export const EDGE_VOICE_OPTIONS: VoiceOption[] = [
-  { id: "edge:fr-FR-DeniseNeural", label: "Denise — française, posée" },
-  { id: "edge:fr-FR-HenriNeural", label: "Henri — français, grave" },
-  { id: "edge:fr-FR-EloiseNeural", label: "Éloïse — française, claire" },
-  { id: "edge:fr-FR-VivienneMultilingualNeural", label: "Vivienne — multilingue" },
-  { id: "edge:fr-FR-RemyMultilingualNeural", label: "Rémy — multilingue" },
+/**
+ * v11.10.0 : moteur local Pocket TTS (binaire embarqué, poids téléchargés au
+ * premier usage). Le host ne le propose que si son binaire est présent ; ce
+ * miroir ne sert qu'au libellé.
+ */
+export const POCKET_VOICE_OPTIONS: VoiceOption[] = [
+  { id: "pocket:fr", label: "Pocket TTS — locale, voix française" },
+  // v11.10.0 : le host ne propose QUE l'une des deux, selon qu'un profil de voix
+  // clonée est installé : le libellé décrit donc toujours ce qui va être dit, sans
+  // jamais nommer une personne.
+  { id: "pocket:clone", label: "Pocket TTS — locale, voix clonée" },
 ]
 
 /**
- * v11.5.0 : voix locale Piper, qui remplace la voix Windows en repli. Le host ne
- * la propose que si l'installeur l'a embarquée : la liste reste donc la source
- * de vérité, ce miroir ne sert qu'aux libellés.
+ * v11.11.0 : page où accepter les conditions du modèle de clonage. Miroir de
+ * `POCKET_CLONE_TERMS_URL` (host/pocket-tts.ts) — même raison que les libellés de
+ * voix : le renderer n'importe pas le host. La sonde v11.11.0 refuse deux valeurs
+ * divergentes.
  */
-export const PIPER_VOICE_OPTIONS: VoiceOption[] = [
-  { id: "piper:fr_FR-siwis-medium", label: "Siwis — locale, hors ligne" },
-]
+export const POCKET_CLONE_TERMS_URL = "https://huggingface.co/kyutai/pocket-tts"
 
-const EDGE_LABELS = new Map(
-  [...EDGE_VOICE_OPTIONS, ...PIPER_VOICE_OPTIONS].map((voice) => [voice.id, voice.label]),
-)
-
-/** Vrai pour une voix neuronale — un service distant, donc en ligne. */
-export function isNeuralVoice(id: string): boolean {
-  return String(id ?? "").startsWith("edge:")
-}
+const VOICE_LABELS = new Map(POCKET_VOICE_OPTIONS.map((voice) => [voice.id, voice.label]))
 
 /**
  * Ramène une préférence enregistrée à un identifiant du menu. Les versions
- * antérieures stockaient le nom Windows brut (« Microsoft Hortense Desktop »).
+ * antérieures stockaient le nom Windows brut (« Microsoft Hortense Desktop ») et
+ * des préfixes retirés (« edge: », « piper: ») : ceux-ci n'ont plus d'entrée au
+ * menu, donc on rend la voix par défaut plutôt qu'un faux choix.
  */
 export function voiceIdOf(pref: string | undefined): string {
   const value = String(pref ?? "").trim()
   if (!value) return ""
-  if (value.startsWith("edge:") || value.startsWith("piper:") || value.startsWith("sapi:")) return value
+  if (value.startsWith("edge:") || value.startsWith("piper:")) return ""
+  if (value.startsWith("pocket:") || value.startsWith("sapi:")) return value
   return `sapi:${value}`
 }
 
-/** Libellé lisible d'une voix : « edge:fr-FR-… » ne doit jamais s'afficher. */
+/** Libellé lisible d'une voix : un identifiant préfixé ne doit jamais s'afficher. */
 export function voiceLabel(id: string): string {
   const value = String(id ?? "")
-  const neural = EDGE_LABELS.get(value)
-  if (neural) return neural
+  const known = VOICE_LABELS.get(value)
+  if (known) return known
   if (value.startsWith("sapi:")) return value.slice(5)
-  if (value.startsWith("edge:")) return value.slice(5)
-  if (value.startsWith("piper:")) return value.slice(6)
+  if (value.startsWith("pocket:")) return value.slice(7)
   return value
 }

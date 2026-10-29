@@ -82,33 +82,54 @@ export default function FreebuffAgentPage(props: { onError: (e: unknown) => void
 
   // Transcript « conversation » : dérivé du buffer xterm (source unique de vérité),
   // coalescé pour ne pas rescanner à chaque octet.
-  const scheduleRender = () => {
+  // v11.12.2 : deux défauts cumulés rendaient la vue MUETTE alors que le TUI parlait.
+  // ① le minuteur n'était jamais remis à zéro : le premier scan — annulé tant que la
+  // vue conversation n'était pas affichée — condamnait tous les suivants ; ② ouvrir
+  // la vue ne déclenchait aucun scan (il n'y avait pas de nouvel octet), donc l'état
+  // vide initial restait affiché indéfiniment.
+  const renderTranscript = () => {
+    const term = termRef.current
+    if (!term) return
+    const buf = term.buffer.active
+    const raw: string[] = []
+    // Plafond de RENDU : 120 lignes suffisent pour une conversation (le buffer
+    // xterm garde tout, la vue terminal est intacte).
+    const max = 120
+    for (let i = Math.max(0, buf.length - max); i < buf.length; i++) {
+      const line = buf.getLine(i)
+      if (!line) continue
+      raw.push(line.translateToString(true))
+    }
+    const { lines: parsed, sessionBar: bar } = buildTranscript(raw)
+    setChatLines(parsed.map((l) => l.text))
+    setUserLines(parsed.map((l) => l.user))
+    setSessionBar(bar)
+    requestAnimationFrame(() => {
+      const el = chatRef.current
+      if (el) el.scrollTop = el.scrollHeight
+    })
+  }
+
+  const scheduleRender = (immediate = false) => {
+    if (immediate) {
+      if (renderTimer.current) { clearTimeout(renderTimer.current); renderTimer.current = null }
+      renderTranscript()
+      return
+    }
     if (renderTimer.current) return
     renderTimer.current = setTimeout(() => {
-      const term = termRef.current
-      if (!term) return
+      renderTimer.current = null
       // Transcript suspendu quand il n'est pas affiché (le terminal montre déjà tout).
       if (!showTranscriptRef.current) return
-      const buf = term.buffer.active
-      const raw: string[] = []
-      // Plafond de RENDU : 120 lignes suffisent pour une conversation (le buffer
-      // xterm garde tout, la vue terminal est intacte).
-      const max = 120
-      for (let i = Math.max(0, buf.length - max); i < buf.length; i++) {
-        const line = buf.getLine(i)
-        if (!line) continue
-        raw.push(line.translateToString(true))
-      }
-      const { lines: parsed, sessionBar: bar } = buildTranscript(raw)
-      setChatLines(parsed.map((l) => l.text))
-      setUserLines(parsed.map((l) => l.user))
-      setSessionBar(bar)
-      requestAnimationFrame(() => {
-        const el = chatRef.current
-        if (el) el.scrollTop = el.scrollHeight
-      })
+      renderTranscript()
     }, 140)
   }
+
+  // v11.12.2 : à l'ouverture de la vue conversation, le buffer peut être immobile
+  // depuis longtemps — aucun événement PTY ne viendra scanner. On le fait ici.
+  useEffect(() => {
+    if (showTranscript) scheduleRender(true)
+  }, [showTranscript])
 
   useEffect(() => {
     let disposed = false
@@ -142,6 +163,11 @@ export default function FreebuffAgentPage(props: { onError: (e: unknown) => void
           theme: XTERM_THEME,
           cursorBlink: true,
           scrollback: 5000,
+          // v11.12.2 : le PTY est un ConPTY (@lydell/node-pty). Sans ce drapeau,
+          // xterm n'applique pas ses correctifs de redimensionnement propres à
+          // ConPTY (lignes enroulées replacées, scrollback) : le TUI se redessinait
+          // de travers après un changement de taille de la fenêtre.
+          windowsPty: { backend: "conpty" },
           // Le TUI Freebuff est une application plein écran : on lui laisse la main
           // sur les fins de ligne et les rapports de souris (défaut xterm).
           allowTransparency: false,
@@ -325,6 +351,7 @@ export default function FreebuffAgentPage(props: { onError: (e: unknown) => void
 
   return (
     <InstrumentFrame
+      compact
       eyebrow="TERMINAL IA"
       title="Terminal Freebuff"
       description="Session CLI Freebuff indépendante de la conversation Aven. Le terminal est interactif : Entrée, flèches, Tab, Ctrl+C et la souris agissent directement dans Freebuff. Quitter cette page n’arrête pas la session."
@@ -403,7 +430,9 @@ export default function FreebuffAgentPage(props: { onError: (e: unknown) => void
         />
         {showTranscript && (
           <div className="agent-chat" ref={chatRef} aria-label="Conversation avec l'agent Freebuff (lecture seule)">
-            {chatLines.length === 0 && <p className="hint agent-chat-empty">Le terminal est vide pour l'instant.</p>}
+            {/* v11.12.2 : ne pas affirmer que le TERMINAL est vide (le TUI peut
+                tourner avec des lignes filtrées) — seul le transcript l'est. */}
+            {chatLines.length === 0 && <p className="hint agent-chat-empty">Aucune ligne de conversation pour l’instant.</p>}
             {chatLines.map((line, i) => (
               <p key={i} className={`agent-line${(userLines[i] ?? false) || isUserLine(line) ? " agent-line-user" : ""}`}>{line}</p>
             ))}

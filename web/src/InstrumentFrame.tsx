@@ -25,6 +25,12 @@ type Props = {
   actions?: InstrumentAction[]
   toolbarLabel?: string
   bodyClassName?: string
+  /**
+   * v12.0.0 : le Poste porte déjà l'icône et le titre de la section dans son
+   * en-tête. En mode compact l'instrument ne les répète pas : il ne garde que
+   * ses propres actions (et sa description si elle explique un geste).
+   */
+  compact?: boolean
   children: ReactNode
 }
 
@@ -36,16 +42,22 @@ export default function InstrumentFrame({
   actions = [],
   toolbarLabel,
   bodyClassName,
+  compact = false,
   children,
 }: Props) {
+  const showHead = !compact || actions.length > 0 || Boolean(description)
   return (
-    <section className={`instrument${className ? ` ${className}` : ""}`} aria-label={title}>
-      <header className="instrument-head">
-        <div className="instrument-heading">
-          <span className="instrument-eyebrow">{eyebrow}</span>
-          <h1>{title}</h1>
-          {description ? <div className="instrument-description">{description}</div> : null}
-        </div>
+    <section className={`instrument${compact ? " instrument-compact" : ""}${className ? ` ${className}` : ""}`} aria-label={title}>
+      {showHead && (
+      <header className={compact ? "instrument-head instrument-head-compact" : "instrument-head"}>
+        {!compact && (
+          <div className="instrument-heading">
+            <span className="instrument-eyebrow">{eyebrow}</span>
+            <h1>{title}</h1>
+            {description ? <div className="instrument-description">{description}</div> : null}
+          </div>
+        )}
+        {compact && description ? <div className="instrument-description">{description}</div> : null}
         {actions.length > 0 && (
           <div className="instrument-actions" role="toolbar" aria-label={toolbarLabel ?? `Actions de ${title}`}>
             {actions.map((action) => (
@@ -65,6 +77,7 @@ export default function InstrumentFrame({
           </div>
         )}
       </header>
+      )}
       <div className={`instrument-body${bodyClassName ? ` ${bodyClassName}` : ""}`}>{children}</div>
     </section>
   )

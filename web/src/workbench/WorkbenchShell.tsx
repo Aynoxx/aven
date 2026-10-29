@@ -1,6 +1,6 @@
-import { useState, type KeyboardEvent as ReactKeyboardEvent } from "react"
+import { useEffect, useLayoutEffect, useState, type KeyboardEvent as ReactKeyboardEvent } from "react"
 import { api } from "../api"
-import { Icon, type IconName } from "../icons"
+import { Icon } from "../icons"
 import FormDialog from "../FormDialog"
 import SettingsDialog from "../SettingsDialog"
 import NotesView from "../NotesView"
@@ -14,18 +14,21 @@ import { useVoiceAgent } from "../voice-agent/use-voice-agent"
 // v11.4.0 : le titre de la note dictée vient du contenu, pas d'un horodatage.
 import { noteTitleFromDraft } from "../voice-agent/note"
 import { TASK_MODES_UI, engineStatusLabel } from "../app/constants"
-import { displayPath } from "../display-path"
 import { planFor } from "./actions"
 import { nextTabFocus } from "./tabs"
 import CommandBar from "./CommandBar"
-import HomeBoard from "./HomeBoard"
+import HomeStage from "./HomeStage"
+import NavigationConstellation, { type NavDestination } from "./NavigationConstellation"
+import WireframeAgent from "../agent/WireframeAgent"
 
-// v11.0.0 : coquille du Poste. Le contrôleur porte l'état ; cette coquille rend le
-// bandeau de télémétrie, le rail d'instruments, la barre d'onglets, la scène et
-// l'inspecteur. Aucun instrument n'est une « page » : tous vivent dans la scène.
+// v12.0.0 : coquille du Poste « agent d'abord ». Le contrôleur porte l'état ; la
+// coquille rend un en-tête unique (marque, section, agent compact, contrôles), la
+// scène, l'inspecteur en tiroir, la barre de commande et la constellation. Aucun
+// rail permanent : la navigation est une action temporaire, pas un meuble.
 
-const RAIL_ITEMS: { kind: "home" | "conversation" | "notes" | "files" | "terminal" | "orchestration"; label: string; icon: IconName }[] = [
-  { kind: "home", label: "Aujourd’hui", icon: "grid" },
+// L'ordre est STABLE et fait autorité : icône, titre, surbrillance et aria-current
+// viennent tous d'ici. Les libellés sont ceux de l'interface, jamais des identifiants.
+const DESTINATIONS: NavDestination[] = [
   // v11.0.2 : une conversation porte une bulle, la délégation une ramification ;
   // `agent` ne désigne plus qu'un agent et `sparkle` que la marque d'Aven.
   { kind: "conversation", label: "Conversations", icon: "chat" },
@@ -34,6 +37,14 @@ const RAIL_ITEMS: { kind: "home" | "conversation" | "notes" | "files" | "termina
   { kind: "terminal", label: "Terminal", icon: "terminal" },
   { kind: "orchestration", label: "Orchestration", icon: "branch" },
 ]
+
+// Aujourd'hui reste une destination explicite — atteinte par la marque, jamais par
+// la poignée de navigation (le brief distingue les deux).
+const HOME_DESTINATION = { kind: "home", label: "Aujourd’hui", icon: "grid" } as const
+
+// Diamètre du canvas de l'agent : constant, pour que le repli soit une TRANSFORMATION
+// du même dessin (CSS scale), pas un second rendu approximatif.
+const AGENT_CANVAS = 340
 
 function tabLabel(app: AvenApp, kind: string, chatId?: string): string {
   if (kind === "conversation") {
@@ -48,14 +59,6 @@ function tabLabel(app: AvenApp, kind: string, chatId?: string): string {
     case "settings": return "Réglages"
     default: return kind
   }
-}
-
-function tabKindLabel(kind: string): string {
-  if (kind === "conversation") return "CONV"
-  if (kind === "home") return "POSTE"
-  if (kind === "orchestration") return "MODE"
-  if (kind === "terminal") return "PTY"
-  return kind.slice(0, 4).toUpperCase()
 }
 
 export default function WorkbenchShell({ app }: { app: AvenApp }) {
@@ -77,6 +80,7 @@ export default function WorkbenchShell({ app }: { app: AvenApp }) {
     focusWorkbenchTab,
     form,
     goHome,
+    homeNotice,
     inspectorOpen,
     live,
     openConfiguration,
@@ -89,6 +93,7 @@ export default function WorkbenchShell({ app }: { app: AvenApp }) {
     routeAppAction,
     selBar,
     setCaptureRequested,
+    setHomeNotice,
     setInspectorOpen,
     setSelBar,
     setSettingsSection,
@@ -119,7 +124,12 @@ export default function WorkbenchShell({ app }: { app: AvenApp }) {
     startRenameChat,
   } = app
 
-  const [railWide, setRailWide] = useState(false)
+  // v12.0.0 : la constellation n'est pas un état de page — elle s'ouvre et se
+  // referme sans changer la destination courante.
+  const [navOpen, setNavOpen] = useState(false)
+  const [leaving, setLeaving] = useState<NavDestination["kind"] | null>(null)
+  const [agentPlacement, setAgentPlacement] = useState<{ x: number; y: number; scale: number } | null>(null)
+  const [reducedMotion, setReducedMotion] = useState(false)
   // v11.1.0 : l'agent vocal vit dans la coquille — il écoute tant que l'app est
   // prête et que le micro n'est pas coupé. La navigation passe par le routeur
   // unique des commandes vocales (même contrat que la dictée historique).
@@ -134,15 +144,78 @@ export default function WorkbenchShell({ app }: { app: AvenApp }) {
       openNotesView(note.id)
       return note.title
     },
+    // v11.15.0 : une note proposée par l'agent et confirmée s'ouvre comme une
+    // note dictée — l'écrit doit être visible, pas seulement annoncé.
+    onNoteCreated: (noteId) => openNotesView(noteId),
   })
   const ask = live.asks[0]
   const showNoKeyBanner = appState.status === "ready" && !Object.values(appState.keys).some(Boolean)
   const lastAssistant = [...app.messages].reverse().find((m) => m.role === "assistant" && m.text.trim())
   const activeKind = activeInstrument.kind
+  const isHome = activeKind === "home"
+  const activeSection = DESTINATIONS.find((d) => d.kind === activeKind) ?? DESTINATIONS[0]
+  const conversationTabs = tabsState.tabs.filter((t) => t.kind === "conversation")
 
-  const openRail = (kind: typeof RAIL_ITEMS[number]["kind"]) => {
+  // Le repli de l'agent est une MESURE, pas une constante : l'ancre de l'état
+  // courant (accueil ou en-tête) donne le rectangle réel. Une seule instance de
+  // canvas se déplace entre les deux.
+  useLayoutEffect(() => {
+    const measure = () => {
+      const anchor = document.getElementById(isHome ? "agent-home-anchor" : "agent-toolbar-anchor")
+      if (!anchor) return
+      const rect = anchor.getBoundingClientRect()
+      if (!rect.width || !rect.height) return
+      const scale = Math.min(1.25, Math.max(0.05, rect.width / AGENT_CANVAS))
+      setAgentPlacement({
+        x: Math.round(rect.left + rect.width / 2 - (AGENT_CANVAS * scale) / 2),
+        y: Math.round(rect.top + rect.height / 2 - (AGENT_CANVAS * scale) / 2),
+        scale: Number(scale.toFixed(3)),
+      })
+    }
+    const frame = requestAnimationFrame(measure)
+    window.addEventListener("resize", measure)
+    return () => { cancelAnimationFrame(frame); window.removeEventListener("resize", measure) }
+  }, [isHome, inspectorOpen])
+
+  useEffect(() => {
+    const query = window.matchMedia("(prefers-reduced-motion: reduce)")
+    const apply = () => setReducedMotion(query.matches)
+    apply()
+    query.addEventListener("change", apply)
+    return () => query.removeEventListener("change", apply)
+  }, [])
+
+  // v12.0.0 : Échap ferme la constellation AVANT tout autre effet du Poste. C'est un
+  // panneau de navigation : il ne doit jamais rester ouvert derrière une action, et
+  // il ne doit pas non plus refermer l'instrument courant — la capture et l'arrêt de
+  // propagation empêchent le contrôleur de traiter le même Échap.
+  useEffect(() => {
+    if (!navOpen) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return
+      event.preventDefault()
+      event.stopPropagation()
+      setNavOpen(false)
+      setLeaving(null)
+      requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(".wb-nav-trigger")?.focus())
+    }
+    window.addEventListener("keydown", onKey, true)
+    return () => window.removeEventListener("keydown", onKey, true)
+  }, [navOpen])
+
+  const goToDestination = (kind: NavDestination["kind"]) => {
     if (kind === "conversation") openConversationInstrument()
     else openInstrumentTab(kind)
+  }
+
+  // Un cercle choisi devient le point focal, les autres s'écartent : la scène
+  // monte tout de suite, les cercles finissent de sortir (~300 ms) et l'arc
+  // disparaît ENTIÈREMENT ensuite. Aucun cercle ne survit dans l'espace de travail.
+  const selectDestination = (kind: NavDestination["kind"]) => {
+    if (!navOpen) { goToDestination(kind); return }
+    setLeaving(kind)
+    goToDestination(kind)
+    window.setTimeout(() => { setNavOpen(false); setLeaving(null) }, 300)
   }
 
   const citeLast = async () => {
@@ -171,30 +244,65 @@ export default function WorkbenchShell({ app }: { app: AvenApp }) {
   }
 
   return (
-    <div className="wb-app">
+    <div className="wb-app" data-nav={navOpen ? "open" : "closed"}>
       <header className="wb-status">
         <div className="wb-status-left">
-          <button className="wb-status-workspace" type="button" onClick={() => openConfiguration("workspaces", "general")} title="Changer d’espace de travail" aria-label={`Espace de travail : ${workspaceName || "aucun"}. Changer`}>
+          {/* v12.0.0 : la marque est le retour à l'accueil — une action distincte,
+              jamais confondue avec la poignée de navigation. */}
+          <button
+            className="wb-brand"
+            type="button"
+            onClick={goHome}
+            aria-label="Aven — revenir à l’accueil"
+            title={`Aven — ${HOME_DESTINATION.label}`}
+          >
+            <span className="brand-mark" aria-hidden="true"><Icon name="sparkle" size={15} /></span>
+            <span className="wb-brand-word">Aven</span>
+          </button>
+          <span className="wb-status-sep" aria-hidden="true" />
+          <button
+            className="wb-status-workspace"
+            type="button"
+            onClick={() => openConfiguration("workspaces")}
+            title="Changer d’espace de travail"
+            aria-label={`Espace de travail : ${workspaceName || "aucun"}. Changer`}
+          >
             <Icon name="folder" size={14} />
             <span>{workspaceName || "Aucun espace"}</span>
           </button>
-          <span className="wb-status-sep" aria-hidden="true" />
-          <span className="wb-status-path" title={displayPath(appState.workspace)}>{displayPath(appState.workspace) || "—"}</span>
+          {activeKind !== "home" && activeKind !== "settings" && (
+            <>
+              <span className="wb-status-sep" aria-hidden="true" />
+              <span className="wb-section">
+                <Icon name={activeSection.icon} size={16} />
+                <h1 className="wb-section-title">{activeSection.label}</h1>
+                {activeKind === "conversation" && app.chats.length > 0 && (
+                  <span className="wb-section-count">{app.chats.length}</span>
+                )}
+              </span>
+            </>
+          )}
         </div>
         <div className="wb-status-center">
-          <span className="wb-status-engine" data-state={appState.status}>
-            <span className={`status-dot ${appState.status}`} aria-hidden="true" />
-            {appState.status === "ready" ? "EN LIGNE" : appState.status === "starting" ? "DÉMARRAGE" : "ERREUR"}
-          </span>
-          <span className="wb-status-sep" aria-hidden="true" />
-          <span className="wb-status-key"><b>{agentName(tab) || "—"}</b></span>
-          <span className="wb-status-sep" aria-hidden="true" />
-          <span className="wb-status-key">{activeModelLabel}</span>
+          {/* L'ancre de l'agent compact. Le canvas est ailleurs mais vient EXACTEMENT
+              ici : c'est le même objet qui se replie, pas une icône qui le remplace. */}
+          <span id="agent-toolbar-anchor" className="wb-agent-anchor" aria-hidden="true" />
+          {/* v12.0.0 : sur l'accueil, l'état est DÉJÀ dit sous le micro (HomeStage).
+              Le rendre deux fois ferait deux annonces aria-live pour la même vérité. */}
+          {!isHome && (
+            <span
+              className="wb-agent-state"
+              role="status" aria-live="polite"
+              data-error={voice.error ? "true" : undefined}
+              title={voice.error ?? (voice.heard ? `Entendu : « ${voice.heard} »` : voice.awake ? "Éveillé : chaque phrase t’est adressée." : undefined)}
+            >
+              {voice.error ?? voice.label}
+            </span>
+          )}
         </div>
         <div className="wb-status-right">
-          {/* v11.1.0 : l'agent vocal est visible en permanence : micro, phase et
-              possibilité d'interrompre la lecture. Le libellé reste du TEXTE — la
-              couleur seule ne porte jamais l'information. */}
+          {/* v11.1.0 : micro, phase et interruption restent visibles en permanence.
+              Le libellé du centre porte l'état ; ce bloc porte l'ACTION. */}
           <div className="wb-voice" data-phase={voice.phase}>
             <button
               className="button ghost wb-voice-button"
@@ -202,19 +310,10 @@ export default function WorkbenchShell({ app }: { app: AvenApp }) {
               onClick={voice.toggleMic}
               aria-pressed={!voice.muted}
               aria-label={voice.muted ? "Activer le micro de l’agent vocal" : "Couper le micro de l’agent vocal"}
-              title={voice.error ?? (voice.muted ? "Micro coupé — clique pour écouter" : `${voice.label} — dis « Aven » pour parler`)}
+              title={voice.error ?? (voice.muted ? "Micro coupé — clique pour écouter" : voice.awake ? "Éveillé — dis « Aven, dors » pour le rendormir" : `${voice.label} — dis « Aven » pour parler`)}
             >
               <Icon name={voice.muted ? "microphone-off" : "microphone"} size={14} />
             </button>
-            {/* v11.1.1 : l'erreur réelle s'affiche au lieu du seul mot « Erreur
-                vocale » (clé absente, quota, micro refusé…) ; la transcription
-                entendue reste lisible en infobulle pour diagnostiquer un réveil
-                manqué. */}
-            <span
-              className={voice.error ? "wb-voice-label wb-voice-error" : "wb-voice-label"}
-              role="status" aria-live="polite"
-              title={voice.error ?? (voice.heard ? `Entendu : « ${voice.heard} »` : undefined)}
-            >{voice.error ?? voice.label}</span>
             {(voice.phase === "speaking" || voice.phase === "thinking") && (
               <button
                 className="button ghost wb-voice-stop"
@@ -230,6 +329,15 @@ export default function WorkbenchShell({ app }: { app: AvenApp }) {
           <button
             className="button ghost wb-status-toggle"
             type="button"
+            onClick={() => openConfiguration(undefined, "general")}
+            aria-label="Réglages"
+            title="Réglages"
+          >
+            <Icon name="settings" size={15} />
+          </button>
+          <button
+            className="button ghost wb-status-toggle"
+            type="button"
             onClick={() => setInspectorOpen(!inspectorOpen)}
             aria-pressed={inspectorOpen}
             aria-label={inspectorOpen ? "Masquer l’inspecteur" : "Afficher l’inspecteur"}
@@ -240,82 +348,32 @@ export default function WorkbenchShell({ app }: { app: AvenApp }) {
         </div>
       </header>
 
-      <div className="wb-body" data-rail={railWide ? "wide" : "narrow"} data-inspector={inspectorOpen ? "open" : "closed"}>
-        <aside className="wb-rail" aria-label="Instruments du Poste">
-          <div className="wb-rail-top">
-            <button className="wb-rail-brand" type="button" onClick={goHome} aria-label="Aujourd’hui — retour au Poste">
-              <span className="brand-mark" aria-hidden="true"><Icon name="sparkle" size={15} /></span>
-              <span className="wb-rail-brand-copy">
-                <strong>Aven</strong>
-                <small>{workspaceName || "Poste"}</small>
-              </span>
-            </button>
-            <button className="wb-rail-item" type="button" onClick={() => setRailWide((v) => !v)} aria-pressed={railWide} aria-label={railWide ? "Replier le rail" : "Déployer le rail"}>
-              <Icon name="menu" size={17} />
-              <span>{railWide ? "Replier" : "Déployer"}</span>
-            </button>
-          </div>
-
-          <nav className="wb-rail-nav" aria-label="Instruments">
-            <span className="wb-rail-label eyebrow">INSTRUMENTS</span>
-            {RAIL_ITEMS.map((item) => {
-              const current = item.kind === "conversation"
-                ? activeKind === "conversation"
-                : activeKind === item.kind
-              return (
-                <button
-                  key={item.kind}
-                  className="wb-rail-item"
-                  type="button"
-                  aria-current={current ? "page" : undefined}
-                  aria-label={item.label}
-                  title={item.label}
-                  onClick={() => openRail(item.kind)}
-                >
-                  <Icon name={item.icon} size={17} />
-                  <span>{item.label}</span>
-                  {item.kind === "conversation" && <span className="wb-rail-count">{app.chats.length}</span>}
-                </button>
-              )
-            })}
-          </nav>
-
-          <div className="wb-rail-bottom">
-            <div className="wb-rail-status">
-              <span className={`status-dot ${appState.status}`} aria-hidden="true" />
-              <span>{appState.status === "ready" ? "Moteur prêt" : appState.status === "starting" ? "Démarrage" : "Hors ligne"}</span>
-            </div>
-            <button className="wb-rail-item" type="button" onClick={() => openConfiguration(undefined, "general")} aria-current={activeKind === "settings" ? "page" : undefined} aria-label="Réglages" title="Réglages">
-              <Icon name="settings" size={17} />
-              <span>Réglages</span>
-            </button>
-          </div>
-        </aside>
-
-        <main className="wb-main">
-          <div className="wb-tabs" role="tablist" aria-label="Onglets du Poste" onKeyDown={onTabsKeyDown}>
-            {tabsState.tabs.map((t) => {
-              const selected = t.id === tabsState.activeId
-              const label = tabLabel(app, t.kind, t.chatId)
-              return (
-                <div key={t.id} className="wb-tab" data-selected={selected || undefined}>
-                  <button
-                    className="wb-tab-main"
-                    id={`wb-tab-${t.id}`}
-                    type="button"
-                    role="tab"
-                    aria-selected={selected}
-                    aria-controls="wb-stage"
-                    tabIndex={selected ? 0 : -1}
-                    onClick={() => focusWorkbenchTab(t.id)}
-                    title={label}
-                  >
-                    <span className="wb-tab-kind">{tabKindLabel(t.kind)}</span>
-                    <span className="wb-tab-label">{label}</span>
-                  </button>
-                  {/* v11.3.0 : bouton frère du libellé (jamais un bouton dans un bouton).
-                      Aujourd'hui est le plancher du Poste : il n'a pas de croix. */}
-                  {t.kind !== "home" && (
+      <div className="wb-body" data-inspector={inspectorOpen ? "open" : "closed"}>
+        <main className="wb-main" data-sessions={conversationTabs.length > 1 ? "true" : "false"}>
+          {/* v12.0.0 : plus de barre d'onglets permanente. Ce bandeau ne vit que
+              s'il y a PLUSIEURS conversations ouvertes : il liste des sessions, pas
+              des destinations — la navigation primaire est la constellation. */}
+          {conversationTabs.length > 1 && (
+            <div className="wb-tabs" role="tablist" aria-label="Onglets du Poste" onKeyDown={onTabsKeyDown}>
+              {conversationTabs.map((t) => {
+                const selected = t.id === tabsState.activeId
+                const label = tabLabel(app, t.kind, t.chatId)
+                return (
+                  <div key={t.id} className="wb-tab" data-selected={selected || undefined}>
+                    <button
+                      className="wb-tab-main"
+                      id={`wb-tab-${t.id}`}
+                      type="button"
+                      role="tab"
+                      aria-selected={selected}
+                      aria-controls="wb-stage"
+                      tabIndex={selected ? 0 : -1}
+                      onClick={() => focusWorkbenchTab(t.id)}
+                      title={label}
+                    >
+                      <span className="wb-tab-kind">CONV</span>
+                      <span className="wb-tab-label">{label}</span>
+                    </button>
                     <button
                       className="wb-tab-close"
                       type="button"
@@ -326,21 +384,26 @@ export default function WorkbenchShell({ app }: { app: AvenApp }) {
                     >
                       <Icon name="close" size={12} />
                     </button>
-                  )}
-                </div>
-              )
-            })}
-            <span className="wb-tabs-spacer" />
-            <div className="wb-tabs-tools">
-              <button className="button ghost" type="button" onClick={() => void newChat()} disabled={!tab} aria-label="Nouvelle conversation" title="Nouvelle conversation (Ctrl N)">
-                <Icon name="plus" size={15} />
-              </button>
+                  </div>
+                )
+              })}
+              <span className="wb-tabs-spacer" />
+              <div className="wb-tabs-tools">
+                <button className="button ghost" type="button" onClick={() => void newChat()} disabled={!tab} aria-label="Nouvelle conversation" title="Nouvelle conversation (Ctrl N)">
+                  <Icon name="plus" size={15} />
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="wb-stage" id="wb-stage" role="tabpanel" aria-labelledby={`wb-tab-${tabsState.activeId}`}>
             {activeKind === "home" ? (
-              <HomeBoard app={app} />
+              <HomeStage
+                voice={voice}
+                notice={homeNotice}
+                onDismissNotice={() => setHomeNotice(null)}
+                onOpenSettings={() => { setHomeNotice(null); openConfiguration(undefined, "general") }}
+              />
             ) : activeKind === "conversation" ? (
               <ConversationPage app={app} />
             ) : activeKind === "notes" ? (
@@ -530,6 +593,18 @@ export default function WorkbenchShell({ app }: { app: AvenApp }) {
         </aside>
 
         <CommandBar app={app} />
+
+        {/* v12.0.0 : la poignée et l'arc sont ancrés sur le CORPS, au-dessus de la
+            barre de commande — jamais sur la fenêtre, qu'un bandeau d'état décale. */}
+        <NavigationConstellation
+          destinations={DESTINATIONS}
+          open={navOpen}
+          leaving={leaving}
+          activeKind={activeKind}
+          onOpen={() => setNavOpen(true)}
+          onClose={() => { setNavOpen(false); setLeaving(null) }}
+          onSelect={selectDestination}
+        />
       </div>
 
       {appState.needsWorkspace && (
@@ -566,6 +641,19 @@ export default function WorkbenchShell({ app }: { app: AvenApp }) {
       {showNoKeyBanner && (
         <div className="status-banner subtle"><span className="status-dot" /> Aucun fournisseur avec clé API n’est configuré. Les modèles sans clé restent disponibles.</div>
       )}
+
+      {/* v12.0.0 : UN canvas pour tout le Poste. Il mesure l'ancre de l'état
+          courant et se transforme entre les deux — même dessin, même identité. */}
+      <div
+        className="aven-agent-layer"
+        data-motion={reducedMotion ? "instant" : "smooth"}
+        style={agentPlacement
+          ? { transform: `translate(${agentPlacement.x}px, ${agentPlacement.y}px) scale(${agentPlacement.scale})`, opacity: 1 }
+          : { visibility: "hidden" }}
+        aria-hidden="true"
+      >
+        <WireframeAgent phase={voice.phase} size={AGENT_CANVAS} />
+      </div>
 
       {form && <FormDialog key={form.id} form={form} onSubmit={answerForm} onCancel={cancelForm} />}
 

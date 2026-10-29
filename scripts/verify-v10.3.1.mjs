@@ -131,14 +131,13 @@ for (const [name, accent] of Object.entries(PRESETS)) {
 // Le hub, ses cartes et ses View Transitions ont été retirés : le morph carte ↔ page
 // n'a plus d'objet. Les garanties d'affordance restent vérifiées sur le Poste.
 const workbench = read("web/src/workbench/WorkbenchShell.tsx")
-const homeBoard = read("web/src/workbench/HomeBoard.tsx")
+const homeBoard = read("web/src/workbench/HomeStage.tsx")
 const commandBar = read("web/src/workbench/CommandBar.tsx")
 const tabModel = read("web/src/workbench/tabs.ts")
 
 // Micro de dictée réellement désactivé quand la clé Groq manque.
 assert.match(commandBar, /disabled=\{!appState\.keys\.groq\}/, "le micro global est désactivé sans clé Groq")
 assert.match(commandBar, /Dictée indisponible : configure une clé Groq/, "le libellé nomme la cause")
-assert.match(homeBoard, /disabled=\{!appState\.keys\.groq\}/, "le micro de la tuile Capturer est désactivé sans clé")
 assert.match(css, /\.wb-command-mic:disabled \{[^}]*cursor: not-allowed;/, "état visuel du micro inactif")
 assert.match(css, /\.wb-command-mic:disabled:hover \{[^}]*color: var\(--muted\);/, "aucun survol qui promet une action désactivée")
 

@@ -24,8 +24,12 @@ fn state_with_workspaces(value: Value) -> Result<Value, String> {
     Ok(inject_workspaces(value, read_workspace_store()?.0))
 }
 
+// v11.5.3 : commande ASYNCHRONE. En synchrone, Tauri l'exécutait sur le fil
+// principal ; pendant les ~1,6 s de synthèse Edge, les événements `aven:event`
+// (trames du flux) attendaient le retour de l'appel. Mesuré : 7 trames reçues
+// groupées à 1,1 s au lieu de la première à ~0,5 s. Le contrat IPC ne change pas.
 #[tauri::command]
-pub(crate) fn aven_call(
+pub(crate) async fn aven_call(
     app: AppHandle,
     state: State<'_, RuntimeState>,
     method: String,

@@ -121,9 +121,29 @@ export function clearActiveChat(state: TabsState): TabsState {
 }
 
 // Retire l'onglet d'une conversation supprimée ; le voisin devient actif.
-export function removeChatTab(state: TabsState, chatId: string): TabsState {
+// v11.14.1 : ce n'était vrai que si aucune conversation ne restait. Supprimer la
+// conversation OUVERTE fermait son onglet et rendait le dernier onglet voisin
+// (Notes, Aujourd'hui…), alors qu'une autre conversation était toujours là.
+// `next` est la conversation qui prend sa place : le MÊME onglet se rattache à
+// elle, ou son onglet déjà ouvert prend le focus et l'onglet vidé disparaît.
+export function removeChatTab(
+  state: TabsState,
+  chatId: string,
+  next?: { chatId: string; agent?: string } | null,
+): TabsState {
   const tab = state.tabs.find((t) => t.kind === "conversation" && t.chatId === chatId)
-  return tab ? closeTab(state, tab.id) : state
+  if (!tab) return state
+  if (state.activeId !== tab.id) return { ...state, tabs: state.tabs.filter((t) => t.id !== tab.id) }
+  const nextId = next?.chatId
+  if (nextId && nextId !== chatId) {
+    const existing = state.tabs.find((t) => t.kind === "conversation" && t.chatId === nextId)
+    if (existing && existing.id !== tab.id) {
+      return { tabs: state.tabs.filter((t) => t.id !== tab.id), activeId: existing.id }
+    }
+    const tabs = state.tabs.map((t) => (t.id === tab.id ? { ...t, chatId: nextId, agent: next?.agent ?? t.agent } : t))
+    return { tabs, activeId: tab.id }
+  }
+  return closeTab(state, tab.id)
 }
 
 // v11.0.0 : navigation clavier HORIZONTALE de la barre d'onglets (rôle tablist) —

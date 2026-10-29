@@ -21,6 +21,7 @@ export default function TasksPage({ app }: { app: AvenApp }) {
 
   return (
         <InstrumentFrame
+          compact
           eyebrow="ORCHESTRATION"
           title="Modes de délégation de l’agent principal"
           description="Choisis comment l’agent principal traite les prochaines demandes dans cet espace de travail."

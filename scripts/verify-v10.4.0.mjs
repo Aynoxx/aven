@@ -23,7 +23,7 @@ const app = readApp()
 // v11.0.0 : la coquille est le Poste (workbench/), plus AppShell.
 const appShell = read("web/src/workbench/WorkbenchShell.tsx")
 const conversation = read("web/src/pages/ConversationPage.tsx")
-const home = read("web/src/workbench/HomeBoard.tsx")
+const home = read("web/src/workbench/HomeStage.tsx")
 const commandBar = read("web/src/workbench/CommandBar.tsx")
 const tasks = read("web/src/pages/TasksPage.tsx")
 const freebuff = read("web/src/FreebuffAgentPage.tsx")
@@ -87,7 +87,6 @@ assert.match(app, /effectiveIntent\(result\.intent, origin, agents\.map\(\(a\) =
   "l'intention effective est calculée à partir de la provenance")
 assert.match(app, /const c = await api\.createChat\(tabRef\.current\)/,
   "la conversation n'est créée qu'à l'arrivée d'un texte (plus de conversation vide)")
-assert.match(home, /dictation\.start\("workbench"\)/, "le micro du Poste déclare sa provenance")
 assert.match(commandBar, /dictation\.start\("workbench"\)/, "le micro global déclare la même provenance")
 assert.match(conversation, /dictation\.start\("composer"\)/, "le micro du composeur déclare la sienne")
 

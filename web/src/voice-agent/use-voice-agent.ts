@@ -10,9 +10,12 @@
 //   - écoute continue tant que le micro n'est pas coupé et que l'app est prête.
 import { useCallback, useEffect, useRef, useState } from "react"
 import { api } from "../api"
-import type { VoiceAnswer } from "../types"
-// v11.3.0 : la phrase lue peut être un MP3 neuronal que la webview joue elle-même.
+import type { VoiceAnswer, VoiceSpeech, VoiceStreamResult } from "../types"
+// v11.14.0 : la phrase lue peut être un WAV que la webview joue elle-même.
 import { playVoiceSpeech, stopVoicePlayback } from "./playback"
+// v11.10.0 : la voix locale Pocket livre des échantillons nus, joués par une
+// horloge audio — le seul lecteur de flux restant (v11.14.0).
+import { createPcmStream } from "./pcm-stream"
 // v11.4.0 : création de note — le brouillon, la question de confirmation et le
 // classement du « oui » vivent dans un module pur testé.
 import {
@@ -24,8 +27,19 @@ import {
   noteConfirmPrompt,
   noteConfirmationOpen,
   noteCreatedReply,
+  noteNeedsComposition,
   parseNoteDraft,
 } from "./note"
+// v11.9.0 : une action destructive est PROPOSÉE par le host ; ce module classe
+// la réponse et n'exécute rien sans un « oui » explicite.
+import {
+  ACTION_CANCELLED_REPLY,
+  ACTION_EXPIRED_REPLY,
+  ACTION_UNCONFIRMED_REPLY,
+  actionConfirmationOpen,
+  classifyActionReply,
+  type PendingVoiceAction,
+} from "./actions"
 // v11.4.1 : la webview s'entend elle-même — une transcription de sa propre voix
 // n'est pas une réponse (elle annulait la note en attente).
 import { isSelfEcho } from "./echo"
@@ -34,10 +48,10 @@ import { isSelfEcho } from "./echo"
 import { shouldInterruptSpeech } from "./barge-in"
 import { DEFAULT_VAD_CONFIG, initialVadState, vadStep, type VadState } from "./vad"
 import {
-  acceptsFollowUp,
   initialVoiceSession,
+  isAwake,
   reduceVoiceSession,
-  voicePhaseLabel,
+  voiceStatusLabel,
   type VoicePhase,
   type VoiceSessionEvent,
   type VoiceSessionState,
@@ -45,8 +59,9 @@ import {
 
 /** Un segment plus court que ~75 ms d'audio n'est même pas envoyé au STT. */
 const SEGMENT_MIN_BYTES = 1_200
-/** Délai de garde après le début d'une phrase lue : évite l'auto-interruption par l'écho. */
-const TTS_ECHO_BARRIER_MS = 900
+// v11.12.0 : l'agent dit qu'il se retire au lieu de disparaître en silence — même
+// règle que le repli de voix, qui se dit toujours (v11.5.0).
+const WAKE_SLEEP_REPLY = "Très bien, je me rendors."
 const VAD_INTERVAL_MS = 50
 // v11.1.1 : pré-roll. Le VAD n'ouvre un segment qu'après ~220 ms de voix : si
 // l'enregistrement ne démarrait qu'à cet instant, le « A » de « Aven » était
@@ -54,10 +69,15 @@ const VAD_INTERVAL_MS = 50
 // capture dès la première trame au-dessus du seuil, et on jette le clip si
 // aucune parole n'est confirmée dans cette fenêtre (bruit bref).
 const PRE_ROLL_MS = 700
+// v11.14.1 : après une question d'Aven, une réponse courte (« oui », « non »,
+// « ok ») lui est adressée pendant cette fenêtre. Au-delà, c'est du bruit.
+const ANSWER_WINDOW_MS = 15_000
 
 export type VoiceAgentApi = {
   phase: VoicePhase
   label: string
+  /** v11.12.0 : mode éveillé — « Aven » n'est plus nécessaire pour être compris. */
+  awake: boolean
   muted: boolean
   error?: string
   heard?: string
@@ -75,8 +95,15 @@ export function useVoiceAgent(options: {
    * Appelée UNIQUEMENT après un « oui » explicite — jamais sur la demande seule.
    */
   onCreateNote: (draft: string) => Promise<string | null | undefined>
+  /**
+   * v11.15.0 : affiche la note que le modèle vient de créer, après confirmation.
+   * Même exigence que la note dictée : l'écrit doit être visible.
+   */
+  onNoteCreated?: (noteId: string) => void
 }): VoiceAgentApi {
-  const [session, setSession] = useState<VoiceSessionState>(() => initialVoiceSession(false))
+  // v11.15.1 : l'écoute démarre « coupée » jusqu'à ce que la préférence soit lue.
+  // La restaurer après le montage ouvrait le micro malgré un choix « coupé ».
+  const [session, setSession] = useState<VoiceSessionState>(() => initialVoiceSession(true))
   const sessionRef = useRef(session)
   const optionsRef = useRef(options)
   optionsRef.current = options
@@ -96,12 +123,18 @@ export function useVoiceAgent(options: {
   const gestureArmedRef = useRef(false)
   const gestureHandlerRef = useRef<(() => void) | null>(null)
   const playbackTokenRef = useRef(0)
-  const speakingSinceRef = useRef(0)
+  // v11.11.1 : jeton de la lecture en vol (0 = aucune). Deux décisions en
+  // dépendent : un écho de la voix de l'agent ne change rien à la session tant
+  // qu'une réponse se joue, et une vraie parole coupe la lecture en cours.
+  const readingRef = useRef(0)
   // v11.4.1 : mémoire de la dernière phrase dite, pour la reconnaître si le
   // micro la reprend (haut-parleurs + STT).
   const spokenTextRef = useRef("")
   const spokenEndedAtRef = useRef(0)
-  const setMutedRef = useRef<(muted: boolean) => void>(() => undefined)
+  const setMutedRef = useRef<(muted: boolean, persist?: boolean) => void>(() => undefined)
+  // v11.15.1 : une action explicite de l'utilisateur prime sur la préférence lue
+  // en retard — cliquer « Activer » ne doit pas être annulé par la réponse IPC.
+  const micTouchedRef = useRef(false)
   const startRecorderRef = useRef<(preRoll?: boolean) => void>(() => undefined)
   const segmentRef = useRef<(blob: Blob) => void>(() => undefined)
   const handlersRef = useRef<{ start: () => void; end: () => void }>({ start: () => undefined, end: () => undefined })
@@ -123,6 +156,9 @@ export function useVoiceAgent(options: {
 
   const stopPlayback = useCallback(() => {
     playbackTokenRef.current += 1
+    // Une lecture coupée n'est plus une lecture en vol : le drapeau tombe ici, sans
+    // attendre que `speakReply` rende la main (v11.11.1).
+    readingRef.current = 0
     stopVoicePlayback()
     void api.voiceAgentStop().catch(() => undefined)
   }, [])
@@ -132,27 +168,70 @@ export function useVoiceAgent(options: {
   // phrases (mesuré). Le service enchaîne les phrases d'un même texte avec ses
   // propres pauses (~0,9 s), sans coupure ajoutée. Une interruption invalide la
   // lecture (le token change) au lieu de laisser parler dans le vide.
+  const playReading = useCallback(async (
+    text: string,
+    stale: () => boolean,
+  ): Promise<boolean> => {
+    // v11.4.1 : ce que l'agent dit est mémorisé AVANT d'être joué — c'est la
+    // référence qui permet de reconnaître sa propre voix dans une transcription.
+    spokenTextRef.current = text
+    // v11.5.3 : l'audio arrive par trames et la lecture commence dès la première.
+    const streamId = `voice-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    // v11.10.0 : le host dit quel lecteur préparer (PCM pour la voix locale
+    // Pocket). La question est posée AVANT de créer le lecteur : un abonné
+    // branché après l'appel ne recevrait aucune trame.
+    // v11.14.0 : sans lecteur PCM (voix Windows), on garde l'ancien chemin —
+    // l'audio rendu d'un bloc par voiceAgentSay.
+    const kind = await api.voiceAgentStreamKind().catch(() => "none" as const)
+    const player = kind === "pcm" ? createPcmStream(streamId) : null
+    const result: VoiceStreamResult | VoiceSpeech = player
+      ? await api.voiceAgentSayStream(text, streamId)
+      : await api.voiceAgentSay(text)
+    // Le host a parlé (voix Windows) ou préparé un repli : l'écho court à partir
+    // de maintenant, même si la webview ne joue rien.
+    spokenEndedAtRef.current = Date.now()
+    if (stale()) {
+      player?.cancel()
+      return false
+    }
+    if (player) {
+      const streamed = result as VoiceStreamResult
+      if (streamed.fallback) {
+        player.cancel()
+        await playVoiceSpeech(streamed.fallback)
+      } else if (streamed.streamed) {
+        await player.done
+      } else {
+        // Aucune trame et aucun repli : rien à jouer (interruption, texte vide).
+        player.cancel()
+      }
+    } else {
+      await playVoiceSpeech(result as VoiceSpeech)
+    }
+    // Fin de lecture réelle : la fin d'écho court à partir d'ici.
+    spokenEndedAtRef.current = Date.now()
+    // v11.3.0 : le service neuronal est gratuit mais non contractuel. Un repli sur
+    // la voix locale est possible, à condition de le dire.
+    if (result.warning) commit({ type: "error", message: result.warning })
+    return !stale()
+  }, [commit])
+
+  // v11.11.1 : la lecture en vol est signalée AVANT la synthèse — c'est pendant ce
+  // temps que le micro peut reprendre la voix de l'agent. Le drapeau est retiré
+  // quoi qu'il arrive (erreur de décodage comprise), sinon l'interface resterait à
+  // « Lecture » pour toujours ; c'est lui qui dit au garde d'écho s'il doit
+  // préserver quelque chose (barge-in.ts).
   const speakReply = useCallback(async (text: string, requestId: number): Promise<boolean> => {
     const token = ++playbackTokenRef.current
     const stale = () => token !== playbackTokenRef.current || sessionRef.current.requestId !== requestId
     if (stale()) return false
-    speakingSinceRef.current = Date.now()
-    // v11.4.1 : ce que l'agent dit est mémorisé AVANT d'être joué — c'est la
-    // référence qui permet de reconnaître sa propre voix dans une transcription.
-    spokenTextRef.current = text
-    // Le host choisit le moteur et rend l'audio ; la webview le joue. Voix Windows :
-    // le host a déjà parlé, playVoiceSpeech rend `false` sans rien bloquer.
-    const speech = await api.voiceAgentSay(text)
-    spokenEndedAtRef.current = Date.now()
-    if (stale()) return false
-    await playVoiceSpeech(speech)
-    // Fin de lecture réelle : la fin d'écho court à partir d'ici.
-    spokenEndedAtRef.current = Date.now()
-    // v11.3.0 : le service neuronal est gratuit mais non contractuel. Un repli sur
-    // la voix Windows est possible, à condition de le dire.
-    if (speech.warning) commit({ type: "error", message: speech.warning })
-    return !stale()
-  }, [commit])
+    readingRef.current = token
+    try {
+      return await playReading(text, stale)
+    } finally {
+      if (readingRef.current === token) readingRef.current = 0
+    }
+  }, [playReading])
 
   // v11.4.0 : une seule façon de prendre la parole. Réponses de commande,
   // questions de note et confirmations d'écriture passent par ici, pour que
@@ -190,6 +269,12 @@ export function useVoiceAgent(options: {
         commit({ type: "interrupt" })
         return
       }
+      // v11.9.0 : le host a proposé une destruction. L'attente est ouverte AVANT
+      // de poser la question, sinon une réponse immédiate ne serait pas classée.
+      // Une nouvelle demande remplace la proposition précédente.
+      pendingActionRef.current = answer.pending
+        ? { token: answer.pending.token, prompt: answer.pending.prompt, askedAt: Date.now() }
+        : null
       commit({ type: "speaking", requestId, reply: answer.text })
       const finished = await speakReply(answer.text, requestId)
       if (finished) commit({ type: "done" })
@@ -237,6 +322,27 @@ export function useVoiceAgent(options: {
     await say(NOTE_CONTENT_PROMPT)
   }, [awaitNote, say])
 
+  /**
+   * v11.16.0 : la phrase décrit le contenu à rédiger, pas le texte à dicter.
+   * Le modèle rédige ; le résultat est relu, puis seule l'écriture confirmée le
+   * persiste. Une panne de rédaction laisse la note non créée et l'erreur dite.
+   */
+  const composeNote = useCallback(async (demand: string) => {
+    clearPendingNote()
+    const requestId = sessionRef.current.requestId
+    commit({ type: "thinking", requestId })
+    try {
+      const result = await api.voiceAgentComposeNote(demand)
+      if (sessionRef.current.requestId !== requestId || sessionRef.current.micMuted) return
+      const content = String(result?.content ?? "").trim()
+      if (!content) throw new Error("L'agent n'a rédigé aucun contenu pour cette note.")
+      awaitNote(content)
+      await say(noteConfirmPrompt(content))
+    } catch (error) {
+      reportError(error)
+    }
+  }, [awaitNote, clearPendingNote, commit, reportError, say])
+
   /** Le SEUL chemin d'écriture — atteint uniquement après un « oui » classé. */
   const writeConfirmedNote = useCallback(async (draft: string) => {
     clearPendingNote()
@@ -263,6 +369,11 @@ export function useVoiceAgent(options: {
       if (classifyNoteReply(text) === "cancel" || text.length < 2) {
         clearPendingNote()
         await say(NOTE_CANCELLED_REPLY)
+      } else if (noteNeedsComposition(text)) {
+        // v11.16.0 : la phrase décrit ce que la note doit contenir, elle n'est
+        // pas le contenu. Le modèle la rédige ; la confirmation relit ensuite le
+        // texte produit, jamais la demande.
+        await composeNote(text)
       } else {
         // Le contenu vient d'être dit : il est répété, puis la confirmation est
         // redemandée. L'utilisateur ne peut donc pas écrire par inadvertance.
@@ -278,7 +389,55 @@ export function useVoiceAgent(options: {
     clearPendingNote()
     await say(reply === "cancel" ? NOTE_CANCELLED_REPLY : NOTE_UNCONFIRMED_REPLY)
     return true
-  }, [askNoteConfirmation, clearPendingNote, say, writeConfirmedNote])
+  }, [askNoteConfirmation, clearPendingNote, composeNote, say, writeConfirmedNote])
+
+  // ── Action destructive : proposée par le host, jamais exécutée sans « oui » ──
+  // v11.9.0 : le renderer ne connaît ni la cible ni l'action exécutée : il garde
+  // le jeton rendu par le host et le rappelle après un accord classé.
+  const pendingActionRef = useRef<PendingVoiceAction | null>(null)
+
+  /** Ferme l'attente et annule la proposition côté host (mute, stop, démontage). */
+  const clearPendingAction = useCallback(() => {
+    const pending = pendingActionRef.current
+    pendingActionRef.current = null
+    if (pending) void api.voiceAgentCancelAction(pending.token).catch(() => undefined)
+  }, [])
+
+  /**
+   * Le SEUL chemin d'exécution : le host revérifie la fenêtre de décision, le
+   * renderer ne fait que transmettre le jeton d'une proposition qu'il a dite.
+   */
+  const confirmPendingAction = useCallback(async (token: string) => {
+    try {
+      const done = await api.voiceAgentConfirmAction(token)
+      // v11.15.0 : une note créée par l'agent s'ouvre comme une note dictée.
+      if (done?.noteId) optionsRef.current.onNoteCreated?.(done.noteId)
+      await say(done?.text?.trim() ? done.text : ACTION_UNCONFIRMED_REPLY)
+    } catch (error) {
+      reportError(error)
+    }
+  }, [reportError, say])
+
+  /** Traite une parole comme réponse à l'action en attente ; vrai si elle l'était. */
+  const answerPendingAction = useCallback(async (text: string): Promise<boolean> => {
+    const pending = pendingActionRef.current
+    if (!pending) return false
+    if (!actionConfirmationOpen(pending.askedAt)) {
+      clearPendingAction()
+      await say(ACTION_EXPIRED_REPLY)
+      return true
+    }
+    const reply = classifyActionReply(text)
+    if (reply === "confirm") {
+      // Le jeton est consommé : le host l'exécute, il n'y a plus rien à annuler.
+      pendingActionRef.current = null
+      await confirmPendingAction(pending.token)
+      return true
+    }
+    clearPendingAction()
+    await say(reply === "cancel" ? ACTION_CANCELLED_REPLY : ACTION_UNCONFIRMED_REPLY)
+    return true
+  }, [clearPendingAction, confirmPendingAction, say])
 
   // v11.1.1 : le chemin d'une transcription est isolé du micro. Le segment
   // audio n'est qu'un producteur de texte : mot d'activation, fenêtre de suivi,
@@ -299,36 +458,88 @@ export function useVoiceAgent(options: {
     // v11.4.1 : l'agent s'entend lui-même par les haut-parleurs. Sans ce garde, sa
     // propre phrase revient transcrite et passe pour une réponse : elle annulait
     // la note en attente. Rien n'est exécuté, la décision reste ouverte.
-    if (isSelfEcho({
+    const reading = readingRef.current !== 0
+    const echo = isSelfEcho({
       heard: text,
       spoken: spokenTextRef.current,
-      speaking: sessionRef.current.phase === "speaking",
+      speaking: sessionRef.current.phase === "speaking" || reading,
       endedAt: spokenEndedAtRef.current,
-    })) {
-      commit({ type: "interrupt" })
+    })
+    if (echo) {
+      // v11.11.1 : un écho ne change RIEN tant qu'une réponse se joue — il la
+      // changeait de requête, et la fin de la lecture disparaissait au retour de la
+      // synthèse. Hors lecture, il reste une parole entendue et non adressée.
+      commit(reading ? { type: "ignored", reading: true } : { type: "interrupt" })
       return
     }
+    // v11.15.0 : une vraie parole ADRESSÉE coupe la lecture en cours. Le bruit de
+    // la pièce ne l'arrête plus : la décision se prend plus bas, après le verdict
+    // d'adresse du host (barge-in.ts), jamais sur le niveau du micro.
+
     // v11.4.2 : la question de confirmation n'a pas été coupée à la détection de la
     // parole ; elle s'arrête ici, quand le texte prouve que c'est bien toi. Un écho
     // est déjà sorti plus haut : il n'arrête donc rien.
     if (pendingNoteRef.current) stopPlayback()
+    // v11.9.0 : même règle pour une action proposée — la question est posée, la
+    // parole suivante y répond, et un « non » n'exécute rien.
+    if (pendingActionRef.current) stopPlayback()
     // v11.4.0 : tant qu'une note attend sa confirmation, toute parole est une
     // réponse à cette question — « Aven » n'est pas exigé, et aucune autre
     // lecture ne s'intercale entre la question et la décision.
     try {
       if (await answerPendingNote(text)) return
+      if (await answerPendingAction(text)) return
     } catch (error) {
       reportError(error)
       return
     }
     try {
-      const interpreted = await api.voiceAgentInterpret(text)
-      // Sans mot d'activation ni fenêtre de suivi, la parole n'est pas adressée
-      // à Aven : elle est ignorée (aucune action, aucune réponse).
-      if (!interpreted.woken && !acceptsFollowUp(sessionRef.current)) {
+      // v11.14.1 : Aven vient de poser une question ? Le contexte vient de la
+      // dernière réponse LUE, jamais d'une liste de mots recopiée ici.
+      const expectsAnswer =
+        sessionRef.current.reply?.trim().endsWith("?") === true &&
+        spokenEndedAtRef.current > 0 &&
+        Date.now() - spokenEndedAtRef.current <= ANSWER_WINDOW_MS
+      const interpreted = await api.voiceAgentInterpret(text, expectsAnswer)
+      const awake = isAwake(sessionRef.current)
+      // v11.12.0 : « dors » rendort l'agent — mais seulement quand il est en veille
+      // (ou qu'on l'a appelé) : « dors » lancé à la cantonade dans la pièce ne doit
+      // pas faire répondre un agent endormi. Aucune écriture ne survit au repos.
+      if (interpreted.sleep && (interpreted.woken || awake)) {
+        clearPendingNote()
+        clearPendingAction()
+        stopPlayback()
+        commit({ type: "sleep" })
+        await say(WAKE_SLEEP_REPLY)
+        return
+      }
+      // Sans mot d'activation ni veille ouverte, la parole n'est pas adressée à
+      // Aven : elle est ignorée (aucune action, aucune réponse).
+      if (!interpreted.woken && !awake) {
+        // v11.15.0 : une réponse plus longue que la veille ne doit pas devenir
+        // impossible à interrompre — une parole adressée coupe encore la lecture.
+        if (shouldInterruptSpeech({ echo: false, reading, addressed: interpreted.addressed, heard: text })) stopPlayback()
         commit({ type: "interrupt" })
         return
       }
+      // v11.14.1 : en VEILLE, tout ce qui est transcrit n'est pas une demande. Un
+      // bruit, une hésitation ou une remarque pour quelqu'un d'autre partait au
+      // LLM, qui n'avait rien de neuf à dire et répétait sa réponse précédente.
+      // Une parole non adressée ne reçoit aucune réponse ET ne prolonge pas la
+      // veille : seule une parole réellement adressée entretient la conversation.
+      if (!interpreted.addressed) {
+        if (shouldInterruptSpeech({ echo: false, reading, addressed: false, heard: text })) {
+          stopPlayback()
+          commit({ type: "interrupt" })
+          return
+        }
+        commit({ type: "ignored", reading })
+        return
+      }
+      // v11.12.0 : chaque parole adressée PROLONGE la veille — une conversation ne
+      // se coupe pas au milieu parce que le mot d'activation a été oublié.
+      if (shouldInterruptSpeech({ echo: false, reading, addressed: true, heard: text })) stopPlayback()
+      commit({ type: "wake" })
       if (interpreted.command) {
         await runCommand(interpreted.command)
         return
@@ -337,11 +548,22 @@ export function useVoiceAgent(options: {
         commit({ type: "interrupt" })
         return
       }
-      // v11.4.0 : une demande de note ne part JAMAIS au LLM — il répondrait
-      // « c'est noté » sans rien écrire. Elle ouvre la confirmation orale.
+      // v11.4.0 : une demande de note ne part JAMAIS au LLM conversationnel — il
+      // répondrait « c'est noté » sans rien écrire. Elle ouvre la confirmation
+      // orale. v11.16.0 : si la demande décrit un contenu à RÉDIGER, un appel
+      // dédié le compose ; le modèle n'écrit toujours rien lui-même.
+      if (
+        noteNeedsComposition(interpreted.demand) &&
+        /\b(?:note|pense-b[eê]te|m[ée]mo)\b/i.test(interpreted.demand) &&
+        /\b(?:cr[ée]e|cr[ée]er|fais|faire|g[ée]n[èe]re|g[ée]n[ée]rer|r[ée]dige|r[ée]diger|[ée]cris|[ée]crire)\b/i.test(interpreted.demand)
+      ) {
+        await composeNote(interpreted.demand)
+        return
+      }
       const note = parseNoteDraft(interpreted.demand)
       if (note) {
-        if (note.draft.trim()) await askNoteConfirmation(note.draft)
+        if (note.draft.trim() && noteNeedsComposition(interpreted.demand)) await composeNote(interpreted.demand)
+        else if (note.draft.trim()) await askNoteConfirmation(note.draft)
         else await askNoteContent()
         return
       }
@@ -349,7 +571,7 @@ export function useVoiceAgent(options: {
     } catch (error) {
       reportError(error)
     }
-  }, [answerPendingNote, ask, askNoteConfirmation, askNoteContent, commit, reportError, runCommand, stopPlayback])
+  }, [answerPendingAction, answerPendingNote, ask, askNoteConfirmation, askNoteContent, clearPendingAction, clearPendingNote, commit, composeNote, reportError, runCommand, say, stopPlayback])
 
   const handleSegment = useCallback(async (blob: Blob) => {
     if (blob.size < SEGMENT_MIN_BYTES) {
@@ -431,30 +653,34 @@ export function useVoiceAgent(options: {
 
   const handleSpeechStart = useCallback(() => {
     if (sessionRef.current.micMuted) return
-    const previous = sessionRef.current.phase
-    // Pendant une phrase lue, l'écho peut ressembler à une voix : garde courte.
-    if (previous === "speaking" && Date.now() - speakingSinceRef.current < TTS_ECHO_BARRIER_MS) return
     clearPreRollTimer()
     discardNextRef.current = false
-    // v11.4.2 : pendant une question de note, la lecture continue. Le micro
-    // entend Aven ; couper ici tronquerait la question avant « Je l'enregistre ? ».
-    // La question s'arrêtera dès que le texte aura prouvé que c'est toi.
-    const cutNow = shouldInterruptSpeech({ phase: previous, awaitingNote: pendingNoteRef.current !== null })
+    // v11.4.2 : la lecture continue pendant qu'une parole est détectée — c'est elle
+    // qui porte la question de confirmation, et la tronquer était le défaut.
+    // v11.11.1 : cette règle vaut pour TOUTES les lectures. Le niveau du micro ne
+    // coupe plus rien : pendant une réponse, il mesure d'abord la voix de l'agent
+    // reprise par les haut-parleurs. La reprise de parole se décide plus loin, à la
+    // transcription, quand le host peut dire si la parole est réellement adressée.
     commit({ type: "speech-start" })
-    if (cutNow) {
-      // v11.3.0 : couper la lecture coupe aussi l'audio neuronal déjà décodé.
-      stopPlayback()
-    }
     // Le pré-roll contient déjà le début de la phrase : ne pas rouvrir de
     // recorder (cela perdrait précisément l'attaque du mot d'activation).
     startRecorderRef.current(false)
-    // v11.3.0 : stopPlayback coupe désormais aussi l'audio neuronal.
-  }, [clearPreRollTimer, commit, stopPlayback])
+  }, [clearPreRollTimer, commit])
 
   const handleSpeechEnd = useCallback(() => {
-    if (sessionRef.current.phase !== "capturing") return
-    commit({ type: "speech-end" })
     const recorder = recorderRef.current
+    if (sessionRef.current.phase !== "capturing") {
+      // v11.15.2 : filet de sécurité. Si une phase a été écrasée alors que
+      // l'enregistreur tourne encore, on l'arrête au lieu de le laisser ouvert :
+      // un enregistreur orphelin rend le micro sourd pour tous les tours suivants.
+      // Le clip part quand même à la transcription (le jeton de demande filtre
+      // les réponses périmées) : c'est peut-être la réponse de l'utilisateur.
+      if (recorder && recorder.state !== "inactive") {
+        try { recorder.stop() } catch { /* déjà arrêté */ }
+      }
+      return
+    }
+    commit({ type: "speech-end" })
     if (recorder && recorder.state !== "inactive") {
       try { recorder.stop() } catch { commit({ type: "heard", text: "" }) }
     } else {
@@ -547,12 +773,17 @@ export function useVoiceAgent(options: {
     }
   }, [reportError])
 
-  const setMuted = useCallback((muted: boolean) => {
+  const setMuted = useCallback((muted: boolean, persist = true) => {
+    // v11.15.1 : `persist = false` restaure une préférence déjà écrite ; marquer
+    // l'interaction ne vaut que pour un geste réel de l'utilisateur.
+    if (persist) micTouchedRef.current = true
     const next = commit({ type: "mic", muted })
     if (next.phase === "muted") {
       // v11.4.0 : couper le micro renonce aussi à la note en attente — on ne
       // laisse pas une décision d'écriture ouverte sans moyen de répondre.
+      // v11.9.0 : même chose pour une action destructive proposée.
       clearPendingNote()
+      clearPendingAction()
       stopPlayback()
       clearPreRollTimer()
       // Un clip en cours (pré-roll compris) ne doit pas être transcrit après
@@ -567,22 +798,27 @@ export function useVoiceAgent(options: {
       streamRef.current?.getAudioTracks().forEach((track) => { track.enabled = true })
       void startListening()
     }
-    void api.setVoiceAgentPrefs({ micMuted: muted }).catch(() => undefined)
-  }, [clearPendingNote, clearPreRollTimer, commit, startListening, stopPlayback])
+    if (persist) void api.setVoiceAgentPrefs({ micMuted: muted }).catch(() => undefined)
+  }, [clearPendingAction, clearPendingNote, clearPreRollTimer, commit, startListening, stopPlayback])
   setMutedRef.current = setMuted
 
   // ── Cycle de vie ────────────────────────────────────────────────────────────
+  // v11.15.1 : la préférence se lit QUAND le Poste est prêt, et l'état initial est
+  // « micro coupé ». Avant, l'écoute démarrait au montage puis la lecture arrivait
+  // après coup — et pouvait échouer parce que le runtime n'était pas encore prêt.
+  // L'agent réglé sur « micro coupé » écoutait donc au démarrage, et le premier
+  // clic recoupait le micro au lieu de l'activer. Le mute par défaut est sûr.
   useEffect(() => {
+    if (!options.enabled) return
     let cancelled = false
     void api.voiceAgentPrefs()
       .then((prefs) => {
-        if (cancelled || !prefs.micMuted) return
-        // Le choix « micro coupé » est restauré avant toute demande de permission.
-        commit({ type: "mic", muted: true })
+        if (cancelled || micTouchedRef.current) return
+        setMuted(prefs.micMuted, false)
       })
       .catch(() => undefined)
     return () => { cancelled = true }
-  }, [commit])
+  }, [options.enabled, setMuted])
 
   useEffect(() => {
     if (!options.enabled) return
@@ -601,7 +837,9 @@ export function useVoiceAgent(options: {
       }
       discardNextRef.current = true
       // v11.4.0 : aucune décision d'écriture ne survit au démontage du hook.
+      // v11.9.0 : une action proposée non plus.
       clearPendingNote()
+      clearPendingAction()
       const recorder = recorderRef.current
       if (recorder && recorder.state !== "inactive") {
         try { recorder.stop() } catch { /* déjà arrêté */ }
@@ -614,20 +852,34 @@ export function useVoiceAgent(options: {
       audioContextRef.current = null
       stopPlayback()
     }
-  }, [clearPendingNote, clearPreRollTimer, options.enabled, startListening, stopPlayback])
+  }, [clearPendingAction, clearPendingNote, clearPreRollTimer, options.enabled, startListening, stopPlayback])
+
+  // v11.12.0 : l'échéance de veille est une minuterie, pas un décompte affiché.
+  // Un seul délai est armé, et son expiration rendort l'agent — sans elle, le
+  // bandeau resterait sur « Éveillé » alors que le mot d'activation est redevenu
+  // exigé, et l'état affiché mentirait.
+  useEffect(() => {
+    const remaining = session.awakeUntil - Date.now()
+    if (remaining <= 0) return
+    const timer = window.setTimeout(() => { commit({ type: "sleep" }) }, remaining)
+    return () => window.clearTimeout(timer)
+  }, [commit, session.awakeUntil])
 
   const toggleMic = useCallback(() => setMuted(!sessionRef.current.micMuted), [setMuted])
   const stop = useCallback(() => {
     // v11.4.0 : interrompre la lecture de la confirmation annule la note — une
     // écriture ne survit pas à un « stop ».
+    // v11.9.0 : idem pour une action destructive proposée.
     clearPendingNote()
+    clearPendingAction()
     stopPlayback()
     commit({ type: "interrupt" })
-  }, [clearPendingNote, commit, stopPlayback])
+  }, [clearPendingAction, clearPendingNote, commit, stopPlayback])
 
   return {
     phase: session.phase,
-    label: voicePhaseLabel(session.phase),
+    label: voiceStatusLabel(session),
+    awake: isAwake(session),
     muted: session.micMuted,
     error: session.error,
     heard: session.heard,

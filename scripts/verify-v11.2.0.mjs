@@ -6,8 +6,14 @@ import { fileURLToPath } from "node:url"
 // v11.2.0 : l'agent vocal reçoit son premier canal d'ACTION. Le risque d'une telle
 // marche n'est pas de mal répondre : c'est de laisser un modèle décider d'une
 // écriture, d'un chemin de fichier ou d'une boucle sans fin. Cette sonde fige les
-// quatre garde-fous : outils en LECTURE SEULE, arguments validés, boucle bornée,
-// chemin machine jamais transmis.
+// quatre garde-fous : les trois outils de LECTURE SEULE, arguments validés, boucle
+// bornée, chemin machine jamais transmis.
+//
+// v11.9.0 : l'agent ÉCRIT désormais, mais pas par cette liste — les écritures et
+// les destructions vivent dans le catalogue (`host/agent-actions.ts`) et sont
+// gouvernées par `scripts/verify-v11.9.0.mjs`. Ce que cette sonde garde est son
+// sujet : `TOOL_NAMES` reste fermé et sans écriture, et un outil inconnu est
+// refusé AVANT toute exécution.
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const read = (p) => readFileSync(path.join(root, p), "utf8")
@@ -60,7 +66,8 @@ assert.match(speech, /if \(!run\) \{/, "sans exécutant, la conversation reste s
 assert.match(tools, /export function safeNoteId/, "les identifiants de note sont filtrés")
 assert.match(tools, /segment === "\.\."/, "la traversée « .. » est refusée")
 assert.match(tools, /export function readToolCalls/, "les appels du modèle sont décodés et bornés")
-assert.match(tools, /if \(!isToolName\(call\.name\)\)/, "un outil inconnu est refusé avant exécution")
+assert.match(tools, /if \(isToolName\(call\.name\)\)/, "la liste fermée est éprouvée avant tout accès aux données")
+assert.match(tools, /if \(!action\) \{\s*return \{ ok: false, text: `Outil inconnu/, "un outil inconnu est refusé avant exécution")
 assert.match(tools, /catch \(error\)/, "un échec de lecture devient un message, jamais une exception")
 
 // ── D. Le host branche les données réelles sans fuiter le chemin machine ────

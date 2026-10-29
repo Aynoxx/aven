@@ -87,7 +87,10 @@ assert.ok(!/\.hub-card:hover \{[^}]*scale\(/s.test(css), "F8 : plus de scale au 
 // AMENDEMENT v11.0.0 : la ligne de récents du hub devient `.wb-row` (planche
 // Aujourd'hui) ; les contrôles segmentés des dialogues restent inchangés.
 // v11.1.3 : `.settings-tabs button` a disparu avec les onglets de la modale de réglages.
-for (const sel of [/\.segmented button:active/, /\.wb-row:active/]) {
+// v12.0.0 : les tuiles d'Aujourd'hui ont disparu ; la rangée d'onglets de session
+// (rendue seulement quand plusieurs conversations sont ouvertes) porte le même
+// press-state que les contrôles segmentés.
+for (const sel of [/\.segmented button:active/, /\.wb-tab:active/]) {
   assert.match(css, sel, "F9 : :active en scale sur les contrôles segmentés")
 }
 // F5 : plus de boucle infinie décorative sur la pilule Freebuff (un seul foyer vivant).
@@ -111,8 +114,12 @@ const contrast = (a, b) => {
 // --panel-solid, dans les DEUX thèmes — seules les valeurs mesurées changent.
 const lightMuted = css.match(/:root\[data-theme="light"\][\s\S]{0,400}?--muted:\s*(#[0-9a-fA-F]{6})/)?.[1]
 const darkMuted = css.match(/:root \{[\s\S]{0,800}?--muted:\s*(#[0-9a-fA-F]{6})/)?.[1]
-assert.equal(lightMuted, "#5c6153", "muted clair (DA v11.0.0) : #5c6153")
-assert.equal(darkMuted, "#949c8b", "muted sombre (DA v11.0.0) : #949c8b")
+// AMENDEMENT v12.0.0 : le champ forêt du brief remplace l'olive. L'exigence ne
+// bouge pas (≥ 4,5:1 sur --bg ET --panel-solid, deux thèmes) ; seules les valeurs
+// mesurées changent — #939f96 mesure 6,5:1 sur #0b100e, #55604f mesure 6,0:1 sur
+// #f1efe8.
+assert.equal(lightMuted, "#55604f", "muted clair (DA v12.0.0) : #55604f")
+assert.equal(darkMuted, "#939f96", "muted sombre (DA v12.0.0) : #939f96")
 for (const [name, muted, bg, panel] of [
   ["clair", lightMuted, "#f3f0e7", "#fffdf7"],
   ["sombre", darkMuted, "#0a0c09", "#141910"],
