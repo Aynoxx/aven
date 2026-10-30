@@ -24,6 +24,8 @@ type Props = {
   ready: boolean
   /** Conversations réellement chargées — la plus récente nourrit « Reprendre ». */
   chats: Chat[]
+  /** La liste des conversations a terminé son chargement pour l'espace actif. */
+  chatsReady: boolean
   /** Libellé français du mode de délégation actif (état réel, jamais une promesse). */
   delegation: string
   onOpenConversation: (chat: Chat) => void
@@ -42,8 +44,7 @@ type Props = {
   onOpenSettings?: () => void
 }
 
-// Ordre fixe des trois colonnes, indépendant des données présentes.
-const SLOTS: ResumeKind[] = ["conversation", "note", "file"]
+// Les entrées restent ordonnées par nature ; une nature absente n'ajoute pas de case vide.
 
 const KIND_LABEL: Record<ResumeKind, string> = {
   conversation: "Conversation",
@@ -63,6 +64,7 @@ export default function HomeStage({
   voice,
   ready,
   chats,
+  chatsReady,
   delegation,
   onOpenConversation,
   onOpenNote,
@@ -81,6 +83,7 @@ export default function HomeStage({
   const [draft, setDraft] = useState("")
   const [notes, setNotes] = useState<Note[]>([])
   const [files, setFiles] = useState<RecentFile[]>([])
+  const [recentLoaded, setRecentLoaded] = useState(false)
   // Dernier message de la conversation la plus récente : un extrait RÉEL, pas une
   // promesse. Sans message, l'extrait reste vide plutôt que d'être inventé.
   const [preview, setPreview] = useState("")
@@ -96,14 +99,25 @@ export default function HomeStage({
     // v12.3.0 : pas d'IPC avant que le runtime ne soit prêt et l'espace actif —
     // sinon l'accueil affichait brièvement des données d'une session précédente
     // (note d'un ancien espace), ce qui ressemble à un historique fabriqué.
-    if (!ready) { setNotes([]); setFiles([]); return }
+    if (!ready) {
+      setNotes([])
+      setFiles([])
+      setRecentLoaded(false)
+      return
+    }
     let alive = true
-    api.notesList()
-      .then((list) => { if (alive) setNotes(list) })
-      .catch(() => { if (alive) setNotes([]) })
-    api.filesRecent()
-      .then((list) => { if (alive) setFiles(list) })
-      .catch(() => { if (alive) setFiles([]) })
+    // v12.7.0 : la zone « Reprendre » attend les deux sources avant d'annoncer
+    // qu'il n'y a rien. Un appel lent ne doit pas être confondu avec un espace vide.
+    setRecentLoaded(false)
+    Promise.all([
+      api.notesList().catch(() => [] as Note[]),
+      api.filesRecent().catch(() => [] as RecentFile[]),
+    ]).then(([nextNotes, nextFiles]) => {
+      if (!alive) return
+      setNotes(nextNotes)
+      setFiles(nextFiles)
+      setRecentLoaded(true)
+    })
     return () => { alive = false }
   }, [ready])
 
@@ -129,8 +143,9 @@ export default function HomeStage({
   // Date réelle, pas une salutation figée : le Poste l'affiche comme un en-tête de
   // fenêtre. Locale française explicite — l'interface ne dépend pas de l'OS.
   const today = new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long" }).format(new Date(now))
-  // L'ordre de la bande est un contrat, pas un tri : trois natures, trois colonnes.
-  const byKind = new Map(entries.map((entry) => [entry.kind, entry]))
+  // v12.7.0 : les colonnes gardent leur largeur, mais seules les entrées réelles
+  // occupent une place. Une case vide ne devient pas un faux élément d'interface.
+  const resumeLoading = ready && (!chatsReady || !recentLoaded)
 
   const openEntry = (entry: ResumeEntry) => {
     if (entry.kind === "note") { onOpenNote(entry.id); return }
@@ -257,42 +272,34 @@ export default function HomeStage({
           <div className="wb-home-foot-head">
             <h2 className="wb-home-resume-title" id="wb-home-resume-title">Reprendre</h2>
           </div>
-          {entries.length > 0 ? (
-            /* v12.3.1 : les colonnes sont FIXÉES par nature (conversation, note,
-               fichier), pas remplies dans l'ordre de ce qu'on trouve. Une nature
-               absente garde sa place et un tiret — la bande ne se réorganise pas
-               sous l'œil quand une entrée apparaît (revue : colonnes clairement
-               définies, alignement cohérent). */
+          {!ready ? (
+            <p className="wb-home-empty">L’activité sera disponible lorsque l’espace de travail sera prêt.</p>
+          ) : resumeLoading ? (
+            <p className="wb-home-resume-loading" role="status" aria-live="polite">Chargement de l’activité récente…</p>
+          ) : entries.length > 0 ? (
             <ul className="wb-home-resume-list" aria-labelledby="wb-home-resume-title" data-count={entries.length}>
-              {SLOTS.map((kind) => {
-                const entry = byKind.get(kind)
+              {entries.map((entry) => {
+                const kind = entry.kind
                 const head = (
                   <span className="wb-home-cell-head">
                     <Icon name={KIND_ICON[kind]} size={14} />
                     <span className="wb-home-cell-kind">{KIND_LABEL[kind]}</span>
-                    {entry && <span className="wb-home-cell-age">· {ageLabel(entry.updated, now)}</span>}
+                    <span className="wb-home-cell-age">· {ageLabel(entry.updated, now)}</span>
                   </span>
                 )
                 return (
-                  <li key={kind} data-empty={entry ? undefined : "true"}>
-                    {entry ? (
-                      <button className="wb-home-cell" type="button" onClick={() => openEntry(entry)} title={entry.title}>
-                        {head}
-                        <span className="wb-home-cell-title">{entry.title}</span>
-                        {entry.excerpt && <span className="wb-home-cell-excerpt">{entry.excerpt}</span>}
-                      </button>
-                    ) : (
-                      <div className="wb-home-cell wb-home-cell--empty">
-                        {head}
-                        <span className="wb-home-cell-empty-note">Rien pour l’instant</span>
-                      </div>
-                    )}
+                  <li key={kind}>
+                    <button className="wb-home-cell" type="button" onClick={() => openEntry(entry)} title={entry.title}>
+                      {head}
+                      <span className="wb-home-cell-title">{entry.title}</span>
+                      {entry.excerpt && <span className="wb-home-cell-excerpt">{entry.excerpt}</span>}
+                    </button>
                   </li>
                 )
               })}
             </ul>
           ) : (
-            <p className="wb-home-empty">Aucune activité récente dans cet espace — commence par une question.</p>
+            <p className="wb-home-empty">Aucune activité récente dans cet espace — commencez par une question.</p>
           )}
         </div>
       </div>
