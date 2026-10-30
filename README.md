@@ -1,4 +1,4 @@
-# Aven v12.6.0
+# Aven v12.7.0
 
 > ## v10.0.0 — 100 % Tauri (Electron et le natif retirés)
 > Aven est une **app Tauri 2** : la webview React parle à Rust (`src-tauri/`)
@@ -27,6 +27,16 @@
 Application de bureau (Tauri) : une chatbox avec **3 agents commutables** (code, recherche, analyse) et un
 sous-agent (code-reviewer), branchée sur **OpenCode 2.0.10** et un catalogue d’agents strictement gratuit (OpenRouter Free / OpenCode Zen).
 
+> **v12.7.0 — l'accueil distingue le vide du chargement**
+> ① « Reprendre » n'affiche plus trois cases dont deux disent « Rien pour l'instant » :
+> seules les entrées réellement disponibles sont rendues, dans l'ordre conversation,
+> note, fichier. La bande conserve ses trois colonnes et ses largeurs, sans faux contenu.
+> ② L'état vide n'apparaît qu'après le chargement de l'historique, des notes et des
+> fichiers. Avant cela, Aven indique que l'activité se charge ; sans espace prêt, il
+> explique pourquoi la reprise n'est pas disponible.
+> ③ Les fenêtres de faible hauteur resserrent les espacements et la scène de l'accueil
+> plutôt que de rogner la sphère ou les commandes. Les tailles de texte restent tokenisées.
+>
 > **v12.6.0 — l'app vous répond au lieu de vous faire attendre**
 > ① La sphère **s'anime avec ta voix**. Elle lit le niveau réel du micro et non un
 > minuteur : quand tu parles, la rotation accélère, le maillage respire plus ample et
