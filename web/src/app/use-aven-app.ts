@@ -479,7 +479,9 @@ export function useAvenApp() {
       if (preferred && next === preferred) preferredChatIdRef.current = null
       return next
     })
-    if (!showArchived) setLoadedFor(agent)
+    // v12.7.0 : loadedFor décrit la fin du chargement, y compris la vue archive.
+    // La création automatique reste protégée séparément par !showArchived.
+    setLoadedFor(agent)
   }, [showArchived])
 
   // Les titres/modèles générés ou modifiés côté serveur sont relus en fin de tour
@@ -1131,6 +1133,8 @@ export function useAvenApp() {
     labelOf,
     lastUserIdx,
     live,
+    // v12.7.0 : exposé pour distinguer « vide » de « pas encore chargé ».
+    loadedFor,
     mainBlocks,
     messages,
     modelButtonRef,
