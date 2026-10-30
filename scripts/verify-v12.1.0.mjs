@@ -72,7 +72,11 @@ assert.ok(!home.includes("Rechercher un fichier"),
 assert.match(shell, /onNewChat=\{\(\) => \{ void newChat\(\) \}\}/, "« Nouvelle conversation » crée réellement une conversation")
 assert.match(shell, /onDictateNote=\{\(\) => \{ setCaptureRequested\(true\); openNotesView\(\) \}\}/,
   "« Dicter une note » ouvre la capture de la vue Notes")
-assert.match(shell, /onBrowseFiles=\{openFilesView\}/, "« Parcourir les fichiers » ouvre la vue Fichiers")
+// AMENDEMENT v12.7.1 : la fonction passée NUE recevait le MouseEvent de React comme
+// `initialPath` ; FilesView le découpait et l'interface tombait. La sonde figeait ce
+// bug. Elle vérifie désormais l'ouverture SANS chemin, seule forme correcte.
+assert.match(shell, /onBrowseFiles=\{\(\) => openFilesView\(\)\}/,
+  "« Parcourir les fichiers » ouvre la vue Fichiers sans lui passer le clic")
 assert.match(shell, /chats=\{app\.chats\}/, "les conversations reprises sont celles réellement chargées")
 assert.match(shell, /delegation=\{TASK_MODES_UI\.find/, "le mode de délégation affiché est le mode réel")
 assert.match(home, /Délégation · \{delegation\}/, "la ligne d'état nomme la délégation, sans la dupliquer ailleurs")

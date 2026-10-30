@@ -1,4 +1,4 @@
-# Aven v12.7.0
+# Aven v12.7.1
 
 > ## v10.0.0 — 100 % Tauri (Electron et le natif retirés)
 > Aven est une **app Tauri 2** : la webview React parle à Rust (`src-tauri/`)
@@ -27,6 +27,11 @@
 Application de bureau (Tauri) : une chatbox avec **3 agents commutables** (code, recherche, analyse) et un
 sous-agent (code-reviewer), branchée sur **OpenCode 2.0.10** et un catalogue d’agents strictement gratuit (OpenRouter Free / OpenCode Zen).
 
+> **v12.7.1 — « Parcourir les fichiers » ne casse plus l'interface**
+> L'action rapide de l'accueil transmettait l'événement de souris comme chemin à la
+> vue Fichiers, qui tentait de le découper : Aven s'arrêtait sur une erreur
+> d'affichage. Elle ouvre maintenant la vue sans chemin, comme son libellé l'annonce.
+>
 > **v12.7.0 — l'accueil distingue le vide du chargement**
 > ① « Reprendre » n'affiche plus trois cases dont deux disent « Rien pour l'instant » :
 > seules les entrées réellement disponibles sont rendues, dans l'ordre conversation,

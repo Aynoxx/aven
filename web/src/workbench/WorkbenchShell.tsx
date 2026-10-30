@@ -472,9 +472,13 @@ export default function WorkbenchShell({ app }: { app: AvenApp }) {
                 // possède son propre enregistreur — indépendant de l'agent vocal, donc
                 // disponible même micro de l'agent coupé.
                 onDictateNote={() => { setCaptureRequested(true); openNotesView() }}
-                // v12.3.0 : l'action passe la fonction telle quelle — une enveloppe
-                // vide n'ajoutait rien et masquait le lien réel avec l'ouverture.
-                onBrowseFiles={openFilesView}
+                // v12.3.0 : l'action passait la fonction telle quelle pour garder le
+                // lien réel avec l'ouverture.
+                // v12.7.1 : c'était faux — React transmet le MouseEvent comme premier
+                // argument, donc `initialPath` recevait l'événement et la vue Fichiers
+                // tombait sur `initial.split`. Une enveloppe sans argument est le lien
+                // réel, sans le piège.
+                onBrowseFiles={() => openFilesView()}
                 onOpenFile={(path) => openFilesView(path)}
                 // v12.5.0 : la saisie d'accueil envoie réellement le premier message.
                 onPrompt={(text) => { void startWithPrompt(text) }}

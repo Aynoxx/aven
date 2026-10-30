@@ -16,14 +16,18 @@ const css = read("web/src/styles/workbench.css")
 const readme = read("README.md")
 const agents = read("AGENTS.md")
 
-assert.equal(pkg.version, "12.7.0", "package.json porte la version courante")
+// v12.7.1 : la version avance — figer « 12.7.0 » casserait au bump suivant, comme
+// l'avait déjà appris v12.3.1. La sonde protège la SYNCHRONISATION des manifestes,
+// pas un numéro.
+assert.match(pkg.version, /^\d+\.\d+\.\d+$/, "package.json porte une version sémantique")
 assert.equal(tauri.version, pkg.version, "Tauri suit package.json")
 assert.equal(cargo.match(/^version = "([^"]+)"$/m)?.[1], pkg.version, "Cargo suit package.json")
 assert.equal(pkg.scripts["verify:v12.7.0"], "node scripts/verify-v12.7.0.mjs", "la sonde a son entrée npm")
 assert.ok(pkg.scripts.verify.includes("scripts/verify-v12.7.0.mjs"), "npm run verify inclut la sonde")
 // Le README du dépôt est en CRLF : un motif qui fige "\n" échoue sur Windows,
 // alors que la règle vérifiée est seulement « la première ligne annonce la version ».
-assert.match(readme, /^# Aven v12\.7\.0\r?$/m, "README annonce la version courante")
+const version = pkg.version.replaceAll(".", "\\.")
+assert.match(readme, new RegExp(`^# Aven v${version}\\r?$`, "m"), "README annonce la version courante")
 assert.ok(readme.includes("v12.7.0 — l'accueil distingue le vide du chargement"), "README documente la finition")
 
 // L'accueil attend la fin des trois chargements avant d'annoncer un état vide.
