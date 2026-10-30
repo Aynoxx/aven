@@ -1,4 +1,4 @@
-# Aven v12.1.0
+# Aven v12.2.0
 
 > ## v10.0.0 — 100 % Tauri (Electron et le natif retirés)
 > Aven est une **app Tauri 2** : la webview React parle à Rust (`src-tauri/`)
@@ -27,6 +27,15 @@
 Application de bureau (Tauri) : une chatbox avec **3 agents commutables** (code, recherche, analyse) et un
 sous-agent (code-reviewer), branchée sur **OpenCode 2.0.10** et un catalogue d’agents strictement gratuit (OpenRouter Free / OpenCode Zen).
 
+> **v12.2.0 — l'accueil a un fond, pas seulement une sphère**
+> ① Derrière la sphère, une couche technique discrète : densité lumineuse, courbes
+> de niveau, ligne graduée et repère en croix. Rien de tout cela ne mesure quoi que
+> ce soit — ce sont des tracés, jamais de fausses coordonnées.
+> ② Le bâti suit la **vraie phase vocale** : les anneaux s'allument quand Aven
+> réfléchit, le nœud s'élargit à la capture puis à la parole. Aucun minuteur ne
+> décide qu'Aven écoute — et aucune boucle d'animation n'est ajoutée : le mouvement
+> vivant, c'est la sphère.
+>
 > **v12.1.0 — l'accueil devient un espace de travail, pas une affiche**
 > ① Le titre monumental cède la place à une composition **éditoriale** : « VOTRE
 > ESPACE. VOTRE AGENT. » tient deux lignes à gauche, la sphère occupe la droite dans

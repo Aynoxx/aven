@@ -80,6 +80,14 @@ export default function HomeStage({
           <button className="button ghost wb-home-notice-close" type="button" onClick={onDismissNotice} aria-label="Fermer l’avis">Fermer</button>
         </div>
       )}
+      {/* v12.1.1 : couche technique du fond — tracés de construction, courbes de
+          niveau et densité. Purement décorative : elle ne dit rien et ne capte rien.
+          Aucune coordonnée, aucune mesure inventée (AGENTS.md §6). */}
+      <div className="wb-home-field" aria-hidden="true">
+        <span className="wb-home-trace" />
+        <span className="wb-home-ticks" />
+        <span className="wb-home-cross" />
+      </div>
       <div className="wb-home-grid">
         {/* Zone gauche : l'identité, la phrase, le contrôle vocal et son état. Un
             seul statut vocal sur toute la page — l'en-tête n'en ajoute pas ici. */}
@@ -112,7 +120,9 @@ export default function HomeStage({
         {/* Zone centre droit : la sphère et son environnement. Les anneaux et les
             repères sont des traits de construction — aucune coordonnée, aucune
             mesure inventée, et ils ne captent jamais le pointeur. */}
-        <div className="wb-home-scene">
+        {/* L'environnement suit la phase RÉELLE de la session vocale : data-phase
+            vient de `voice.phase`, jamais d'un minuteur ni d'un état simulé. */}
+        <div className="wb-home-scene" data-phase={voice.phase}>
           <span className="wb-home-ring" aria-hidden="true" />
           <span className="wb-home-ring wb-home-ring--wide" aria-hidden="true" />
           <span className="wb-home-mark" aria-hidden="true" />

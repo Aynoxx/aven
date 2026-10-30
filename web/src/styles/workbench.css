@@ -546,8 +546,69 @@
     linear-gradient(var(--border-strong), var(--border-strong)) right bottom / 16px 1px no-repeat,
     linear-gradient(var(--border-strong), var(--border-strong)) right bottom / 1px 16px no-repeat;
 }
+/* v12.2.0 : la couche technique du fond. Elle donne une profondeur de carte —
+   densité derrière la sphère, courbes de niveau, une ligne graduée et un repère en
+   croix. Aucune de ces marques ne mesure quoi que ce soit : ce sont des tracés, pas
+   des données (le brief interdit les fausses coordonnées). */
+.wb-home-field { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+/* Densité : deux lueurs très basses, la plus forte derrière la sphère. */
+.wb-home-field::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(58% 54% at 72% 46%, color-mix(in srgb, var(--text) 4%, transparent), transparent 70%),
+    radial-gradient(42% 40% at 10% 82%, color-mix(in srgb, var(--text) 2.5%, transparent), transparent 72%);
+}
+/* Courbes de niveau : des anneaux espacés, comme une carte topographique. Le motif
+   s'efface au centre (masque) pour ne jamais passer sous le texte de l'identité. */
+.wb-home-field::after {
+  content: "";
+  position: absolute;
+  right: -18%;
+  top: 50%;
+  width: min(120vh, 980px);
+  aspect-ratio: 1;
+  translate: 0 -50%;
+  border-radius: 50%;
+  background: repeating-radial-gradient(circle at 50% 50%, transparent 0 62px, color-mix(in srgb, var(--border-strong) 26%, transparent) 62px 63px);
+  /* Le masque ne joue que sur l'alpha : « black » n'est pas une couleur de la DA. */
+  mask-image: radial-gradient(circle at 50% 50%, transparent 26%, black 50%, transparent 84%);
+  opacity: .42;
+}
+/* Une ligne de construction traversée de graduations : le geste de cartographie. */
+.wb-home-trace {
+  position: absolute;
+  left: -4%;
+  right: -4%;
+  top: 66%;
+  height: 1px;
+  rotate: -5deg;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--border-strong) 42%, transparent) 24%, color-mix(in srgb, var(--border-strong) 42%, transparent) 76%, transparent);
+}
+.wb-home-ticks {
+  position: absolute;
+  left: 7%;
+  top: 17%;
+  width: 1px;
+  height: 24%;
+  opacity: .5;
+  background: repeating-linear-gradient(to bottom, color-mix(in srgb, var(--border-strong) 58%, transparent) 0 1px, transparent 1px 9px);
+}
+.wb-home-cross {
+  position: absolute;
+  right: 13%;
+  top: 15%;
+  width: 13px;
+  height: 13px;
+  opacity: .55;
+  background:
+    linear-gradient(var(--border-strong), var(--border-strong)) center / 1px 100% no-repeat,
+    linear-gradient(var(--border-strong), var(--border-strong)) center / 100% 1px no-repeat;
+}
 .wb-home-grid {
   position: relative;
+  z-index: 1;
   flex: 1;
   min-height: 0;
   display: grid;
@@ -654,7 +715,9 @@
   border-bottom-color: transparent;
   border-radius: 50%;
   opacity: .34;
-  transform: rotate(-24deg);
+  /* v12.2.0 : la rotation passe par la propriété `rotate`, pas `transform` — elle
+     peut ainsi tourner quand l'agent réfléchit sans écraser son inclinaison. */
+  rotate: -24deg;
 }
 .wb-home-ring--wide {
   width: min(70vh, 548px);
@@ -662,12 +725,26 @@
   border-left-color: transparent;
   border-top-color: transparent;
   opacity: .55;
-  transform: rotate(18deg);
+  rotate: 18deg;
 }
 /* Un trait de construction et un point d'accent : les deux seuls repères, assez
    discrets pour ne pas devenir une légende. */
 .wb-home-mark { position: absolute; left: 17%; top: 23%; width: 1px; height: clamp(16px, 3vh, 30px); background: var(--border-strong); opacity: .7; }
 .wb-home-node { position: absolute; right: 20%; bottom: 27%; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+/* v12.2.0 : le bâti répond à la phase RÉELLE de la session par des changements
+   d'ÉTAT (filet, halo, taille), jamais par un minuteur : sans la phase correspondante,
+   il ne se passe rien. On n'ajoute AUCUNE boucle ambiante ici — le mouvement vivant,
+   c'est la sphère, qui lit déjà l'énergie réelle du micro (AGENTS.md §12.4 garde les
+   boucles rares, et ce bâti n'a pas à en consommer une). */
+.wb-home-ring, .wb-home-node {
+  transition: opacity var(--dur-med) var(--ease-out), border-color var(--dur-med) var(--ease-out), box-shadow var(--dur-med) var(--ease-out), scale var(--dur-med) var(--ease-out);
+}
+.wb-home-scene[data-phase="thinking"] .wb-home-ring { opacity: .52; border-color: var(--accent-border); }
+.wb-home-scene[data-phase="thinking"] .wb-home-node { opacity: .3; }
+.wb-home-scene[data-phase="listening"] .wb-home-node { box-shadow: 0 0 0 7px color-mix(in srgb, var(--accent) 16%, transparent); }
+.wb-home-scene[data-phase="capturing"] .wb-home-node { scale: 1.45; }
+.wb-home-scene[data-phase="speaking"] .wb-home-node { scale: 1.8; }
 /* L'ancre de la sphère au repos : une boîte réelle, mesurée par le calque de
    l'agent. Elle ne peint rien — le canvas vit au-dessus. */
 .wb-home-agent { width: min(44vh, 340px); height: min(44vh, 340px); }

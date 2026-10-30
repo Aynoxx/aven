@@ -211,8 +211,16 @@ par les variables `:root` existantes, sinon thèmes et densités cassent.
   historique inventé, et la zone disparaît quand il n'y a rien. Une action rapide
   se nomme par ce qu'elle fait — « Parcourir les fichiers », jamais « Rechercher un
   fichier » tant que la recherche n'existe pas.
+  Une **couche technique** (densité, courbes de niveau, ligne graduée, croix) donne
+  la profondeur du fond : elle est décorative, ne capte rien, ne mesure rien, et
+  s'efface sous l'identité par masque — jamais de fausse coordonnée (v12.2.0). Le
+  bâti autour de la sphère est **lié à `voice.phase`** : anneaux qui s'allument quand
+  l'agent réfléchit, nœud qui s'élargit à la capture puis à la parole ; aucun minuteur
+  ne simule un état, et **aucune boucle ambiante n'est ajoutée** — le mouvement
+  vivant reste la sphère, qui lit l'énergie réelle du micro.
   `scripts/verify-v12.1.0.mjs` refuse le retour au titre plein écran, à un
-  historique fabriqué et à une action sans effet.
+  historique fabriqué, à une action sans effet, comme à un fond qui prétendrait
+  mesurer quelque chose.
 - **Une constellation se mesure, elle ne se devine pas** (`web/src/workbench/NavigationConstellation.tsx`) :
   la poignée passe **avant** l'arc dans le DOM (Tab entre dans les cercles), le survol
   ouvre sans voler le focus, et la grâce de fermeture empêche la scintillation entre la
