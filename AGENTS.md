@@ -209,9 +209,11 @@ par les variables `:root` existantes, sinon thèmes et densités cassent.
   horizontale** — le libellé à gauche, trois colonnes à droite, une par nature
   (conversation, note, fichier), et non un titre empilé au-dessus d'une ligne de
   pied de page — avec **trois entrées**, décidées par `web/src/workbench/resume.ts`
-  (module pur testé) : titre, extrait réel, âge. Les colonnes sont **fixées par
-  nature** (v12.3.1) : une nature absente garde sa place et le dit d'une ligne
-  discrète, la bande ne se réorganise jamais sous l'œil. Les métadonnées d'une
+  (module pur testé) : titre, extrait réel, âge. La bande garde **trois colonnes
+  égales** et un ordre stable conversation → note → fichier (v12.3.1). Depuis
+  v12.7.0, seules les entrées réellement présentes sont rendues : une nature absente
+  ne reçoit pas de case ni de faux libellé. Le vide n'est annoncé qu'après le
+  chargement des conversations, notes et fichiers. Les métadonnées d'une
   cellule (icône, nature, âge) vivent sur UNE ligne groupée — l'âge ne flotte pas au
   bord droit — et « Délégation · … » appartient à la ligne d'état du micro, pas au
   travail passé. Le dernier document vient de
