@@ -21,12 +21,16 @@ assert.equal(tauri.version, pkg.version, "Tauri suit package.json")
 assert.equal(cargo.match(/^version = "([^"]+)"$/m)?.[1], pkg.version, "Cargo suit package.json")
 assert.equal(pkg.scripts["verify:v12.7.0"], "node scripts/verify-v12.7.0.mjs", "la sonde a son entrée npm")
 assert.ok(pkg.scripts.verify.includes("scripts/verify-v12.7.0.mjs"), "npm run verify inclut la sonde")
-assert.ok(readme.startsWith("# Aven v12.7.0\n"), "README annonce la version courante")
+// Le README du dépôt est en CRLF : un motif qui fige "\n" échoue sur Windows,
+// alors que la règle vérifiée est seulement « la première ligne annonce la version ».
+assert.match(readme, /^# Aven v12\.7\.0\r?$/m, "README annonce la version courante")
 assert.ok(readme.includes("v12.7.0 — l'accueil distingue le vide du chargement"), "README documente la finition")
 
 // L'accueil attend la fin des trois chargements avant d'annoncer un état vide.
 assert.ok(shell.includes("chatsReady={loadedFor === tab}"), "le shell transmet la disponibilité de l'historique")
-assert.ok(app.includes("    loadedFor,\n    mainBlocks,"), "le contrôleur expose loadedFor")
+// Même piège CRLF que la première ligne du README : la règle est la présence des
+// deux champs dans le même objet rendu, pas le caractère de fin de ligne.
+assert.match(app, /^    loadedFor,\r?\n    mainBlocks,$/m, "le contrôleur expose loadedFor")
 assert.ok(app.includes("setLoadedFor(agent)"), "un chargement d'archives est lui aussi signalé comme terminé")
 assert.ok(home.includes("chatsReady: boolean"), "HomeStage reçoit l'état de l'historique")
 assert.ok(home.includes("Promise.all(["), "notes et fichiers sont attendus ensemble")

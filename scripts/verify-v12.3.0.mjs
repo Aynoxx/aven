@@ -92,7 +92,11 @@ assert.match(read("web/src/app/use-aven-app.ts"), /const openFilesView = \(initi
 // ── D bis. La reprise ne lit que l'espace réellement actif ──────────────────
 assert.match(shell, /ready=\{appState\.status === "ready" && !appState\.needsWorkspace\}/,
   "l'accueil reçoit l'état réel du Poste, pas une supposition")
-assert.match(home, /if \(!ready\) \{ setNotes\(\[\]\); setFiles\(\[\]\); return \}/,
+// AMENDEMENT v12.7.0 : le bloc « non prêt » remet aussi le chargement des notes et
+// fichiers à zéro, pour ne pas annoncer un vide avant les données. La règle de
+// v12.3.0 ne bouge pas — aucune lecture d'historique hors d'un espace actif — et le
+// motif ne fige donc plus la mise en forme d'une seule ligne.
+assert.match(home, /if \(!ready\) \{[\s\S]{0,160}?setNotes\(\[\]\)[\s\S]{0,80}?setFiles\(\[\]\)[\s\S]{0,80}?return\s*\}/,
   "hors d'un espace actif, aucune lecture d'historique n'est affichée")
 assert.match(home, /\}, \[ready, lastChatId\]\)/, "l'extrait se recharge quand l'espace devient actif")
 
@@ -101,9 +105,11 @@ const actionsAt = home.indexOf('className="wb-home-actions"')
 const footAt = home.indexOf('className="wb-home-foot"')
 assert.ok(actionsAt > 0 && footAt > 0 && actionsAt < footAt, "les actions rapides vivent dans la zone d'identité, pas dans la reprise")
 assert.equal(home.match(/className="button ghost wb-home-action"/g)?.length, 3, "trois actions, pas une barre")
-// Trois colonnes fixes : une seule entrée ne s'étire pas en ligne de pied de page.
+// AMENDEMENT v12.7.0 : la bande garde trois colonnes de largeur égale — les
+// largeurs ne sautent pas d'un rendu à l'autre — mais seules les entrées réelles
+// les occupent, une nature absente ne recevant plus de case vide.
 assert.match(css, /\.wb-home-resume-list \{[^}]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/,
-  "« Reprendre » tient trois colonnes, même quand une nature manque")
+  "« Reprendre » garde trois colonnes de largeur égale")
 
 // La bande basse est UNE zone horizontale : le libellé à gauche, les trois entrées
 // à droite, sur la même ligne. Empilé, « Reprendre » redevenait un pied de page.

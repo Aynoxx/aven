@@ -36,15 +36,15 @@ const version = pkg.version.replaceAll(".", "\\.")
 assert.match(readme, new RegExp(`^# Aven v${version}$`, "m"), "README annonce la version courante")
 assert.match(readme, new RegExp(`v${version} — `), "README porte la note de la version courante")
 
-// ── B. Trois colonnes FIXÉES, métadonnées alignées ─────────────────────────
-// Une colonne qui se décalerait selon les données rendrait l'alignement imprévisible :
-// l'ordre des natures est un contrat, pas un tri par date.
-assert.match(home, /const SLOTS: ResumeKind\[\] = \["conversation", "note", "file"\]/, "l'ordre des colonnes est un contrat")
-assert.match(home, /SLOTS\.map\(\(kind\) => \{/, "la bande itère sur les natures, pas sur les entrées trouvées")
-assert.match(home, /const entry = byKind\.get\(kind\)/, "chaque colonne prend l'entrée de SA nature")
-assert.match(home, /wb-home-cell--empty/, "une nature absente garde sa colonne")
-assert.match(home, /Rien pour l’instant/, "la colonne vide le dit, sans fabriquer d'entrée")
-assert.match(css, /\.wb-home-cell--empty \{ cursor: default; \}/, "la colonne vide n'est pas un bouton")
+// ── B. Trois colonnes de largeur stable, métadonnées alignées ──────────────
+// L'ordre des natures est un contrat, pas un tri par date. AMENDEMENT v12.7.0 :
+// les cases fixes par nature sont retirées (deux colonnes sur trois disaient « Rien
+// pour l'instant »). L'ordre vit désormais là où la liste se construit — resumeBoard
+// — et l'écran ne rend que les entrées réelles, sans fabriquer de faux élément.
+assert.match(read("web/src/workbench/resume.ts"), /if \(conversation\)[\s\S]*if \(note\)[\s\S]*if \(file\)/,
+  "l'ordre conversation → note → fichier est un contrat de données")
+assert.match(home, /entries\.map\(\(entry\) => \{/, "la bande rend les entrées réelles, pas des cases par nature")
+assert.ok(!/SLOTS|wb-home-cell--empty|Rien pour l’instant/.test(home), "aucune case vide ni faux libellé n'est fabriqué")
 // Une seule ligne de métadonnées, groupée : l'âge ne flotte plus au bord de la colonne.
 const ageRule = css.match(/\.wb-home-cell-age \{[^}]*\}/)?.[0] ?? ""
 assert.ok(ageRule, "l'âge a sa règle")

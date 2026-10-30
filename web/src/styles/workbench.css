@@ -953,10 +953,11 @@
   text-transform: uppercase;
 }
 .wb-home-cell-age { font-family: var(--font-mono); font-size: var(--font-size-xs); color: var(--muted); white-space: nowrap; }
-/* v12.3.1 : une nature absente garde sa colonne et le DIT en une ligne discrète —
-   structure stable, aucune donnée fabriquée. */
-/* v12.7.0 : un chargement n'est pas une entrée vide. Le repère est statique :
-   aucune animation ne prétend signaler une activité que les données ne confirment pas. */
+/* v12.3.1 : une nature absente gardait sa colonne et le disait d'une ligne discrète.
+   v12.7.0 retire ces cases — seules les entrées réelles sont rendues — et conserve
+   la règle de fond : aucune donnée fabriquée. Un chargement n'est pas une entrée
+   vide, et le repère reste statique : aucune animation ne prétend signaler une
+   activité que les données ne confirment pas. */
 .wb-home-resume-loading {
   margin: 0;
   padding: 14px 20px 12px;
