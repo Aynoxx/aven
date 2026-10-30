@@ -14,6 +14,9 @@ const fmtSize = (n: number) => (n < 1024 ? `${n} o` : n < 1024 * 1024 ? `${(n / 
 type Props = {
   agents: { id: string; name: string }[]
   currentAgent?: string
+  /** v12.3.0 : fichier à ouvrir d'emblée (accueil « Reprendre »). Une seule fois. */
+  initialPath?: string
+  onInitialHandled?: () => void
   onCompose: (text: string) => void
   onClose: () => void
   onError: (e: unknown) => void
@@ -38,8 +41,6 @@ export default function FilesView(props: Props) {
       .finally(() => setLoading(false))
   }, [])
 
-  useEffect(() => { load("") }, [load])
-
   const openDir = (path: string) => {
     setPreview(null)
     setAnalyzeFor(null)
@@ -48,10 +49,26 @@ export default function FilesView(props: Props) {
 
   const openFile = (path: string) => {
     setAnalyzeFor(null)
+    // v12.3.0 : l'ouverture nourrit l'historique de l'espace (accueil « Reprendre »).
+    // Un échec d'écriture ne doit pas empêcher la lecture : l'aperçu reste la priorité.
+    void api.filesTouch(path).catch(() => {})
     api.filesRead(path)
       .then(setPreview)
       .catch((e) => { setPreview(null); setError(e instanceof Error ? e.message : String(e)) })
   }
+
+  // v12.3.0 : un fichier demandé par l'accueil s'ouvre une fois, avec son dossier.
+  // Ensuite la vue vit sa vie : le chemin n'est pas une préférence persistante.
+  useEffect(() => {
+    const initial = props.initialPath
+    if (!initial) { load(""); return }
+    const dir = initial.split("/").slice(0, -1).join("/")
+    load(dir)
+    openFile(initial)
+    props.onInitialHandled?.()
+    // Une seule fois, au montage : dépendre du chemin rouvrirait le fichier à chaque rendu.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const upDir = useMemo(() => {
     const parts = relative.split("/").filter(Boolean)

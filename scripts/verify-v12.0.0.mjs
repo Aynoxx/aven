@@ -91,8 +91,10 @@ assert.match(nav, /aria-controls=\{open \? "wb-nav-arc" : undefined\}/, "la poig
 const navRule = workbenchCss.match(/\.wb-nav \{[\s\S]*?\n\}/)?.[0] ?? ""
 assert.ok(navRule, "la constellation a sa règle dédiée")
 assert.match(navRule, /position: absolute/, "la constellation est ancrée sur le corps, pas sur la fenêtre (un bandeau d'état décalait la poignée)")
-assert.match(navRule, /bottom: calc\(var\(--wb-command-h\) \+ 2px\)/, "la poignée reste juste au-dessus de la barre de commande, jamais dessus")
-assert.ok(shell.indexOf("<NavigationConstellation") > shell.indexOf("<CommandBar"), "la constellation est rendue dans le corps, après la barre de commande")
+// v12.6.0 : la barre de commande n'occupe plus de rangée permanente — la poignée
+// prend le bord inférieur au lieu de rester suspendue à une hauteur de barre.
+assert.match(navRule, /bottom: 12px;/, "la poignée tient le bord inférieur du Poste, sans offset de barre")
+assert.ok(shell.indexOf("<NavigationConstellation") > shell.indexOf("<CommandBar"), "la constellation est rendue dans le corps, après la palette de commande")
 
 const nodeRule = workbenchCss.match(/\.wb-nav-node \{[\s\S]*?\n\}/)?.[0] ?? ""
 assert.match(nodeRule, /position: absolute/, "chaque cercle est positionné indépendamment (aucun conteneur commun)")
@@ -126,10 +128,19 @@ for (const label of ["Conversations", "Notes", "Fichiers", "Terminal", "Orchestr
 assert.match(shell, /event\.key !== "Escape"/, "Échap ferme la constellation")
 assert.match(shell, /setNavOpen\(false\)/, "Échap rend bien la main (aucun panneau fantôme)")
 assert.match(shell, /addEventListener\("keydown", onKey, true\)/, "Échap est capté avant le reste du Poste : un panneau ouvert ne reste pas derrière")
-assert.match(nav, /onPointerEnter=\{\(\) => \{ focusOnOpen\.current = false; cancelClose\(\); onOpen\(\) \}\}/,
+// AMENDEMENT v12.6.0 : le survol remet aussi le drapeau d'ouverture passive à
+// false (la bande du bas peut avoir ouvert l'arc sans clic). L'invariant de la
+// v12.0.0 est conservé : c'est bien le SURVOL qui ouvre, et `focusOnOpen` reste
+// faux — le survol ne vole donc jamais le focus clavier.
+assert.match(nav, /onPointerEnter=\{\(\) => \{[^}]*focusOnOpen\.current = false;[^}]*cancelClose\(\);[^}]*onOpen\(\) \}\}/,
   "le survol ouvre, sans voler le focus clavier")
-assert.match(nav, /onPointerLeave=\{scheduleClose\}/, "le pointeur qui quitte un cercle referme : pas de panneau orphelin")
-assert.match(nav, /const CLOSE_GRACE_MS = 170/, "la grâce anti-scintillement entre poignée et cercles existe")
+// AMENDEMENT v12.6.0 : la fermeture ne dépend plus du rectangle d'un cercle.
+// `pointerleave` sur chaque nœud refermait l'arc dès qu'on écartait la souris d'un
+// centimètre — le défaut corrigé. L'invariant conservé est celui de la v12.0.0 :
+// aucun panneau orphelin, donc une fermeture qui existe et qui est bornée.
+assert.match(nav, /const scheduleClose = \(\) => \{[\s\S]*?onClose\(\) \}, CLOSE_GRACE_MS\)/, "la fermeture reste programmée, pas subie")
+const closeGrace = Number(nav.match(/const CLOSE_GRACE_MS = (\d+)/)?.[1] ?? 0)
+assert.ok(closeGrace >= 400, `la grâce laisse le temps de revenir sur l'arc (mesurée : ${closeGrace} ms)`)
 assert.match(nav, /event\.key === "ArrowRight"/, "les cercles se parcourent aux flèches")
 assert.match(nav, /aria-label=\{destination\.label\}/, "chaque cercle icône porte son nom accessible")
 

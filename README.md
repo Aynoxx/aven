@@ -1,4 +1,4 @@
-# Aven v12.2.0
+# Aven v12.6.0
 
 > ## v10.0.0 — 100 % Tauri (Electron et le natif retirés)
 > Aven est une **app Tauri 2** : la webview React parle à Rust (`src-tauri/`)
@@ -27,6 +27,70 @@
 Application de bureau (Tauri) : une chatbox avec **3 agents commutables** (code, recherche, analyse) et un
 sous-agent (code-reviewer), branchée sur **OpenCode 2.0.10** et un catalogue d’agents strictement gratuit (OpenRouter Free / OpenCode Zen).
 
+> **v12.6.0 — l'app vous répond au lieu de vous faire attendre**
+> ① La sphère **s'anime avec ta voix**. Elle lit le niveau réel du micro et non un
+> minuteur : quand tu parles, la rotation accélère, le maillage respire plus ample et
+> les particules grossissent ; quand tu te tais, elle revient au repos. Elle ne
+> s'anime jamais pendant sa propre voix (qui revient par les haut-parleurs), ni
+> micro coupé.
+> ② **Supprimer une note la fait disparaître immédiatement** — de l'arbre comme de
+> l'aperçu. Il fallait auparavant changer de page pour constater qu'elle était
+> partie.
+> ③ **Plus de barre de recherche collée en bas.** Elle réservait 56 px en
+> permanence pour un usage occasionnel, alors que chaque instrument a sa propre
+> recherche et son historique. `Ctrl+K` ouvre désormais une palette flottante —
+> mêmes fonctions, aucune place perdue.
+> ④ **Le bas de la fenêtre ouvre la navigation.** Elle s'active sur toute la
+> largeur, et ne se referme plus quand la souris s'écarte d'un centimètre : il faut
+> s'éloigner franchement, ou appuyer sur Échap.
+
+> **v12.5.0 — l'accueil se tient comme une application**
+> ① La surface d'entrée porte enfin une **vraie saisie** : une question rhétorique
+> sans champ ne laissait que des boutons — c'est ce qui faisait lire l'accueil comme
+> une page de présentation. Tu tapes, Entrée envoie : Aven ouvre la session **et**
+> part avec ton premier message, au lieu de te faire « envoyer » deux fois.
+> ② L'accueil nomme ce qu'il est — « Aujourd'hui » et la date du jour, en français —
+> au lieu d'un slogan de marque en anglais ; le titre garde sa voix et ses deux
+> lignes, mais à l'**échelle d'un masthead** (~42 px au lieu de 59) : c'est le champ
+> qui mène. Les trois actions rapides deviennent trois **commandes de barre d'outils**
+> (filet du chrome, 26 px).
+> ③ Le champ porte son signal de focus sur son cadre, comme le composeur, et n'affiche
+> **aucun aplat d'accent inerte** tant qu'il n'y a rien à envoyer ; sans espace de
+> travail il se ferme et **dit pourquoi**. La sphère et la constellation ne changent pas.
+>
+> **v12.4.0 — la sphère devient une structure**
+> ① L'agent n'est plus une **bille éclairée avec un filet posé dessus** : sa surface
+> est un maillage géodésique **irrégulier** — 5 000 triangles à l'accueil, 320 dans
+> l'en-tête —, chaque sommet portant une particule, doublée d'une poussière de surface.
+> ② La lumière vient du **haut-droite, rasante** : croissant blanc sur le limbe, centre
+> et gauche charbon, et le maillage reste lisible dans l'ombre. Aucun halo, aucun
+> dégradé radial derrière la sphère : l'éclat vient des points eux-mêmes.
+> ③ Les courbes internes enroulent la surface, le **dos de la sphère n'est plus
+> dessiné**, et le thème comme l'accent sont relus à chaud — la sphère change de
+> couleur sans recharger l'application.
+>
+> **v12.3.1 — l'accueil se cale au détail près**
+> ① « Reprendre » tient trois colonnes **fixes** — conversation, note, fichier —
+> alignées sur la même ligne de métadonnées (icône, nature, âge). Une nature absente
+> garde sa place et le dit d'un « Rien pour l'instant », sans jamais rien inventer.
+> ② Les trois actions rapides tiennent sur **une rangée compacte** de 24 px, et
+> « Délégation » rejoint l'état du micro au lieu de flotter seule sous elles.
+> ③ La sphère garde son asymétrie, mais son terminateur n'est plus une marche : le
+> maillage reste lisible sur toute la surface. La diagonale du fond s'efface un peu
+> plus, sans disparaître.
+>
+> **v12.3.0 — « Reprendre » montre enfin le vrai travail**
+> ① Une **bande** : « Reprendre » à gauche, trois colonnes à droite — conversation,
+> note, fichier — avec leur titre, un extrait réel et leur âge. Des filets, pas des
+> cartes : ce n'est pas un tableau de bord, et ce n'est plus une ligne de pied de page.
+> ② Le « dernier document » n'est pas une invention : Aven retient les fichiers que tu
+> ouvres, **par espace**, et cliquer dessus rouvre l'aperçu. Une note vide, une note
+> qui se contente de répéter son titre, une conversation au titre par défaut sans
+> message ne sont jamais proposées — et l'extrait d'une note ne récite pas son titre.
+> ③ Les actions rapides remontent sous la question, la diagonale du fond s'efface, et
+> les anneaux tournent lentement — une seule boucle, déclarée, coupée par le mouvement
+> réduit.
+>
 > **v12.2.0 — l'accueil a un fond, pas seulement une sphère**
 > ① Derrière la sphère, une couche technique discrète : densité lumineuse, courbes
 > de niveau, ligne graduée et repère en croix. Rien de tout cela ne mesure quoi que

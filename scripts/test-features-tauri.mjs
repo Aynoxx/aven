@@ -140,6 +140,12 @@ async function press(cdp, key, modifiers = 0) {
   await cdp.send("Input.dispatchKeyEvent", { type: "keyUp", key, code, windowsVirtualKeyCode, modifiers })
 }
 
+// v12.6.0 : survol RÉEL (mouvement de souris), pas un `pointerenter` synthétique —
+// c'est le mouvement qui décide de l'ouverture et de la fermeture de l'arc.
+async function hover(cdp, x, y) {
+  await cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x, y, buttons: 0 })
+}
+
 // L'ordre de la table de destinations (WorkbenchShell) est un contrat : le
 // smoke test le vérifie À L'ÉCRAN, pas seulement dans le source.
 const attendues = ["Conversations", "Notes", "Fichiers", "Terminal", "Orchestration"]
@@ -474,13 +480,50 @@ try {
   if (refermee) pass("Échap referme la barre demandée sur l'accueil")
   else fail("Échap ne referme pas la barre de commande demandée")
 
-  // Dans un espace de travail, la barre reste le point d'entrée du Poste.
+  // ── 7 bis) v12.6.0 : la bande du BAS ouvre la navigation, et c'est un
+  // mouvement LARGE qui la referme. Les deux défauts corrigés sont testés ici :
+  // la poignée seule n'était activable que sur son rectangle, et 170 ms
+  // suffisaient à la refermer dès qu'on écartait le pointeur.
+  const taille = JSON.parse(await cdp.eval(`JSON.stringify({ w: innerWidth, h: innerHeight })`))
+  await hover(cdp, Math.round(taille.w / 2), taille.h - 24)
+  const ouverteParBande = await waitFor(cdp, `document.querySelectorAll(".wb-nav-circle").length === 5`, 3_000).then(() => true).catch(() => false)
+  if (ouverteParBande) pass("bande du bas : survoler le bord inférieur ouvre la constellation")
+  else fail("bande du bas : le bord inférieur n'ouvre pas la constellation")
+  // Un écart franc mais court (au-dessus de la poignée, dans la bande large) ne
+  // doit PAS refermer : c'était le défaut « elle se ferme tout de suite ».
+  await hover(cdp, Math.round(taille.w / 2) - 140, taille.h - 96)
+  await sleep(1_100)
+  if (await cdp.eval(`document.querySelectorAll(".wb-nav-circle").length === 5`)) pass("constellation : un petit écart du pointeur ne la referme plus")
+  else fail("constellation : elle se referme encore au moindre écart du pointeur")
+  // Monter franchement dans la page la referme (après la grâce).
+  await hover(cdp, Math.round(taille.w / 2), Math.round(taille.h / 2))
+  const refermeeParEloignement = await waitGone(cdp, ".wb-nav-circle", 3_000)
+  if (refermeeParEloignement) pass("constellation : elle se referme quand le pointeur s'éloigne vraiment")
+  else fail("constellation : elle reste ouverte alors que le pointeur est au centre")
+
+  // ── 7 ter) v12.6.0 : plus aucune barre de recherche permanente en bas ─────
+  if (await cdp.eval(VISIBLE(".wb-command-input"))) fail("la palette de commande occupe encore une bande permanente")
+  else pass("aucune barre de recherche permanente : la palette se demande (Ctrl+K)")
+  await press(cdp, "k", 2)
+  const paletteEspace = await waitFor(cdp, VISIBLE(".wb-command-input"), 4_000).then(() => true).catch(() => false)
+  if (paletteEspace) {
+    const auDessus = await cdp.eval(`(() => {
+      const p = document.querySelector(".wb-command"); const n = document.querySelector(".wb-nav-trigger")
+      if (!p || !n) return "absent"
+      return JSON.stringify({ palette: p.getBoundingClientRect().bottom, poignee: n.getBoundingClientRect().top })
+    })()`)
+    const g = JSON.parse(auDessus)
+    if (g.palette > g.poignee) fail(`la palette recouvre la poignée de navigation (${auDessus})`)
+    else pass(`la palette flotte au-dessus de la poignée, sans la recouvrir (${auDessus})`)
+    await cdp.eval(`document.querySelector(".wb-command-input")?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))`)
+    await waitGone(cdp, ".wb-command", 3_000)
+  } else fail("Ctrl+K n'ouvre pas la palette dans un espace de travail")
+
+  // Dans un espace de travail, la navigation mène aux mêmes destinations.
   await cdp.eval(`document.querySelector(".wb-nav-trigger").click()`)
   await waitFor(cdp, `document.querySelectorAll(".wb-nav-circle").length === 5`, 4_000)
   await cdp.eval(`document.querySelector(${JSON.stringify('.wb-nav-circle[aria-label="Notes"]')}).click()`)
   await waitFor(cdp, `!!document.querySelector(".notes-layout")`, 10_000)
-  if (await cdp.eval(VISIBLE(".wb-command-input"))) pass("Notes : la barre de commande reste disponible dans l'espace de travail")
-  else fail("Notes : la barre de commande a disparu de l'espace de travail")
 
   // ── 8) Réglages : quatre sections dans l'inspecteur, fermeture ────────────
   await cdp.eval(`document.querySelector('.wb-status-toggle[aria-label="Réglages"]').click()`)

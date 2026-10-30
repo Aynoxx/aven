@@ -55,9 +55,10 @@ assert.match(shell, /role=\{stageIsTab \? "tabpanel" : "region"\}/, "la scène s
 assert.match(shell, /aria-labelledby=\{stageIsTab \? `wb-tab-\$\{tabsState\.activeId\}` : undefined\}/, "le libellé d'onglet n'est référencé que s'il existe")
 assert.match(shell, /aria-label=\{stageIsTab \? undefined : \(isHome \? HOME_DESTINATION\.label : activeSection\.label\)\}/, "région nommée par la destination en cours")
 assert.match(shell, /className="wb-inspector"/, "inspecteur permanent")
-// v12.0.0 : la barre reste le point d'entrée du Poste, mais l'accueil la demande
-// (Ctrl+K) au lieu de la subir en permanence.
-assert.match(shell, /commandVisible && <CommandBar app=\{app\}/, "barre de commande rendue par la coquille")
+// AMENDEMENT v12.6.0 : la barre n'est plus rendue en permanence — nulle part.
+// L'invariant conservé est celui de la v11.0.0 : elle est rendue PAR la coquille
+// (jamais par un instrument) et reste le point d'entrée de la recherche.
+assert.match(shell, /\{commandOpen && <CommandBar app=\{app\}/, "barre de commande rendue par la coquille, sur demande")
 // v12.0.0 : plus de rail à déployer — la poignée ouvre la même constellation,
 // que l'on soit à l'accueil ou dans un espace de travail.
 assert.match(shell, /open={navOpen}/, "la poignée pilote l'ouverture de la constellation")
@@ -157,7 +158,10 @@ assert.ok(!read("web/src/App.css").includes('@import "./styles/home.css"'), "App
 assert.match(rules, /Poste de travail/, "AGENTS.md §6 nomme le Poste")
 assert.match(rules, /InstrumentFrame/, "AGENTS.md §6 cite la charpente des instruments")
 assert.match(rules, /web\/src\/workbench\/tabs\.ts/, "AGENTS.md §6 cite le modèle d'onglets")
-assert.match(rules, /Barre de commande et nouvelle conversation \(v11\.0\.0\)/, "AGENTS.md §6 fixe la barre de commande")
+// AMENDEMENT v12.6.0 : la règle s'appelle désormais « palette de commande » et
+// dit qu'elle ne s'installe pas. Ce qui compte ici est inchangé : elle est écrite
+// dans §6, avec son raccourci et ses modes.
+assert.match(rules, /palette de commande se demande, elle ne s'installe pas \(v11\.0\.0, resserré\s+v12\.6\.0\)/, "AGENTS.md §6 fixe la palette de commande")
 assert.match(readme, /v11\.0\.0 — le Poste/, "README porte la note de version")
 
 // ── E. Version publiée, sonde branchée ───────────────────────────────────────

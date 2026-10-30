@@ -101,7 +101,9 @@ assert.ok(!old104.includes('assert.equal(pkg.version, "10.4.0"'), "la sonde hist
 assert.match(old93, /label: "Terminal"/, "la sonde historique du hub utilise le nom visible actuel")
 assert.match(old96, /label: "Orchestration"/, "la sonde historique des spécialistes utilise le nom visible actuel")
 assert.match(smoke, /const attendues = \[.*"Terminal".*"Orchestration"/, "le smoke test attend les destinations actuelles")
-assert.match(rules, /Barre de commande et nouvelle conversation \(v11\.0\.0\)/, "AGENTS.md fixe la séparation des intentions")
+// AMENDEMENT v12.6.0 : le titre de la règle a changé (palette, plus barre
+// permanente) ; la séparation des intentions qu'elle fixe est intacte.
+assert.match(rules, /palette de commande se demande, elle ne s'installe pas/, "AGENTS.md fixe la séparation des intentions")
 assert.match(readme, /v10\.5\.0 — navigation et destinations explicites/, "README résume les corrections visibles")
 
 console.log("v10.5.0 verification: OK (navigation, recherche, destinations IA, Notes, réglages et version)")

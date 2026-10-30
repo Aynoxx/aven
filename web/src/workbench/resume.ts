@@ -1,30 +1,42 @@
 // Pur : testable avec Node seul, sans dépendance desktop.
 //
-// v12.1.0 : l'accueil propose de REPRENDRE le travail réel de l'utilisateur. La
-// décision — quels éléments, dans quel ordre, avec quel âge — vit ici pour être
-// testée sans React : un accueil qui affiche un faux historique serait pire qu'un
-// accueil qui n'affiche rien. Aucune donnée n'est inventée : tout vient des
-// conversations et des notes réellement chargées.
+// v12.1.0 : l'accueil reprend le travail réel de l'utilisateur.
+// v12.3.0 : « Reprendre » devient une vraie zone à trois entrées — conversation,
+// note, fichier — une par nature. La décision vit ici pour être testée sans React.
+// Ce que ce module refuse, et c'est le point : pas d'entrée sans titre, pas de note
+// vide (elle n'apprend rien), pas de fichier sans chemin, pas d'âge négatif. Un
+// accueil qui fabrique un historique est pire qu'un accueil qui n'affiche rien.
 
-export type ResumeChat = { id: string; title: string; updated?: number }
-export type ResumeNote = { id: string; title: string; updated: number }
+export type ResumeChat = { id: string; title: string; updated?: number; preview?: string }
+export type ResumeNote = { id: string; title: string; markdown?: string; updated: number }
+export type ResumeFile = { path: string; name: string; opened: number }
 
-export type ResumeSource = {
+export type ResumeSources = {
   chats: ResumeChat[]
   notes: ResumeNote[]
+  files: ResumeFile[]
 }
 
-export type ResumeItem = {
-  kind: "conversation" | "note"
+export type ResumeKind = "conversation" | "note" | "file"
+
+export type ResumeEntry = {
+  kind: ResumeKind
+  /** Identifiant de navigation : id de conversation/note, chemin pour un fichier. */
   id: string
   title: string
+  /** Extrait court et réel (dernier message, début de note, chemin du fichier). */
+  excerpt: string
   updated: number
 }
 
-/** Deux lignes suffisent : la troisième ferait un tableau de bord (brief §4.3). */
-const MAX_ITEMS = 2
+const MAX_EXCERPT = 96
 
-function cleanTitle(value: unknown): string {
+// Une conversation que personne n'a ouverte n'est pas une reprise : Aven crée la
+// ligne « Nouvelle conversation » au démarrage. Tant qu'elle n'a ni message ni titre
+// donné, la proposer revient à afficher un élément vide (constaté à l'écran).
+const PLACEHOLDER_TITLES = new Set(["nouvelle conversation", "new conversation", "sans titre", "untitled"])
+
+function cleanText(value: unknown): string {
   return String(value ?? "").replace(/\s+/g, " ").trim()
 }
 
@@ -33,29 +45,106 @@ function timestamp(value: unknown): number {
   return Number.isFinite(n) && n > 0 ? n : 0
 }
 
-/**
- * Le plus récent d'abord. À âge égal, une conversation passe avant une note : elle
- * a une suite à donner, là où la note est déjà écrite. Un élément sans identifiant
- * ou sans titre n'est pas repris — une ligne vide mentirait sur ce qu'on peut ouvrir.
- */
-export function resumeItems(source: ResumeSource, limit = MAX_ITEMS): ResumeItem[] {
-  const items: ResumeItem[] = [
-    ...(source.chats ?? []).map((chat) => ({
-      kind: "conversation" as const,
-      id: chat.id,
-      title: cleanTitle(chat.title),
-      updated: timestamp(chat.updated),
-    })),
-    ...(source.notes ?? []).map((note) => ({
-      kind: "note" as const,
-      id: note.id,
-      title: cleanTitle(note.title),
-      updated: timestamp(note.updated),
-    })),
-  ].filter((item) => item.id && item.title)
+/** Le plus récent d'une liste, ou null : l'ordre de l'entrée est une donnée, pas un hasard. */
+function newest<T extends { updated: number }>(list: T[]): T | null {
+  return list.reduce<T | null>((best, item) => (!best || item.updated > best.updated ? item : best), null)
+}
 
-  items.sort((a, b) => b.updated - a.updated || (a.kind === b.kind ? 0 : a.kind === "conversation" ? -1 : 1))
-  return items.slice(0, Math.max(0, Math.floor(limit)))
+/**
+ * Retire le balisage Markdown d'un extrait : une ligne d'accueil ne se lit pas avec
+ * des dièses, des astérisques ou un bloc de code. Tronqué aux mots, jamais au milieu.
+ */
+export function excerptOf(markdown: unknown, max = MAX_EXCERPT): string {
+  const flat = String(markdown ?? "")
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/`([^`]*)`/g, "$1")
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/^#{1,6}\s*/gm, "")
+    .replace(/[*_>~|]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+  if (!flat) return ""
+  if (flat.length <= max) return flat
+  const cut = flat.slice(0, max)
+  const lastSpace = cut.lastIndexOf(" ")
+  return `${(lastSpace > max * 0.6 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`
+}
+
+/**
+ * Extrait d'une note : son corps, SANS la ligne de titre qui ouvre le fichier.
+ * Le titre est déjà affiché au-dessus — le répéter dans l'extrait ne dit rien de
+ * plus et gaspillait la seule ligne de lecture disponible (constaté à l'écran).
+ */
+export function noteExcerpt(markdown: unknown, max = MAX_EXCERPT): string {
+  const lines = String(markdown ?? "").replace(/\r\n/g, "\n").split("\n")
+  const first = lines.findIndex((line) => line.trim() !== "")
+  if (first >= 0 && /^#\s+/.test(lines[first].trim())) lines.splice(first, 1)
+  return excerptOf(lines.join("\n"), max)
+}
+
+/**
+ * Les trois entrées de l'accueil, dans l'ordre fixe conversation → note → fichier
+ * (l'ordre des trois colonnes, pas un tri par date : trois natures différentes ne se
+ * comparent pas). Une nature absente n'est pas remplacée par du contenu de synthèse.
+ */
+export function resumeBoard(sources: ResumeSources): ResumeEntry[] {
+  const chats = (sources.chats ?? [])
+    .map((chat) => ({ ...chat, title: cleanText(chat.title), updated: timestamp(chat.updated), preview: cleanText(chat.preview) }))
+    .filter((chat) => chat.id && chat.title)
+    // Le titre par défaut n'est pas un titre : sans extrait, il n'y a rien à reprendre.
+    .filter((chat) => !(PLACEHOLDER_TITLES.has(chat.title.toLowerCase()) && !chat.preview))
+  const notes = (sources.notes ?? [])
+    .map((note) => ({ ...note, title: cleanText(note.title), updated: timestamp(note.updated) }))
+    // Une note sans contenu n'est pas une reprise : elle n'a rien à rouvrir.
+    .filter((note) => note.id && note.title && cleanText(note.markdown))
+    // v12.3.1 : une note dont le corps ne dit RIEN DE PLUS que son titre n'apprend
+    // rien non plus. Cas réel dans l'espace de test : un titre et son corps
+    // identiques (« sans contenu avec comme nom importation »), que la v12.3.0
+    // proposait encore parce que le fichier, lui, n'était pas vide.
+    .filter((note) => {
+      const excerpt = noteExcerpt(note.markdown)
+      return excerpt !== "" && excerpt.toLowerCase() !== note.title.toLowerCase()
+    })
+  const files = (sources.files ?? [])
+    .map((file) => ({ ...file, path: cleanText(file.path), name: cleanText(file.name), opened: timestamp(file.opened) }))
+    .filter((file) => file.path)
+
+  const conversation = newest(chats)
+  const note = newest(notes)
+  const file = files.reduce<ResumeFile | null>((best, item) => (!best || item.opened > best.opened ? item : best), null)
+
+  const entries: ResumeEntry[] = []
+  if (conversation) {
+    entries.push({
+      kind: "conversation",
+      id: conversation.id,
+      title: conversation.title,
+      excerpt: excerptOf(conversation.preview),
+      updated: conversation.updated,
+    })
+  }
+  if (note) {
+    entries.push({
+      kind: "note",
+      id: note.id,
+      title: note.title,
+      excerpt: noteExcerpt(note.markdown),
+      updated: note.updated,
+    })
+  }
+  if (file) {
+    // Le dossier, pas le chemin complet : à la racine, le chemin répète le titre.
+    const dir = file.path.split("/").slice(0, -1).join("/")
+    entries.push({
+      kind: "file",
+      id: file.path,
+      title: file.name || file.path.split("/").pop() || file.path,
+      excerpt: dir,
+      updated: file.opened,
+    })
+  }
+  return entries
 }
 
 /**

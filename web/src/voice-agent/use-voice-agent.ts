@@ -47,6 +47,10 @@ import { isSelfEcho } from "./echo"
 // de note — la voix de l'agent ne doit pas tronquer sa propre question.
 import { shouldInterruptSpeech } from "./barge-in"
 import { DEFAULT_VAD_CONFIG, initialVadState, vadStep, type VadState } from "./vad"
+// v12.6.0 : le niveau mesuré par le VAD alimente la sphère (page d'accueil et
+// en-tête) sans provoquer de rendu React — vingt mises à jour par seconde
+// re-rendraient tout le Poste.
+import { pushLevel, resetLevel } from "./level"
 import {
   initialVoiceSession,
   isAwake,
@@ -698,6 +702,9 @@ export function useVoiceAgent(options: {
     let sum = 0
     for (let i = 0; i < frames.length; i++) sum += frames[i] * frames[i]
     const rms = Math.sqrt(sum / frames.length)
+    // v12.6.0 : une seule mesure par trame, micro coupé = zéro. La sphère ne peut
+    // donc pas s'animer sur du silence.
+    pushLevel(sessionRef.current.micMuted ? 0 : rms)
     const phase = sessionRef.current.phase
     // v11.1.1 : seuil adaptatif. Sur un micro discret, la voix restait sous le
     // seuil fixe de 0,012 et aucun segment ne partait — le symptôme exact de
@@ -786,6 +793,9 @@ export function useVoiceAgent(options: {
       clearPendingAction()
       stopPlayback()
       clearPreRollTimer()
+      // v12.6.0 : micro coupé, plus aucune amplitude à montrer : la sphère revient
+      // au repos immédiatement au lieu de garder le dernier pic.
+      resetLevel()
       // Un clip en cours (pré-roll compris) ne doit pas être transcrit après
       // la coupure du micro.
       discardNextRef.current = true
@@ -851,6 +861,7 @@ export function useVoiceAgent(options: {
       void audioContextRef.current?.close().catch(() => undefined)
       audioContextRef.current = null
       stopPlayback()
+      resetLevel()
     }
   }, [clearPendingAction, clearPendingNote, clearPreRollTimer, options.enabled, startListening, stopPlayback])
 

@@ -38,7 +38,11 @@ assert.match(home, /className="wb-home-grid"/, "l'accueil est une grille de comp
 for (const zone of ["wb-home-id", "wb-home-scene", "wb-home-foot"]) {
   assert.match(home, new RegExp(`className="${zone}"`), `la zone « ${zone} » existe`)
 }
-assert.match(home, /wb-home-eyebrow">Aven \/ Voice workspace/, "l'identité est nommée une fois, en libellé technique")
+// AMENDEMENT v12.5.0 : le libellé « Aven / Voice workspace » était en anglais et
+// disait la marque, pas l'endroit où l'on est. L'invariant conservé est celui de
+// la sonde — l'accueil porte UN en-tête technique, une seule fois —, il nomme
+// désormais la destination et la date réelles.
+assert.match(home, /wb-home-eyebrow">Aujourd’hui · \{today\}/, "l'en-tête de l'accueil nomme la destination et la date, une seule fois")
 assert.match(home, /<span>Votre espace\.<\/span>\s*<span>Votre agent\.<\/span>/, "le titre tient deux lignes courtes, dans l'ordre éditorial")
 assert.ok(!home.includes("Bonjour. Je suis Aven"), "le titre monumental de la v12.0.0 ne revient pas")
 assert.match(css, /\.wb-home-title span \+ span \{ color: var\(--muted\)/, "la seconde ligne recule au lieu de doubler la masse")
@@ -48,14 +52,14 @@ const statusAt = home.indexOf('className="wb-home-status"')
 assert.ok(voiceAt > 0 && statusAt > voiceAt, "le micro et son état vivent dans le même bloc")
 
 // ── B. « Reprendre » ne montre que du travail réel ─────────────────────────
-assert.match(home, /import \{ ageLabel, resumeItems, type ResumeItem \} from "\.\/resume"/,
+assert.match(home, /import \{ ageLabel, resumeBoard, type ResumeEntry, type ResumeKind \} from "\.\/resume"/,
   "la sélection des entrées vient du module pur, pas d'un calcul dans le rendu")
 assert.match(resume, /^\/\/ Pur : testable avec Node seul, sans dépendance desktop\./, "resume.ts se déclare pur (AGENTS.md §8)")
-assert.match(resume, /const MAX_ITEMS = 2/, "deux entrées au plus : la troisième ferait un tableau de bord")
-assert.match(resume, /\.filter\(\(item\) => item\.id && item\.title\)/, "une ligne sans titre ni identifiant n'est jamais reprise")
+assert.match(resume, /export function resumeBoard/, "la sélection vit dans une fonction pure exportée")
+assert.match(resume, /\.filter\(\(chat\) => chat\.id && chat\.title\)/, "une ligne sans titre ni identifiant n'est jamais reprise")
 assert.match(resume, /delta < 60_000\) return "à l’instant"/, "un âge ne s'affiche jamais négatif (horloge en avance comprise)")
 assert.ok(exists("tests/resume.test.mjs"), "le module pur a son test Node")
-assert.match(home, /\{items\.length > 0 && \(/, "sans entrée réelle, la zone disparaît au lieu d'inventer")
+assert.match(home, /entries\.length > 0 \?/, "sans entrée réelle, la zone le dit au lieu d'inventer")
 assert.ok(!/\b(lorem|exemple|exemple de)\b/i.test(home), "aucun contenu de démonstration dans l'accueil")
 
 // ── C. Trois actions, nommées pour ce qu'elles font ────────────────────────

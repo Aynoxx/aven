@@ -116,8 +116,12 @@ function buttonTags(source) {
 }
 
 const files = walk("web/src")
-const withoutType = files.flatMap((file) => buttonTags(read(file)).filter((tag) => !/\btype="button"/.test(tag)).map((tag) => `${file}: ${tag.slice(0, 60)}`))
-assert.deepEqual(withoutType, [], "tout bouton hors formulaire déclare type=\"button\"")
+// AMENDEMENT v12.5.0 : la règle d'AGENTS.md §4 vise les boutons HORS formulaire.
+// Un bouton d'envoi vit DANS un `<form>` : son type natif est "submit", et le refuser
+// rendait impossible toute saisie d'accueil valide. La sonde accepte donc les deux
+// types explicites — elle continue de refuser un bouton muet.
+const withoutType = files.flatMap((file) => buttonTags(read(file)).filter((tag) => !/\btype="(?:button|submit)"/.test(tag)).map((tag) => `${file}: ${tag.slice(0, 60)}`))
+assert.deepEqual(withoutType, [], "tout bouton déclare un type explicite (button hors formulaire, submit dedans)")
 
 // v12.0.0 : l'accueil n'est plus une planche d'actions — l'agent en est l'unique
 // action. La règle « jamais deux actions primaires » tient, sa mesure devient <= 1.

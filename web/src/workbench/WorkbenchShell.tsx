@@ -83,9 +83,11 @@ export default function WorkbenchShell({ app }: { app: AvenApp }) {
     homeNotice,
     inspectorOpen,
     live,
+    filesInitialPath,
     openConfiguration,
     openConversationInstrument,
     openFilesView,
+    setFilesInitialPath,
     openHomeConversation,
     openInstrumentTab,
     openNotesView,
@@ -100,6 +102,7 @@ export default function WorkbenchShell({ app }: { app: AvenApp }) {
     setSelBar,
     setSettingsSection,
     settingsFocus,
+    startWithPrompt,
     settingsSection,
     tab,
     tabsState,
@@ -129,9 +132,10 @@ export default function WorkbenchShell({ app }: { app: AvenApp }) {
   // v12.0.0 : la constellation n'est pas un état de page — elle s'ouvre et se
   // referme sans changer la destination courante.
   const [navOpen, setNavOpen] = useState(false)
-  // v12.0.0 : la barre de commande n'est plus PERMANENTE sur l'accueil. Elle s'y
-  // demande par Ctrl+K et se referme à Échap (saisie vide) ; ailleurs elle reste
-  // le point d'entrée unique de la recherche et de la dictée globale.
+  // v12.6.0 : la barre de commande n'est plus JAMAIS permanente — ni sur l'accueil,
+  // ni dans un espace de travail. Elle était une bande de 56 px qui mangeait le
+  // bas du Poste en permanence pour un usage occasionnel. Elle se demande par
+  // Ctrl+K et se referme à Échap : une palette, pas un meuble.
   const [commandOpen, setCommandOpen] = useState(false)
   const [leaving, setLeaving] = useState<NavDestination["kind"] | null>(null)
   const [agentPlacement, setAgentPlacement] = useState<{ x: number; y: number; scale: number } | null>(null)
@@ -161,22 +165,21 @@ export default function WorkbenchShell({ app }: { app: AvenApp }) {
   const isHome = activeKind === "home"
   const activeSection = DESTINATIONS.find((d) => d.kind === activeKind) ?? DESTINATIONS[0]
   const conversationTabs = tabsState.tabs.filter((t) => t.kind === "conversation")
-  const commandVisible = !isHome || commandOpen
   // Le bandeau d'onglets ne liste QUE des conversations : la scène ne peut être
   // un `tabpanel` que lorsque l'un de ces onglets est réellement affiché.
   const stageIsTab = conversationTabs.length > 1 && activeKind === "conversation"
 
-  // Quitter l'accueil referme la barre demandée : elle appartient à l'état
-  // d'accueil, jamais au Poste en général.
+  // v12.6.0 : un changement de destination referme la palette — elle ne survit
+  // pas à la navigation (le Poste ne laisse jamais un panneau ouvert derrière).
   useEffect(() => {
-    if (!isHome) setCommandOpen(false)
-  }, [isHome])
+    setCommandOpen(false)
+  }, [activeKind])
 
-  // Ctrl+K ouvre la barre sur l'accueil AVANT que le contrôleur ne cherche son
-  // input : elle n'existe pas encore dans le DOM à cet instant. Capture + stop
-  // pour que les deux gestionnaires ne se disputent pas la même frappe.
+  // Ctrl+K ouvre la palette PARTOUT, AVANT que le contrôleur ne cherche son input
+  // (elle n'existe pas encore dans le DOM à cet instant). Capture + stop pour que
+  // les deux gestionnaires ne se disputent pas la même frappe.
   useEffect(() => {
-    if (!isHome || commandOpen) return
+    if (commandOpen) return
     const onKey = (event: KeyboardEvent) => {
       if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "k") return
       event.preventDefault()
@@ -185,7 +188,7 @@ export default function WorkbenchShell({ app }: { app: AvenApp }) {
     }
     window.addEventListener("keydown", onKey, true)
     return () => window.removeEventListener("keydown", onKey, true)
-  }, [isHome, commandOpen])
+  }, [commandOpen])
 
   // Le focus attend le rendu : l'input vient d'être monté par le même tour.
   useEffect(() => {
@@ -392,7 +395,7 @@ export default function WorkbenchShell({ app }: { app: AvenApp }) {
         </div>
       </header>
 
-      <div className="wb-body" data-inspector={inspectorOpen ? "open" : "closed"} data-command={commandVisible ? "open" : "closed"}>
+      <div className="wb-body" data-inspector={inspectorOpen ? "open" : "closed"}>
         <main className="wb-main" data-sessions={conversationTabs.length > 1 ? "true" : "false"}>
           {/* v12.0.0 : plus de barre d'onglets permanente. Ce bandeau ne vit que
               s'il y a PLUSIEURS conversations ouvertes : il liste des sessions, pas
@@ -453,6 +456,9 @@ export default function WorkbenchShell({ app }: { app: AvenApp }) {
             {activeKind === "home" ? (
               <HomeStage
                 voice={voice}
+                // v12.3.0 : « Reprendre » ne lit l'espace que lorsque le Poste est
+                // prêt et qu'un espace est réellement actif.
+                ready={appState.status === "ready" && !appState.needsWorkspace}
                 chats={app.chats}
                 delegation={TASK_MODES_UI.find((m) => m.id === taskMode)?.label ?? TASK_MODES_UI[0].label}
                 onOpenConversation={openHomeConversation}
@@ -462,7 +468,12 @@ export default function WorkbenchShell({ app }: { app: AvenApp }) {
                 // possède son propre enregistreur — indépendant de l'agent vocal, donc
                 // disponible même micro de l'agent coupé.
                 onDictateNote={() => { setCaptureRequested(true); openNotesView() }}
+                // v12.3.0 : l'action passe la fonction telle quelle — une enveloppe
+                // vide n'ajoutait rien et masquait le lien réel avec l'ouverture.
                 onBrowseFiles={openFilesView}
+                onOpenFile={(path) => openFilesView(path)}
+                // v12.5.0 : la saisie d'accueil envoie réellement le premier message.
+                onPrompt={(text) => { void startWithPrompt(text) }}
                 notice={homeNotice}
                 onDismissNotice={() => setHomeNotice(null)}
                 onOpenSettings={() => { setHomeNotice(null); openConfiguration(undefined, "general") }}
@@ -482,6 +493,8 @@ export default function WorkbenchShell({ app }: { app: AvenApp }) {
               />
             ) : activeKind === "files" ? (
               <FilesView
+                initialPath={filesInitialPath}
+                onInitialHandled={() => setFilesInitialPath(undefined)}
                 agents={orderedAgents.map((a) => ({ id: a.id, name: a.name }))}
                 currentAgent={tab}
                 onCompose={(text) => void composeIntoChat(text)}
@@ -655,10 +668,12 @@ export default function WorkbenchShell({ app }: { app: AvenApp }) {
           </div>
         </aside>
 
-        {commandVisible && <CommandBar app={app} onDismiss={() => setCommandOpen(false)} />}
+        {/* v12.6.0 : rendue seulement si on la demande — aucune bande permanente. */}
+        {commandOpen && <CommandBar app={app} onDismiss={() => setCommandOpen(false)} />}
 
-        {/* v12.0.0 : la poignée et l'arc sont ancrés sur le CORPS, au-dessus de la
-            barre de commande — jamais sur la fenêtre, qu'un bandeau d'état décale. */}
+        {/* v12.0.0 : la poignée et l'arc sont ancrés sur le CORPS, jamais sur la
+            fenêtre, qu'un bandeau d'état décale. v12.6.0 : plus de barre sous
+            elle, donc plus d'offset à compenser. */}
         <NavigationConstellation
           destinations={DESTINATIONS}
           open={navOpen}

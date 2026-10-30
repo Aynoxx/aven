@@ -58,7 +58,11 @@ for (const value of animations) {
 }
 const ambient = animations.filter((value) => /\binfinite\b/.test(value))
 assert.ok(ambient.length >= 4, "les boucles ambiantes (pulse, présence, dictée, shimmer) restent déclarées")
-assert.ok(ambient.length <= 6, `boucles ambiantes inattendues (${ambient.length}) — justifie ou tokenise`)
+// v12.3.0 : plafond porté de 6 à 7 pour UNE boucle demandée explicitement — la
+// rotation lente des anneaux de l'accueil (48 s), qui dit « le système vit ».
+// Ce n'est pas une permission générale : une huitième boucle doit être justifiée
+// ici, dans le même changement, pas ajoutée en silence.
+assert.ok(ambient.length <= 7, `boucles ambiantes inattendues (${ambient.length}) — justifie ou tokenise`)
 assert.match(css, /boucles AMBIANTES/, "l'exception des boucles est expliquée dans la feuille (pas implicite)")
 // Les durées gardent UNE définition chacune : pas de valeur en double dans le fichier.
 for (const token of ["--dur-fast", "--dur-med", "--dur-slow"]) {

@@ -1,25 +1,35 @@
 import { useEffect, useRef } from "react"
 import {
+  AGENT_LIGHT,
+  circle,
   fibonacciSphere,
+  geodesicMesh,
+  lightCurve,
   phaseEnergy,
-  pointAlpha,
-  project,
   wireframe,
+  withInput,
   type AgentPhase,
-  type Projected,
+  type Mesh,
+  type PhaseEnergy,
   type Vec3,
 } from "./sphere"
+// v12.6.0 : le niveau d'entrée du micro (mesuré par le VAD) anime la sphère
+// PENDANT que l'utilisateur parle. Il n'est pas un état React : le relire dans
+// la boucle évite de re-rendre le Poste vingt fois par seconde.
+import { readLevel } from "../voice-agent/level"
 
 // v12.0.0 : l'agent vocal EST la marque d'Aven. Une seule instance de ce canvas
 // vit dans la coquille ; elle se déplace de l'accueil vers l'en-tête. Le composant
 // ne décide de rien : la géométrie est pure (./sphere), la phase est celle de la
 // session vocale réelle, et le mouvement s'arrête dès qu'il n'apprend rien.
 //
-// v12.0.0 (passe graphique) : la référence montre une CALOTTE éclairée (une surface
-// pleine, pas un simple filet) posée sur un maillage de points, entourée d'une
-// charpente d'instrument (anneau, rayons pointillés, nœuds carrés). Le volume venait
-// d'une lueur diffuse ; il vient maintenant d'une masse opaque, et le maillage est
-// creusé dedans plutôt que posé dessus.
+// v12.4.0 : la calotte opaque de la v12.0.0 est RETIRÉE. Elle faisait une bille
+// éclairée avec un filet posé dessus (« illumined orb with a mesh overlay », le
+// défaut nommé par la référence). La sphère devient une STRUCTURE : maillage
+// géodésique triangulaire irrégulier, une particule par sommet (plus une poussière
+// de surface), et une lumière fixe en haut-droite qui allume les particules elles-
+// mêmes — pas un dégradé radial blanc derrière elles. Le centre et la gauche
+// restent charbon, le maillage y demeure lisible.
 
 type Props = {
   phase: AgentPhase
@@ -28,23 +38,68 @@ type Props = {
   className?: string
 }
 
-// v12.0.0 : densité de la référence — une surface de points, pas un semis clairsemé.
-// 1 250 points restent tenables : le rendu est plafonné à 30 images/s et les points
-// trop sombres sont sautés avant le tracé.
-const POINTS = 1250
-const WIREFRAME: Vec3[][] = wireframe(9, 14, 80)
-const SURFACE = fibonacciSphere(POINTS)
-// Lumière fixe, en espace écran : haut-gauche. Elle donne la lecture « volume »
-// de la référence sans dépendre d'une rotation particulière.
-const LIGHT_X = -0.62
-const LIGHT_Y = -0.5
-const LIGHT_Z = 0.58
+// Lumière fixe à l'écran, haut-droite (voir AGENT_LIGHT). Elle ne tourne pas avec
+// la sphère : c'est l'éclairage du lieu, pas une propriété de la matière.
+const LX = AGENT_LIGHT.x
+const LY = AGENT_LIGHT.y
+const LZ = AGENT_LIGHT.z
+
+// Perspective douce : la face avant grossit d'environ 8 %.
+const FOCAL = 3.6
 
 // Rayons de la charpente, en multiples du rayon de la sphère. L'ensemble tient
 // dans la boîte (1,27 × r) : rien n'est rogné par le canvas.
 const RING = 1.09
 const SPOKE_IN = 1.1
 const SPOKE_OUT = 1.26
+
+// Deux couches de courbes internes : les latitudes/longitudes (fines, partout) et
+// quelques orbites inclinées qui enroulent la surface, comme dans la référence.
+const GRID = wireframe(6, 8, 64)
+function tilted(points: Vec3[], ax: number, az: number): Vec3[] {
+  const cx = Math.cos(ax), sx = Math.sin(ax), cz = Math.cos(az), sz = Math.sin(az)
+  return points.map((p) => {
+    const y1 = p.y * cx - p.z * sx
+    const z1 = p.y * sx + p.z * cx
+    return { x: p.x * cz - y1 * sz, y: p.x * sz + y1 * cz, z: z1 }
+  })
+}
+// v12.4.0 : des PETITS cercles, jamais des méridiens. Un grand cercle vu de biais
+// se projette en corde rectiligne : cela faisait des rayures en travers de la
+// sphère au lieu de courbes qui l'enroulent.
+const ORBITS: Vec3[][] = [
+  tilted(circle("parallel", 0.16), Math.PI - 0.5, 0.9),
+  tilted(circle("parallel", 0.3), Math.PI - 0.2, 0.4),
+  tilted(circle("parallel", 0.72), 0.4, -0.5),
+  tilted(circle("parallel", 0.86), 0.18, 1.15),
+]
+// v12.4.0 : la référence groupe quelques boucles de niveau en bas à gauche. Elles
+// enroulent la SURFACE (petits cercles de la sphère), elles ne flottent pas autour.
+const CONTOURS: Vec3[][] = [0.16, 0.24, 0.33].map((t, i) =>
+  tilted(circle("parallel", t), Math.PI + 0.22 * i, 0.58 - 0.05 * i),
+)
+
+type Scene = { mesh: Mesh; dust: Vec3[] }
+const SCENES = new Map<number, Scene>()
+
+/** Un niveau de détail par taille rendue : le compact ne paie pas 2 500 sommets. */
+function detailFor(size: number): number {
+  return size >= 300 ? 5 : size >= 240 ? 4 : size >= 110 ? 3 : 2
+}
+
+function sceneFor(detail: number): Scene {
+  const cached = SCENES.get(detail)
+  if (cached) return cached
+  const scene: Scene = {
+    mesh: geodesicMesh(detail),
+    // Poussière de surface : comble les mailles sans ajouter d'arêtes. Volontairement
+    // plus rare que les sommets — au-delà, le semis noie la structure au lieu de la
+    // révéler (mesuré : 1 100 points faisaient une surface floue).
+    dust: fibonacciSphere(detail >= 5 ? 1200 : detail >= 4 ? 1000 : detail >= 3 ? 400 : 0),
+  }
+  SCENES.set(detail, scene)
+  return scene
+}
 
 // v12.0.0 : les couleurs viennent des jetons, jamais d'un littéral. `withAlpha`
 // évite d'inventer une couleur sombre hors thème : en clair, le disque de fond
@@ -61,19 +116,24 @@ function readColors(canvas: HTMLCanvasElement) {
   const ink = css.getPropertyValue("--text").trim() || "#e7ebe7"
   const accent = css.getPropertyValue("--accent").trim() || "#d77a43"
   const panel = css.getPropertyValue("--panel-solid").trim() || "#111916"
-  return { ink, accent, panel }
+  // v12.4.0 : la même encre ne pèse pas pareil sur fond clair et sur fond sombre.
+  // On mesure la luminance du disque et on compense les PARTICULES — jamais une
+  // seconde palette. Les traits, eux, gardent leur opacité.
+  const hex = /^#([0-9a-f]{6})$/i.exec(panel)
+  const value = hex ? Number.parseInt(hex[1], 16) : 0x111916
+  const luma = (((value >> 16) & 255) * 0.299 + ((value >> 8) & 255) * 0.587 + (value & 255) * 0.114) / 255
+  // Un point clair disparaît sur un disque blanc : en thème clair, les particules
+  // passent à --muted et sont atténuées — à l'encre maximale, le croissant
+  // ressemblait à de la suie. Les traits, eux, gardent leur opacité.
+  const light = luma > 0.55
+  const muted = css.getPropertyValue("--muted").trim() || ink
+  return { ink, dot: light ? muted : ink, accent, panel, dotBoost: light ? 0.55 : 1 }
 }
 
-function strokePath(ctx: CanvasRenderingContext2D, path: Projected[], alpha: number, color: string) {
-  if (path.length < 2) return
-  ctx.beginPath()
-  ctx.strokeStyle = color
-  ctx.globalAlpha = alpha
-  ctx.moveTo(path[0].x, path[0].y)
-  for (let i = 1; i < path.length; i += 1) ctx.lineTo(path[i].x, path[i].y)
-  ctx.closePath()
-  ctx.stroke()
-}
+// Six paliers d'alpha : un tracé par palier au lieu de 7 680 stroke. C'est ce qui
+// permet à la maille d'être dense sans coûter une frame.
+const LEVELS = 6
+const LEVEL_STEP = 0.085
 
 export default function WireframeAgent({ phase, size, className }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -121,7 +181,19 @@ export default function WireframeAgent({ phase, size, className }: Props) {
     canvas.width = Math.round(size * dpr)
     canvas.height = Math.round(size * dpr)
 
-    let { ink, accent, panel } = readColors(canvas)
+    const detail = detailFor(size)
+    const { mesh, dust } = sceneFor(detail)
+    const verts = mesh.vertices
+    const edges = mesh.edges
+    const vertCount = verts.length
+    const total = vertCount + dust.length
+    // Tampons réutilisés à chaque frame : aucun objet alloué dans la boucle.
+    const sx = new Float32Array(total)
+    const sy = new Float32Array(total)
+    const sz = new Float32Array(total)
+    const light = new Float32Array(total)
+
+    let { ink, dot, accent, panel, dotBoost } = readColors(canvas)
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)")
     let raf = 0
     let last = 0
@@ -129,114 +201,185 @@ export default function WireframeAgent({ phase, size, className }: Props) {
     const pitch = 0.32
     let stopped = false
 
+    // v12.6.0 : seule la voix de l'UTILISATEUR amplifie le mouvement. Pendant la
+    // lecture de l'agent, les haut-parleurs reviennent par le micro : amplifier
+    // sur cette mesure ferait réagir la sphère à sa propre voix.
+    const currentEnergy = (): PhaseEnergy => {
+      const phase = phaseRef.current
+      const speaking = phase === "capturing" || phase === "listening"
+      return withInput(phaseEnergy(phase), speaking ? readLevel() : 0)
+    }
+
     const draw = (energy: ReturnType<typeof phaseEnergy>, now: number) => {
       const w = canvas.width
       const h = canvas.height
-      // 0,38 : la sphère n'occupe plus toute la boîte — elle laisse la place à la
-      // charpente (anneau et rayons jusqu'à 1,26 r), sans jamais être rognée.
+      // 0,38 : la sphère laisse la place à la charpente (anneau et rayons jusqu'à
+      // 1,26 r), sans jamais être rognée.
       const radius = Math.min(w, h) * 0.38
       const cx = w / 2
       const cy = h / 2
       const t = now / 1000
       // Respiration : une seule sinusoïde, jamais un bruit aléatoire — l'onde doit
       // correspondre à une phase réelle, pas simuler une activité.
-      const breathe = 1 + Math.sin(t * 2.2) * 0.012 * energy.wave
-      const hair = Math.max(0.5, dpr * 0.45)
+      // v12.6.0 : la respiration porte l'énergie de la phase (et le niveau du micro
+      // pendant la parole) — 1,2 % au repos, jusqu'à ~4 % quand on parle.
+      const breathe = 1 + Math.sin(t * 2.2) * 0.014 * energy.wave
+      // v12.6.0 : les particules GROSSISSENT avec l'énergie : le réseau s'allume
+      // visiblement quand l'utilisateur parle, sans changer la silhouette.
+      // `dotBoost` (0,55 en thème clair) borne la croissance : des points plus gros
+      // sur un disque clair blanchissent la sphère au lieu de l'allumer.
+      const swell = 1 + Math.min(0.6, 0.18 * energy.wave) * dotBoost
+      const hair = Math.max(0.5, dpr * 0.42)
+      // Le compact (≈ 40 px CSS) ne peut pas porter des points de 2 px : ils
+      // recouvrent la surface et la sphère devient une bille blanche.
+      const dotScale = Math.max(0.5, Math.min(1, radius / 170))
+      const sizeFade = Math.max(0.78, Math.min(1, radius / 90))
+      // v12.4.0 : le disque doit être opaque — sinon la grande diagonale du fond
+      // traverse la sphère et redevient l'élément dominant de la composition.
+      const core = withAlpha(panel, 0.96)
+      // Ambiance : sur fond clair, la même encre à 5 % disparaît. On compense par
+      // luminance mesurée, sans seconde palette.
+      const ambient = 0.02 * dotBoost
 
       ctx.setTransform(1, 0, 0, 1, 0, 0)
       ctx.clearRect(0, 0, w, h)
       ctx.translate(cx, cy)
       ctx.scale(breathe, breathe)
 
-      // Halo du noyau : une lueur très basse, pas un néon.
-      const glow = ctx.createRadialGradient(-radius * 0.22, -radius * 0.26, radius * 0.05, 0, 0, radius * 1.18)
-      glow.addColorStop(0, withAlpha(ink, 0.1 * energy.glow))
-      glow.addColorStop(0.55, withAlpha(ink, 0.03 * energy.glow))
-      glow.addColorStop(1, withAlpha(ink, 0))
-      ctx.fillStyle = glow
-      ctx.beginPath()
-      ctx.arc(0, 0, radius * 1.18, 0, Math.PI * 2)
-      ctx.fill()
+      // ── Rotation + projection, une fois par frame ──────────────────────────
+      const cyw = Math.cos(yaw)
+      const syw = Math.sin(yaw)
+      const cp = Math.cos(pitch)
+      const sp = Math.sin(pitch)
+      const rotatePoint = (v: Vec3, index: number) => {
+        const x1 = v.x * cyw - v.z * syw
+        const z1 = v.x * syw + v.z * cyw
+        const y2 = v.y * cp - z1 * sp
+        const z2 = v.y * sp + z1 * cp
+        const k = FOCAL / Math.max(0.001, FOCAL - z2)
+        sx[index] = x1 * k * radius
+        sy[index] = -y2 * k * radius
+        sz[index] = z2
+        // Lumière fixe à l'écran : la normale tournée donne l'éclairement du lieu.
+        const dot = x1 * LX + y2 * LY + z2 * LZ
+        light[index] = dot > 0 ? (dot > 1 ? 1 : dot) : 0
+      }
+      for (let i = 0; i < vertCount; i += 1) rotatePoint(verts[i], i)
+      for (let i = 0; i < dust.length; i += 1) rotatePoint(dust[i], vertCount + i)
 
-      // Disque de fond : il donne un volume au dos des points. Il suit --panel-solid
-      // (sombre sur fond forêt, clair sur papier) — jamais une couleur en dur.
-      ctx.fillStyle = withAlpha(panel, 0.72)
+      // ── Volume : un disque sombre, pas une lueur ───────────────────────────
+      // La référence n'a aucun halo : le fond technique de l'accueil suffit. Le
+      // disque empêche seulement de voir la grille du fond à travers la matière.
+      ctx.fillStyle = core
       ctx.beginPath()
       ctx.arc(0, 0, radius, 0, Math.PI * 2)
       ctx.fill()
 
-      // Courbes de niveau : la face non éclairée porte une cartographie fine, comme
-      // la référence. Ce sont des cercles décalés, pas des données : aucune valeur
-      // n'est affichée, donc rien ne peut mentir.
-      ctx.save()
-      ctx.beginPath()
-      ctx.arc(0, 0, radius, 0, Math.PI * 2)
-      ctx.clip()
+      // ── Courbes internes : latitudes/longitudes ténues, puis orbites inclinées
+      ctx.strokeStyle = ink
+      ctx.lineCap = "round"
+      ctx.lineWidth = hair
+      for (const path of GRID) {
+        ctx.beginPath()
+        projectTo(path, ctx, yaw, pitch, radius, FOCAL)
+        ctx.globalAlpha = Math.min(1, (0.028 + 0.025 * energy.density))
+        ctx.stroke()
+      }
+      for (const path of ORBITS) {
+        ctx.beginPath()
+        projectTo(path, ctx, yaw, pitch, radius, FOCAL)
+        ctx.globalAlpha = Math.min(1, (0.08 + 0.05 * energy.density))
+        ctx.stroke()
+      }
+      for (const path of CONTOURS) {
+        ctx.beginPath()
+        projectTo(path, ctx, yaw, pitch, radius, FOCAL)
+        ctx.globalAlpha = Math.min(1, 0.24)
+        ctx.stroke()
+      }
+      ctx.globalAlpha = 1
+
+      // ── Maillage : les arêtes, triées par paliers de lumière × profondeur ──
+      const edgeBuckets: number[][] = Array.from({ length: LEVELS }, () => [])
+      for (let e = 0; e < edges.length; e += 1) {
+        const a = edges[e][0]
+        const b = edges[e][1]
+        const mid = (sz[a] + sz[b]) / 2
+        // Occlusion VRAIE : le disque est opaque, une arête du dos est derrière la
+        // matière. La dessiner, même à 15 %, superposait deux réseaux — la maille
+        // devenait un griffonnage au lieu de triangles lisibles (constaté).
+        if (mid <= 0) continue
+        const depthK = 0.5 + 0.5 * mid
+        const lit = lightCurve((light[a] + light[b]) / 2)
+        const alpha = Math.min(1, Math.max(0.012, (0.026 + 0.46 * lit) * depthK))
+        const level = Math.min(LEVELS - 1, Math.floor(alpha / LEVEL_STEP))
+        const bucket = edgeBuckets[level]
+        bucket.push(sx[a], sy[a], sx[b], sy[b])
+      }
+      for (let level = 0; level < LEVELS; level += 1) {
+        const bucket = edgeBuckets[level]
+        if (!bucket.length) continue
+        ctx.beginPath()
+        for (let i = 0; i < bucket.length; i += 4) {
+          ctx.moveTo(bucket[i], bucket[i + 1])
+          ctx.lineTo(bucket[i + 2], bucket[i + 3])
+        }
+        ctx.globalAlpha = (level + 0.6) * LEVEL_STEP
+        ctx.lineWidth = hair
+        ctx.stroke()
+      }
+      ctx.globalAlpha = 1
+
+      // ── Particules : une par sommet, plus la poussière de surface ──────────
+      // Leur éclat fait la lumière : les points du haut-droite sont blancs et
+      // larges, ceux de l'ombre restent de petits points gris.
+      const dustPaths: Path2D[] = Array.from({ length: LEVELS }, () => new Path2D())
+      for (let i = 0; i < total; i += 1) {
+        // Même occlusion que les arêtes : le dos de la sphère n'est pas visible.
+        if (sz[i] <= 0.02) continue
+        const lit = lightCurve(light[i])
+        const depthK = 0.22 + 0.78 * sz[i]
+        const alpha = Math.min(1, (ambient + 0.95 * lit) * depthK * (0.78 + 0.22 * energy.density) * sizeFade)
+        if (alpha < 0.025) continue
+        const level = Math.min(LEVELS - 1, Math.floor(alpha / (1 / LEVELS)))
+        const r = (0.45 + 1.5 * Math.pow(lit, 0.8)) * dpr * dotScale * swell * (i < vertCount ? 1 : 0.78)
+        dustPaths[level].moveTo(sx[i] + r, sy[i])
+        dustPaths[level].arc(sx[i], sy[i], r, 0, Math.PI * 2)
+      }
+      ctx.fillStyle = dot
+      for (let level = 0; level < LEVELS; level += 1) {
+        ctx.globalAlpha = Math.min(0.94, (level + 0.75) / LEVELS)
+        ctx.fill(dustPaths[level])
+      }
+      ctx.globalAlpha = 1
+
+      // ── Contour et croissant lumineux ──────────────────────────────────────
+      // Le limbe éclairé est un ARC, pas un dégradé : c'est lui qui détache la
+      // sphère de son fond du côté de la lumière.
       ctx.strokeStyle = ink
       ctx.lineWidth = hair
-      for (const [scale, alpha] of [[0.3, 0.15], [0.46, 0.13], [0.62, 0.11], [0.78, 0.09]] as const) {
-        ctx.globalAlpha = alpha * energy.density
-        ctx.beginPath()
-        ctx.arc(-radius * 0.14, radius * 0.24, radius * scale, 0, Math.PI * 2)
-        ctx.stroke()
-      }
-      ctx.globalAlpha = 1
-      ctx.restore()
-
-      // Méridiens et parallèles : la charpente filaire, volontairement ténue. La
-      // référence montre surtout des POINTS sur la face sombre ; un filet trop
-      // appuyé transformait la sphère en globe de bureau (vu à l'écran).
-      ctx.lineWidth = hair
-      for (const path of WIREFRAME) strokePath(ctx, project(path, yaw, pitch, radius), 0.075, ink)
-
-      // v12.0.0 : LA CALOTTE. Une masse opaque côté lumière, à bord progressif :
-      // c'est elle qui donne la lecture « sphère pleine » de la référence. L'alpha
-      // suit la densité de la phase — au repos elle est plus sourde, jamais éteinte.
-      const capAlpha = 0.55 + 0.35 * energy.density
-      // `strokePath` laisse l'alpha du dernier tracé (0,15) : sans ce remise à 1, la
-      // calotte se peignait à 15 % et la sphère restait une boule noire (vu à l'écran).
-      ctx.globalAlpha = 1
-      const cap = ctx.createRadialGradient(-radius * 0.42, -radius * 0.46, radius * 0.04, -radius * 0.34, -radius * 0.38, radius * 0.92)
-      // Le terminateur est SERRÉ : une décroissance sur 25 % du rayon donnait une
-      // boule de brume sans bord (mesuré sur la webview), alors que la référence
-      // montre une coque au bord lisible.
-      cap.addColorStop(0, withAlpha(ink, capAlpha))
-      cap.addColorStop(0.56, withAlpha(ink, capAlpha * 0.98))
-      cap.addColorStop(0.68, withAlpha(ink, capAlpha * 0.62))
-      cap.addColorStop(0.735, withAlpha(ink, capAlpha * 0.16))
-      cap.addColorStop(0.755, withAlpha(ink, 0))
-      ctx.fillStyle = cap
+      ctx.globalAlpha = 0.14
       ctx.beginPath()
       ctx.arc(0, 0, radius, 0, Math.PI * 2)
-      ctx.fill()
-
-      // Le maillage est CREUSÉ dans la calotte : on le redessine dans la couleur du
-      // panneau par-dessus la masse. Sur la face sombre ce trait est invisible (même
-      // couleur que le disque), ce qui laisse les points seuls porter le relief.
-      ctx.lineWidth = hair
-      ctx.strokeStyle = withAlpha(panel, 0.62)
-      for (const path of WIREFRAME) {
+      ctx.stroke()
+      const limb = Math.atan2(-LY, LX)
+      for (const [span, alpha] of [[1.15, 0.1], [0.8, 0.18], [0.44, 0.3]] as const) {
+        ctx.globalAlpha = Math.min(1, alpha * (0.8 + 0.15 * energy.density + 0.2 * energy.glow))
         ctx.beginPath()
-        ctx.globalAlpha = 1
-        const projected = project(path, yaw, pitch, radius)
-        ctx.moveTo(projected[0].x, projected[0].y)
-        for (let i = 1; i < projected.length; i += 1) ctx.lineTo(projected[i].x, projected[i].y)
-        ctx.closePath()
+        ctx.arc(0, 0, radius * 0.995, limb - span, limb + span)
         ctx.stroke()
       }
       ctx.globalAlpha = 1
 
-      // ── Charpente d'instrument : anneau, rayon pointillés, nœuds carrés ──
+      // ── Charpente d'instrument : anneau, ellipse, rayons et nœuds ──────────
       // Elle ne tourne PAS avec la sphère : c'est le bâti de l'instrument, pas la
       // matière. Aucune valeur affichée, aucun repère qui prétendrait mesurer.
-      ctx.strokeStyle = ink
-      ctx.lineWidth = hair
-      ctx.globalAlpha = 0.38
+      ctx.globalAlpha = 0.3
       ctx.beginPath()
       ctx.arc(0, 0, radius * RING, 0, Math.PI * 2)
       ctx.stroke()
 
-      ctx.globalAlpha = 0.26
+      ctx.globalAlpha = 0.22
       ctx.save()
       ctx.rotate(-0.32)
       ctx.beginPath()
@@ -251,7 +394,7 @@ export default function WireframeAgent({ phase, size, className }: Props) {
         const y1 = Math.sin(angle) * radius * SPOKE_IN
         const x2 = Math.cos(angle) * radius * SPOKE_OUT
         const y2 = Math.sin(angle) * radius * SPOKE_OUT
-        ctx.globalAlpha = 0.42
+        ctx.globalAlpha = 0.3
         ctx.beginPath()
         ctx.moveTo(x1, y1)
         ctx.lineTo(x2, y2)
@@ -260,48 +403,40 @@ export default function WireframeAgent({ phase, size, className }: Props) {
         // Nœud carré : l'orange est réservé au signal, jamais à une décoration.
         const accentNode = index === 1 || index === 5
         ctx.fillStyle = accentNode ? accent : ink
-        ctx.globalAlpha = accentNode ? 0.85 : 0.32
+        ctx.globalAlpha = accentNode ? 0.85 : 0.28
         const side = (accentNode ? 3 : 2) * dpr
         ctx.fillRect(x2 - side / 2, y2 - side / 2, side, side)
         ctx.setLineDash([dpr * 2, dpr * 4])
       }
       ctx.setLineDash([])
       ctx.globalAlpha = 1
+    }
 
-      // Points : la surface. La lumière décide taille et opacité ; la profondeur
-      // garde le dos lisible (une sphère filaire n'est pas une demi-sphère).
-      const projected = project(SURFACE, yaw, pitch, radius)
-      for (const point of projected) {
-        const nx = point.x / radius
-        const ny = point.y / radius
-        const shade = Math.max(0, nx * LIGHT_X + ny * LIGHT_Y + point.depth * LIGHT_Z)
-        // 0,34 au lieu de 0,22 : la face non éclairée doit rester une SURFACE de
-        // points, pas un vide derrière un filet.
-        const alpha = pointAlpha(point.depth, energy.density) * (0.34 + 0.66 * shade)
-        if (alpha < 0.03) continue
-        ctx.globalAlpha = Math.min(0.95, alpha)
-        ctx.fillStyle = ink
-        const dot = (0.55 + 1.15 * shade * shade) * dpr
-        ctx.beginPath()
-        ctx.arc(point.x, point.y, dot, 0, Math.PI * 2)
-        ctx.fill()
+    /** Trace une polyligne déjà en coordonnées monde, sans fermer le chemin. */
+    function projectTo(path: Vec3[], target: CanvasRenderingContext2D, y: number, p: number, scale: number, focal: number) {
+      const cyy = Math.cos(y)
+      const syy = Math.sin(y)
+      const cpp = Math.cos(p)
+      const spp = Math.sin(p)
+      for (let i = 0; i < path.length; i += 1) {
+        const v = path[i]
+        const x1 = v.x * cyy - v.z * syy
+        const z1 = v.x * syy + v.z * cyy
+        const y2 = v.y * cpp - z1 * spp
+        const z2 = v.y * spp + z1 * cpp
+        const k = focal / Math.max(0.001, focal - z2)
+        const px = x1 * k * scale
+        const py = -y2 * k * scale
+        if (i === 0) target.moveTo(px, py)
+        else target.lineTo(px, py)
       }
-      ctx.globalAlpha = 1
-
-      // Contour : le seul trait plein, il tient la silhouette lors du repli.
-      ctx.strokeStyle = ink
-      ctx.globalAlpha = 0.18
-      ctx.lineWidth = hair
-      ctx.beginPath()
-      ctx.arc(0, 0, radius, 0, Math.PI * 2)
-      ctx.stroke()
-      ctx.globalAlpha = 1
+      target.closePath()
     }
 
     let lastDraw = 0
     const loop = (now: number) => {
       if (stopped) return
-      const energy = phaseEnergy(phaseRef.current)
+      const energy = currentEnergy()
       const animate = !reduced.matches && !document.hidden && energy.spin > 0
       const delta = last ? Math.min(64, now - last) : 16
       last = now
@@ -315,7 +450,7 @@ export default function WireframeAgent({ phase, size, className }: Props) {
       }
     }
 
-    redrawRef.current = () => draw(phaseEnergy(phaseRef.current), performance.now())
+    redrawRef.current = () => draw(currentEnergy(), performance.now())
     // v12.0.0 : relire les jetons puis repeindre — c'est la MÊME fonction draw,
     // jamais une seconde palette devinée.
     recolorRef.current = () => {
@@ -323,7 +458,9 @@ export default function WireframeAgent({ phase, size, className }: Props) {
       ink = next.ink
       accent = next.accent
       panel = next.panel
-      draw(phaseEnergy(phaseRef.current), performance.now())
+      dotBoost = next.dotBoost
+      dot = next.dot
+      draw(currentEnergy(), performance.now())
     }
 
     const start = () => {
@@ -335,7 +472,7 @@ export default function WireframeAgent({ phase, size, className }: Props) {
     const onVisibility = () => {
       window.cancelAnimationFrame(raf)
       if (!document.hidden) start()
-      else draw(phaseEnergy(phaseRef.current), performance.now())
+      else draw(currentEnergy(), performance.now())
     }
     const onMotion = () => {
       window.cancelAnimationFrame(raf)
@@ -345,7 +482,7 @@ export default function WireframeAgent({ phase, size, className }: Props) {
     reduced.addEventListener("change", onMotion)
     document.addEventListener("visibilitychange", onVisibility)
     // Premier dessin immédiat : pas de trou entre le montage et la première frame.
-    draw(phaseEnergy(phaseRef.current), performance.now())
+    draw(currentEnergy(), performance.now())
     start()
 
     return () => {

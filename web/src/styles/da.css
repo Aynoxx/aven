@@ -88,7 +88,8 @@
   /* Charpente du Poste. */
   --wb-tabs-h: 38px;
   --wb-inspector-w: 320px;
-  --wb-command-h: 56px;
+  /* v12.6.0 : --wb-command-h a disparu avec la bande permanente ; la palette
+     flottante a sa hauteur naturelle et ne réserve plus de rangée. */
   /* v12.0.0 : en-tête unique (marque · section · agent · contrôles) et
      constellation. Aucune barre de navigation permanente. */
   --wb-header-h: 54px;
@@ -103,7 +104,11 @@
      titre n'est plus une masse qui traverse la page — c'est un titre éditorial de
      deux lignes. Le plancher reste grand sur une fenêtre étroite, et la borne de
      hauteur l'empêche de pousser la sphère hors de la scène sur un écran court. */
-  --font-size-display: clamp(30px, min(4.6vw, 8.6vh), 76px);
+  /* v12.5.0 : l'échelle d'affiche était celle d'une page de présentation — 59 px
+     à 1280 de large, plus que le champ de saisie posé dessous. Le titre garde sa
+     voix, ses deux lignes et son rôle d'identité, mais à l'échelle d'un masthead
+     d'application (~42 px à 1280) : la surface d'entrée redevient le point d'entrée. */
+  --font-size-display: clamp(26px, min(3.3vw, 6vh), 54px);
 }
 
 /* Thème clair « blueprint » : papier os, encre olive, même signal assombri.

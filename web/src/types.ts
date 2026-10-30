@@ -59,6 +59,7 @@ export type NoteTreeEntry =
 export type NoteLink = { target: string; resolved: string | null }
 export type NoteSearchHit = { id: string; title: string; snippet: string }
 // v9.3.0 : explorateur de fichiers de l'espace (miroir de host/workspace-files.ts).
+export type RecentFile = { path: string; name: string; opened: number }
 export type FileEntry = { name: string; path: string; kind: "dir" | "file"; size: number; modified: number }
 export type TextFile = { path: string; size: number; truncated: boolean; content: string }
 export type Breadcrumb = { label: string; path: string }[]
@@ -193,6 +194,9 @@ export type OpenCodeApi = {
   filesRead: (relative: string) => Promise<TextFile>
   filesBreadcrumb: (relative: string) => Promise<Breadcrumb>
   filesOpen: (relative: string) => Promise<string>
+  // v12.3.0 : historique des fichiers ouverts dans l'espace (accueil « Reprendre »).
+  filesRecent: () => Promise<RecentFile[]>
+  filesTouch: (relative: string) => Promise<RecentFile[]>
   noteTogglePin: (id: string) => Promise<string[]>
   notePins: () => Promise<string[]>
   noteExport: (id: string) => Promise<string | null>

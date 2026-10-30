@@ -6,6 +6,9 @@ import { Icon } from "./icons"
 import InstrumentFrame, { type InstrumentAction } from "./InstrumentFrame"
 import type { Note, NoteLink, NoteSearchHit, NoteTreeEntry } from "./types"
 import { stripLeadingTitle } from "./note-display"
+// v12.6.0 : le retrait immédiat d'une note est une récursion pure, testée sans
+// React (tests/notes-tree.test.mjs).
+import { pruneNote } from "./notes-tree"
 import { displayPath } from "./display-path"
 
 // v10.1.0 « façon Kortex » : arbre de dossiers (drag&drop natif), éditeur riche
@@ -145,8 +148,31 @@ export default function NotesView(props: Props) {
     } catch (e) { props.onError(e) }
   }
 
-  const withNote = async (fn: () => Promise<unknown>) => {
-    try { await fn(); reload() } catch (e) { props.onError(e) }
+  // v12.6.0 : supprimer, archiver ou purger retire la note de la VUE tout de
+  // suite. Avant, l'arbre ne se rechargeait qu'après l'aller-retour IPC et la
+  // note restait affichée à droite (`selected` gardait sa copie) : il fallait
+  // changer de page pour la voir disparaître. La donnée fait foi — l'état local
+  // est retiré immédiatement, puis confirmé par le rechargement du disque.
+  const dropFromView = (id: string) => {
+    setTree((nodes) => pruneNote(nodes, id))
+    setTrash((list) => list.filter((n) => n.id !== id))
+    setArchived((list) => list.filter((n) => n.id !== id))
+    setHits((list) => list.filter((h) => h.id !== id))
+    setSelectedId((current) => {
+      if (current !== id) return current
+      setSelected(null)
+      setLinks([])
+      setBacks([])
+      return undefined
+    })
+  }
+
+  const withNote = async (fn: () => Promise<unknown>, removedId?: string) => {
+    try {
+      await fn()
+      if (removedId) dropFromView(removedId)
+      reload()
+    } catch (e) { props.onError(e) }
   }
 
   const quickCapture = async () => {
@@ -181,7 +207,7 @@ export default function NotesView(props: Props) {
   // v10.2.0 (E2) : purge à deux clics — armer puis confirmer dans les 4 s.
   const purgeNote = (id: string) => {
     window.clearTimeout(purgeTimer.current)
-    if (purgeArmed === id) { setPurgeArmed(null); void withNote(() => api.notePurge(id)); return }
+    if (purgeArmed === id) { setPurgeArmed(null); void withNote(() => api.notePurge(id), id); return }
     setPurgeArmed(id)
     purgeTimer.current = window.setTimeout(() => setPurgeArmed(null), 4000)
   }
@@ -360,8 +386,8 @@ export default function NotesView(props: Props) {
                 <details className="notes-secondary-actions">
                   <summary>Autres actions</summary>
                   <div className="notes-secondary-actions-list">
-                    <button className="button ghost" onClick={() => void withNote(() => api.noteArchive(selected.id))} type="button"><Icon name="archive" size={14} />Archiver</button>
-                    <button className="button ghost" onClick={() => void withNote(() => api.noteDelete(selected.id))} type="button"><Icon name="trash" size={14} />Poubelle</button>
+                    <button className="button ghost" onClick={() => void withNote(() => api.noteArchive(selected.id), selected.id)} type="button"><Icon name="archive" size={14} />Archiver</button>
+                    <button className="button ghost" onClick={() => void withNote(() => api.noteDelete(selected.id), selected.id)} type="button"><Icon name="trash" size={14} />Poubelle</button>
                     <button className="button ghost" onClick={() => api.noteExport(selected.id).catch((e) => props.onError(e))} type="button">Exporter .md</button>
                   </div>
                 </details>

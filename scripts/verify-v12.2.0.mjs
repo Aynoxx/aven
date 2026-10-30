@@ -57,10 +57,9 @@ assert.ok(!/data-phase="listening"/.test(home), "la phase n'est jamais écrite e
 for (const phase of ["thinking", "listening", "capturing", "speaking"]) {
   assert.match(css, new RegExp(`\\.wb-home-scene\\[data-phase="${phase}"\\]`), `la phase « ${phase} » a son effet`)
 }
-// Le bâti ne consomme AUCUNE boucle ambiante : le mouvement vivant est la sphère.
+// Les règles de PHASE ne déclarent aucune animation : elles changent un état.
 const phaseTail = css.slice(css.indexOf(".wb-home-scene[data-phase="), css.indexOf("/* Zone inférieure"))
-assert.ok(!/\binfinite\b/.test(phaseTail), "le bâti ne déclare aucune animation infinie")
-assert.ok(!/@keyframes wb-home-/.test(css), "aucune boucle propre au bâti n'est ajoutée")
+assert.ok(!/\binfinite\b/.test(phaseTail), "une phase ne déclare aucune animation infinie")
 assert.match(css, /\.wb-home-ring, \.wb-home-node \{\s*transition: [^}]*var\(--dur-med\) var\(--ease-out\)/, "les changements d'état passent par les tokens de temps")
 assert.match(da, /@media \(prefers-reduced-motion: reduce\) \{\s*\.wb-app \*/, "le mouvement réduit arrête le bâti comme le reste du Poste")
 

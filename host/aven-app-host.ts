@@ -30,6 +30,9 @@ import {
 } from "./notes.js"
 import { forgetNote, loadAllTags, loadPinned, loadTags, setTags, togglePin } from "./notes-meta.js"
 import { listWorkspaceDir, readWorkspaceFile, breadcrumbOf, safeResolve as safeResolveWorkspacePath } from "./workspace-files.js"
+// v12.3.0 : l'accueil reprend le dernier document RÉELLEMENT ouvert — Aven en garde
+// la trace par espace (jamais un « fichier récent » inventé).
+import { loadRecentFiles, rememberWorkspaceFile } from "./recent-files.js"
 import { aggregateStats, readDictationStats } from "./stats.js"
 import { buildDiagnostic } from "./diagnostic.js"
 import { transcribeSpeech } from "./voice.js"
@@ -1590,6 +1593,11 @@ async function dispatch(method: string, params: any): Promise<unknown> {
       return readWorkspaceFile(requireWorkspace(), String(params?.[0] ?? ""))
     case "filesBreadcrumb":
       return breadcrumbOf(String(params?.[0] ?? ""))
+    // v12.3.0 : ouverture d'un fichier → historique de l'espace.
+    case "filesRecent":
+      return loadRecentFiles(requireWorkspace())
+    case "filesTouch":
+      return rememberWorkspaceFile(requireWorkspace(), params?.[0])
     case "filesOpen":
       return safeResolveWorkspacePath(requireWorkspace(), String(params?.[0] ?? ""))
     case "noteOpenFolder":

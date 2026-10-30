@@ -23,7 +23,15 @@ type Props = {
   onSelect: (kind: NavDestination["kind"]) => void
 }
 
-const CLOSE_GRACE_MS = 170
+// v12.6.0 : la zone d'activation est TOUT LE BAS du Poste, pas le seul rectangle
+// de la poignée. Avant, `pointerleave` sur la poignée refermait après 170 ms :
+// écarter la souris d'un centimètre suffisait à faire disparaître la navigation.
+// La bande ouvre sur une intention (OPEN_DWELL_MS) et ne referme qu'une fois le
+// pointeur sorti d'une bande bien plus haute, après une grâce visible.
+const OPEN_BAND_H = 56
+const KEEP_BAND_H = 156
+const CLOSE_GRACE_MS = 640
+const OPEN_DWELL_MS = 240
 
 export default function NavigationConstellation({
   destinations,
@@ -36,11 +44,27 @@ export default function NavigationConstellation({
 }: Props) {
   const [width, setWidth] = useState(() => (typeof window === "undefined" ? 1200 : window.innerWidth))
   const closeTimer = useRef<number | null>(null)
+  const dwellTimer = useRef<number | null>(null)
+  // Le panneau ouvert est lu par les écouteurs de fenêtre : sans cette copie, un
+  // effet enregistré à l'ouverture jugerait l'état figé du rendu précédent.
+  const openRef = useRef(open)
+  openRef.current = open
+  // `onOpen` est une flèche recréée à chaque rendu du Poste : la garder en ref
+  // évite de réenregistrer les écouteurs (et d'annuler une attente en cours) à
+  // chaque mise à jour de la conversation.
+  const openPanelRef = useRef(onOpen)
+  openPanelRef.current = onOpen
+  const passiveOpen = useRef(false)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const nodeRefs = useRef<Array<HTMLButtonElement | null>>([])
   // Le survol ouvre, mais ne déplace pas le focus clavier : voler le focus sous
   // la souris ferait perdre la frappe en cours ailleurs dans le Poste.
   const focusOnOpen = useRef(false)
+  // v12.6.0 : la bande du bas ouvre sans clic. Sans ce drapeau, un pointeur posé
+  // dans la bande faisait apparaître l'arc, et le premier clic sur la poignée le
+  // REFERMAIT — l'utilisateur voyait la navigation s'ouvrir toute seule puis
+  // disparaître à l'instant où il la visait. Le premier clic confirme donc une
+  // ouverture passive ; le suivant ferme.
 
   useEffect(() => {
     const onResize = () => setWidth(window.innerWidth)
@@ -60,7 +84,67 @@ export default function NavigationConstellation({
     closeTimer.current = window.setTimeout(() => { closeTimer.current = null; onClose() }, CLOSE_GRACE_MS)
   }
 
-  useEffect(() => cancelClose, [])
+  const cancelDwell = () => {
+    if (dwellTimer.current !== null) {
+      window.clearTimeout(dwellTimer.current)
+      dwellTimer.current = null
+    }
+  }
+
+  useEffect(() => () => { cancelClose(); cancelDwell() }, [])
+
+  // v12.6.0 : la bande du bas du Poste décide seule de l'ouverture et de la
+  // fermeture. Écouter le pointeur à la fenêtre plutôt que sur un élément évite
+  // deux pièges : une bande invisible pleine largeur intercepterait les clics du
+  // composeur, et `pointerleave` se déclenche au moindre écart.
+  useEffect(() => {
+    const inBand = (clientY: number, height: number) => clientY >= window.innerHeight - height
+    const typing = () => {
+      const element = document.activeElement
+      if (!element) return false
+      const tag = element.tagName
+      return tag === "INPUT" || tag === "TEXTAREA" || (element as HTMLElement).isContentEditable
+    }
+    const onMove = (event: PointerEvent) => {
+      if (openRef.current) {
+        // Ouverte : elle survit à tout le bas du Poste, et se referme au-dessus.
+        if (inBand(event.clientY, KEEP_BAND_H)) cancelClose()
+        else scheduleClose()
+        return
+      }
+      if (!inBand(event.clientY, OPEN_BAND_H) || typing()) {
+        cancelDwell()
+        return
+      }
+      if (dwellTimer.current === null) {
+        dwellTimer.current = window.setTimeout(() => {
+          dwellTimer.current = null
+          passiveOpen.current = true
+          openPanelRef.current()
+        }, OPEN_DWELL_MS)
+      }
+    }
+    // Un clic dans la bande est une action, pas une demande de navigation : on
+    // annule l'attente au lieu de faire surgir l'arc sous le curseur.
+    const onDown = () => cancelDwell()
+    // Quitter la fenêtre arrête `pointermove` : sans cela, la navigation resterait
+    // ouverte derrière une autre application.
+    const onLeaveWindow = () => { if (openRef.current) scheduleClose() }
+    const onResize = () => { if (openRef.current) scheduleClose() }
+    window.addEventListener("pointermove", onMove, { passive: true })
+    window.addEventListener("pointerdown", onDown, true)
+    window.addEventListener("blur", onLeaveWindow)
+    window.addEventListener("resize", onResize)
+    return () => {
+      window.removeEventListener("pointermove", onMove)
+      window.removeEventListener("pointerdown", onDown, true)
+      window.removeEventListener("blur", onLeaveWindow)
+      window.removeEventListener("resize", onResize)
+      cancelDwell()
+    }
+    // scheduleClose / cancelClose / cancelDwell / openPanelRef ne lisent que des refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Le focus suit une ouverture EXPLICITE : la destination courante d'abord,
   // sinon la première. Sans cela, ouvrir au clavier laisserait le focus sur la
@@ -96,7 +180,7 @@ export default function NavigationConstellation({
 
   return (
     <div className="wb-nav">
-      <div className="wb-nav-zone" data-open={open} onPointerLeave={open ? scheduleClose : undefined}>
+      <div className="wb-nav-zone" data-open={open} onPointerEnter={cancelClose}>
         {/* La poignée PASSE AVANT l'arc dans le DOM : Tab part de la poignée et
             entre dans les cercles, au lieu de sauter par-dessus le panneau. */}
         <button
@@ -107,9 +191,12 @@ export default function NavigationConstellation({
           aria-controls={open ? "wb-nav-arc" : undefined}
           aria-label={open ? "Fermer la navigation" : "Ouvrir la navigation"}
           title={open ? "Fermer la navigation (Échap)" : "Navigation — ouvre les cinq destinations"}
-          onPointerEnter={() => { focusOnOpen.current = false; cancelClose(); onOpen() }}
+          onPointerEnter={() => { focusOnOpen.current = false; passiveOpen.current = false; cancelClose(); onOpen() }}
           onClick={() => {
-            if (open) { onClose() } else { focusOnOpen.current = true; onOpen() }
+            if (open && !passiveOpen.current) { onClose(); return }
+            passiveOpen.current = false
+            focusOnOpen.current = true
+            onOpen()
           }}
         >
           <span className="wb-nav-dots" aria-hidden="true"><i /><i /><i /></span>
@@ -147,7 +234,6 @@ export default function NavigationConstellation({
                       ["--exit-x" as string]: `${node.exitX}px`,
                     }}
                     onPointerEnter={cancelClose}
-                    onPointerLeave={scheduleClose}
                   >
                     <button
                       ref={(element) => { nodeRefs.current[index] = element }}

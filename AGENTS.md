@@ -103,7 +103,7 @@ par les variables `:root` existantes, sinon thèmes et densités cassent.
 | Titres de vue | `var(--font-size-xl)` | 20px |
 | Chiffres clés, stats | `var(--font-size-2xl)` | 28px |
 | Grands titres de vue (plafond d'un `clamp`) | `var(--font-size-3xl)` | 32px |
-| **Titre d'accueil seulement** | `var(--font-size-display)` | `clamp(30px, min(4.6vw, 8.6vh), 76px)` — titre éditorial sur deux lignes ; ce token ne sert QUE là, jamais au texte courant (v12.1.0) |
+| **Titre d'accueil seulement** | `var(--font-size-display)` | `clamp(26px, min(3.3vw, 6vh), 54px)` — titre éditorial sur deux lignes, à l'**échelle d'un masthead d'application** : il ne domine pas le champ de saisie qui le suit. Ce token ne sert QUE là, jamais au texte courant (v12.1.0, resserré v12.5.0) |
 
 - **Graisse** : texte courant 400–500 ; semi-gras 600 (titres de liste, badges,
   valeurs) ; boutons `font-weight: 680` (classe `.button`) ; titres `700–800`.
@@ -205,22 +205,58 @@ par les variables `:root` existantes, sinon thèmes et densités cassent.
   à gauche, sphère et anneaux de construction à droite, ligne basse pour le travail
   réel. Le titre tient deux lignes (`--font-size-display`, revalorisé : le brief
   monumental de la v12.0.0 est **retiré**), et un seul statut vocal est affiché —
-  l'en-tête n'en ajoute pas sur l'accueil. « Reprendre » passe par
-  `web/src/workbench/resume.ts` (module pur testé) : au plus deux entrées, des
-  conversations et des notes **réellement chargées**, avec leur âge ; jamais un
-  historique inventé, et la zone disparaît quand il n'y a rien. Une action rapide
-  se nomme par ce qu'elle fait — « Parcourir les fichiers », jamais « Rechercher un
-  fichier » tant que la recherche n'existe pas.
+  l'en-tête n'en ajoute pas sur l'accueil. « Reprendre » est une **bande
+  horizontale** — le libellé à gauche, trois colonnes à droite, une par nature
+  (conversation, note, fichier), et non un titre empilé au-dessus d'une ligne de
+  pied de page — avec **trois entrées**, décidées par `web/src/workbench/resume.ts`
+  (module pur testé) : titre, extrait réel, âge. Les colonnes sont **fixées par
+  nature** (v12.3.1) : une nature absente garde sa place et le dit d'une ligne
+  discrète, la bande ne se réorganise jamais sous l'œil. Les métadonnées d'une
+  cellule (icône, nature, âge) vivent sur UNE ligne groupée — l'âge ne flotte pas au
+  bord droit — et « Délégation · … » appartient à la ligne d'état du micro, pas au
+  travail passé. Le dernier document vient de
+  `host/recent-files.ts`, qui journalise les ouvertures dans les métadonnées de
+  l'espace — jamais d'historique inventé, une note vide n'est pas proposée, et la
+  zone le dit quand il n'y a rien. Les actions rapides vivent sous la saisie
+  (v12.5.0), pas dans « Reprendre ». Une action se nomme par ce qu'elle fait — « Parcourir les
+  fichiers », jamais « Rechercher un fichier » tant que la recherche n'existe pas.
   Une **couche technique** (densité, courbes de niveau, ligne graduée, croix) donne
   la profondeur du fond : elle est décorative, ne capte rien, ne mesure rien, et
   s'efface sous l'identité par masque — jamais de fausse coordonnée (v12.2.0). Le
   bâti autour de la sphère est **lié à `voice.phase`** : anneaux qui s'allument quand
   l'agent réfléchit, nœud qui s'élargit à la capture puis à la parole ; aucun minuteur
-  ne simule un état, et **aucune boucle ambiante n'est ajoutée** — le mouvement
-  vivant reste la sphère, qui lit l'énergie réelle du micro.
+  ne simule un état. Le mouvement vivant reste la sphère, qui lit l'énergie réelle du
+  micro ; la seule boucle ajoutée (v12.3.0) est la **rotation lente des anneaux**
+  (48 s), déclarée comme ambiante et coupée par `prefers-reduced-motion` — le plafond
+  de `verify-v10.3.2` a été porté de 6 à 7 pour elle, avec sa justification.
   `scripts/verify-v12.1.0.mjs` refuse le retour au titre plein écran, à un
   historique fabriqué, à une action sans effet, comme à un fond qui prétendrait
   mesurer quelque chose.
+- **Un accueil d'application ouvre une saisie, pas une affiche (v12.5.0)** : la
+  surface d'entrée porte un champ (`.wb-home-command` dans `HomeStage.tsx`), pas une
+  question rhétorique suivie de boutons — sans champ, l'écran ne propose que des
+  destinations et se lit comme une page de présentation. Entrée envoie : le premier
+  message crée la session **et** part avec elle (`startWithPrompt` :
+  `api.createChat` puis `sendText(prompt, c.id)`), jamais « envoyer deux fois ».
+  `sendText` reçoit sa **cible en argument** : une session neuve n'existe pas encore
+  dans l'état, et une fermeture sur `chatId` l'aurait envoyée dans la conversation
+  du rendu précédent. Le signal de focus vit sur le conteneur (`:focus-within`),
+  le champ dit pourquoi il est fermé sans espace de travail, et il ne porte jamais
+  d'action primaire inerte (l'envoi reste secondaire tant qu'il n'y a rien à
+  envoyer). L'en-tête de l'accueil nomme la **destination et la date**
+  (« Aujourd'hui · … »), jamais un slogan de marque, et le titre garde sa voix à
+  l'échelle d'un masthead : `--font-size-display` ne dépasse pas 54 px.
+  `scripts/verify-v12.5.0.mjs` refuse le retour à la question rhétorique.
+- **La sphère est une structure, pas une bille (v12.4.0)** : sa surface est un
+  maillage géodésique **irrégulier** (`geodesicMesh`), une particule par sommet plus
+  une poussière de surface (`fibonacciSphere`), et une lumière FIXE en haut-droite,
+  **rasante** (`AGENT_LIGHT`, z < 0,7) — elle n'applique jamais le yaw de la sphère.
+  Le dos n'est pas dessiné (occlusion réelle), le disque est opaque, et il n'y a
+  **aucun halo ni dégradé radial** : l'éclat vient des points eux-mêmes. La géométrie
+  et la courbe de lumière vivent dans `web/src/agent/sphere.ts` (pur, testé) ; le
+  canvas ne fait que peindre. Le détail suit la taille rendue et se paie en paliers
+  d'alpha, jamais trait par trait. `scripts/verify-v12.4.0.mjs` refuse le retour à
+  une lumière frontale, à un halo, ou à un dos visible.
 - **Une constellation se mesure, elle ne se devine pas** (`web/src/workbench/NavigationConstellation.tsx`) :
   la poignée passe **avant** l'arc dans le DOM (Tab entre dans les cercles), le survol
   ouvre sans voler le focus, et la grâce de fermeture empêche la scintillation entre la
@@ -268,8 +304,30 @@ par les variables `:root` existantes, sinon thèmes et densités cassent.
   pouvait plus fermer d'onglet du tout) : un raccourci ne remplace jamais l'action
   visible. Aucun instrument n'ajoute un second chemin vers lui-même.
 - **Une dictée a une provenance (v10.4.0)** : le micro du composeur transcrit
-  TOUJOURS dans la chatbox ; seul le micro global du Poste (barre de commande, tuile
-  Capturer) exécute les commandes d'application. La décision vit dans
+  TOUJOURS dans la chatbox ; seul le micro global du Poste (palette de commande
+  Ctrl+K, tuile Capturer) exécute les commandes d'application.
+- **La sphère entend la personne qui parle (v12.6.0)** : le niveau du micro mesuré
+  par le VAD (`web/src/voice-agent/level.ts`, module pur testé) module l'énergie de
+  la phase (`withInput` dans `web/src/agent/sphere.ts`) — rotation, respiration,
+  et grossissement des particules. Seules les phases où l'**utilisateur** parle
+  (`capturing`, `listening`) l'utilisent : pendant `speaking`, la voix de l'agent
+  revient par les haut-parleurs et s'amplifierait elle-même. Le niveau vit hors de
+  l'état React (lu dans la boucle de rendu) : vingt mises à jour par seconde
+  re-rendraient tout le Poste. Micro coupé, il vaut zéro — aucune animation ne
+  simule une écoute.
+- **Une suppression se voit tout de suite (v12.6.0)** : supprimer, archiver ou
+  purger une note la retire immédiatement de l'arbre **et** de l'aperçu
+  (`pruneNote` dans `web/src/notes-tree.ts`, pur et testé ; `dropFromView` dans
+  `NotesView`) ; le rechargement du disque confirme. Laisser la note ouverte parce
+  que `selected` gardait sa copie obligeait à changer de page pour la voir partir.
+- **Le bas du Poste appartient à la navigation (v12.6.0)** : la constellation
+  s'active sur **toute la largeur** de la bande inférieure (56 px), après une
+  intention de survol (240 ms), et ne se referme qu'une fois le pointeur sorti
+  d'une bande bien plus haute (156 px), après 640 ms. Écouter `pointermove` à la
+  fenêtre — plutôt qu'un `pointerenter` sur la poignée — évite deux pièges : une
+  bande invisible pleine largeur intercepterait les clics du composeur, et
+  `pointerleave` refermait l'arc au moindre écart du pointeur. Écrire dans un champ
+  n'appelle jamais la navigation. La décision vit dans
   `web/src/dictation-routing.ts` (module pur testé).
 - **L'agent vocal est une provenance distincte (v11.1.0)** : il n'exécute une
   commande que si le mot **« Aven »** a été prononcé, ou pendant la veille
@@ -492,11 +550,17 @@ par les variables `:root` existantes, sinon thèmes et densités cassent.
   (module pur testé) : une table **par moteur** — `sapi` et `pocket` aujourd'hui —
   appliquée au texte de synthèse seulement, jamais au texte affiché. Une entrée
   nouvelle s'accompagne d'une écoute et d'un test.
-- **Barre de commande et nouvelle conversation (v11.0.0)** : la barre permanente
-  (Ctrl+K) sert à retrouver une conversation ou une note, à exécuter une commande
-  (`>`), ou à cibler une portée (`/`). Une recherche vide n'exécute aucune action
-  implicite. Créer et rédiger une conversation reste une action nommée distincte ;
-  tout état vide est informatif, jamais un faux bouton.
+- **La palette de commande se demande, elle ne s'installe pas (v11.0.0, resserré
+  v12.6.0)** : Ctrl+K ouvre une **palette flottante** qui retrouve une conversation
+  ou une note, exécute une commande (`>`), ou cible une portée (`/`). Une recherche
+  vide n'exécute aucune action implicite. Créer et rédiger une conversation reste
+  une action nommée distincte ; tout état vide est informatif, jamais un faux bouton.
+  **Aucune bande permanente ne réserve le bas du Poste** : la rangée de 56 px de la
+  v11.0.0 a été retirée (v12.6.0) — elle coûtait de la scène en permanence pour un
+  usage occasionnel, et doublait la recherche des instruments (historique des
+  conversations, recherche des notes, explorateur de fichiers). La palette flotte
+  au-dessus de la poignée de navigation, jamais par-dessus, et un changement de
+  destination la referme.
 - **Les destinations ont un nom fonctionnel (v10.5.0)** : le rail et la planche
   Aujourd'hui indiquent ce qu'ils ouvrent réellement. « Terminal » ouvre le CLI
   Freebuff ; « Orchestration » règle la délégation de l'agent principal Aven. Les

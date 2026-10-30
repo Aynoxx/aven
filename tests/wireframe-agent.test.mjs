@@ -1,13 +1,19 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 import {
+  AGENT_LIGHT,
   AGENT_PHASES,
   circle,
   fibonacciSphere,
+  geodesicMesh,
+  lightAt,
+  lightCurve,
   phaseEnergy,
   pointAlpha,
   project,
+  shadeAlpha,
   wireframe,
+  withInput,
 } from "../web/src/agent/sphere.ts"
 
 // v12.0.0 : la géométrie de l'agent est PURE. Si elle casse, la sphère ne
@@ -101,6 +107,119 @@ test("phaseEnergy : les sept phases réelles, aucune inventée", () => {
   // La parole est la phase la plus « vivante », l'écoute la plus large.
   assert.ok(phaseEnergy("speaking").wave > phaseEnergy("listening").wave)
   assert.equal(phaseEnergy("listening").density, 0.9)
+})
+
+// v12.4.0 : la sphère est une STRUCTURE (maillage géodésique + lumière fixe),
+// plus une bille à calotte. Ces trois invariants décident de son apparence :
+// une géométrie sur la sphère unitaire, un maillage déterministe et fermé, et
+// une lumière asymétrique qui garde l'ombre lisible.
+
+test("geodesicMesh : sommets unitaires, triangles quadruplés par niveau", () => {
+  for (const detail of [0, 1, 2, 3]) {
+    const mesh = geodesicMesh(detail)
+    assert.equal(mesh.triangles.length, 20 * 4 ** detail, `detail ${detail} : faces`)
+    // Icosphere : V = 10·4^n + 2. La formule attrape un cache de milieux cassé.
+    assert.equal(mesh.vertices.length, 10 * 4 ** detail + 2, `detail ${detail} : sommets`)
+    for (const v of mesh.vertices) assert.ok(Math.abs(norm(v) - 1) < 1e-9)
+    for (const triangle of mesh.triangles) {
+      assert.equal(triangle.length, 3)
+      for (const index of triangle) assert.ok(index >= 0 && index < mesh.vertices.length)
+    }
+  }
+})
+
+test("geodesicMesh : arêtes uniques et fermées sur les triangles", () => {
+  const mesh = geodesicMesh(2)
+  const keys = new Set(mesh.edges.map(([a, b]) => `${a}:${b}`))
+  assert.equal(keys.size, mesh.edges.length, "aucune arête ne doit être dessinée deux fois")
+  for (const [a, b] of mesh.edges) assert.ok(a < b, "arêtes ordonnées sommet bas → haut")
+  // E = 3F/2 pour un maillage triangulaire fermé.
+  assert.equal(mesh.edges.length, (mesh.triangles.length * 3) / 2)
+  for (const [a, b, c] of mesh.triangles) {
+    for (const [i, j] of [[a, b], [b, c], [c, a]]) {
+      assert.ok(keys.has(`${Math.min(i, j)}:${Math.max(i, j)}`), `arête ${i}-${j} absente`)
+    }
+  }
+})
+
+test("geodesicMesh : déterministe — le jitter ne scintille pas à chaque frame", () => {
+  assert.deepEqual(geodesicMesh(2), geodesicMesh(2))
+  // Le jitter déforme vraiment les milieux : un maillage parfaitement régulier
+  // trahirait la projection des seuls points de Fibonacci.
+  const a = geodesicMesh(1, 0)
+  const b = geodesicMesh(1, 0.05)
+  assert.notDeepEqual(a.vertices, b.vertices)
+})
+
+test("AGENT_LIGHT : unitaire, haut-droite, devant", () => {
+  assert.ok(Math.abs(norm(AGENT_LIGHT) - 1) < 1e-9)
+  assert.ok(AGENT_LIGHT.x > 0 && AGENT_LIGHT.y > 0 && AGENT_LIGHT.z > 0)
+  // La référence place le croissant lumineux en haut à droite, pas au centre.
+  assert.ok(AGENT_LIGHT.x > AGENT_LIGHT.y)
+})
+
+test("lightAt : pleine face à 1, dos à 0, jamais négatif", () => {
+  assert.ok(Math.abs(lightAt({ x: AGENT_LIGHT.x, y: AGENT_LIGHT.y, z: AGENT_LIGHT.z }) - 1) < 1e-9)
+  assert.equal(lightAt({ x: -AGENT_LIGHT.x, y: -AGENT_LIGHT.y, z: -AGENT_LIGHT.z }), 0)
+  assert.equal(lightAt({ x: 0, y: 0, z: 0 }), 0)
+  assert.equal(lightAt({ x: 0, y: 1, z: 0 }), AGENT_LIGHT.y)
+})
+
+test("lightCurve : plateau large, ombre à 0, plein jour à 1", () => {
+  assert.equal(lightCurve(0), 0)
+  assert.equal(lightCurve(1), 1)
+  // Une source large, pas un projecteur : à mi-lambert, on est déjà bien éclairé.
+  assert.ok(lightCurve(0.6) > 0.25, "le croissant doit être large, pas un liseré")
+  assert.ok(lightCurve(0.6) < lightCurve(0.9))
+  const samples = [0, 0.2, 0.4, 0.6, 0.8, 1].map((dot) => lightCurve(dot))
+  for (let i = 1; i < samples.length; i += 1) assert.ok(samples[i] >= samples[i - 1])
+  assert.equal(lightCurve(-2), 0)
+  assert.equal(lightCurve(3), 1)
+})
+
+test("shadeAlpha : ombre jamais noire, lumière à 1, courbe croissante", () => {
+  assert.equal(shadeAlpha(1), 1)
+  assert.ok(shadeAlpha(0) > 0, "un maillage invisible dans l'ombre n'est plus une sphère")
+  assert.equal(shadeAlpha(0), 0.1)
+  const samples = [0, 0.2, 0.5, 0.8, 1].map((lit) => shadeAlpha(lit))
+  for (let i = 1; i < samples.length; i += 1) assert.ok(samples[i] > samples[i - 1])
+  assert.ok(shadeAlpha(2) <= 1 && shadeAlpha(-3) >= 0)
+})
+
+// v12.6.0 : la sphère réagit au niveau RÉEL du micro pendant que l'utilisateur
+// parle. Sans niveau, l'énergie de la phase est rendue inchangée — aucune
+// animation ne doit naître du silence.
+
+test("withInput : sans niveau, l'énergie de la phase est intacte", () => {
+  for (const phase of AGENT_PHASES) {
+    const energy = phaseEnergy(phase)
+    assert.deepEqual(withInput(energy, 0), energy)
+  }
+  // Une mesure absurde ne devient pas une animation.
+  assert.deepEqual(withInput(phaseEnergy("listening"), Number.NaN), phaseEnergy("listening"))
+})
+
+test("withInput : la parole amplifie le mouvement, sans sortir des bornes", () => {
+  const base = phaseEnergy("capturing")
+  const loud = withInput(base, 1)
+  assert.ok(loud.spin > base.spin, "une voix forte accélère la rotation")
+  assert.ok(loud.wave > base.wave, "une voix forte respire plus ample")
+  assert.ok(loud.glow > base.glow, "une voix forte allume le limbe")
+  for (const value of [loud.spin, loud.density, loud.wave, loud.glow]) assert.ok(Number.isFinite(value))
+  assert.ok(loud.density <= 1 && loud.glow <= 1)
+  // Monotone : deux fois plus de voix = au moins autant de mouvement.
+  const half = withInput(base, 0.5)
+  assert.ok(half.wave < loud.wave && half.spin < loud.spin)
+  // Borné même si une mesure dérape.
+  assert.deepEqual(withInput(base, 4), withInput(base, 1))
+})
+
+test("phaseEnergy : la capture est la phase la plus vivante côté utilisateur", () => {
+  // Le défaut signalé : la sphère bougeait autant quand on se taisait que quand
+  // on parlait. La capture doit dominer l'écoute, et battre la parole de l'agent.
+  assert.ok(phaseEnergy("capturing").spin > phaseEnergy("listening").spin)
+  assert.ok(phaseEnergy("capturing").spin > phaseEnergy("speaking").spin)
+  assert.ok(phaseEnergy("capturing").glow > phaseEnergy("speaking").glow)
 })
 
 test("pointAlpha : la face visible pèse plus que le dos, borné à [0,1]", () => {

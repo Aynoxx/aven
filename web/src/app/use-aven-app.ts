@@ -87,6 +87,9 @@ export function useAvenApp() {
   // côté main (api.switchWorkspace), l'état remonte par le poll de app:state existant.
   const [showProjectPicker, setShowProjectPicker] = useState(false)
   const [notesInitialId, setNotesInitialId] = useState<string | undefined>()
+  // v12.3.0 : « Reprendre » ouvre un fichier précis — la vue Fichiers reçoit son
+  // chemin une fois, puis l'oublie : c'est un état de passage, pas une préférence.
+  const [filesInitialPath, setFilesInitialPath] = useState<string | undefined>()
   // v9.3.0 : explorateur de fichiers intégré (lecture seule) — remplace l'ouverture
   // externe de l'Explorateur Windows, qui reste disponible depuis la vue elle-même.
   // v11.0.0 : la pastille Freebuff vit dans le rail ; l'instrument Terminal est un
@@ -420,7 +423,10 @@ export function useAvenApp() {
     setNotesInitialId(initialId)
     openInstrumentTab("notes")
   }
-  const openFilesView = () => openInstrumentTab("files")
+  const openFilesView = (initialPath?: string) => {
+    setFilesInitialPath(initialPath)
+    openInstrumentTab("files")
+  }
   // v11.0.0 : le rail « Conversations » ouvre un onglet de conversation (draft) au
   // lieu de changer d'écran ; la première session chargée s'y rattache.
   const openConversationInstrument = () => {
@@ -775,8 +781,11 @@ export function useAvenApp() {
     if (chatId) draftsRef.current.delete(chatId)
     await sendText(text)
   }
-  const sendText = async (text: string) => {
-    if (!chatId || live.busy) return
+  const sendText = async (text: string, target: string | null = chatId) => {
+    // v12.5.0 : `target` explicite. Le premier message saisi sur l'accueil crée sa
+    // session DANS LE MÊME TOUR : `chatId` appartient encore au rendu précédent (une
+    // autre conversation, ou aucune), et le message partirait dans la mauvaise.
+    if (!target || live.busy) return
     const prompt = text.trim()
     if (!prompt) return
     setError(undefined)
@@ -784,10 +793,27 @@ export function useAvenApp() {
     setMessages((m) => [...m, { id: `local-${Date.now()}`, role: "user", text: prompt }])
     setLiveBoth({ ...emptyLive, busy: true })
     try {
-      await api.send(chatId, prompt)
+      await api.send(target, prompt)
     } catch (e) {
       setLiveBoth(emptyLive)
       if (!(e instanceof Error && /interrompu/i.test(e.message))) fail(e)
+    }
+  }
+
+  // v12.5.0 : l'accueil pose une vraie saisie. Envoyer ouvre la session ET parte le
+  // premier message en un geste ; s'en tenir à la création obligerait à « envoyer »
+  // deux fois, ce qui ne serait plus une application mais un enchaînement d'écrans.
+  const startWithPrompt = async (text: string) => {
+    const prompt = text.trim()
+    if (!prompt || !tab || live.busy) return
+    try {
+      const c = await api.createChat(tab)
+      setChats((prev) => [c, ...prev])
+      setChatId(c.id)
+      setTabsState((state) => openConversation(state, c.id, undefined, tabRef.current))
+      await sendText(prompt, c.id)
+    } catch (e) {
+      fail(e)
     }
   }
 
@@ -1082,6 +1108,7 @@ export function useAvenApp() {
     closePage,
     commitChatRename,
     composeIntoChat,
+    startWithPrompt,
     conversationsListRef,
     currentModel,
     deleteArmed,
@@ -1112,6 +1139,7 @@ export function useAvenApp() {
     modelMenuStyle,
     newChat,
     notesInitialId,
+    filesInitialPath,
     notices,
     openHomeConversation,
     submitHomeCommand,
@@ -1123,6 +1151,7 @@ export function useAvenApp() {
     openConfiguration,
     openConversationFromSidebar,
     openFilesView,
+    setFilesInitialPath,
     openFreebuffAgent,
     openNotesView,
     orderedAgents,

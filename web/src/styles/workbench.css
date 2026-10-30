@@ -132,19 +132,17 @@
 
 /* ── Corps : scène · inspecteur (tiroir) · commande ─────────────────────── */
 
+/* v12.6.0 : UNE seule rangée. La palette de commande n'occupe plus une bande
+   permanente de 56 px en bas du Poste : elle flotte quand on la demande, donc
+   la scène reprend toute la hauteur et la poignée n'a plus d'offset à compenser. */
 .wb-body {
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr) var(--wb-command-h);
+  grid-template-rows: minmax(0, 1fr);
   min-height: 0;
   overflow: hidden;
 }
-/* v12.0.0 : sur l'accueil, la barre de commande se demande (Ctrl+K). Sans elle,
-   la rangée n'existe pas et le tiroir reprend le bas du corps — sinon un vide
-   de 56 px restait sous le contenu et la poignée flottait au-dessus de rien. */
-.wb-body[data-command="closed"] { grid-template-rows: minmax(0, 1fr); }
-.wb-body[data-command="closed"] .wb-inspector { bottom: 0; }
 
 /* ── Colonne principale ──────────────────────────────────────────────────── */
 
@@ -274,7 +272,7 @@
   position: absolute;
   top: 0;
   right: 0;
-  bottom: var(--wb-command-h);
+  bottom: 0;
   z-index: 20;
   display: flex;
   flex-direction: column;
@@ -366,18 +364,26 @@
 .wb-home-notice .button { min-height: 24px; padding: 0 8px; font-size: var(--font-size-xs); }
 .wb-notice::before { content: "›"; color: var(--signal); font-family: var(--font-mono); }
 
-/* ── Barre de commande ───────────────────────────────────────────────────── */
+/* ── Palette de commande (Ctrl+K) ─────────────────────────────────────────── */
 
+/* v12.6.0 : ce n'est plus une bande de pied de page mais une palette flottante,
+   demandée au clavier et refermée à Échap. Elle se pose au-dessus de la poignée
+   de navigation (qui garde le bord), jamais par-dessus. */
 .wb-command {
-  grid-column: 1;
-  grid-row: 2;
-  position: relative;
+  position: absolute;
+  left: 50%;
+  bottom: 58px;
+  transform: translateX(-50%);
+  z-index: 40;
+  width: min(720px, calc(100% - 32px));
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 0 12px;
-  border-top: 1px solid var(--border);
-  background: color-mix(in srgb, var(--panel) 90%, transparent);
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--panel-solid);
+  box-shadow: var(--shadow);
 }
 
 
@@ -446,8 +452,8 @@
 
 .wb-command-results {
   position: absolute;
-  left: 12px;
-  right: 12px;
+  left: 0;
+  right: 0;
   bottom: calc(100% + 6px);
   z-index: 40;
   max-height: min(420px, 52vh);
@@ -524,7 +530,10 @@
   flex-direction: column;
   /* La marge large à gauche est la respiration éditoriale : l'identité part du bord
      intérieur, jamais du centre de la fenêtre. */
-  padding: clamp(16px, 3.2vh, 30px) clamp(20px, 4vw, 64px) clamp(12px, 2.2vh, 22px);
+  /* v12.3.0 : le bas réserve la voie de la poignée de navigation (26 px + 12 px
+     de bord). Sans cette réserve, la bande « Reprendre » grandie passait SOUS l'anse,
+     qui coupait le texte de la dernière colonne (mesuré sur la capture de prod). */
+  padding: clamp(16px, 3.2vh, 30px) clamp(20px, 4vw, 64px) clamp(46px, 6vh, 62px);
   overflow: hidden;
 }
 /* Cadre de mesure : quatre équerres de 1 px, la signature d'instrument de la
@@ -577,6 +586,8 @@
   opacity: .42;
 }
 /* Une ligne de construction traversée de graduations : le geste de cartographie. */
+/* v12.3.0 : la diagonale reste un trait de construction — moins contrastée qu'en
+   v12.2.0, et plus discrète encore sur le thème clair où elle coupait la page. */
 .wb-home-trace {
   position: absolute;
   left: -4%;
@@ -584,8 +595,13 @@
   top: 66%;
   height: 1px;
   rotate: -5deg;
-  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--border-strong) 42%, transparent) 24%, color-mix(in srgb, var(--border-strong) 42%, transparent) 76%, transparent);
+  /* v12.3.0 : la diagonale reste une LIGNE DE CONSTRUCTION. Elle s'efface aux
+     deux tiers de sa course — elle ne traverse plus la composition de bord à bord
+     (le brief la trouvait envahissante) et ne passe jamais sous l'identité. */
+  opacity: .4;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--border-strong) 22%, transparent) 30%, color-mix(in srgb, var(--border-strong) 22%, transparent) 70%, transparent);
 }
+:root[data-theme="light"] .wb-home-trace { opacity: .24; }
 .wb-home-ticks {
   position: absolute;
   left: 7%;
@@ -628,10 +644,15 @@
   flex-direction: column;
   align-items: flex-start;
   min-width: 0;
-  max-width: 34ch;
+  /* v12.3.1 : plus de plafond de 34ch — il forçait les actions rapides sur trois
+     lignes alors que la colonne a la place de les tenir sur une seule (revue §3).
+     La mesure de lecture est portée par la question, pas par tout le bloc. */
+  width: 100%;
 }
+/* v12.3.0 : plus d'air entre les blocs — le titre respire, la question et le micro
+   ne sont pas collés sous lui (le brief demandait un peu d'espace, pas plus petit). */
 .wb-home-eyebrow {
-  margin: 0 0 clamp(10px, 1.8vh, 18px);
+  margin: 0 0 clamp(18px, 3.4vh, 30px);
   font-family: var(--font-mono);
   font-size: var(--font-size-xs);
   letter-spacing: .24em;
@@ -647,7 +668,10 @@
   line-height: .92;
   letter-spacing: -.012em;
   font-weight: 700;
-  font-stretch: 87.5%;
+  /* v12.3.0 : un cran plus étroit qu'en v12.1.0 — le titre garde son échelle mais
+     cesse d'occuper toute la colonne (le brief demandait moins de largeur, pas
+     moins de taille : la demande de départ, elle, reste un titre éditorial). */
+  font-stretch: 85%;
   text-transform: uppercase;
   text-align: left;
   color: var(--text);
@@ -656,8 +680,76 @@
    d'être une deuxième masse de blanc. */
 .wb-home-title span { white-space: nowrap; }
 .wb-home-title span + span { color: var(--muted); }
-.wb-home-ask { margin: clamp(10px, 1.8vh, 16px) 0 0; font-size: var(--font-size-md); color: var(--text); letter-spacing: .005em; }
-.wb-home-voice { display: flex; align-items: center; gap: 10px; min-height: 34px; margin-top: clamp(10px, 2vh, 18px); }
+/* v12.5.0 : l'accueil d'une APPLICATION pose une saisie, pas une question
+   rhétorique. Sans champ, il ne restait que des boutons : c'est la signature d'une
+   page de présentation. Le conteneur porte le signal de focus (modèle `.composer`),
+   l'input reste sans bordure — deux cadres autour d'une seule cible donneraient un
+   formulaire administratif, pas un champ de commande. */
+.wb-home-command {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  max-width: 560px;
+  margin-top: clamp(18px, 3vh, 28px);
+  padding: 4px 4px 4px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--panel-solid) 82%, transparent);
+  transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+.wb-home-command:focus-within {
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.wb-home-command input {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-family: var(--font-ui);
+  font-size: var(--font-size-md);
+  color: var(--text);
+  /* Le signal de focus vit sur le conteneur (:focus-within ci-dessus) : c'est la
+     paire exigée par la sonde 9b, pas un outline supprimé sans remplacement. */
+  outline: none;
+}
+/* v12.5.0 : le cadre du conteneur EST le signal de focus. L'anneau global
+   `input:focus-visible` en dessinait un SECOND, à l'intérieur du premier (mesuré :
+   2 px d'accent + 1 px d'offset sur un champ de 40 px) — deux rectangles pour une
+   seule cible. Le conteneur porte `:focus-within` juste au-dessus. */
+.wb-home-command input:focus-visible { outline: none; }
+.wb-home-command input::placeholder { color: var(--muted); opacity: 1; }
+.wb-home-command input:disabled { cursor: not-allowed; }
+/* 30 px : un bouton de champ, pas une action de premier plan. */
+.wb-home-send { min-height: 30px; padding: 0 12px; font-size: var(--font-size-xs); }
+/* v12.3.1 : la ligne d'état porte trois métadonnées de session — micro, phase,
+   délégation — séparées par un filet. Elle peut se replier sur une fenêtre étroite.
+   v12.5.0 : elle remonte — la saisie occupe désormais l'intervalle au-dessus d'elle. */
+.wb-home-voice { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; min-height: 34px; margin-top: clamp(12px, 2vh, 18px); }
+/* v12.3.0 : les actions rapides vivent sous la question — elles y répondent, et
+   laissent « Reprendre » parler du travail déjà fait (deux fonctions distinctes).
+   v12.3.1 : une rangée compacte, pas un empilement de trois boutons. */
+.wb-home-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: clamp(10px, 1.8vh, 16px); }
+/* La délégation décrit l'agent en cours de session : elle rejoint l'état du micro
+   au lieu de flotter seule sous les actions (revue : métadonnée isolée). */
+.wb-home-mode {
+  margin: 0 0 0 2px;
+  padding-left: 12px;
+  border-left: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+/* 26 px de haut : une barre d'outils, pas un groupe de boutons d'appel à l'action.
+   v12.5.0 : le filet vient du chrome — sur l'accueil ces trois gestes sont des
+   commandes de l'application, pas les CTA d'une page de vente. */
+.wb-home-action { min-height: 26px; padding: 0 9px; border: 1px solid var(--border); font-size: var(--font-size-xs); color: var(--muted); }
+.wb-home-action:hover:not(:disabled) { color: var(--text); border-color: var(--border-strong); background: var(--panel-soft); }
 .wb-home-mic {
   position: relative;
   width: 34px;
@@ -706,6 +798,21 @@
   min-height: 0;
   pointer-events: none;
 }
+/* v12.3.0 : une particule par anneau. Elle n'a PAS sa propre animation : elle est
+   posée sur l'arc et tourne avec lui (la rotation de l'anneau est la seule boucle
+   déclarée). Deux points suffisent — un semis deviendrait une texture décorative. */
+.wb-home-ring::after {
+  content: "";
+  position: absolute;
+  left: -2px;
+  top: 50%;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--border-strong);
+  opacity: .8;
+}
+.wb-home-ring--wide::after { left: auto; right: -1px; width: 2px; height: 2px; background: var(--accent); opacity: .55; }
 .wb-home-ring {
   position: absolute;
   width: min(56vh, 430px);
@@ -716,19 +823,39 @@
   border-radius: 50%;
   opacity: .34;
   /* v12.2.0 : la rotation passe par la propriété `rotate`, pas `transform` — elle
-     peut ainsi tourner quand l'agent réfléchit sans écraser son inclinaison. */
+     peut ainsi tourner sans écraser l'inclinaison.
+     v12.3.0 : la rotation est une boucle AMBIANTE lente (48 s), déclarée : c'est le
+     seul mouvement ajouté à l'accueil, et il dit « le système vit ». Elle est
+     couverte par le bloc prefers-reduced-motion de da.css. */
   rotate: -24deg;
+  animation: wb-home-orbit 48s linear infinite;
 }
+@keyframes wb-home-orbit { to { rotate: 336deg; } }
 .wb-home-ring--wide {
   width: min(70vh, 548px);
   border-color: var(--border);
   border-left-color: transparent;
   border-top-color: transparent;
   opacity: .55;
-  rotate: 18deg;
 }
 /* Un trait de construction et un point d'accent : les deux seuls repères, assez
    discrets pour ne pas devenir une légende. */
+/* Deux liaisons de construction entre les anneaux et le repère : elles dessinent
+   un système, sans mesurer quoi que ce soit. Elles s'allument quand l'agent
+   TRAVAILLE (réflexion, parole) — un état, jamais un minuteur. */
+.wb-home-link {
+  position: absolute;
+  height: 1px;
+  width: clamp(48px, 8vw, 96px);
+  transform-origin: 0 50%;
+  opacity: .22;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--border-strong) 70%, transparent));
+  transition: opacity var(--dur-med) var(--ease-out);
+}
+.wb-home-link--a { left: 22%; top: 32%; rotate: 18deg; }
+.wb-home-link--b { right: 24%; bottom: 30%; rotate: 196deg; }
+.wb-home-scene[data-phase="thinking"] .wb-home-link,
+.wb-home-scene[data-phase="speaking"] .wb-home-link { opacity: .46; }
 .wb-home-mark { position: absolute; left: 17%; top: 23%; width: 1px; height: clamp(16px, 3vh, 30px); background: var(--border-strong); opacity: .7; }
 .wb-home-node { position: absolute; right: 20%; bottom: 27%; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 
@@ -749,19 +876,30 @@
    l'agent. Elle ne peint rien — le canvas vit au-dessus. */
 .wb-home-agent { width: min(44vh, 340px); height: min(44vh, 340px); }
 
-/* Zone inférieure — reprendre, agir, et l'état réel de la délégation. Des lignes,
-   pas des cartes : rien n'est encadré pour paraître important. */
+/* Zone inférieure — le travail réel, une colonne par nature. Des lignes, pas des
+   cartes : rien n'est encadré pour paraître important (brief §4.3).
+   v12.3.0 : libellé À GAUCHE et trois entrées À DROITE, sur UNE bande. Le titre
+   empilé au-dessus de la liste laissait le bas ressembler à un pied de page — la
+   revue demandait une zone horizontale, pas une ligne en petits caractères. */
 .wb-home-foot {
   grid-area: foot;
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: clamp(16px, 3vw, 40px);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: stretch;
+  gap: clamp(16px, 2.4vw, 34px);
   min-width: 0;
-  padding-top: clamp(8px, 1.4vh, 14px);
+  min-height: clamp(84px, 12vh, 118px);
+  padding-top: clamp(14px, 2.4vh, 22px);
   border-top: 1px solid var(--border);
 }
-.wb-home-resume { flex: 1 1 auto; min-width: 0; }
+.wb-home-foot-head {
+  display: flex;
+  align-items: flex-start;
+  /* Le libellé s'aligne sur la ligne « nature · âge » des entrées, pas au milieu
+     de la bande : c'est un titre de zone, il ouvre la lecture. */
+  padding-top: 12px;
+  gap: 16px;
+}
 .wb-home-resume-title {
   margin: 0;
   font-family: var(--font-mono);
@@ -771,15 +909,29 @@
   text-transform: uppercase;
   color: var(--muted);
 }
-.wb-home-resume-list { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
-.wb-home-recent {
+/* v12.3.0 : trois COLONNES ÉGALES. En auto-fit, une seule entrée réelle s'étirait
+   sur toute la largeur et « Reprendre » redevenait une ligne de pied de page —
+   exactement ce que la revue reprochait. Les entrées remplissent les colonnes dans
+   l'ordre des natures (conversation, note, fichier) et les colonnes restantes
+   demeurent vides : rien n'est fabriqué pour les remplir. */
+.wb-home-resume-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+  min-width: 0;
+}
+.wb-home-resume-list > li { min-width: 0; }
+.wb-home-resume-list > li + li { border-left: 1px solid var(--border); }
+.wb-home-cell {
   display: flex;
-  align-items: center;
-  gap: 9px;
-  width: min(560px, 100%);
-  min-height: 26px;
-  margin-left: -6px;
-  padding: 2px 6px;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  padding: 14px 20px 12px;
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -787,30 +939,57 @@
   text-align: left;
   cursor: pointer;
 }
-.wb-home-recent:hover:not(:disabled) { background: var(--panel-soft); }
-.wb-home-recent:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.wb-home-recent svg { flex: none; color: var(--muted); }
-.wb-home-recent-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-size-sm); }
-.wb-home-recent-meta { flex: none; font-family: var(--font-mono); font-size: var(--font-size-xs); color: var(--muted); }
-.wb-home-more { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
-.wb-home-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 2px; }
-.wb-home-action { min-height: 26px; padding: 0 8px; font-size: var(--font-size-xs); color: var(--muted); }
-.wb-home-action:hover:not(:disabled) { color: var(--text); }
-.wb-home-mode {
-  margin: 0;
+.wb-home-resume-list > li:first-child .wb-home-cell { padding-left: 0; }
+.wb-home-cell:hover:not(:disabled) { background: var(--panel-soft); }
+.wb-home-cell:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* v12.3.1 : une seule ligne de métadonnées, groupée à gauche (icône, nature, âge).
+   L'âge n'est plus poussé au bord droit de la colonne : il ne « flottait » plus
+   à côté de rien, et l'alignement devient identique dans les trois colonnes. */
+.wb-home-cell-head { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+.wb-home-cell-kind {
   font-family: var(--font-mono);
   font-size: var(--font-size-xs);
-  letter-spacing: .16em;
+  letter-spacing: .18em;
   text-transform: uppercase;
-  color: var(--muted);
 }
+.wb-home-cell-age { font-family: var(--font-mono); font-size: var(--font-size-xs); color: var(--muted); white-space: nowrap; }
+/* v12.3.1 : une nature absente garde sa colonne et le DIT en une ligne discrète —
+   structure stable, aucune donnée fabriquée. */
+.wb-home-cell--empty { cursor: default; }
+.wb-home-cell-empty-note { font-size: var(--font-size-xs); color: var(--muted); }
+.wb-home-cell-title {
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  /* v12.3.1 : un élément flex a min-width:auto — sans ces deux lignes, un titre
+     long débordait sur la colonne voisine au lieu d'être tronqué (mesuré à 720 px). */
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wb-home-cell-excerpt {
+  font-size: var(--font-size-xs);
+  line-height: 1.45;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-width: 0;
+  max-width: 100%;
+}
+/* L'absence se lit au centre de la bande, pas collée au filet : elle occupe la
+   zone qu'auraient occupée les entrées, sans rien inventer pour la remplir. */
+.wb-home-empty { align-self: center; max-width: 52ch; margin: 0; font-size: var(--font-size-sm); line-height: 1.5; color: var(--muted); }
 
 /* v12.0.0 : quand la constellation s'ouvre, l'accueil LIBÈRE le bas de la scène.
    Les cercles flottent là où vivaient la question, le micro, l'état et la ligne
    basse — sinon ils se peignent par-dessus (mesuré à l'écran : trois textes sous
    cinq cercles). L'agent et le titre ne bougent pas. */
-.wb-app[data-nav="open"] .wb-home-ask,
+.wb-app[data-nav="open"] .wb-home-command,
 .wb-app[data-nav="open"] .wb-home-voice,
+.wb-app[data-nav="open"] .wb-home-actions,
 .wb-app[data-nav="open"] .wb-home-foot {
   opacity: 0;
   transform: translateY(6px);
@@ -845,12 +1024,12 @@
    conteneur peint, aucun filet entre eux : la purge du brief est structurelle. */
 .wb-nav {
   /* v12.0.0 : ancrée sur le CORPS, pas sur la fenêtre. Un bandeau d'état posé en
-     bas de fenêtre décalait la poignée de 28 px — elle tombait dans la barre de
-     commande. Dans .wb-body, elle reste juste au-dessus de la barre, toujours. */
+     bas de fenêtre décalait la poignée de 28 px. v12.6.0 : plus aucune barre
+     sous elle — elle prend le bord du Poste. */
   position: absolute;
   left: 0;
   right: 0;
-  bottom: calc(var(--wb-command-h) + 2px);
+  bottom: 12px;
   z-index: 30;
   display: grid;
   justify-items: center;
@@ -864,9 +1043,6 @@
   padding-bottom: 6px;
   pointer-events: auto;
 }
-/* v12.0.0 : sans barre de commande, la poignée prend le bord inférieur au lieu
-   de rester suspendue à la hauteur d'une barre absente. */
-.wb-body[data-command="closed"] .wb-nav { bottom: 12px; }
 .wb-nav-zone[data-open="false"] { pointer-events: none; }
 .wb-nav-zone[data-open="false"] .wb-nav-trigger { pointer-events: auto; }
 
@@ -1081,16 +1257,26 @@
   .wb-status-workspace { display: none; }
   .wb-status-sep { display: none; }
   .wb-agent-state { display: none; }
-  .wb-home { padding: 12px 16px 16px; }
+  /* v12.3.0 : la réserve du bas reste — sur une fenêtre étroite, la bande empilée
+     descendrait sous l'anse de navigation. */
+  .wb-home { padding: 12px 16px 44px; }
   /* v12.1.0 : deux lignes de titre restent lisibles sur une fenêtre étroite ;
      c'est la largeur qui décide, pas un retour à la ligne forcé. */
   .wb-home-title { letter-spacing: -.02em; }
   .wb-home-title span { white-space: normal; }
   .wb-home-grid { grid-template-columns: 1fr; grid-template-areas: "id" "scene" "foot"; grid-template-rows: auto minmax(0, 1fr) auto; }
   .wb-home-id { align-self: start; max-width: none; }
-  .wb-home-foot { flex-direction: column; align-items: stretch; gap: 10px; }
-  .wb-home-more { align-items: flex-start; }
-  .wb-home-actions { justify-content: flex-start; }
+  /* v12.3.1 : la bande reste HORIZONTALE à fenêtre étroite — trois colonnes
+     conservées, l'extrait masqué (titre, nature et âge suffisent à choisir).
+     Empilée en liste, elle mangeait un tiers de la scène et passait sous la sphère. */
+  .wb-home-foot { grid-template-columns: 1fr; grid-template-rows: auto auto; gap: 2px; min-height: 0; }
+  .wb-home-foot-head { align-items: baseline; padding-top: 0; }
+  .wb-home-resume-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .wb-home-cell { padding: 8px 10px 8px; }
+  .wb-home-cell-excerpt { display: none; }
+  /* La sphère reste dans sa rangée : à 300 px elle débordait sur la bande. */
+  .wb-home-agent { width: min(38vh, 260px); height: min(38vh, 260px); }
+  .wb-home-ring { width: min(52vh, 360px); }
   .wb-nav-arc { height: 150px; }
   .wb-nav-label { letter-spacing: .06em; }
 }
