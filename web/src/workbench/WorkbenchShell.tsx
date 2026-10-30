@@ -83,6 +83,7 @@ export default function WorkbenchShell({ app }: { app: AvenApp }) {
     homeNotice,
     inspectorOpen,
     live,
+    loadedFor,
     filesInitialPath,
     openConfiguration,
     openConversationInstrument,
@@ -460,6 +461,9 @@ export default function WorkbenchShell({ app }: { app: AvenApp }) {
                 // prêt et qu'un espace est réellement actif.
                 ready={appState.status === "ready" && !appState.needsWorkspace}
                 chats={app.chats}
+                // v12.7.0 : ne pas afficher un faux état vide pendant le chargement
+                // de l'historique de l'espace actif.
+                chatsReady={loadedFor === tab}
                 delegation={TASK_MODES_UI.find((m) => m.id === taskMode)?.label ?? TASK_MODES_UI[0].label}
                 onOpenConversation={openHomeConversation}
                 onOpenNote={(id) => openNotesView(id)}
