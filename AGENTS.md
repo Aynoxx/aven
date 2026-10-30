@@ -103,7 +103,7 @@ par les variables `:root` existantes, sinon thèmes et densités cassent.
 | Titres de vue | `var(--font-size-xl)` | 20px |
 | Chiffres clés, stats | `var(--font-size-2xl)` | 28px |
 | Grands titres de vue (plafond d'un `clamp`) | `var(--font-size-3xl)` | 32px |
-| **Titre d'accueil seulement** | `var(--font-size-display)` | `clamp(44px, min(9vw, 18vh), 170px)` — le brief demande un titre massif ; ce token ne sert QUE là, jamais au texte courant (v12.0.0) |
+| **Titre d'accueil seulement** | `var(--font-size-display)` | `clamp(30px, min(4.6vw, 8.6vh), 76px)` — titre éditorial sur deux lignes ; ce token ne sert QUE là, jamais au texte courant (v12.1.0) |
 
 - **Graisse** : texte courant 400–500 ; semi-gras 600 (titres de liste, badges,
   valeurs) ; boutons `font-weight: 680` (classe `.button`) ; titres `700–800`.
@@ -200,6 +200,19 @@ par les variables `:root` existantes, sinon thèmes et densités cassent.
 > `scripts/verify-v12.0.0.mjs` refuse le retour à un rail, à un second canvas ou à une
 > table de destinations dupliquée.
 
+- **L'accueil est une composition, pas une affiche (v12.1.0)** :
+  `web/src/workbench/HomeStage.tsx` tient trois zones — identité et contrôle vocal
+  à gauche, sphère et anneaux de construction à droite, ligne basse pour le travail
+  réel. Le titre tient deux lignes (`--font-size-display`, revalorisé : le brief
+  monumental de la v12.0.0 est **retiré**), et un seul statut vocal est affiché —
+  l'en-tête n'en ajoute pas sur l'accueil. « Reprendre » passe par
+  `web/src/workbench/resume.ts` (module pur testé) : au plus deux entrées, des
+  conversations et des notes **réellement chargées**, avec leur âge ; jamais un
+  historique inventé, et la zone disparaît quand il n'y a rien. Une action rapide
+  se nomme par ce qu'elle fait — « Parcourir les fichiers », jamais « Rechercher un
+  fichier » tant que la recherche n'existe pas.
+  `scripts/verify-v12.1.0.mjs` refuse le retour au titre plein écran, à un
+  historique fabriqué et à une action sans effet.
 - **Une constellation se mesure, elle ne se devine pas** (`web/src/workbench/NavigationConstellation.tsx`) :
   la poignée passe **avant** l'arc dans le DOM (Tab entre dans les cercles), le survol
   ouvre sans voler le focus, et la grâce de fermeture empêche la scintillation entre la

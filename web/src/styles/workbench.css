@@ -510,16 +510,20 @@
 .instrument-actions .button { min-height: 30px; padding: 0 9px; font-size: var(--font-size-xs); }
 .instrument-body { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 
-/* ── Accueil : la scène de l'agent ────────────────────────────────────────── */
+/* ── Accueil : composition éditoriale de l'agent (v12.1.0) ─────────────────── */
 
+/* v12.1.0 : le titre monumental ne remplit plus la page. L'accueil est une grille
+   éditoriale : l'identité et le contrôle vocal à gauche, la sphère au centre droit
+   dans son environnement technique, et une ligne basse pour le travail réel.
+   L'accueil ne défile pas : la grille tient dans la scène. */
 .wb-home {
   position: relative;
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  /* v12.0.0 (passe graphique) : la référence laisse une marge large à gauche —
-     le titre part du bord intérieur, pas du centre de la fenêtre. */
+  /* La marge large à gauche est la respiration éditoriale : l'identité part du bord
+     intérieur, jamais du centre de la fenêtre. */
   padding: clamp(16px, 3.2vh, 30px) clamp(20px, 4vw, 64px) clamp(12px, 2.2vh, 22px);
   overflow: hidden;
 }
@@ -542,44 +546,57 @@
     linear-gradient(var(--border-strong), var(--border-strong)) right bottom / 16px 1px no-repeat,
     linear-gradient(var(--border-strong), var(--border-strong)) right bottom / 1px 16px no-repeat;
 }
-.wb-home-stack {
+.wb-home-grid {
   position: relative;
   flex: 1;
   min-height: 0;
   display: grid;
-  align-content: start;
-  justify-items: center;
-  width: 100%;
-  text-align: center;
+  grid-template-columns: minmax(240px, .82fr) minmax(300px, 1.18fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "id scene"
+    "foot foot";
+  gap: clamp(10px, 1.8vh, 20px) clamp(20px, 3.6vw, 52px);
+}
+
+/* Zone gauche — l'identité éditoriale, une seule masse de lecture. */
+.wb-home-id {
+  grid-area: id;
+  align-self: center;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  max-width: 34ch;
+}
+.wb-home-eyebrow {
+  margin: 0 0 clamp(10px, 1.8vh, 18px);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  letter-spacing: .24em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 .wb-home-title {
   margin: 0;
-  /* v12.0.0 : la seule occurrence de la voix condensée du brief. La référence en
-     fait la PREMIÈRE masse de la page : alignée à gauche, une seule ligne, à
-     l'échelle de la fenêtre — le token est borné par la hauteur pour ne jamais
-     manger la sphère. */
+  display: flex;
+  flex-direction: column;
   font-family: var(--font-display);
   font-size: var(--font-size-display);
-  line-height: .84;
-  letter-spacing: -.015em;
+  line-height: .92;
+  letter-spacing: -.012em;
   font-weight: 700;
   font-stretch: 87.5%;
   text-transform: uppercase;
   text-align: left;
-  white-space: nowrap;
   color: var(--text);
-  justify-self: stretch;
 }
-/* L'ancre de la sphère au repos : une boîte réelle, mesurée par le calque de
-   l'agent. Elle ne peint rien — le canvas vit au-dessus. */
-.wb-home-agent {
-  width: min(44vh, 340px);
-  height: min(44vh, 340px);
-  margin-top: clamp(6px, 1.4vh, 14px);
-  pointer-events: none;
-}
-.wb-home-ask { margin: 4px 0 0; font-size: var(--font-size-md); color: var(--text); letter-spacing: .005em; }
-.wb-home-voice { margin-top: clamp(8px, 2vh, 20px); }
+/* Le titre se lit comme une phrase à deux temps : la seconde ligne recule au lieu
+   d'être une deuxième masse de blanc. */
+.wb-home-title span { white-space: nowrap; }
+.wb-home-title span + span { color: var(--muted); }
+.wb-home-ask { margin: clamp(10px, 1.8vh, 16px) 0 0; font-size: var(--font-size-md); color: var(--text); letter-spacing: .005em; }
+.wb-home-voice { display: flex; align-items: center; gap: 10px; min-height: 34px; margin-top: clamp(10px, 2vh, 18px); }
 .wb-home-mic {
   position: relative;
   width: 34px;
@@ -608,23 +625,116 @@
   box-shadow: 0 0 0 2px var(--accent-soft);
 }
 .wb-home-status {
-  margin-top: 7px;
   font-family: var(--font-mono);
   font-size: var(--font-size-xs);
-  letter-spacing: .2em;
+  letter-spacing: .18em;
   text-transform: uppercase;
   color: var(--muted);
   min-height: 1.4em;
 }
 .wb-home-status[data-error="true"] { color: var(--danger); text-transform: none; letter-spacing: 0; font-family: var(--font-ui); }
 
+/* Zone centre droit — la sphère et son environnement. Les anneaux sont des arcs
+   incomplets : un cercle fermé autour de l'agent redeviendrait un cadre. */
+.wb-home-scene {
+  grid-area: scene;
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  min-height: 0;
+  pointer-events: none;
+}
+.wb-home-ring {
+  position: absolute;
+  width: min(56vh, 430px);
+  aspect-ratio: 1;
+  border: 1px solid var(--border-strong);
+  border-right-color: transparent;
+  border-bottom-color: transparent;
+  border-radius: 50%;
+  opacity: .34;
+  transform: rotate(-24deg);
+}
+.wb-home-ring--wide {
+  width: min(70vh, 548px);
+  border-color: var(--border);
+  border-left-color: transparent;
+  border-top-color: transparent;
+  opacity: .55;
+  transform: rotate(18deg);
+}
+/* Un trait de construction et un point d'accent : les deux seuls repères, assez
+   discrets pour ne pas devenir une légende. */
+.wb-home-mark { position: absolute; left: 17%; top: 23%; width: 1px; height: clamp(16px, 3vh, 30px); background: var(--border-strong); opacity: .7; }
+.wb-home-node { position: absolute; right: 20%; bottom: 27%; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+/* L'ancre de la sphère au repos : une boîte réelle, mesurée par le calque de
+   l'agent. Elle ne peint rien — le canvas vit au-dessus. */
+.wb-home-agent { width: min(44vh, 340px); height: min(44vh, 340px); }
+
+/* Zone inférieure — reprendre, agir, et l'état réel de la délégation. Des lignes,
+   pas des cartes : rien n'est encadré pour paraître important. */
+.wb-home-foot {
+  grid-area: foot;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: clamp(16px, 3vw, 40px);
+  min-width: 0;
+  padding-top: clamp(8px, 1.4vh, 14px);
+  border-top: 1px solid var(--border);
+}
+.wb-home-resume { flex: 1 1 auto; min-width: 0; }
+.wb-home-resume-title {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  letter-spacing: .24em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.wb-home-resume-list { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+.wb-home-recent {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: min(560px, 100%);
+  min-height: 26px;
+  margin-left: -6px;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.wb-home-recent:hover:not(:disabled) { background: var(--panel-soft); }
+.wb-home-recent:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.wb-home-recent svg { flex: none; color: var(--muted); }
+.wb-home-recent-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-size-sm); }
+.wb-home-recent-meta { flex: none; font-family: var(--font-mono); font-size: var(--font-size-xs); color: var(--muted); }
+.wb-home-more { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.wb-home-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 2px; }
+.wb-home-action { min-height: 26px; padding: 0 8px; font-size: var(--font-size-xs); color: var(--muted); }
+.wb-home-action:hover:not(:disabled) { color: var(--text); }
+.wb-home-mode {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
 /* v12.0.0 : quand la constellation s'ouvre, l'accueil LIBÈRE le bas de la scène.
-   Les cercles flottent là où vivaient la question, le micro et l'état — sinon ils
-   se peignent par-dessus (mesuré à l'écran : trois textes sous cinq cercles).
-   L'agent, le titre et l'en-tête (avec son micro) ne bougent pas. */
+   Les cercles flottent là où vivaient la question, le micro, l'état et la ligne
+   basse — sinon ils se peignent par-dessus (mesuré à l'écran : trois textes sous
+   cinq cercles). L'agent et le titre ne bougent pas. */
 .wb-app[data-nav="open"] .wb-home-ask,
 .wb-app[data-nav="open"] .wb-home-voice,
-.wb-app[data-nav="open"] .wb-home-status {
+.wb-app[data-nav="open"] .wb-home-foot {
   opacity: 0;
   transform: translateY(6px);
   pointer-events: none;
@@ -876,6 +986,8 @@
   .wb-status-key { display: none; }
   .wb-agent-state { display: none; }
   .wb-home-agent { width: min(38vh, 300px); height: min(38vh, 300px); }
+  /* v12.1.0 : le second anneau sort de la scène avant de frôler le titre. */
+  .wb-home-ring--wide { display: none; }
   .wb-nav-arc { height: 168px; }
 }
 
@@ -893,7 +1005,15 @@
   .wb-status-sep { display: none; }
   .wb-agent-state { display: none; }
   .wb-home { padding: 12px 16px 16px; }
-  .wb-home-title { letter-spacing: -.02em; white-space: normal; }
+  /* v12.1.0 : deux lignes de titre restent lisibles sur une fenêtre étroite ;
+     c'est la largeur qui décide, pas un retour à la ligne forcé. */
+  .wb-home-title { letter-spacing: -.02em; }
+  .wb-home-title span { white-space: normal; }
+  .wb-home-grid { grid-template-columns: 1fr; grid-template-areas: "id" "scene" "foot"; grid-template-rows: auto minmax(0, 1fr) auto; }
+  .wb-home-id { align-self: start; max-width: none; }
+  .wb-home-foot { flex-direction: column; align-items: stretch; gap: 10px; }
+  .wb-home-more { align-items: flex-start; }
+  .wb-home-actions { justify-content: flex-start; }
   .wb-nav-arc { height: 150px; }
   .wb-nav-label { letter-spacing: .06em; }
 }

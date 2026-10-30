@@ -99,11 +99,11 @@
      technique du brief. Bahnschrift est livrée avec Windows (aucun fichier, aucun
      téléchargement) ; ailleurs la pile retombe sur la sans-serif système. */
   --font-display: "Bahnschrift SemiCondensed", "Bahnschrift", "Segoe UI Semibold", system-ui, sans-serif;
-  /* Le brief demande un titre massif : ce plafond ne sert QU'à l'accueil, jamais au
-     texte courant. v12.0.0 (passe graphique) : la référence fait du titre une masse
-     qui traverse la page — le plancher monte à 44 px et la borne de hauteur (14 vh)
-     empêche la ligne de pousser la sphère hors de la scène sur un écran court. */
-  --font-size-display: clamp(44px, min(9vw, 18vh), 170px);
+  /* Ce token ne sert QU'au titre d'accueil, jamais au texte courant. v12.1.0 : le
+     titre n'est plus une masse qui traverse la page — c'est un titre éditorial de
+     deux lignes. Le plancher reste grand sur une fenêtre étroite, et la borne de
+     hauteur l'empêche de pousser la sphère hors de la scène sur un écran court. */
+  --font-size-display: clamp(30px, min(4.6vw, 8.6vh), 76px);
 }
 
 /* Thème clair « blueprint » : papier os, encre olive, même signal assombri.

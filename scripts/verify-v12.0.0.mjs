@@ -138,10 +138,11 @@ assert.match(da, /--bg: #0b100e;/, "le fond forêt du brief est un jeton")
 assert.match(da, /--border-strong: #46534b;/, "les filets prennent le gris-vert du brief")
 assert.match(da, /--font-display: "Bahnschrift SemiCondensed"/, "la condensée du brief est une pile SYSTÈME (aucun téléchargement)")
 // v12.0.0 : la valeur exacte du clamp est un réglage graphique, pas un contrat ;
-// l'invariant est qu'il soit BORNÉ (plancher 44 px, plafond par la largeur ET la
-// hauteur, pour ne jamais pousser la sphère hors scène). Figer le littéral cassait
-// la sonde au premier ajustement de composition (leçon v10.2.1).
-assert.match(da, /--font-size-display: clamp\(44px, min\(9vw, 18vh\), 170px\)/, "le titre d'accueil a son token dédié, borné en largeur et en hauteur")
+// l'invariant est qu'il soit BORNÉ (plancher + plafond, borné par la largeur ET par
+// la hauteur, pour ne jamais pousser la sphère hors scène). Figer le littéral cassait
+// la sonde au premier ajustement de composition (leçon v10.2.1) — et c'est arrivé en
+// v12.1.0, où le titre monumental devient un titre éditorial.
+assert.match(da, /--font-size-display: clamp\(\d+px, min\([\d.]+vw, [\d.]+vh\), \d+px\)/, "le titre d'accueil a son token dédié, borné en largeur et en hauteur")
 assert.match(workbenchCss, /\.wb-home-title \{[^}]*font-family: var\(--font-display\)[^}]*font-size: var\(--font-size-display\)[^}]*text-align: left/, "le grand titre utilise la voix condensée, aligné à gauche, nulle part ailleurs")
 assert.match(workbenchCss, /\.wb-app::after \{[^}]*border: 1px solid var\(--border-strong\)[^}]*pointer-events: none/, "le cadre de fenêtre est un filet 1 px transparent au pointeur")
 assert.match(workbenchCss, /\.wb-nav-word \{[^}]*max-width: 0/, "au repos le repère n'est qu'un symbole, pas un bouton libellé")

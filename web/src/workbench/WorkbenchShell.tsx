@@ -85,6 +85,8 @@ export default function WorkbenchShell({ app }: { app: AvenApp }) {
     live,
     openConfiguration,
     openConversationInstrument,
+    openFilesView,
+    openHomeConversation,
     openInstrumentTab,
     openNotesView,
     orderedAgents,
@@ -451,6 +453,16 @@ export default function WorkbenchShell({ app }: { app: AvenApp }) {
             {activeKind === "home" ? (
               <HomeStage
                 voice={voice}
+                chats={app.chats}
+                delegation={TASK_MODES_UI.find((m) => m.id === taskMode)?.label ?? TASK_MODES_UI[0].label}
+                onOpenConversation={openHomeConversation}
+                onOpenNote={(id) => openNotesView(id)}
+                onNewChat={() => { void newChat() }}
+                // v12.1.0 : « Dicter une note » ouvre la capture de la vue Notes, qui
+                // possède son propre enregistreur — indépendant de l'agent vocal, donc
+                // disponible même micro de l'agent coupé.
+                onDictateNote={() => { setCaptureRequested(true); openNotesView() }}
+                onBrowseFiles={openFilesView}
                 notice={homeNotice}
                 onDismissNotice={() => setHomeNotice(null)}
                 onOpenSettings={() => { setHomeNotice(null); openConfiguration(undefined, "general") }}
