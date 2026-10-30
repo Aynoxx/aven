@@ -1,4 +1,4 @@
-# Aven v12.7.1
+# Aven v12.7.2
 
 > ## v10.0.0 — 100 % Tauri (Electron et le natif retirés)
 > Aven est une **app Tauri 2** : la webview React parle à Rust (`src-tauri/`)
@@ -27,6 +27,11 @@
 Application de bureau (Tauri) : une chatbox avec **3 agents commutables** (code, recherche, analyse) et un
 sous-agent (code-reviewer), branchée sur **OpenCode 2.0.10** et un catalogue d’agents strictement gratuit (OpenRouter Free / OpenCode Zen).
 
+> **v12.7.2 — « Nouvelle note » dit ce qu'elle fait**
+> L'action rapide de l'accueil promettait une dictée qui n'existe pas : elle crée
+> une note de capture vide et ouvre son éditeur. Elle s'appelle désormais « Nouvelle
+> note », sans changer le geste.
+>
 > **v12.7.1 — « Parcourir les fichiers » ne casse plus l'interface**
 > L'action rapide de l'accueil transmettait l'événement de souris comme chemin à la
 > vue Fichiers, qui tentait de le découper : Aven s'arrêtait sur une erreur

@@ -35,7 +35,7 @@ type Props = {
    *  Le contrôleur décide comment (identifiant neuf, mêmes canaux que le composeur). */
   onPrompt: (text: string) => void
   onNewChat: () => void
-  onDictateNote: () => void
+  onNewNote: () => void
   onBrowseFiles: () => void
   /** Avis transitoire du Poste (CLI manquant, échec de capture…) — jamais un tableau
    *  de bord : il disparaît seul et reste ACTIONNABLE (règle v9.1.4). */
@@ -71,7 +71,7 @@ export default function HomeStage({
   onOpenFile,
   onPrompt,
   onNewChat,
-  onDictateNote,
+  onNewNote,
   onBrowseFiles,
   notice,
   onDismissNotice,
@@ -241,8 +241,8 @@ export default function HomeStage({
             <button className="button ghost wb-home-action" type="button" onClick={onNewChat}>
               <Icon name="chat" size={14} />Nouvelle conversation
             </button>
-            <button className="button ghost wb-home-action" type="button" onClick={onDictateNote}>
-              <Icon name="file" size={14} />Dicter une note
+            <button className="button ghost wb-home-action" type="button" onClick={onNewNote}>
+              <Icon name="file" size={14} />Nouvelle note
             </button>
             <button className="button ghost wb-home-action" type="button" onClick={onBrowseFiles}>
               <Icon name="folder" size={14} />Parcourir les fichiers

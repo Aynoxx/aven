@@ -64,14 +64,16 @@ assert.ok(!/\b(lorem|exemple|exemple de)\b/i.test(home), "aucun contenu de démo
 
 // ── C. Trois actions, nommées pour ce qu'elles font ────────────────────────
 assert.equal(home.match(/className="button ghost wb-home-action"/g)?.length, 3, "trois actions rapides, pas une barre d'outils")
-for (const label of ["Nouvelle conversation", "Dicter une note", "Parcourir les fichiers"]) {
+for (const label of ["Nouvelle conversation", "Nouvelle note", "Parcourir les fichiers"]) {
   assert.ok(home.includes(label), `l'action « ${label} » est nommée dans l'interface`)
 }
 assert.ok(!home.includes("Rechercher un fichier"),
   "aucune action ne promet une recherche que la vue Fichiers n'offre pas (AGENTS.md §6)")
 assert.match(shell, /onNewChat=\{\(\) => \{ void newChat\(\) \}\}/, "« Nouvelle conversation » crée réellement une conversation")
-assert.match(shell, /onDictateNote=\{\(\) => \{ setCaptureRequested\(true\); openNotesView\(\) \}\}/,
-  "« Dicter une note » ouvre la capture de la vue Notes")
+// AMENDEMENT v12.7.2 : le libellé promettait une dictée que la capture n'exécute pas
+// (elle crée une note vide). La sonde suit le nom qui dit l'effet réel.
+assert.match(shell, /onNewNote=\{\(\) => \{ setCaptureRequested\(true\); openNotesView\(\) \}\}/,
+  "« Nouvelle note » ouvre la capture de la vue Notes")
 // AMENDEMENT v12.7.1 : la fonction passée NUE recevait le MouseEvent de React comme
 // `initialPath` ; FilesView le découpait et l'interface tombait. La sonde figeait ce
 // bug. Elle vérifie désormais l'ouverture SANS chemin, seule forme correcte.

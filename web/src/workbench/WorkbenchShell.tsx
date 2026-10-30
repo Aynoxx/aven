@@ -468,10 +468,11 @@ export default function WorkbenchShell({ app }: { app: AvenApp }) {
                 onOpenConversation={openHomeConversation}
                 onOpenNote={(id) => openNotesView(id)}
                 onNewChat={() => { void newChat() }}
-                // v12.1.0 : « Dicter une note » ouvre la capture de la vue Notes, qui
-                // possède son propre enregistreur — indépendant de l'agent vocal, donc
-                // disponible même micro de l'agent coupé.
-                onDictateNote={() => { setCaptureRequested(true); openNotesView() }}
+                // v12.1.0 : l'action ouvre la capture de la vue Notes.
+                // v12.7.2 : son ancien libellé « Dicter une note » promettait une
+                // dictée absente — la capture crée une note vide et ouvre l'éditeur.
+                // Elle s'appelle « Nouvelle note », et le handler le dit aussi.
+                onNewNote={() => { setCaptureRequested(true); openNotesView() }}
                 // v12.3.0 : l'action passait la fonction telle quelle pour garder le
                 // lien réel avec l'ouverture.
                 // v12.7.1 : c'était faux — React transmet le MouseEvent comme premier
