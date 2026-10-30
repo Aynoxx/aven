@@ -955,8 +955,26 @@
 .wb-home-cell-age { font-family: var(--font-mono); font-size: var(--font-size-xs); color: var(--muted); white-space: nowrap; }
 /* v12.3.1 : une nature absente garde sa colonne et le DIT en une ligne discrète —
    structure stable, aucune donnée fabriquée. */
-.wb-home-cell--empty { cursor: default; }
-.wb-home-cell-empty-note { font-size: var(--font-size-xs); color: var(--muted); }
+/* v12.7.0 : un chargement n'est pas une entrée vide. Le repère est statique :
+   aucune animation ne prétend signaler une activité que les données ne confirment pas. */
+.wb-home-resume-loading {
+  margin: 0;
+  padding: 14px 20px 12px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  letter-spacing: .04em;
+}
+.wb-home-resume-loading::before {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-right: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+  vertical-align: 1px;
+}
 .wb-home-cell-title {
   font-size: var(--font-size-md);
   font-weight: 600;
@@ -1247,6 +1265,21 @@
 @media (max-width: 860px) {
   .wb-status-workspace span:last-child { display: none; }
   :root { --wb-nav-size: var(--wb-nav-size-sm); }
+}
+
+/* v12.7.0 : une fenêtre de faible hauteur reste une fenêtre de travail.
+   On resserre les espacements et la scène sans toucher à l'échelle du texte courant. */
+@media (max-height: 640px) and (min-width: 721px) {
+  .wb-home { padding-top: 12px; padding-bottom: 42px; }
+  .wb-home-eyebrow { margin-bottom: 12px; }
+  .wb-home-command { margin-top: 14px; }
+  .wb-home-voice { margin-top: 8px; }
+  .wb-home-actions { margin-top: 8px; }
+  .wb-home-agent { width: min(36vh, 280px); height: min(36vh, 280px); }
+  .wb-home-ring { width: min(42vh, 340px); }
+  .wb-home-ring--wide { width: min(54vh, 420px); }
+  .wb-home-foot { min-height: 72px; padding-top: 8px; }
+  .wb-home-cell { padding-top: 8px; padding-bottom: 8px; }
 }
 
 @media (max-width: 720px) {
