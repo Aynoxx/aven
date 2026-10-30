@@ -12,7 +12,11 @@ import { fileURLToPath } from "node:url"
 //   D. le texte composé est relu avant le « oui », et l'écriture reste unique.
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
-const read = (p) => readFileSync(path.join(root, p), "utf8")
+// v12.0.0 : GitHub Actions checkout convertit le dépôt en CRLF ; les repères
+// ci-dessous (« \n} », « \n}\n ») ne trouvaient plus la fin d'une fonction et la
+// sonde relisait alors TOUT le fichier — elle échouait sur du code correct.
+// On normalise la fin de ligne à la lecture : le texte analysé, pas le disque.
+const read = (p) => readFileSync(path.join(root, p), "utf8").replaceAll("\r\n", "\n")
 const pkg = JSON.parse(read("package.json"))
 const tauri = JSON.parse(read("src-tauri/tauri.conf.json"))
 const lock = JSON.parse(read("package-lock.json"))

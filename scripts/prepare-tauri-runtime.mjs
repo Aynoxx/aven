@@ -37,6 +37,16 @@ function assertCargo() {
 
 assertCargo()
 
+// v12.0.0 : tauri.conf.json déclare `resources/pocket-tts/` comme ressource.
+// Sur une machine où `npm run fetch:pocket-tts` n'a jamais tourné (un runner CI
+// neuf, un clone frais), le dossier n'existe pas et `tauri-build` refuse de
+// compiler AVANT même cargo : le binaire de la voix n'est pas versionné, donc
+// l'absence est normale. On pose le dossier vide : le moteur local est alors
+// simplement introuvable, et la voix retombe sur Windows en le disant.
+const pocketDir = join("src-tauri", "resources", "pocket-tts")
+mkdirSync(pocketDir, { recursive: true })
+console.log("✓ Dossier de voix Pocket TTS prêt :", pocketDir)
+
 if (process.platform !== "win32") {
   console.log("Tauri runtime preparation: Windows Node binary skipped on non-Windows.")
   process.exit(0)
