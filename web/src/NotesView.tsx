@@ -472,11 +472,27 @@ export default function NotesView(props: Props) {
                 <button className="button primary" type="button" onClick={() => void commitEdit()} disabled={!editing.id && !editing.title.trim()}><Icon name="check" size={14} />Enregistrer</button>
                 <button className="button ghost" type="button" onClick={() => { setEditing(null); setEditingTags(null) }}>Annuler</button>
                 {editing.id === "" && editingTags && (
-                  <span className="notes-tag-picker" role="group" aria-label="Étiquettes de la nouvelle note">
+                  <span className="notes-tag-picker" role="group" aria-label="Agents liés à la nouvelle note">
                     {props.agents.map((a) => (
                       <button key={a.id} type="button" className={`notes-tag ${editingTags.includes(a.id) ? "selected" : ""}`} onClick={() => setEditingTags(editingTags.includes(a.id) ? editingTags.filter((t) => t !== a.id) : [...editingTags, a.id])}>{a.name}</button>
                     ))}
                   </span>
+                )}
+                {editing.id === "" && editingLabels && (
+                  <label className="notes-new-labels">
+                    <span className="eyebrow">ÉTIQUETTES</span>
+                    <input className="settings-input" placeholder="Ajouter une étiquette puis Entrée" value={labelDraft} onChange={(event) => setLabelDraft(event.target.value)} onKeyDown={(event) => {
+                      if ((event.key === "Enter" || event.key === ",") && labelDraft.trim()) {
+                        event.preventDefault()
+                        setEditingLabels([...new Set([...editingLabels, labelDraft.trim()])])
+                        setLabelDraft("")
+                      }
+                    }} />
+                    <span className="notes-label-chips">
+                      {editingLabels.map((label) => <button key={label} className="notes-tag selected" type="button" onClick={() => setEditingLabels(editingLabels.filter((item) => item !== label))}>{label} ×</button>)}
+                    </span>
+                  </label>
+                )}
                 )}
               </div>
             </div>
@@ -499,11 +515,20 @@ export default function NotesView(props: Props) {
                 </details>
                 <span className="hint">{selected.markdown.split(/\s+/).filter(Boolean).length} mots</span>
               </div>
-              <div className="notes-tags-editor" role="group" aria-label="Étiquettes par agent">
+              <div className="notes-tags-editor" role="group" aria-label="Agents liés à la note">
+                <span className="eyebrow">AGENTS LIÉS</span>
                 {props.agents.map((a) => {
                   const active = (tags[selected.id] ?? []).includes(a.id)
                   return <button key={a.id} type="button" className={`notes-tag ${active ? "selected" : ""}`} onClick={() => void commitTags(selected.id, active ? (tags[selected.id] ?? []).filter((t) => t !== a.id) : [...(tags[selected.id] ?? []), a.id])}>{a.name}</button>
                 })}
+              </div>
+              <div className="notes-tags-editor notes-labels-editor" role="group" aria-label="Étiquettes de contenu">
+                <span className="eyebrow">ÉTIQUETTES</span>
+                {(labels[selected.id] ?? []).map((label) => (
+                  <button key={label} type="button" className="notes-tag selected" onClick={() => void commitLabels(selected.id, (labels[selected.id] ?? []).filter((item) => item !== label))} aria-label={`Retirer l'étiquette ${label}`}>{label} ×</button>
+                ))}
+                <input className="settings-input notes-label-input" value={labelDraft} placeholder="Ajouter une étiquette…" onChange={(event) => setLabelDraft(event.target.value)} onKeyDown={(event) => labelInputKeyDown(event, selected.id)} />
+                <button className="button secondary notes-label-add" type="button" disabled={!labelDraft.trim()} onClick={() => addLabel(selected.id, labelDraft)}>Ajouter</button>
               </div>
               {/* v10.2.2 : le H1 de tête répétait le titre déjà affiché en h4. */}
               <div className="notes-render"><Markdown text={stripLeadingTitle(selected.markdown, selected.title)} onWikilink={(target) => { const hit = links.find((l) => l.target === target)?.resolved; if (hit) open(hit) }} /></div>
