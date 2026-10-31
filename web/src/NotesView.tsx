@@ -505,7 +505,7 @@ export default function NotesView(props: Props) {
               </div>
             ))}
             <button className="notes-tree-item folder" type="button" aria-expanded={highlightsOpen} onClick={() => setHighlightsOpen((value) => !value)}>
-              <Icon name={highlightsOpen ? "chevron-down" : "chevron-right"} size={12} /><Icon name="highlighter" size={14} /><span>Highlights ({highlights.length})</span>
+              <Icon name={highlightsOpen ? "chevron-down" : "chevron-right"} size={12} /><Icon name="quote" size={14} /><span>Highlights ({highlights.length})</span>
             </button>
             {highlightsOpen && highlights.map((item) => (
               <div key={item.id} className="notes-highlight-row">
@@ -571,7 +571,7 @@ export default function NotesView(props: Props) {
                   </div>
                 </details>
                 <button className="button ghost" type="button" disabled={!selectedQuote} onMouseDown={(event) => event.preventDefault()} onClick={() => void saveHighlight()} title={selectedQuote ? "Enregistrer l'extrait sélectionné" : "Sélectionnez d'abord un passage dans la note"}>
-                  <Icon name="highlighter" size={14} />Capturer l'extrait
+                  <Icon name="quote" size={14} />Capturer l'extrait
                 </button>
                 <span className="hint">{selected.markdown.split(/\s+/).filter(Boolean).length} mots</span>
               </div>
