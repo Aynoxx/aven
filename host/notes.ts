@@ -148,7 +148,7 @@ export function deleteFolder(workspace: string, folder: string) {
   let dest = target
   while (existsSync(dest)) { dest = `${target}-${n}`; n++ }
   renameSync(src, dest)
-  return rel
+  return path.relative(path.resolve(NOTE_DIR(workspace)), dest).split(path.sep).join("/")
 }
 
 // ── Déplacement / poubelle / archive ────────────────────────────────────────
@@ -183,7 +183,7 @@ export function deleteNote(workspace: string, id: string) {
   const dest = uniqueAbs(workspace, `${TRASH_DIR}/${rel}`)
   ensureDir(path.dirname(dest))
   renameSync(src, dest)
-  return rel
+  return path.relative(path.resolve(NOTE_DIR(workspace)), dest).split(path.sep).join("/")
 }
 
 /** Restaure une note de la poubelle vers son emplacement d'origine. */
@@ -227,7 +227,7 @@ export function archiveNote(workspace: string, id: string) {
   const dest = uniqueAbs(workspace, `${ARCHIVE_DIR}/${rel}`)
   ensureDir(path.dirname(dest))
   renameSync(src, dest)
-  return rel
+  return path.relative(path.resolve(NOTE_DIR(workspace)), dest).split(path.sep).join("/")
 }
 
 export function unarchiveNote(workspace: string, id: string) {
