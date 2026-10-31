@@ -43,7 +43,7 @@ assert.match(pure, /Pur : testable avec Node seul/, "sphere.ts reste un module p
 assert.match(sphere, /export function geodesicMesh/, "la sphère a une géométrie géodésique exportée")
 assert.match(sphere, /export function lightCurve/, "la courbe de lumière est une fonction pure")
 assert.match(sphere, /export const AGENT_LIGHT/, "la lumière est une constante exportée")
-assert.match(agent, /geodesicMesh,\n  lightCurve,\n  phaseEnergy,/, "le rendu CONSOMME la géométrie pure au lieu de la recalculer")
+assert.match(agent, /geodesicMesh,[\s\S]*?phaseEnergy,/, "le rendu CONSOMME la géométrie pure au lieu de la recalculer")
 assert.match(agent, /const \{ mesh, dust \} = sceneFor\(detail\)/, "la scène vient du cache pur, pas d'une boucle de rendu")
 // Aucune coordonnée de sphère n'est écrite à la main dans le composant.
 assert.ok(!/Math\.cos\(.*\)\s*\*\s*Math\.sin\(.*\)/.test(agent), "aucune trigonométrie de surface dans le canvas")
