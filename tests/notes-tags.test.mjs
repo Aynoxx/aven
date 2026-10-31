@@ -85,7 +85,6 @@ const makeWs = () => mkdtempSync(path.join(tmpdir(), "aven-notes-tags-"))
 {
   const ws = makeWs()
   try {
-    const { loadAllLabels, loadLabels, normalizeLabels, setLabels } = await import("../host/notes-meta.ts")
     assert.deepEqual(normalizeLabels([" Projet personnel ", "Été", "projet personnel", "Recherche & veille", "", "!!!"]), [
       "projet-personnel", "ete", "recherche-veille",
     ])
