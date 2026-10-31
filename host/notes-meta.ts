@@ -11,10 +11,13 @@ import { cleanNoteId } from "./notes.js"
 export const MAX_PINNED = 20
 export const MAX_NOTE_TAGS = 6
 export const MAX_NOTE_LABELS = 12
+export const MAX_NOTE_HIGHLIGHTS = 500
+
+export type NoteHighlight = { id: string; noteId: string; noteTitle: string; quote: string; createdAt: number }
 
 const file = (workspace: string) => path.join(workspace, ".opencode-app", "notes-meta.json")
 
-type NotesMeta = { pinned: string[]; tags?: Record<string, string[]>; labels?: Record<string, string[]> }
+type NotesMeta = { pinned: string[]; tags?: Record<string, string[]>; labels?: Record<string, string[]>; highlights?: NoteHighlight[] }
 
 function readMeta(workspace: string): NotesMeta {
   try {
@@ -39,13 +42,25 @@ function readMeta(workspace: string): NotesMeta {
         if (clean.length) labels[cleanId] = clean
       }
     }
+    const highlights: NoteHighlight[] = Array.isArray(raw.highlights)
+      ? raw.highlights.flatMap((item) => {
+        if (!item || typeof item !== "object") return []
+        const noteId = cleanNoteId(item.noteId)
+        const id = String(item.id ?? "").trim().slice(0, 100)
+        const quote = String(item.quote ?? "").trim().slice(0, 2000)
+        const createdAt = Number(item.createdAt)
+        if (!noteId || !id || !quote || !Number.isFinite(createdAt) || createdAt <= 0) return []
+        return [{ id, noteId, noteTitle: String(item.noteTitle ?? "").trim().slice(0, 120), quote, createdAt }]
+      }).slice(-MAX_NOTE_HIGHLIGHTS)
+      : []
     return {
       pinned: Array.isArray(raw.pinned) ? raw.pinned.filter((id) => typeof id === "string") : [],
       tags,
       labels,
+      highlights,
     }
   } catch {
-    return { pinned: [], tags: {}, labels: {} }
+    return { pinned: [], tags: {}, labels: {}, highlights: [] }
   }
 }
 
@@ -118,14 +133,64 @@ export function forgetNote(workspace: string, id: string): void {
   const pinned = meta.pinned.filter((x) => !keys.has(x))
   const tags = { ...(meta.tags ?? {}) }
   const labels = { ...(meta.labels ?? {}) }
+  const highlights = (meta.highlights ?? []).filter((item) => !keys.has(item.noteId))
   let hadTags = false
   for (const key of keys) {
     if (Object.prototype.hasOwnProperty.call(tags, key)) hadTags = true
     delete tags[key]
     delete labels[key]
   }
-  if (pinned.length === meta.pinned.length && !hadTags && Object.keys(labels).length === Object.keys(meta.labels ?? {}).length) return
-  writeJsonAtomicPretty(file(workspace), { pinned, tags, labels })
+  const labelsChanged = Object.keys(labels).length !== Object.keys(meta.labels ?? {}).length
+  const highlightsChanged = highlights.length !== (meta.highlights ?? []).length
+  if (pinned.length === meta.pinned.length && !hadTags && !labelsChanged && !highlightsChanged) return
+  writeJsonAtomicPretty(file(workspace), { pinned, tags, labels, highlights })
+}
+
+/** Highlights conservés dans les métadonnées de l'espace, avec leur note source. */
+export function loadHighlights(workspace: string): NoteHighlight[] {
+  return (readMeta(workspace).highlights ?? [])
+    .map((item) => ({ ...item }))
+    .sort((a, b) => b.createdAt - a.createdAt)
+}
+
+/** Enregistre un extrait sélectionné dans une note et garde sa provenance. */
+export function addHighlight(workspace: string, noteId: string, noteTitle: string, quote: string): NoteHighlight {
+  const cleanId = cleanNoteId(noteId)
+  const cleanQuote = String(quote ?? "").trim().slice(0, 2000)
+  if (!cleanId) throw new Error("Note invalide")
+  if (!cleanQuote) throw new Error("Sélectionnez un extrait avant de le conserver")
+  const meta = readMeta(workspace)
+  const now = Date.now()
+  const id = `highlight-${now.toString(36)}-${(meta.highlights ?? []).length.toString(36)}`
+  const item: NoteHighlight = {
+    id,
+    noteId: cleanId,
+    noteTitle: String(noteTitle ?? "").trim().slice(0, 120),
+    quote: cleanQuote,
+    createdAt: now,
+  }
+  meta.highlights = [...(meta.highlights ?? []), item].slice(-MAX_NOTE_HIGHLIGHTS)
+  writeJsonAtomicPretty(file(workspace), {
+    pinned: meta.pinned,
+    tags: meta.tags ?? {},
+    labels: meta.labels ?? {},
+    highlights: meta.highlights,
+  })
+  return item
+}
+
+/** Supprime uniquement le highlight demandé, jamais sa note source. */
+export function removeHighlight(workspace: string, id: string): void {
+  const meta = readMeta(workspace)
+  const next = (meta.highlights ?? []).filter((item) => item.id !== String(id ?? ""))
+  if (next.length === (meta.highlights ?? []).length) return
+  meta.highlights = next
+  writeJsonAtomicPretty(file(workspace), {
+    pinned: meta.pinned,
+    tags: meta.tags ?? {},
+    labels: meta.labels ?? {},
+    highlights: next,
+  })
 }
 
 /** Étiquettes libres d'une note, indépendantes des agents affectés. */
