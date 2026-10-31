@@ -36,16 +36,21 @@ const version = pkg.version.replaceAll(".", "\\.")
 assert.match(readme, new RegExp(`^# Aven v${version}$`, "m"), "README annonce la version courante")
 assert.match(readme, new RegExp(`v${version} — `), "README porte la note de la version courante")
 
-// ── B. Trois colonnes FIXÉES, métadonnées alignées ─────────────────────────
-// Une colonne qui se décalerait selon les données rendrait l'alignement imprévisible :
-// l'ordre des natures est un contrat, pas un tri par date.
-assert.match(home, /const SLOTS: ResumeKind\[\] = \["conversation", "note", "file"\]/, "l'ordre des colonnes est un contrat")
-assert.match(home, /SLOTS\.map\(\(kind\) => \{/, "la bande itère sur les natures, pas sur les entrées trouvées")
-assert.match(home, /const entry = byKind\.get\(kind\)/, "chaque colonne prend l'entrée de SA nature")
-assert.match(home, /wb-home-cell--empty/, "une nature absente garde sa colonne")
-assert.match(home, /Rien pour l’instant/, "la colonne vide le dit, sans fabriquer d'entrée")
-assert.match(css, /\.wb-home-cell--empty \{ cursor: default; \}/, "la colonne vide n'est pas un bouton")
-// Une seule ligne de métadonnées, groupée : l'âge ne flotte plus au bord de la colonne.
+// ── B. Trois colonnes de largeur stable, entrées réelles dans l'ordre ─────
+// L'ordre reste un contrat, mais une nature absente ne doit plus créer de case
+// artificielle : les entrées sont filtrées puis rendues dans leur ordre de nature.
+const kindOrder = [
+  resume.indexOf('kind: "conversation"'),
+  resume.indexOf('kind: "note"'),
+  resume.indexOf('kind: "file"'),
+]
+assert.ok(kindOrder.every((index) => index >= 0), "les trois natures existent")
+assert.ok(kindOrder[0] < kindOrder[1] && kindOrder[1] < kindOrder[2], "l'ordre reste conversation → note → fichier")
+assert.match(home, /entries\.map\(\(entry\) => \{/, "la bande rend les entrées réellement disponibles")
+assert.ok(!home.includes("SLOTS"), "aucune cellule vide n'est fabriquée")
+assert.ok(!home.includes("Rien pour l’instant"), "aucun faux libellé ne remplit une colonne")
+assert.match(css, /\.wb-home-resume-list \{[^}]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/, "les trois colonnes conservent leur largeur stable")
+// Une seule ligne de métadonnées, groupée : l'âge reste auprès de la nature.
 const ageRule = css.match(/\.wb-home-cell-age \{[^}]*\}/)?.[0] ?? ""
 assert.ok(ageRule, "l'âge a sa règle")
 assert.ok(!/margin-left: auto/.test(ageRule), "l'âge reste auprès de la nature, pas poussé au bord droit")
