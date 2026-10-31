@@ -189,6 +189,10 @@ export type OpenCodeApi = {
   noteTags: (id: string) => Promise<string[]>
   // v10.5.0 : évite un appel IPC par note dans l'arbre Notes.
   noteTagsAll: () => Promise<Record<string, string[]>>
+  // v12.8.0 : tags libres de contenu, indépendants des agents liés à une note.
+  noteSetLabels: (id: string, labels: string[]) => Promise<string[]>
+  noteLabels: (id: string) => Promise<string[]>
+  noteLabelsAll: () => Promise<Record<string, string[]>>
   // v9.3.0 : explorateur de fichiers intégré (lecture seule, cloisonné à l'espace).
   filesList: (relative: string) => Promise<FileEntry[]>
   filesRead: (relative: string) => Promise<TextFile>
