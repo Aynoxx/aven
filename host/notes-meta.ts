@@ -258,8 +258,8 @@ export function setLabels(workspace: string, id: string, labels: string[]): stri
 export function normalizeLabels(labels: unknown): string[] {
   const values = (Array.isArray(labels) ? labels : [])
     .map((value) => String(value ?? "").trim().toLowerCase().normalize("NFD")
-      .replace(/[\\u0300-\\u036f]/g, "")
-      .replace(/\\s+/g, "-")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/\s+/g, "-")
       .replace(/[^a-z0-9-]/g, "")
       .replace(/-{2,}/g, "-")
       .replace(/^-+|-+$/g, "")
