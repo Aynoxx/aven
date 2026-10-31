@@ -366,11 +366,23 @@ export function backlinks(workspace: string, id: string): string[] {
 }
 
 // ── Recherche globale (titre + corps) ───────────────────────────────────────
-export function searchNotes(workspace: string, query: string): { id: string; title: string; snippet: string }[] {
+export function searchNotes(
+  workspace: string,
+  query: string,
+  metadata: { tags?: Record<string, string[]>; labels?: Record<string, string[]> } = {},
+): { id: string; title: string; snippet: string }[] {
   const q = normalizeForSearch(query)
   if (!q) return []
   return listNotes(workspace)
-    .filter((n) => matchQuery(normalizeForSearch(`${n.title} ${n.markdown}`), q))
+    .filter((n) => {
+      const indexed = [
+        n.title,
+        n.markdown,
+        ...(metadata.tags?.[n.id] ?? []),
+        ...(metadata.labels?.[n.id] ?? []),
+      ].join(" ")
+      return matchQuery(normalizeForSearch(indexed), q)
+    })
     .slice(0, 50)
     .map((n) => {
       const norm = normalizeForSearch(n.markdown)
