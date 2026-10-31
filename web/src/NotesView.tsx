@@ -470,7 +470,7 @@ export default function NotesView(props: Props) {
               <NoteEditor key={editing.id || "new"} value={editing.markdown} onChange={(markdown) => setEditing((cur) => (cur ? { ...cur, markdown } : cur))} />
               <div className="row notes-editor-actions">
                 <button className="button primary" type="button" onClick={() => void commitEdit()} disabled={!editing.id && !editing.title.trim()}><Icon name="check" size={14} />Enregistrer</button>
-                <button className="button ghost" type="button" onClick={() => { setEditing(null); setEditingTags(null) }}>Annuler</button>
+                <button className="button ghost" type="button" onClick={() => { setEditing(null); setEditingTags(null); setEditingLabels(null); setLabelDraft("") }}>Annuler</button>
                 {editing.id === "" && editingTags && (
                   <span className="notes-tag-picker" role="group" aria-label="Agents liés à la nouvelle note">
                     {props.agents.map((a) => (
@@ -492,7 +492,6 @@ export default function NotesView(props: Props) {
                       {editingLabels.map((label) => <button key={label} className="notes-tag selected" type="button" onClick={() => setEditingLabels(editingLabels.filter((item) => item !== label))}>{label} ×</button>)}
                     </span>
                   </label>
-                )}
                 )}
               </div>
             </div>
