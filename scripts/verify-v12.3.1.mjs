@@ -58,7 +58,7 @@ assert.ok(!/margin-left: auto/.test(ageRule), "l'âge reste auprès de la nature
 assert.match(home, /<span className="wb-home-cell-age">· \{ageLabel\(entry\.updated, now\)\}<\/span>/, "l'âge est séparé par un point médian, dans la même ligne")
 // Une note dont le corps ne dit rien de plus que son titre n'est pas un travail :
 // c'était le cas réel « sans contenu avec comme nom importation » de la revue.
-assert.match(resume, /return excerpt !== "" && excerpt.toLowerCase() !== note.title.toLowerCase(),
+assert.match(resume, /return excerpt !== "" && excerpt\.toLowerCase\(\) !== note\.title\.toLowerCase\(\)/,
   "une note qui récite son titre n'est jamais proposée en reprise")
 
 // ── C. Actions compactes, délégation dans l'état de session ────────────────
