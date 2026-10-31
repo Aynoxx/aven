@@ -10,6 +10,7 @@ import { stripLeadingTitle } from "./note-display"
 // React (tests/notes-tree.test.mjs).
 import { pruneNote } from "./notes-tree"
 import { displayPath } from "./display-path"
+import { buildNoteTemplate, NOTE_TEMPLATES } from "./note-templates"
 
 // v10.1.0 « façon Kortex » : arbre de dossiers (drag&drop natif), éditeur riche
 // TipTap, wikilinks [[note]] + backlinks, poubelle/archive sur disque, recherche
@@ -36,6 +37,12 @@ export default function NotesView(props: Props) {
   const [hits, setHits] = useState<{ id: string; title: string; snippet: string }[]>([])
   const [tagFilter, setTagFilter] = useState<string | null>(null)
   const [tags, setTags] = useState<Record<string, string[]>>({})
+  // v12.8.0 : étiquettes de contenu, indépendantes des agents affectés.
+  const [labelFilter, setLabelFilter] = useState<string | null>(null)
+  const [labels, setLabels] = useState<Record<string, string[]>>({})
+  const [labelDraft, setLabelDraft] = useState("")
+  const [editingLabels, setEditingLabels] = useState<string[] | null>(null)
+  const [focusMode, setFocusMode] = useState(false)
   const [pinned, setPinned] = useState<string[]>([])
   const [dir, setDir] = useState("")
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
@@ -84,6 +91,9 @@ export default function NotesView(props: Props) {
     api.noteTagsAll()
       .then((all) => { if (!stop) setTags(Object.fromEntries(Object.entries(all).filter(([id]) => ids.has(id)))) })
       .catch(() => { if (!stop) setTags({}) })
+    api.noteLabelsAll()
+      .then((all) => { if (!stop) setLabels(Object.fromEntries(Object.entries(all).filter(([id]) => ids.has(id)))) })
+      .catch(() => { if (!stop) setLabels({}) })
     return () => { stop = true }
   }, [tree])
 
@@ -119,7 +129,13 @@ export default function NotesView(props: Props) {
     return () => clearTimeout(t)
   }, [query])
 
-  const open = (id: string) => { setSelectedId(id); setEditing(null); setEditingTags(null) }
+  const open = (id: string) => {
+    setSelectedId(id)
+    setEditing(null)
+    setEditingTags(null)
+    setEditingLabels(null)
+    setLabelDraft("")
+  }
 
   const togglePin = async (id: string) => {
     try { setPinned(await api.noteTogglePin(id)) } catch (e) { props.onError(e) }
