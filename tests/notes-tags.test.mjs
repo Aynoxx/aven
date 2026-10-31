@@ -5,7 +5,7 @@ import assert from "node:assert/strict"
 import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { forgetNote, loadAllTags, loadPinned, loadTags, normalizeTags, setTags, togglePin } from "../host/notes-meta.ts"
+import { forgetNote, loadAllLabels, loadAllTags, loadHighlights, loadLabels, loadPinned, loadTags, normalizeLabels, normalizeTags, rekeyNoteMetadata, setLabels, setTags, togglePin, addHighlight } from "../host/notes-meta.ts"
 
 const makeWs = () => mkdtempSync(path.join(tmpdir(), "aven-notes-tags-"))
 
@@ -103,6 +103,28 @@ const makeWs = () => mkdtempSync(path.join(tmpdir(), "aven-notes-tags-"))
     forgetNote(ws, ".trash/note.md")
     assert.deepEqual(loadLabels(ws, "note.md"), [])
     assert.deepEqual(loadLabels(ws, "autre.md"), ["recherche"])
+  } finally {
+    rmSync(ws, { recursive: true, force: true })
+  }
+}
+
+
+{
+  const ws = makeWs()
+  try {
+    setTags(ws, "projets/idee.md", ["recherche"])
+    setLabels(ws, "projets/idee.md", ["important"])
+    togglePin(ws, "projets/idee.md")
+    addHighlight(ws, "projets/idee.md", "Idée", "À retenir")
+    rekeyNoteMetadata(ws, "projets", ".trash/projets")
+    assert.deepEqual(loadTags(ws, ".trash/projets/idee.md"), ["recherche"])
+    assert.deepEqual(loadLabels(ws, ".trash/projets/idee.md"), ["important"])
+    assert.ok(loadPinned(ws).includes(".trash/projets/idee.md"))
+    assert.equal(loadHighlights(ws)[0].noteId, ".trash/projets/idee.md")
+    rekeyNoteMetadata(ws, ".trash/projets", "archives/projets")
+    assert.deepEqual(loadAllLabels(ws), { "archives/projets/idee.md": ["important"] })
+    assert.deepEqual(loadAllTags(ws), { "archives/projets/idee.md": ["recherche"] })
+    assert.equal(loadHighlights(ws)[0].noteId, "archives/projets/idee.md")
   } finally {
     rmSync(ws, { recursive: true, force: true })
   }
