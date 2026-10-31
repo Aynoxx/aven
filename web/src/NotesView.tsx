@@ -164,6 +164,12 @@ export default function NotesView(props: Props) {
       const saved = await api.noteSetLabels(id, next)
       setLabels((current) => ({ ...current, [id]: saved }))
       hitsCache.current.clear()
+      const currentQuery = query.trim()
+      if (currentQuery) {
+        const hits = await api.noteSearch(currentQuery)
+        hitsCache.current.set(currentQuery, hits)
+        setHits(hits)
+      }
     } catch (e) { props.onError(e) }
   }
 
@@ -340,11 +346,15 @@ export default function NotesView(props: Props) {
   const activeAgentName = props.currentAgent === "projet" ? "l’agent principal Aven" : props.agents.find((a) => a.id === props.currentAgent)?.name ?? "agent actif"
   const allTags = useMemo(() => [...new Set(Object.values(tags).flat())].sort((a, b) => a.localeCompare(b, "fr")), [tags])
   const allLabels = useMemo(() => [...new Set(Object.values(labels).flat())].sort((a, b) => a.localeCompare(b, "fr")), [labels])
-  const visibleNote = (node: NoteTreeEntry) => {
-    if (node.type === "folder") return true
-    return (!tagFilter || (tags[node.id] ?? []).includes(tagFilter))
-      && (!labelFilter || (labels[node.id] ?? []).includes(labelFilter))
+  const visibleNote = (node: NoteTreeEntry): boolean => {
+    if (node.type === "note") {
+      return (!tagFilter || (tags[node.id] ?? []).includes(tagFilter))
+        && (!labelFilter || (labels[node.id] ?? []).includes(labelFilter))
+    }
+    // Quand un filtre est actif, on masque aussi les dossiers sans résultat.
+    return !tagFilter && !labelFilter ? true : node.children.some(visibleNote)
   }
+  const hasVisibleEntries = tree.some(visibleNote)
 
   const renderNoteRow = (entry: NoteTreeEntry & { type: "note" }) => (
     <div key={entry.id} className={`notes-tree-row ${selectedId === entry.id ? "selected" : ""}`} data-note-id={entry.id} draggable
@@ -472,7 +482,7 @@ export default function NotesView(props: Props) {
           )}
           <div className="notes-tree" role="tree" aria-label="Dossiers et notes" onKeyDown={treeKeyDown} aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown">
             {renderTree(tree)}
-            {!tree.length && <p className="hint">Aucune note — crée la première.</p>}
+            {!hasVisibleEntries && <p className="hint">{tagFilter || labelFilter ? "Aucune note ne correspond à ces filtres." : "Aucune note — crée la première."}</p>}
           </div>
           <div className="notes-tree-sections">
             <button className="notes-tree-item folder" onClick={() => { setTrashOpen((v) => !v); if (!trashOpen) api.noteTrash().then(setTrash).catch(() => undefined) }} type="button">
