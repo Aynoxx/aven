@@ -4,7 +4,7 @@ import Markdown from "./Markdown"
 import NoteEditor from "./NoteEditor"
 import { Icon } from "./icons"
 import InstrumentFrame, { type InstrumentAction } from "./InstrumentFrame"
-import type { Note, NoteLink, NoteSearchHit, NoteTreeEntry } from "./types"
+import type { Note, NoteHighlight, NoteLink, NoteSearchHit, NoteTreeEntry } from "./types"
 import { stripLeadingTitle } from "./note-display"
 // v12.6.0 : le retrait immédiat d'une note est une récursion pure, testée sans
 // React (tests/notes-tree.test.mjs).
@@ -43,6 +43,10 @@ export default function NotesView(props: Props) {
   const [labelDraft, setLabelDraft] = useState("")
   const [editingLabels, setEditingLabels] = useState<string[] | null>(null)
   const [focusMode, setFocusMode] = useState(false)
+  const [highlights, setHighlights] = useState<NoteHighlight[]>([])
+  const [highlightsOpen, setHighlightsOpen] = useState(false)
+  const [selectedQuote, setSelectedQuote] = useState("")
+  const [highlightNotice, setHighlightNotice] = useState("")
   const [pinned, setPinned] = useState<string[]>([])
   const [dir, setDir] = useState("")
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
@@ -69,6 +73,13 @@ export default function NotesView(props: Props) {
   }, [props.onError])
 
   useEffect(() => { reload() }, [reload])
+
+  // v12.8.0 : les highlights sont une bibliothèque de citations avec provenance.
+  useEffect(() => {
+    let active = true
+    api.noteHighlights().then((items) => { if (active) setHighlights(items) }).catch((e) => props.onError(e))
+    return () => { active = false }
+  }, [props.onError])
 
   // Capture rapide demandée au montage (raccourci global) : note datée en Inbox/.
   // quickCapture est stable en pratique (props.onError constant) ; l'effet ne
@@ -135,6 +146,8 @@ export default function NotesView(props: Props) {
     setEditingTags(null)
     setEditingLabels(null)
     setLabelDraft("")
+    setSelectedQuote("")
+    setHighlightNotice("")
   }
 
   const togglePin = async (id: string) => {
@@ -151,6 +164,29 @@ export default function NotesView(props: Props) {
       const saved = await api.noteSetLabels(id, next)
       setLabels((current) => ({ ...current, [id]: saved }))
       hitsCache.current.clear()
+    } catch (e) { props.onError(e) }
+  }
+
+  const captureSelection = () => {
+    const quote = window.getSelection()?.toString().replace(/\\s+/g, " ").trim() ?? ""
+    setSelectedQuote(quote.slice(0, 2000))
+  }
+
+  const saveHighlight = async () => {
+    if (!selected || !selectedQuote.trim()) return
+    try {
+      const saved = await api.noteHighlightAdd(selected.id, selected.title, selectedQuote)
+      setHighlights((items) => [saved, ...items.filter((item) => item.id !== saved.id)])
+      setSelectedQuote("")
+      window.getSelection()?.removeAllRanges()
+      setHighlightNotice("Extrait ajouté à la bibliothèque.")
+    } catch (e) { props.onError(e) }
+  }
+
+  const removeHighlight = async (id: string) => {
+    try {
+      await api.noteHighlightDelete(id)
+      setHighlights((items) => items.filter((item) => item.id !== id))
     } catch (e) { props.onError(e) }
   }
 
@@ -458,6 +494,18 @@ export default function NotesView(props: Props) {
                 <button className="button ghost note-row-action" onClick={() => void withNote(() => api.noteUnarchive(n.id))} type="button" title="Restaurer"><Icon name="restore" size={14} /></button>
               </div>
             ))}
+            <button className="notes-tree-item folder" type="button" aria-expanded={highlightsOpen} onClick={() => setHighlightsOpen((value) => !value)}>
+              <Icon name={highlightsOpen ? "chevron-down" : "chevron-right"} size={12} /><Icon name="highlighter" size={14} /><span>Highlights ({highlights.length})</span>
+            </button>
+            {highlightsOpen && highlights.map((item) => (
+              <div key={item.id} className="notes-highlight-row">
+                <button className="notes-highlight-open" type="button" onClick={() => open(item.noteId)} title={`Ouvrir : ${item.noteTitle}`}>
+                  <span>{item.quote}</span>
+                  <small>{item.noteTitle || item.noteId}</small>
+                </button>
+                <button className="button ghost note-row-action" type="button" onClick={() => void removeHighlight(item.id)} aria-label="Supprimer ce highlight" title="Supprimer ce highlight"><Icon name="close" size={12} /></button>
+              </div>
+            ))}
           </div>
         </aside>
         <article className="notes-preview">
@@ -512,8 +560,12 @@ export default function NotesView(props: Props) {
                     <button className="button ghost" onClick={() => api.noteExport(selected.id).catch((e) => props.onError(e))} type="button">Exporter .md</button>
                   </div>
                 </details>
+                <button className="button ghost" type="button" disabled={!selectedQuote} onMouseDown={(event) => event.preventDefault()} onClick={() => void saveHighlight()} title={selectedQuote ? "Enregistrer l'extrait sélectionné" : "Sélectionnez d'abord un passage dans la note"}>
+                  <Icon name="highlighter" size={14} />Capturer l'extrait
+                </button>
                 <span className="hint">{selected.markdown.split(/\s+/).filter(Boolean).length} mots</span>
               </div>
+              {highlightNotice && <p className="notes-highlight-notice" role="status">{highlightNotice}</p>}
               <div className="notes-tags-editor" role="group" aria-label="Agents liés à la note">
                 <span className="eyebrow">AGENTS LIÉS</span>
                 {props.agents.map((a) => {
@@ -530,7 +582,7 @@ export default function NotesView(props: Props) {
                 <button className="button secondary notes-label-add" type="button" disabled={!labelDraft.trim()} onClick={() => addLabel(selected.id, labelDraft)}>Ajouter</button>
               </div>
               {/* v10.2.2 : le H1 de tête répétait le titre déjà affiché en h4. */}
-              <div className="notes-render"><Markdown text={stripLeadingTitle(selected.markdown, selected.title)} onWikilink={(target) => { const hit = links.find((l) => l.target === target)?.resolved; if (hit) open(hit) }} /></div>
+              <div className="notes-render" onMouseUp={captureSelection} onKeyUp={captureSelection}><Markdown text={stripLeadingTitle(selected.markdown, selected.title)} onWikilink={(target) => { const hit = links.find((l) => l.target === target)?.resolved; if (hit) open(hit) }} /></div>
               {!!links.length && (
                 <div className="notes-links">
                   <span className="eyebrow">LIENS SORTANTS</span>
