@@ -6,7 +6,7 @@
 import { readFileSync } from "node:fs"
 import path from "node:path"
 import { writeJsonAtomicPretty } from "./atomic-file.js"
-import { cleanNoteId } from "./notes.js"
+import { cleanNoteId, cleanRelPath } from "./notes.js"
 
 export const MAX_PINNED = 20
 export const MAX_NOTE_TAGS = 6
@@ -144,6 +144,42 @@ export function forgetNote(workspace: string, id: string): void {
   const highlightsChanged = highlights.length !== (meta.highlights ?? []).length
   if (pinned.length === meta.pinned.length && !hadTags && !labelsChanged && !highlightsChanged) return
   writeJsonAtomicPretty(file(workspace), { pinned, tags, labels, highlights })
+}
+
+/** Suit le déplacement ou le renommage d'un fichier/dossier dans l'arbre des notes. */
+export function rekeyNoteMetadata(workspace: string, fromPath: string, toPath: string): void {
+  const from = cleanRelPath(fromPath)
+  const to = cleanRelPath(toPath)
+  if (!from || !to || from === to) return
+  const remap = (value: string) => value === from || value.startsWith(from + "/")
+    ? to + value.slice(from.length)
+    : value
+  const meta = readMeta(workspace)
+  let changed = false
+
+  const pinned = meta.pinned.map((id) => {
+    const next = remap(id)
+    if (next !== id) changed = true
+    return next
+  })
+  const rekeyMap = (source: Record<string, string[]> = {}) => {
+    const result: Record<string, string[]> = {}
+    for (const [id, values] of Object.entries(source)) {
+      const next = remap(id)
+      if (next !== id) changed = true
+      result[next] = [...new Set([...(result[next] ?? []), ...values])]
+    }
+    return result
+  }
+  const tags = rekeyMap(meta.tags)
+  const labels = rekeyMap(meta.labels)
+  const highlights = (meta.highlights ?? []).map((item) => {
+    const noteId = remap(item.noteId)
+    if (noteId !== item.noteId) changed = true
+    return noteId === item.noteId ? item : { ...item, noteId }
+  })
+  if (!changed) return
+  writeJsonAtomicPretty(file(workspace), { pinned: [...new Set(pinned)], tags, labels, highlights })
 }
 
 /** Highlights conservés dans les métadonnées de l'espace, avec leur note source. */
