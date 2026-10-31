@@ -575,6 +575,18 @@ par les variables `:root` existantes, sinon thèmes et densités cassent.
   via une commande IPC ; la résolution des liens d'une note réutilise le même
   inventaire de notes. Ne pas réintroduire un appel IPC par note ou un balayage
   complet par lien.
+- **Notes = bibliothèque de connaissances (v12.8.0)** : le contenu reste en
+  fichiers Markdown dans `.opencodeapp/notes/`, tandis que les tags d'agents, les
+  étiquettes libres et les highlights restent dans les métadonnées atomiques de
+  l'espace (`.opencode-app/notes-meta.json`). Ces trois concepts sont distincts :
+  agent lié ≠ étiquette de sujet ≠ extrait cité. Les highlights gardent un `noteId`
+  source et suivent chaque déplacement, renommage, archivage, mise à la poubelle,
+  restauration et purge ; ne jamais conserver une citation sans provenance.
+  La recherche indexe titre, corps, tags, étiquettes et highlights ; les six modèles
+  sont du Markdown ordinaire modifiable, jamais des documents spéciaux. Les filtres
+  doivent masquer les dossiers sans résultat, et le mode concentration doit garder
+  une sortie visible. Les données restent locales à l'espace : pas de collaboration
+  ni de source web/PDF prétendues tant que ces fonctions n'existent pas.
 
 ## 7. Architecture host/renderer (Tauri)
 
