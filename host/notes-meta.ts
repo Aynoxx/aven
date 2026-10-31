@@ -45,7 +45,7 @@ function readMeta(workspace: string): NotesMeta {
       labels,
     }
   } catch {
-    return { pinned: [], tags: {} }
+    return { pinned: [], tags: {}, labels: {} }
   }
 }
 
