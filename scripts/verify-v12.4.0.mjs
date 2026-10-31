@@ -99,7 +99,7 @@ assert.match(agent, /css\.getPropertyValue\("--panel-solid"\)/, "le disque vient
 // Les SEULES valeurs littérales tolérées sont les replis de readColors, quand un
 // jeton manque (feuille non chargée). Partout ailleurs, une couleur en dur est une
 // régression de thème, et la sonde la refuse.
-const withoutTokenReader = agent.replace(/function readColors[\s\S]*?\n}\n/, "")
+const withoutTokenReader = agent.replace(/function readColors[\s\S]*?\r?\n}\r?\n/, "")
 assert.ok(!/#[0-9a-f]{6}/i.test(withoutTokenReader.replace(/\/\/.*$/gm, "")), "aucune couleur littérale dans le rendu")
 assert.match(agent, /const animate = !reduced\.matches && !document\.hidden && energy\.spin > 0/, "le mouvement réduit arrête la rotation")
 assert.match(agent, /redrawRef\.current\?\.\(\)/, "un changement de phase repeint même sans boucle")
