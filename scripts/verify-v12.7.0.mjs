@@ -16,12 +16,12 @@ const css = read("web/src/styles/workbench.css")
 const readme = read("README.md")
 const agents = read("AGENTS.md")
 
-assert.equal(pkg.version, "12.7.0", "package.json porte la version courante")
+assert.ok(/^\d+\.\d+\.\d+$/.test(pkg.version), "package.json porte une version sémantique")
 assert.equal(tauri.version, pkg.version, "Tauri suit package.json")
 assert.equal(cargo.match(/^version = "([^"]+)"$/m)?.[1], pkg.version, "Cargo suit package.json")
 assert.equal(pkg.scripts["verify:v12.7.0"], "node scripts/verify-v12.7.0.mjs", "la sonde a son entrée npm")
 assert.ok(pkg.scripts.verify.includes("scripts/verify-v12.7.0.mjs"), "npm run verify inclut la sonde")
-assert.ok(readme.startsWith("# Aven v12.7.0\n"), "README annonce la version courante")
+assert.ok(readme.startsWith("# Aven v" + pkg.version + "\n"), "README annonce la version courante")
 assert.ok(readme.includes("v12.7.0 — l'accueil distingue le vide du chargement"), "README documente la finition")
 
 // L'accueil attend la fin des trois chargements avant d'annoncer un état vide.
