@@ -1595,8 +1595,11 @@ async function dispatch(method: string, params: any): Promise<unknown> {
     // v12.8.0 : highlights rattachés à une note locale, jamais des citations anonymes.
     case "noteHighlights":
       return loadHighlights(requireWorkspace())
-    case "noteHighlightAdd":
-      return addHighlight(requireWorkspace(), String(params?.[0] ?? ""), String(params?.[1] ?? ""), String(params?.[2] ?? ""))
+    case "noteHighlightAdd": {
+      const workspace = requireWorkspace()
+      const note = getNote(workspace, String(params?.[0] ?? ""))
+      return addHighlight(workspace, note.id, note.title, String(params?.[2] ?? ""))
+    }
     case "noteHighlightDelete":
       removeHighlight(requireWorkspace(), String(params?.[0] ?? ""))
       return true
@@ -1696,6 +1699,7 @@ async function dispatch(method: string, params: any): Promise<unknown> {
       return searchNotes(workspace, String(params?.[0] ?? ""), {
         tags: loadAllTags(workspace),
         labels: loadAllLabels(workspace),
+        highlights: loadHighlights(workspace),
       })
     }
     case "noteQuickCapture":
