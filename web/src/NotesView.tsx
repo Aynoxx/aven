@@ -366,7 +366,7 @@ export default function NotesView(props: Props) {
     const noteId = noteRow?.dataset.noteId
     if (!noteRow || !noteId) return
     const folderIdOf = (btn: HTMLElement) => btn.closest<HTMLElement>(".notes-tree-folder")?.dataset.folderId ?? ""
-    const containerBtn = noteRow.closest<HTMLElement>(".notes-tree-folder")?.querySelector<HTMLElement>(":scope > .notes-tree-item")
+    const containerBtn = noteRow.closest<HTMLElement>(".notes-tree-folder")?.querySelector<HTMLElement>(":scope > .notes-tree-folder-head > .notes-tree-item")
     const folders = rows.filter((el) => el.classList.contains("folder"))
     // f AVANT la note = la note est positionnée après f dans le document.
     const before = folders.filter((f) => (f.compareDocumentPosition(noteRow) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0 && f !== containerBtn)
