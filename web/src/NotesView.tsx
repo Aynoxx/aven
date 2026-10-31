@@ -145,12 +145,77 @@ export default function NotesView(props: Props) {
     try { const saved = await api.noteSetTags(id, next); setTags((t) => ({ ...t, [id]: saved })) } catch (e) { props.onError(e) }
   }
 
+  // v12.8.0 : les étiquettes décrivent le sujet ; les tags existants désignent les agents liés.
+  const commitLabels = async (id: string, next: string[]) => {
+    try {
+      const saved = await api.noteSetLabels(id, next)
+      setLabels((current) => ({ ...current, [id]: saved }))
+      hitsCache.current.clear()
+    } catch (e) { props.onError(e) }
+  }
+
+  const addLabel = (id: string, raw: string) => {
+    const value = raw.trim()
+    if (!value) return
+    void commitLabels(id, [...(labels[id] ?? []), value])
+    setLabelDraft("")
+  }
+
+  const labelInputKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>, id: string) => {
+    if (event.key !== "Enter" && event.key !== ",") return
+    event.preventDefault()
+    addLabel(id, labelDraft)
+  }
+
   const startEdit = (note?: Note) => {
-    if (note) setEditing({ id: note.id, title: note.title, markdown: note.markdown })
-    else {
+    if (note) {
+      setEditing({ id: note.id, title: note.title, markdown: note.markdown })
+      setEditingLabels(null)
+    } else {
       setEditing({ id: "", title: "", markdown: "" })
       setEditingTags(props.currentAgent ? [props.currentAgent] : [])
+      setEditingLabels([])
     }
+  }
+
+  // v12.8.0 : les modèles sont des points de départ, entièrement modifiables.
+  const startFromTemplate = (id: string) => {
+    const generated = buildNoteTemplate(id)
+    if (!generated) return
+    setEditing({ id: "", title: generated.title, markdown: generated.markdown })
+    setEditingTags(props.currentAgent ? [props.currentAgent] : [])
+    setEditingLabels([])
+    setSelectedId(undefined)
+  }
+
+  const renameFolder = async (folder: string) => {
+    const currentName = folder.split("/").pop() ?? folder
+    const nextName = window.prompt("Nouveau nom du dossier :", currentName)?.trim()
+    if (!nextName || nextName === currentName || nextName.includes("/")) return
+    const parent = folder.includes("/") ? folder.slice(0, folder.lastIndexOf("/")) : ""
+    const target = parent ? parent + "/" + nextName : nextName
+    try {
+      await api.noteRenameFolder(folder, target)
+      if (selectedId && (selectedId === folder || selectedId.startsWith(folder + "/"))) {
+        setSelectedId(target + selectedId.slice(folder.length))
+      }
+      reload()
+    } catch (e) { props.onError(e) }
+  }
+
+  const removeFolder = async (folder: string) => {
+    const name = folder.split("/").pop() ?? folder
+    if (!window.confirm("Déplacer le dossier « " + name + " » et son contenu vers la poubelle ?")) return
+    try {
+      await api.noteDeleteFolder(folder)
+      if (selectedId?.startsWith(folder + "/")) {
+        setSelectedId(undefined)
+        setSelected(null)
+        setLinks([])
+        setBacks([])
+      }
+      reload()
+    } catch (e) { props.onError(e) }
   }
 
   const commitEdit = async () => {
@@ -160,7 +225,8 @@ export default function NotesView(props: Props) {
       reload()
       setSelectedId(saved.id)
       if (editingTags && editing.id === "") await commitTags(saved.id, editingTags)
-      setEditing(null); setEditingTags(null)
+      if (editingLabels && editing.id === "") await commitLabels(saved.id, editingLabels)
+      setEditing(null); setEditingTags(null); setEditingLabels(null)
     } catch (e) { props.onError(e) }
   }
 
