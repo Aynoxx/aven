@@ -369,7 +369,7 @@ export function backlinks(workspace: string, id: string): string[] {
 export function searchNotes(
   workspace: string,
   query: string,
-  metadata: { tags?: Record<string, string[]>; labels?: Record<string, string[]> } = {},
+  metadata: { tags?: Record<string, string[]>; labels?: Record<string, string[]>; highlights?: { noteId: string; quote: string }[] } = {},
 ): { id: string; title: string; snippet: string }[] {
   const q = normalizeForSearch(query)
   if (!q) return []
@@ -380,6 +380,7 @@ export function searchNotes(
         n.markdown,
         ...(metadata.tags?.[n.id] ?? []),
         ...(metadata.labels?.[n.id] ?? []),
+        ...(metadata.highlights ?? []).filter((item) => item.noteId === n.id).map((item) => item.quote),
       ].join(" ")
       return matchQuery(normalizeForSearch(indexed), q)
     })
