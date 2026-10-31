@@ -80,4 +80,32 @@ const makeWs = () => mkdtempSync(path.join(tmpdir(), "aven-notes-tags-"))
   }
 }
 
+
+// v12.8.0 : les étiquettes libres restent indépendantes des tags d'agents.
+{
+  const ws = makeWs()
+  try {
+    const { loadAllLabels, loadLabels, normalizeLabels, setLabels } = await import("../host/notes-meta.ts")
+    assert.deepEqual(normalizeLabels([" Projet personnel ", "Été", "projet personnel", "Recherche & veille", "", "!!!"]), [
+      "projet-personnel", "ete", "recherche-veille",
+    ])
+    assert.equal(normalizeLabels(Array.from({ length: 20 }, (_, i) => "tag-" + i)).length, 12)
+    setTags(ws, "note.md", ["recherche"])
+    assert.deepEqual(setLabels(ws, "note.md", ["Projet", "personnel"]), ["projet", "personnel"])
+    assert.deepEqual(loadTags(ws, "note.md"), ["recherche"], "les labels ne remplacent pas l'affectation agent")
+    assert.deepEqual(loadLabels(ws, "note.md"), ["projet", "personnel"])
+    const all = loadAllLabels(ws)
+    all["note.md"].push("mutation externe")
+    assert.deepEqual(loadAllLabels(ws), { "note.md": ["projet", "personnel"] })
+    setLabels(ws, "autre.md", ["recherche"])
+    assert.deepEqual(loadAllLabels(ws), { "note.md": ["projet", "personnel"], "autre.md": ["recherche"] })
+    assert.throws(() => setLabels(ws, "../evil.md", ["code"]), /Note invalide/)
+    forgetNote(ws, ".trash/note.md")
+    assert.deepEqual(loadLabels(ws, "note.md"), [])
+    assert.deepEqual(loadLabels(ws, "autre.md"), ["recherche"])
+  } finally {
+    rmSync(ws, { recursive: true, force: true })
+  }
+}
+
 console.log("notes-tags: OK")
