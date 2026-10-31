@@ -1,4 +1,4 @@
-# Aven v12.7.0
+# Aven v12.8.0
 
 > ## v10.0.0 — 100 % Tauri (Electron et le natif retirés)
 > Aven est une **app Tauri 2** : la webview React parle à Rust (`src-tauri/`)
@@ -27,6 +27,19 @@
 Application de bureau (Tauri) : une chatbox avec **3 agents commutables** (code, recherche, analyse) et un
 sous-agent (code-reviewer), branchée sur **OpenCode 2.0.10** et un catalogue d’agents strictement gratuit (OpenRouter Free / OpenCode Zen).
 
+> **v12.8.0 — les notes deviennent une bibliothèque de connaissances**
+> ① Les étiquettes libres (« projet », « idée », « lecture ») sont désormais séparées
+> des agents associés à une note. Elles sont persistées par espace, filtrables et
+> recherchables avec le titre, le Markdown et les extraits conservés.
+> ② La recherche trouve aussi le contenu des highlights. Un passage sélectionné dans
+> une note peut être capturé dans une bibliothèque avec le titre et le chemin de sa
+> source ; il peut être rouvert, supprimé et suit les déplacements de son document.
+> ③ Six modèles Markdown servent de points de départ modifiables : idée, réunion,
+> recherche, journal, projet et plan de contenu. L'arbre permet aussi de renommer
+> ou mettre un dossier à la poubelle, et un mode concentration masque la navigation.
+> ④ Les fichiers restent des Markdown locaux. Les étiquettes, épingles et highlights
+> restent dans les métadonnées de l'espace et suivent les déplacements/renommages.
+>
 > **v12.7.0 — l'accueil distingue le vide du chargement**
 > ① « Reprendre » n'affiche plus trois cases dont deux disent « Rien pour l'instant » :
 > seules les entrées réellement disponibles sont rendues, dans l'ordre conversation,
