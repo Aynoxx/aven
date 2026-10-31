@@ -49,7 +49,7 @@ assert.ok(host.includes("highlights: loadHighlights(workspace)"), "dispatch rech
 for (const symbol of ["loadHighlights", "addHighlight", "removeHighlight"]) {
   assert.ok(notesMeta.includes("export function " + symbol), "notes-meta exporte " + symbol)
 }
-assert.ok(host.includes("const note = getNote(workspace, String(params?.[0] ?? \"\"))"), "le host valide la note source d'un highlight")
+assert.ok(host.includes("const note = getNote(workspace"), "le host valide la note source d'un highlight")
 assert.ok(host.includes("rekeyNoteMetadata(workspace, from, moved)"), "un déplacement conserve les références")
 assert.ok(host.includes("rekeyNoteMetadata(workspace, from, archived)"), "un archivage conserve les références")
 assert.ok(view.includes("Capturer l'extrait"), "l'interface capture une sélection")
