@@ -82,6 +82,32 @@
 .notes-tag:hover { border-color:var(--accent-border); color:var(--text); }
 .notes-tag.selected { background:var(--accent-soft); border-color:var(--accent-border); color:var(--accent-ink); font-weight: 600; }
 .notes-tags-editor { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
+/* v12.8.0 : bibliotheque de notes — étiquettes libres, modèles et focus. */
+.notes-template-select { flex:0 0 102px; width:102px; min-width:0; padding-inline:6px; font-size:var(--font-size-xs); }
+.notes-tags-filter > .eyebrow { width:100%; }
+.notes-tags-editor > .eyebrow { width:100%; }
+.notes-labels-editor { align-items:center; }
+.notes-label-input { flex:1 1 150px; min-width:120px; width:auto; max-width:240px; }
+.notes-label-add { min-height:28px; padding:0 9px; }
+.notes-new-labels { display:flex; flex-wrap:wrap; align-items:center; gap:6px; width:100%; }
+.notes-new-labels > .eyebrow { flex:0 0 100%; }
+.notes-new-labels .settings-input { flex:1 1 180px; min-width:160px; }
+.notes-label-chips { display:flex; flex-wrap:wrap; gap:5px; }
+.notes-tree-folder-head { display:flex; align-items:center; gap:3px; min-width:0; }
+.notes-tree-folder-head > .notes-tree-item { flex:1; }
+.notes-folder-actions { display:flex; gap:1px; opacity:0; transition:opacity var(--dur-fast) var(--ease-out); }
+.notes-tree-folder:hover > .notes-tree-folder-head .notes-folder-actions,
+.notes-tree-folder:focus-within > .notes-tree-folder-head .notes-folder-actions { opacity:1; }
+.note-folder-action { width:24px; min-width:24px; height:24px; min-height:24px; padding:0; justify-content:center; }
+.notes-tree-folder.drop-target > .notes-tree-folder-head > .notes-tree-item { outline:2px dashed var(--accent-border); outline-offset:-1px; background:var(--accent-soft); }
+.notes-layout.focus-mode { grid-template-columns:minmax(0,1fr); }
+.notes-layout.focus-mode .notes-list-panel { display:none; }
+.notes-layout.focus-mode .notes-preview { width:min(100%, 980px); margin:0 auto; padding-inline:clamp(18px, 5vw, 64px); }
+.notes-highlight-row { display:flex; align-items:flex-start; gap:4px; padding:5px 0 5px 8px; border-left:2px solid var(--accent-border); margin:5px 0 5px 7px; }
+.notes-highlight-open { flex:1; min-width:0; display:grid; gap:3px; padding:3px 5px; text-align:left; color:var(--text); background:transparent; border:0; cursor:pointer; font:inherit; }
+.notes-highlight-open > span { font-size:var(--font-size-xs); line-height:1.4; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+.notes-highlight-open > small { font-size:var(--font-size-xs); color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.notes-highlight-notice { color:var(--accent-ink); font-size:var(--font-size-xs); margin:0 0 8px; }
 .notes-title-input { width:100%; box-sizing:border-box; margin:8px 0 10px; }
 .notes-editor { display:flex; flex-direction:column; min-height:0; flex:1; }
 .notes-editor-actions { margin-top:10px; align-items:center; flex-wrap:wrap; }

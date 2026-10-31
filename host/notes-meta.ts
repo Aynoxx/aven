@@ -6,14 +6,18 @@
 import { readFileSync } from "node:fs"
 import path from "node:path"
 import { writeJsonAtomicPretty } from "./atomic-file.js"
-import { cleanNoteId } from "./notes.js"
+import { cleanNoteId, cleanRelPath } from "./notes.js"
 
 export const MAX_PINNED = 20
 export const MAX_NOTE_TAGS = 6
+export const MAX_NOTE_LABELS = 12
+export const MAX_NOTE_HIGHLIGHTS = 500
+
+export type NoteHighlight = { id: string; noteId: string; noteTitle: string; quote: string; createdAt: number }
 
 const file = (workspace: string) => path.join(workspace, ".opencode-app", "notes-meta.json")
 
-type NotesMeta = { pinned: string[]; tags?: Record<string, string[]> }
+type NotesMeta = { pinned: string[]; tags?: Record<string, string[]>; labels?: Record<string, string[]>; highlights?: NoteHighlight[] }
 
 function readMeta(workspace: string): NotesMeta {
   try {
@@ -29,9 +33,34 @@ function readMeta(workspace: string): NotesMeta {
         if (clean.length) tags[cleanId] = [...new Set(clean)].slice(0, MAX_NOTE_TAGS)
       }
     }
-    return { pinned: Array.isArray(raw.pinned) ? raw.pinned.filter((id) => typeof id === "string") : [], tags }
+    const labels: Record<string, string[]> = {}
+    if (raw.labels && typeof raw.labels === "object") {
+      for (const [id, list] of Object.entries(raw.labels)) {
+        const cleanId = cleanNoteId(id)
+        if (!cleanId || !Array.isArray(list)) continue
+        const clean = normalizeLabels(list)
+        if (clean.length) labels[cleanId] = clean
+      }
+    }
+    const highlights: NoteHighlight[] = Array.isArray(raw.highlights)
+      ? raw.highlights.flatMap((item) => {
+        if (!item || typeof item !== "object") return []
+        const noteId = cleanNoteId(item.noteId)
+        const id = String(item.id ?? "").trim().slice(0, 100)
+        const quote = String(item.quote ?? "").trim().slice(0, 2000)
+        const createdAt = Number(item.createdAt)
+        if (!noteId || !id || !quote || !Number.isFinite(createdAt) || createdAt <= 0) return []
+        return [{ id, noteId, noteTitle: String(item.noteTitle ?? "").trim().slice(0, 120), quote, createdAt }]
+      }).slice(-MAX_NOTE_HIGHLIGHTS)
+      : []
+    return {
+      pinned: Array.isArray(raw.pinned) ? raw.pinned.filter((id) => typeof id === "string") : [],
+      tags,
+      labels,
+      highlights,
+    }
   } catch {
-    return { pinned: [], tags: {} }
+    return { pinned: [], tags: {}, labels: {}, highlights: [] }
   }
 }
 
@@ -103,13 +132,140 @@ export function forgetNote(workspace: string, id: string): void {
   const keys = new Set([clean, clean.replace(/^\.(?:trash|archive)\//, "")])
   const pinned = meta.pinned.filter((x) => !keys.has(x))
   const tags = { ...(meta.tags ?? {}) }
+  const labels = { ...(meta.labels ?? {}) }
+  const highlights = (meta.highlights ?? []).filter((item) => !keys.has(item.noteId))
   let hadTags = false
   for (const key of keys) {
     if (Object.prototype.hasOwnProperty.call(tags, key)) hadTags = true
     delete tags[key]
+    delete labels[key]
   }
-  if (pinned.length === meta.pinned.length && !hadTags) return
-  writeJsonAtomicPretty(file(workspace), { pinned, tags })
+  const labelsChanged = Object.keys(labels).length !== Object.keys(meta.labels ?? {}).length
+  const highlightsChanged = highlights.length !== (meta.highlights ?? []).length
+  if (pinned.length === meta.pinned.length && !hadTags && !labelsChanged && !highlightsChanged) return
+  writeJsonAtomicPretty(file(workspace), { pinned, tags, labels, highlights })
+}
+
+/** Suit le déplacement ou le renommage d'un fichier/dossier dans l'arbre des notes. */
+export function rekeyNoteMetadata(workspace: string, fromPath: string, toPath: string): void {
+  const from = cleanRelPath(fromPath)
+  const to = cleanRelPath(toPath)
+  if (!from || !to || from === to) return
+  const remap = (value: string) => value === from || value.startsWith(from + "/")
+    ? to + value.slice(from.length)
+    : value
+  const meta = readMeta(workspace)
+  let changed = false
+
+  const pinned = meta.pinned.map((id) => {
+    const next = remap(id)
+    if (next !== id) changed = true
+    return next
+  })
+  const rekeyMap = (source: Record<string, string[]> = {}) => {
+    const result: Record<string, string[]> = {}
+    for (const [id, values] of Object.entries(source)) {
+      const next = remap(id)
+      if (next !== id) changed = true
+      result[next] = [...new Set([...(result[next] ?? []), ...values])]
+    }
+    return result
+  }
+  const tags = rekeyMap(meta.tags)
+  const labels = rekeyMap(meta.labels)
+  const highlights = (meta.highlights ?? []).map((item) => {
+    const noteId = remap(item.noteId)
+    if (noteId !== item.noteId) changed = true
+    return noteId === item.noteId ? item : { ...item, noteId }
+  })
+  if (!changed) return
+  writeJsonAtomicPretty(file(workspace), { pinned: [...new Set(pinned)], tags, labels, highlights })
+}
+
+/** Highlights conservés dans les métadonnées de l'espace, avec leur note source. */
+export function loadHighlights(workspace: string): NoteHighlight[] {
+  return (readMeta(workspace).highlights ?? [])
+    .map((item) => ({ ...item }))
+    .sort((a, b) => b.createdAt - a.createdAt)
+}
+
+/** Enregistre un extrait sélectionné dans une note et garde sa provenance. */
+export function addHighlight(workspace: string, noteId: string, noteTitle: string, quote: string): NoteHighlight {
+  const cleanId = cleanNoteId(noteId)
+  const cleanQuote = String(quote ?? "").trim().slice(0, 2000)
+  if (!cleanId) throw new Error("Note invalide")
+  if (!cleanQuote) throw new Error("Sélectionnez un extrait avant de le conserver")
+  const meta = readMeta(workspace)
+  const now = Date.now()
+  const id = `highlight-${now.toString(36)}-${(meta.highlights ?? []).length.toString(36)}`
+  const item: NoteHighlight = {
+    id,
+    noteId: cleanId,
+    noteTitle: String(noteTitle ?? "").trim().slice(0, 120),
+    quote: cleanQuote,
+    createdAt: now,
+  }
+  meta.highlights = [...(meta.highlights ?? []), item].slice(-MAX_NOTE_HIGHLIGHTS)
+  writeJsonAtomicPretty(file(workspace), {
+    pinned: meta.pinned,
+    tags: meta.tags ?? {},
+    labels: meta.labels ?? {},
+    highlights: meta.highlights,
+  })
+  return item
+}
+
+/** Supprime uniquement le highlight demandé, jamais sa note source. */
+export function removeHighlight(workspace: string, id: string): void {
+  const meta = readMeta(workspace)
+  const next = (meta.highlights ?? []).filter((item) => item.id !== String(id ?? ""))
+  if (next.length === (meta.highlights ?? []).length) return
+  meta.highlights = next
+  writeJsonAtomicPretty(file(workspace), {
+    pinned: meta.pinned,
+    tags: meta.tags ?? {},
+    labels: meta.labels ?? {},
+    highlights: next,
+  })
+}
+
+/** Étiquettes libres d'une note, indépendantes des agents affectés. */
+export function loadLabels(workspace: string, id: string): string[] {
+  const clean = cleanNoteId(id)
+  return clean ? readMeta(workspace).labels?.[clean] ?? [] : []
+}
+
+/** Toutes les étiquettes libres, lues en un seul accès et copiées pour l'UI. */
+export function loadAllLabels(workspace: string): Record<string, string[]> {
+  const labels = readMeta(workspace).labels ?? {}
+  return Object.fromEntries(Object.entries(labels).map(([id, values]) => [id, [...values]]))
+}
+
+/** Remplace les étiquettes libres d'une note. */
+export function setLabels(workspace: string, id: string, labels: string[]): string[] {
+  const clean = cleanNoteId(id)
+  if (!clean) throw new Error("Note invalide")
+  const normalized = normalizeLabels(labels)
+  const meta = readMeta(workspace)
+  meta.labels = { ...(meta.labels ?? {}) }
+  if (normalized.length) meta.labels[clean] = normalized
+  else delete meta.labels[clean]
+  writeJsonAtomicPretty(file(workspace), meta)
+  return normalized
+}
+
+/** Normalise les étiquettes libres : accents retirés, tirets, 30 caractères, 12 max. */
+export function normalizeLabels(labels: unknown): string[] {
+  const values = (Array.isArray(labels) ? labels : [])
+    .map((value) => String(value ?? "").trim().toLowerCase().normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/\s+/g, "-")
+      .replace(/[^a-z0-9-]/g, "")
+      .replace(/-{2,}/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 30))
+    .filter(Boolean)
+  return [...new Set(values)].slice(0, MAX_NOTE_LABELS)
 }
 
 /** Normalise un texte pour la recherche : minuscules, sans accents, ponctuation → espace. */

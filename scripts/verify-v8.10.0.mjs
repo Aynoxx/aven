@@ -46,7 +46,7 @@ assert.match(dialog, /mots/)
 // v10.1.0 : la recherche est globale et côté host (searchNotes) — le critère
 // « la recherche porte sur le contenu » est vérifié là où il s'applique.
 assert.match(dialog, /noteSearch\(q\)/, "la vue interroge la recherche globale du host")
-assert.match(notes, /normalizeForSearch\(`\$\{n\.title\} \$\{n\.markdown\}`\)/, "la recherche porte sur titre + contenu")
+assert.match(notes, /const indexed = \[[\s\S]*?n\.title,[\s\S]*?n\.markdown,[\s\S]*?matchQuery\(normalizeForSearch\(indexed\), q\)/, "la recherche porte toujours sur titre + contenu, et peut indexer les métadonnées")
 
 // Tests présents.
 assert.match(tests, /togglePin/)

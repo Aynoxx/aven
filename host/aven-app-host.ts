@@ -28,7 +28,7 @@ import {
   listNotes, listTrash, moveNote, noteLinks, notesDir, notesTree, purgeNote, quickCapture,
   renameFolder, restoreNote, saveNote, searchNotes, unarchiveNote,
 } from "./notes.js"
-import { forgetNote, loadAllTags, loadPinned, loadTags, setTags, togglePin } from "./notes-meta.js"
+import { addHighlight, forgetNote, loadAllLabels, loadAllTags, loadHighlights, loadPinned, loadTags, rekeyNoteMetadata, removeHighlight, setLabels, setTags, togglePin } from "./notes-meta.js"
 import { listWorkspaceDir, readWorkspaceFile, breadcrumbOf, safeResolve as safeResolveWorkspacePath } from "./workspace-files.js"
 // v12.3.0 : l'accueil reprend le dernier document RÉELLEMENT ouvert — Aven en garde
 // la trace par espace (jamais un « fichier récent » inventé).
@@ -1585,6 +1585,24 @@ async function dispatch(method: string, params: any): Promise<unknown> {
     // v10.5.0 : l'arbre Notes lit toutes les étiquettes en un seul appel IPC.
     case "noteTagsAll":
       return loadAllTags(requireWorkspace())
+    // v12.8.0 : étiquettes libres, distinctes des tags d'affectation aux agents.
+    case "noteSetLabels":
+      return setLabels(requireWorkspace(), String(params?.[0] ?? ""), Array.isArray(params?.[1]) ? params[1].map(String) : [])
+    case "noteLabels":
+      return loadAllLabels(requireWorkspace())[String(params?.[0] ?? "")] ?? []
+    case "noteLabelsAll":
+      return loadAllLabels(requireWorkspace())
+    // v12.8.0 : highlights rattachés à une note locale, jamais des citations anonymes.
+    case "noteHighlights":
+      return loadHighlights(requireWorkspace())
+    case "noteHighlightAdd": {
+      const workspace = requireWorkspace()
+      const note = getNote(workspace, String(params?.[0] ?? ""))
+      return addHighlight(workspace, note.id, note.title, String(params?.[2] ?? ""))
+    }
+    case "noteHighlightDelete":
+      removeHighlight(requireWorkspace(), String(params?.[0] ?? ""))
+      return true
     case "noteDir":
       return notesDir(requireWorkspace())
     case "filesList":
@@ -1612,20 +1630,55 @@ async function dispatch(method: string, params: any): Promise<unknown> {
       return notesTree(requireWorkspace())
     case "noteCreateFolder":
       return createFolder(requireWorkspace(), String(params?.[0] ?? ""))
-    case "noteRenameFolder":
-      return renameFolder(requireWorkspace(), String(params?.[0] ?? ""), String(params?.[1] ?? ""))
-    case "noteDeleteFolder":
-      return deleteFolder(requireWorkspace(), String(params?.[0] ?? ""))
-    case "noteMove":
-      return moveNote(requireWorkspace(), String(params?.[0] ?? ""), String(params?.[1] ?? ""))
-    case "noteDelete":
-      return deleteNote(requireWorkspace(), String(params?.[0] ?? ""))
-    case "noteRestore":
-      return restoreNote(requireWorkspace(), String(params?.[0] ?? ""))
-    case "noteArchive":
-      return archiveNote(requireWorkspace(), String(params?.[0] ?? ""))
-    case "noteUnarchive":
-      return unarchiveNote(requireWorkspace(), String(params?.[0] ?? ""))
+    case "noteRenameFolder": {
+      const workspace = requireWorkspace()
+      const from = String(params?.[0] ?? "")
+      const renamed = renameFolder(workspace, from, String(params?.[1] ?? ""))
+      rekeyNoteMetadata(workspace, from, renamed)
+      return renamed
+    }
+    case "noteDeleteFolder": {
+      const workspace = requireWorkspace()
+      const from = String(params?.[0] ?? "")
+      const trashed = deleteFolder(workspace, from)
+      rekeyNoteMetadata(workspace, from, trashed)
+      return trashed
+    }
+    case "noteMove": {
+      const workspace = requireWorkspace()
+      const from = String(params?.[0] ?? "")
+      const moved = moveNote(workspace, from, String(params?.[1] ?? ""))
+      rekeyNoteMetadata(workspace, from, moved)
+      return moved
+    }
+    case "noteDelete": {
+      const workspace = requireWorkspace()
+      const from = String(params?.[0] ?? "")
+      const trashed = deleteNote(workspace, from)
+      rekeyNoteMetadata(workspace, from, trashed)
+      return trashed
+    }
+    case "noteRestore": {
+      const workspace = requireWorkspace()
+      const from = String(params?.[0] ?? "")
+      const restored = restoreNote(workspace, from)
+      rekeyNoteMetadata(workspace, from, restored)
+      return restored
+    }
+    case "noteArchive": {
+      const workspace = requireWorkspace()
+      const from = String(params?.[0] ?? "")
+      const archived = archiveNote(workspace, from)
+      rekeyNoteMetadata(workspace, from, archived)
+      return archived
+    }
+    case "noteUnarchive": {
+      const workspace = requireWorkspace()
+      const from = String(params?.[0] ?? "")
+      const restored = unarchiveNote(workspace, from)
+      rekeyNoteMetadata(workspace, from, restored)
+      return restored
+    }
     case "noteTrash":
       return listTrash(requireWorkspace())
     case "noteArchived":
@@ -1641,8 +1694,14 @@ async function dispatch(method: string, params: any): Promise<unknown> {
       return noteLinks(requireWorkspace(), String(params?.[0] ?? ""))
     case "noteBacklinks":
       return backlinks(requireWorkspace(), String(params?.[0] ?? ""))
-    case "noteSearch":
-      return searchNotes(requireWorkspace(), String(params?.[0] ?? ""))
+    case "noteSearch": {
+      const workspace = requireWorkspace()
+      return searchNotes(workspace, String(params?.[0] ?? ""), {
+        tags: loadAllTags(workspace),
+        labels: loadAllLabels(workspace),
+        highlights: loadHighlights(workspace),
+      })
+    }
     case "noteQuickCapture":
       return quickCapture(requireWorkspace(), String(params?.[0] ?? ""), String(params?.[1] ?? ""))
     case "prefs":

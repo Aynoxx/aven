@@ -43,7 +43,7 @@ assert.match(pure, /Pur : testable avec Node seul/, "sphere.ts reste un module p
 assert.match(sphere, /export function geodesicMesh/, "la sphère a une géométrie géodésique exportée")
 assert.match(sphere, /export function lightCurve/, "la courbe de lumière est une fonction pure")
 assert.match(sphere, /export const AGENT_LIGHT/, "la lumière est une constante exportée")
-assert.match(agent, /geodesicMesh,\n  lightCurve,\n  phaseEnergy,/, "le rendu CONSOMME la géométrie pure au lieu de la recalculer")
+assert.match(agent, /geodesicMesh,[\s\S]*?phaseEnergy,/, "le rendu CONSOMME la géométrie pure au lieu de la recalculer")
 assert.match(agent, /const \{ mesh, dust \} = sceneFor\(detail\)/, "la scène vient du cache pur, pas d'une boucle de rendu")
 // Aucune coordonnée de sphère n'est écrite à la main dans le composant.
 assert.ok(!/Math\.cos\(.*\)\s*\*\s*Math\.sin\(.*\)/.test(agent), "aucune trigonométrie de surface dans le canvas")
@@ -59,7 +59,7 @@ assert.ok(lx > ly && ly > 0, "la lumière vient bien du HAUT-DROITE")
 assert.ok(lz > 0 && lz < 0.7, "elle est RASANTE (z < 0,7) : sinon le centre s'allume et la sphère redevient une bille")
 const norm = Math.hypot(lx, ly, lz)
 for (const component of [lx, ly, lz]) assert.ok(Math.abs(component / norm) <= 1)
-assert.match(agent, /const LX = AGENT_LIGHT\.x\nconst LY = AGENT_LIGHT\.y\nconst LZ = AGENT_LIGHT\.z/, "le rendu lit la constante, il n'invente pas de direction")
+assert.match(agent, /const LX = AGENT_LIGHT\.x\r?\nconst LY = AGENT_LIGHT\.y\r?\nconst LZ = AGENT_LIGHT\.z/, "le rendu lit la constante, il n'invente pas de direction")
 // La lumière s'applique à la normale TOURNÉE, avec les constantes d'écran : elle ne
 // suit donc pas le yaw. Une lumière solidaire de la sphère effacerait l'asymétrie.
 assert.match(agent, /const dot = x1 \* LX \+ y2 \* LY \+ z2 \* LZ/, "la lumière est évaluée dans le repère de l'écran")

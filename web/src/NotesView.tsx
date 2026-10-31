@@ -4,12 +4,13 @@ import Markdown from "./Markdown"
 import NoteEditor from "./NoteEditor"
 import { Icon } from "./icons"
 import InstrumentFrame, { type InstrumentAction } from "./InstrumentFrame"
-import type { Note, NoteLink, NoteSearchHit, NoteTreeEntry } from "./types"
+import type { Note, NoteHighlight, NoteLink, NoteSearchHit, NoteTreeEntry } from "./types"
 import { stripLeadingTitle } from "./note-display"
 // v12.6.0 : le retrait immédiat d'une note est une récursion pure, testée sans
 // React (tests/notes-tree.test.mjs).
 import { pruneNote } from "./notes-tree"
 import { displayPath } from "./display-path"
+import { buildNoteTemplate, NOTE_TEMPLATES } from "./note-templates"
 
 // v10.1.0 « façon Kortex » : arbre de dossiers (drag&drop natif), éditeur riche
 // TipTap, wikilinks [[note]] + backlinks, poubelle/archive sur disque, recherche
@@ -36,6 +37,16 @@ export default function NotesView(props: Props) {
   const [hits, setHits] = useState<{ id: string; title: string; snippet: string }[]>([])
   const [tagFilter, setTagFilter] = useState<string | null>(null)
   const [tags, setTags] = useState<Record<string, string[]>>({})
+  // v12.8.0 : étiquettes de contenu, indépendantes des agents affectés.
+  const [labelFilter, setLabelFilter] = useState<string | null>(null)
+  const [labels, setLabels] = useState<Record<string, string[]>>({})
+  const [labelDraft, setLabelDraft] = useState("")
+  const [editingLabels, setEditingLabels] = useState<string[] | null>(null)
+  const [focusMode, setFocusMode] = useState(false)
+  const [highlights, setHighlights] = useState<NoteHighlight[]>([])
+  const [highlightsOpen, setHighlightsOpen] = useState(false)
+  const [selectedQuote, setSelectedQuote] = useState("")
+  const [highlightNotice, setHighlightNotice] = useState("")
   const [pinned, setPinned] = useState<string[]>([])
   const [dir, setDir] = useState("")
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
@@ -63,6 +74,13 @@ export default function NotesView(props: Props) {
 
   useEffect(() => { reload() }, [reload])
 
+  // v12.8.0 : les highlights sont une bibliothèque de citations avec provenance.
+  useEffect(() => {
+    let active = true
+    api.noteHighlights().then((items) => { if (active) setHighlights(items) }).catch((e) => props.onError(e))
+    return () => { active = false }
+  }, [props.onError])
+
   // Capture rapide demandée au montage (raccourci global) : note datée en Inbox/.
   // quickCapture est stable en pratique (props.onError constant) ; l'effet ne
   // s'exécute qu'une fois au montage pour éviter une boucle de captures.
@@ -84,6 +102,9 @@ export default function NotesView(props: Props) {
     api.noteTagsAll()
       .then((all) => { if (!stop) setTags(Object.fromEntries(Object.entries(all).filter(([id]) => ids.has(id)))) })
       .catch(() => { if (!stop) setTags({}) })
+    api.noteLabelsAll()
+      .then((all) => { if (!stop) setLabels(Object.fromEntries(Object.entries(all).filter(([id]) => ids.has(id)))) })
+      .catch(() => { if (!stop) setLabels({}) })
     return () => { stop = true }
   }, [tree])
 
@@ -119,7 +140,15 @@ export default function NotesView(props: Props) {
     return () => clearTimeout(t)
   }, [query])
 
-  const open = (id: string) => { setSelectedId(id); setEditing(null); setEditingTags(null) }
+  const open = (id: string) => {
+    setSelectedId(id)
+    setEditing(null)
+    setEditingTags(null)
+    setEditingLabels(null)
+    setLabelDraft("")
+    setSelectedQuote("")
+    setHighlightNotice("")
+  }
 
   const togglePin = async (id: string) => {
     try { setPinned(await api.noteTogglePin(id)) } catch (e) { props.onError(e) }
@@ -129,12 +158,106 @@ export default function NotesView(props: Props) {
     try { const saved = await api.noteSetTags(id, next); setTags((t) => ({ ...t, [id]: saved })) } catch (e) { props.onError(e) }
   }
 
+  // v12.8.0 : les étiquettes décrivent le sujet ; les tags existants désignent les agents liés.
+  const commitLabels = async (id: string, next: string[]) => {
+    try {
+      const saved = await api.noteSetLabels(id, next)
+      setLabels((current) => ({ ...current, [id]: saved }))
+      hitsCache.current.clear()
+      const currentQuery = query.trim()
+      if (currentQuery) {
+        const hits = await api.noteSearch(currentQuery)
+        hitsCache.current.set(currentQuery, hits)
+        setHits(hits)
+      }
+    } catch (e) { props.onError(e) }
+  }
+
+  const captureSelection = () => {
+    const quote = window.getSelection()?.toString().replace(/\\s+/g, " ").trim() ?? ""
+    setSelectedQuote(quote.slice(0, 2000))
+  }
+
+  const saveHighlight = async () => {
+    if (!selected || !selectedQuote.trim()) return
+    try {
+      const saved = await api.noteHighlightAdd(selected.id, selected.title, selectedQuote)
+      setHighlights((items) => [saved, ...items.filter((item) => item.id !== saved.id)])
+      setSelectedQuote("")
+      window.getSelection()?.removeAllRanges()
+      setHighlightNotice("Extrait ajouté à la bibliothèque.")
+    } catch (e) { props.onError(e) }
+  }
+
+  const removeHighlight = async (id: string) => {
+    try {
+      await api.noteHighlightDelete(id)
+      setHighlights((items) => items.filter((item) => item.id !== id))
+    } catch (e) { props.onError(e) }
+  }
+
+  const addLabel = (id: string, raw: string) => {
+    const value = raw.trim()
+    if (!value) return
+    void commitLabels(id, [...(labels[id] ?? []), value])
+    setLabelDraft("")
+  }
+
+  const labelInputKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>, id: string) => {
+    if (event.key !== "Enter" && event.key !== ",") return
+    event.preventDefault()
+    addLabel(id, labelDraft)
+  }
+
   const startEdit = (note?: Note) => {
-    if (note) setEditing({ id: note.id, title: note.title, markdown: note.markdown })
-    else {
+    if (note) {
+      setEditing({ id: note.id, title: note.title, markdown: note.markdown })
+      setEditingLabels(null)
+    } else {
       setEditing({ id: "", title: "", markdown: "" })
       setEditingTags(props.currentAgent ? [props.currentAgent] : [])
+      setEditingLabels([])
     }
+  }
+
+  // v12.8.0 : les modèles sont des points de départ, entièrement modifiables.
+  const startFromTemplate = (id: string) => {
+    const generated = buildNoteTemplate(id)
+    if (!generated) return
+    setEditing({ id: "", title: generated.title, markdown: generated.markdown })
+    setEditingTags(props.currentAgent ? [props.currentAgent] : [])
+    setEditingLabels([])
+    setSelectedId(undefined)
+  }
+
+  const renameFolder = async (folder: string) => {
+    const currentName = folder.split("/").pop() ?? folder
+    const nextName = window.prompt("Nouveau nom du dossier :", currentName)?.trim()
+    if (!nextName || nextName === currentName || nextName.includes("/")) return
+    const parent = folder.includes("/") ? folder.slice(0, folder.lastIndexOf("/")) : ""
+    const target = parent ? parent + "/" + nextName : nextName
+    try {
+      await api.noteRenameFolder(folder, target)
+      if (selectedId && (selectedId === folder || selectedId.startsWith(folder + "/"))) {
+        setSelectedId(target + selectedId.slice(folder.length))
+      }
+      reload()
+    } catch (e) { props.onError(e) }
+  }
+
+  const removeFolder = async (folder: string) => {
+    const name = folder.split("/").pop() ?? folder
+    if (!window.confirm("Déplacer le dossier « " + name + " » et son contenu vers la poubelle ?")) return
+    try {
+      await api.noteDeleteFolder(folder)
+      if (selectedId?.startsWith(folder + "/")) {
+        setSelectedId(undefined)
+        setSelected(null)
+        setLinks([])
+        setBacks([])
+      }
+      reload()
+    } catch (e) { props.onError(e) }
   }
 
   const commitEdit = async () => {
@@ -144,7 +267,8 @@ export default function NotesView(props: Props) {
       reload()
       setSelectedId(saved.id)
       if (editingTags && editing.id === "") await commitTags(saved.id, editingTags)
-      setEditing(null); setEditingTags(null)
+      if (editingLabels && editing.id === "") await commitLabels(saved.id, editingLabels)
+      setEditing(null); setEditingTags(null); setEditingLabels(null)
     } catch (e) { props.onError(e) }
   }
 
@@ -221,7 +345,16 @@ export default function NotesView(props: Props) {
   const tagName = (tag: string) => props.agents.find((a) => a.id === tag)?.name ?? tag
   const activeAgentName = props.currentAgent === "projet" ? "l’agent principal Aven" : props.agents.find((a) => a.id === props.currentAgent)?.name ?? "agent actif"
   const allTags = useMemo(() => [...new Set(Object.values(tags).flat())].sort((a, b) => a.localeCompare(b, "fr")), [tags])
-  const visibleNote = (n: { id: string }) => !tagFilter || (tags[n.id] ?? []).includes(tagFilter)
+  const allLabels = useMemo(() => [...new Set(Object.values(labels).flat())].sort((a, b) => a.localeCompare(b, "fr")), [labels])
+  const visibleNote = (node: NoteTreeEntry): boolean => {
+    if (node.type === "note") {
+      return (!tagFilter || (tags[node.id] ?? []).includes(tagFilter))
+        && (!labelFilter || (labels[node.id] ?? []).includes(labelFilter))
+    }
+    // Quand un filtre est actif, on masque aussi les dossiers sans résultat.
+    return !tagFilter && !labelFilter ? true : node.children.some(visibleNote)
+  }
+  const hasVisibleEntries = tree.some(visibleNote)
 
   const renderNoteRow = (entry: NoteTreeEntry & { type: "note" }) => (
     <div key={entry.id} className={`notes-tree-row ${selectedId === entry.id ? "selected" : ""}`} data-note-id={entry.id} draggable
@@ -243,11 +376,17 @@ export default function NotesView(props: Props) {
       return (
         <div key={`f-${n.id}`} className={`notes-tree-folder ${dropFolder === n.id ? "drop-target" : ""}`} data-folder-id={n.id} style={{ paddingLeft: depth * 12 }}
           onDragOver={(e) => { e.preventDefault(); setDropFolder(n.id) }} onDragLeave={() => setDropFolder((f) => (f === n.id ? null : f))} onDrop={(e) => { e.preventDefault(); void onDrop(n.id) }}>
-          <button className="notes-tree-item folder" onClick={() => setCollapsed((c) => ({ ...c, [n.id]: !c[n.id] }))} type="button">
-            <Icon name={isCollapsed ? "chevron-right" : "chevron-down"} size={12} />
-            <Icon name="folder" size={14} />
-            <span>{n.name}</span>
-          </button>
+          <div className="notes-tree-folder-head">
+            <button className="notes-tree-item folder" onClick={() => setCollapsed((c) => ({ ...c, [n.id]: !c[n.id] }))} type="button" aria-expanded={!isCollapsed}>
+              <Icon name={isCollapsed ? "chevron-right" : "chevron-down"} size={12} />
+              <Icon name="folder" size={14} />
+              <span>{n.name}</span>
+            </button>
+            <div className="notes-folder-actions">
+              <button className="button ghost note-folder-action" type="button" onClick={(event) => { event.stopPropagation(); void renameFolder(n.id) }} aria-label={`Renommer le dossier ${n.name}`} title="Renommer le dossier"><Icon name="pencil" size={12} /></button>
+              <button className="button ghost note-folder-action" type="button" onClick={(event) => { event.stopPropagation(); void removeFolder(n.id) }} aria-label={`Mettre le dossier ${n.name} à la poubelle`} title="Mettre le dossier à la poubelle"><Icon name="trash" size={12} /></button>
+            </div>
+          </div>
           {!isCollapsed && renderTree(n.children, depth + 1)}
         </div>
       )
@@ -273,7 +412,7 @@ export default function NotesView(props: Props) {
     const noteId = noteRow?.dataset.noteId
     if (!noteRow || !noteId) return
     const folderIdOf = (btn: HTMLElement) => btn.closest<HTMLElement>(".notes-tree-folder")?.dataset.folderId ?? ""
-    const containerBtn = noteRow.closest<HTMLElement>(".notes-tree-folder")?.querySelector<HTMLElement>(":scope > .notes-tree-item")
+    const containerBtn = noteRow.closest<HTMLElement>(".notes-tree-folder")?.querySelector<HTMLElement>(":scope > .notes-tree-folder-head > .notes-tree-item")
     const folders = rows.filter((el) => el.classList.contains("folder"))
     // f AVANT la note = la note est positionnée après f dans le document.
     const before = folders.filter((f) => (f.compareDocumentPosition(noteRow) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0 && f !== containerBtn)
@@ -287,6 +426,7 @@ export default function NotesView(props: Props) {
 
   // v11.0.0 : l'instrument déclare SES actions ; la sortie est l'onglet voisin.
   const pageActions: InstrumentAction[] = [
+    { key: "focus", label: focusMode ? "Quitter le mode concentration" : "Mode concentration", icon: focusMode ? "minimize" : "maximize", onClick: () => setFocusMode((value) => !value) },
     { key: "dir", label: "Ouvrir le dossier", icon: "folder", onClick: () => { api.noteOpenFolder().catch((e) => props.onError(e)) }, title: dir },
   ]
 
@@ -303,18 +443,30 @@ export default function NotesView(props: Props) {
       toolbarLabel="Actions des notes"
       bodyClassName="notes-body notes-dialog"
     >
-      <div className="notes-layout">
+      <div className={`notes-layout${focusMode ? " focus-mode" : ""}`}>
         <aside className="notes-list-panel">
           <div className="row notes-actions-row">
             <input className="settings-input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher… (global)" aria-label="Rechercher dans les notes" />
             {/* v11.0.1 : boutons icône seuls — le title ne remplace pas un nom accessible (§12.1). */}
             <button className="button secondary" type="button" onClick={() => void quickCapture()} title="Capture rapide (dans Inbox)" aria-label="Capture rapide dans Inbox"><Icon name="inbox" size={14} /></button>
             <button className="button secondary" type="button" onClick={() => void createFolder()} title="Nouveau dossier" aria-label="Nouveau dossier"><Icon name="folder" size={14} /></button>
+            <select className="settings-input notes-template-select" aria-label="Créer depuis un modèle" defaultValue="" onChange={(event) => { if (event.currentTarget.value) startFromTemplate(event.currentTarget.value); event.currentTarget.value = "" }}>
+              <option value="">Modèles…</option>
+              {NOTE_TEMPLATES.map((template) => <option key={template.id} value={template.id}>{template.label}</option>)}
+            </select>
             <button className="button primary" type="button" onClick={() => startEdit()} title="Nouvelle note"><Icon name="plus" size={14} />Nouvelle</button>
           </div>
+          {!!allLabels.length && (
+            <div className="notes-tags-filter" role="group" aria-label="Filtrer par étiquette">
+              <span className="eyebrow">ÉTIQUETTES</span>
+              <button className={`notes-tag ${labelFilter === null ? "selected" : ""}`} onClick={() => setLabelFilter(null)} type="button">Toutes</button>
+              {allLabels.map((label) => <button key={label} className={`notes-tag ${labelFilter === label ? "selected" : ""}`} onClick={() => setLabelFilter(labelFilter === label ? null : label)} type="button">{label}</button>)}
+            </div>
+          )}
           {!!allTags.length && (
             <div className="notes-tags-filter" role="group" aria-label="Filtrer par agent">
-              <button className={`notes-tag ${tagFilter === null ? "selected" : ""}`} onClick={() => setTagFilter(null)} type="button">Toutes</button>
+              <span className="eyebrow">AGENTS</span>
+              <button className={`notes-tag ${tagFilter === null ? "selected" : ""}`} onClick={() => setTagFilter(null)} type="button">Tous</button>
               {allTags.map((t) => <button key={t} className={`notes-tag ${tagFilter === t ? "selected" : ""}`} onClick={() => setTagFilter(tagFilter === t ? null : t)} type="button">{tagName(t)}</button>)}
             </div>
           )}
@@ -330,7 +482,7 @@ export default function NotesView(props: Props) {
           )}
           <div className="notes-tree" role="tree" aria-label="Dossiers et notes" onKeyDown={treeKeyDown} aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown">
             {renderTree(tree)}
-            {!tree.length && <p className="hint">Aucune note — crée la première.</p>}
+            {!hasVisibleEntries && <p className="hint">{tagFilter || labelFilter ? "Aucune note ne correspond à ces filtres." : "Aucune note — crée la première."}</p>}
           </div>
           <div className="notes-tree-sections">
             <button className="notes-tree-item folder" onClick={() => { setTrashOpen((v) => !v); if (!trashOpen) api.noteTrash().then(setTrash).catch(() => undefined) }} type="button">
@@ -352,6 +504,18 @@ export default function NotesView(props: Props) {
                 <button className="button ghost note-row-action" onClick={() => void withNote(() => api.noteUnarchive(n.id))} type="button" title="Restaurer"><Icon name="restore" size={14} /></button>
               </div>
             ))}
+            <button className="notes-tree-item folder" type="button" aria-expanded={highlightsOpen} onClick={() => setHighlightsOpen((value) => !value)}>
+              <Icon name={highlightsOpen ? "chevron-down" : "chevron-right"} size={12} /><Icon name="quote" size={14} /><span>Highlights ({highlights.length})</span>
+            </button>
+            {highlightsOpen && highlights.map((item) => (
+              <div key={item.id} className="notes-highlight-row">
+                <button className="notes-highlight-open" type="button" onClick={() => open(item.noteId)} title={`Ouvrir : ${item.noteTitle}`}>
+                  <span>{item.quote}</span>
+                  <small>{item.noteTitle || item.noteId}</small>
+                </button>
+                <button className="button ghost note-row-action" type="button" onClick={() => void removeHighlight(item.id)} aria-label="Supprimer ce highlight" title="Supprimer ce highlight"><Icon name="close" size={12} /></button>
+              </div>
+            ))}
           </div>
         </aside>
         <article className="notes-preview">
@@ -364,13 +528,28 @@ export default function NotesView(props: Props) {
               <NoteEditor key={editing.id || "new"} value={editing.markdown} onChange={(markdown) => setEditing((cur) => (cur ? { ...cur, markdown } : cur))} />
               <div className="row notes-editor-actions">
                 <button className="button primary" type="button" onClick={() => void commitEdit()} disabled={!editing.id && !editing.title.trim()}><Icon name="check" size={14} />Enregistrer</button>
-                <button className="button ghost" type="button" onClick={() => { setEditing(null); setEditingTags(null) }}>Annuler</button>
+                <button className="button ghost" type="button" onClick={() => { setEditing(null); setEditingTags(null); setEditingLabels(null); setLabelDraft("") }}>Annuler</button>
                 {editing.id === "" && editingTags && (
-                  <span className="notes-tag-picker" role="group" aria-label="Étiquettes de la nouvelle note">
+                  <span className="notes-tag-picker" role="group" aria-label="Agents liés à la nouvelle note">
                     {props.agents.map((a) => (
                       <button key={a.id} type="button" className={`notes-tag ${editingTags.includes(a.id) ? "selected" : ""}`} onClick={() => setEditingTags(editingTags.includes(a.id) ? editingTags.filter((t) => t !== a.id) : [...editingTags, a.id])}>{a.name}</button>
                     ))}
                   </span>
+                )}
+                {editing.id === "" && editingLabels && (
+                  <label className="notes-new-labels">
+                    <span className="eyebrow">ÉTIQUETTES</span>
+                    <input className="settings-input" placeholder="Ajouter une étiquette puis Entrée" value={labelDraft} onChange={(event) => setLabelDraft(event.target.value)} onKeyDown={(event) => {
+                      if ((event.key === "Enter" || event.key === ",") && labelDraft.trim()) {
+                        event.preventDefault()
+                        setEditingLabels([...new Set([...editingLabels, labelDraft.trim()])])
+                        setLabelDraft("")
+                      }
+                    }} />
+                    <span className="notes-label-chips">
+                      {editingLabels.map((label) => <button key={label} className="notes-tag selected" type="button" onClick={() => setEditingLabels(editingLabels.filter((item) => item !== label))}>{label} ×</button>)}
+                    </span>
+                  </label>
                 )}
               </div>
             </div>
@@ -391,16 +570,29 @@ export default function NotesView(props: Props) {
                     <button className="button ghost" onClick={() => api.noteExport(selected.id).catch((e) => props.onError(e))} type="button">Exporter .md</button>
                   </div>
                 </details>
+                <button className="button ghost" type="button" disabled={!selectedQuote} onMouseDown={(event) => event.preventDefault()} onClick={() => void saveHighlight()} title={selectedQuote ? "Enregistrer l'extrait sélectionné" : "Sélectionnez d'abord un passage dans la note"}>
+                  <Icon name="quote" size={14} />Capturer l'extrait
+                </button>
                 <span className="hint">{selected.markdown.split(/\s+/).filter(Boolean).length} mots</span>
               </div>
-              <div className="notes-tags-editor" role="group" aria-label="Étiquettes par agent">
+              {highlightNotice && <p className="notes-highlight-notice" role="status">{highlightNotice}</p>}
+              <div className="notes-tags-editor" role="group" aria-label="Agents liés à la note">
+                <span className="eyebrow">AGENTS LIÉS</span>
                 {props.agents.map((a) => {
                   const active = (tags[selected.id] ?? []).includes(a.id)
                   return <button key={a.id} type="button" className={`notes-tag ${active ? "selected" : ""}`} onClick={() => void commitTags(selected.id, active ? (tags[selected.id] ?? []).filter((t) => t !== a.id) : [...(tags[selected.id] ?? []), a.id])}>{a.name}</button>
                 })}
               </div>
+              <div className="notes-tags-editor notes-labels-editor" role="group" aria-label="Étiquettes de contenu">
+                <span className="eyebrow">ÉTIQUETTES</span>
+                {(labels[selected.id] ?? []).map((label) => (
+                  <button key={label} type="button" className="notes-tag selected" onClick={() => void commitLabels(selected.id, (labels[selected.id] ?? []).filter((item) => item !== label))} aria-label={`Retirer l'étiquette ${label}`}>{label} ×</button>
+                ))}
+                <input className="settings-input notes-label-input" value={labelDraft} placeholder="Ajouter une étiquette…" onChange={(event) => setLabelDraft(event.target.value)} onKeyDown={(event) => labelInputKeyDown(event, selected.id)} />
+                <button className="button secondary notes-label-add" type="button" disabled={!labelDraft.trim()} onClick={() => addLabel(selected.id, labelDraft)}>Ajouter</button>
+              </div>
               {/* v10.2.2 : le H1 de tête répétait le titre déjà affiché en h4. */}
-              <div className="notes-render"><Markdown text={stripLeadingTitle(selected.markdown, selected.title)} onWikilink={(target) => { const hit = links.find((l) => l.target === target)?.resolved; if (hit) open(hit) }} /></div>
+              <div className="notes-render" onMouseUp={captureSelection} onKeyUp={captureSelection}><Markdown text={stripLeadingTitle(selected.markdown, selected.title)} onWikilink={(target) => { const hit = links.find((l) => l.target === target)?.resolved; if (hit) open(hit) }} /></div>
               {!!links.length && (
                 <div className="notes-links">
                   <span className="eyebrow">LIENS SORTANTS</span>

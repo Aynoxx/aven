@@ -130,4 +130,19 @@ test("sécurité : traversée refusée partout", () => {
   assert.throws(() => moveNote(temp, "racine.md", ".."), /invalide/)
 })
 
+
+test("recherche globale : étiquettes et agents liés sont aussi indexés", () => {
+  const note = saveNote(temp, "", "Compte-rendu", "Décisions prises pendant la réunion.")
+  const metadata = {
+    tags: { [note.id]: ["recherche"] },
+    labels: { [note.id]: ["projet-personnel", "important"] },
+    highlights: [{ noteId: note.id, quote: "Citation essentielle à garder" }],
+  }
+  assert.equal(searchNotes(temp, "projet personnel", metadata)[0]?.id, note.id)
+  assert.equal(searchNotes(temp, "recherche", metadata)[0]?.id, note.id)
+  assert.equal(searchNotes(temp, "important", metadata)[0]?.id, note.id)
+  assert.equal(searchNotes(temp, "citation essentielle", metadata)[0]?.id, note.id)
+  purgeNote(temp, note.id)
+})
+
 console.log("notes-v2: OK")

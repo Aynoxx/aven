@@ -148,7 +148,7 @@ export function deleteFolder(workspace: string, folder: string) {
   let dest = target
   while (existsSync(dest)) { dest = `${target}-${n}`; n++ }
   renameSync(src, dest)
-  return rel
+  return path.relative(path.resolve(NOTE_DIR(workspace)), dest).split(path.sep).join("/")
 }
 
 // ── Déplacement / poubelle / archive ────────────────────────────────────────
@@ -183,7 +183,7 @@ export function deleteNote(workspace: string, id: string) {
   const dest = uniqueAbs(workspace, `${TRASH_DIR}/${rel}`)
   ensureDir(path.dirname(dest))
   renameSync(src, dest)
-  return rel
+  return path.relative(path.resolve(NOTE_DIR(workspace)), dest).split(path.sep).join("/")
 }
 
 /** Restaure une note de la poubelle vers son emplacement d'origine. */
@@ -227,7 +227,7 @@ export function archiveNote(workspace: string, id: string) {
   const dest = uniqueAbs(workspace, `${ARCHIVE_DIR}/${rel}`)
   ensureDir(path.dirname(dest))
   renameSync(src, dest)
-  return rel
+  return path.relative(path.resolve(NOTE_DIR(workspace)), dest).split(path.sep).join("/")
 }
 
 export function unarchiveNote(workspace: string, id: string) {
@@ -366,11 +366,24 @@ export function backlinks(workspace: string, id: string): string[] {
 }
 
 // ── Recherche globale (titre + corps) ───────────────────────────────────────
-export function searchNotes(workspace: string, query: string): { id: string; title: string; snippet: string }[] {
+export function searchNotes(
+  workspace: string,
+  query: string,
+  metadata: { tags?: Record<string, string[]>; labels?: Record<string, string[]>; highlights?: { noteId: string; quote: string }[] } = {},
+): { id: string; title: string; snippet: string }[] {
   const q = normalizeForSearch(query)
   if (!q) return []
   return listNotes(workspace)
-    .filter((n) => matchQuery(normalizeForSearch(`${n.title} ${n.markdown}`), q))
+    .filter((n) => {
+      const indexed = [
+        n.title,
+        n.markdown,
+        ...(metadata.tags?.[n.id] ?? []),
+        ...(metadata.labels?.[n.id] ?? []),
+        ...(metadata.highlights ?? []).filter((item) => item.noteId === n.id).map((item) => item.quote),
+      ].join(" ")
+      return matchQuery(normalizeForSearch(indexed), q)
+    })
     .slice(0, 50)
     .map((n) => {
       const norm = normalizeForSearch(n.markdown)

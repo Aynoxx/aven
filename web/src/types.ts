@@ -50,6 +50,8 @@ export type ProviderLite = { id: string; label: string; url: string; note: strin
 export type WorkspaceEntry = { path: string; name: string }
 export type FileSyncResult = { file: string; status: "created" | "updated" | "unchanged" | "custom" }
 export type Note = { id: string; title: string; markdown: string; updated: number }
+// v12.8.0 : extrait capturé avec provenance vers son fichier Markdown source.
+export type NoteHighlight = { id: string; noteId: string; noteTitle: string; quote: string; createdAt: number }
 // v10.1.0 : mode de tâche de l'orchestrateur (miroir de host/task-mode.ts).
 export type TaskMode = "auto" | "code" | "analyse" | "recherche"
 // v10.1.0 : arbre de notes façon Kortex (miroir de host/notes.ts).
@@ -189,6 +191,14 @@ export type OpenCodeApi = {
   noteTags: (id: string) => Promise<string[]>
   // v10.5.0 : évite un appel IPC par note dans l'arbre Notes.
   noteTagsAll: () => Promise<Record<string, string[]>>
+  // v12.8.0 : tags libres de contenu, indépendants des agents liés à une note.
+  noteSetLabels: (id: string, labels: string[]) => Promise<string[]>
+  noteLabels: (id: string) => Promise<string[]>
+  noteLabelsAll: () => Promise<Record<string, string[]>>
+  // v12.8.0 : bibliothèque de citations extraites des notes Aven.
+  noteHighlights: () => Promise<NoteHighlight[]>
+  noteHighlightAdd: (noteId: string, noteTitle: string, quote: string) => Promise<NoteHighlight>
+  noteHighlightDelete: (id: string) => Promise<boolean>
   // v9.3.0 : explorateur de fichiers intégré (lecture seule, cloisonné à l'espace).
   filesList: (relative: string) => Promise<FileEntry[]>
   filesRead: (relative: string) => Promise<TextFile>
