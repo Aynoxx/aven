@@ -28,7 +28,7 @@ import {
   listNotes, listTrash, moveNote, noteLinks, notesDir, notesTree, purgeNote, quickCapture,
   renameFolder, restoreNote, saveNote, searchNotes, unarchiveNote,
 } from "./notes.js"
-import { addHighlight, forgetNote, loadAllLabels, loadAllTags, loadHighlights, loadPinned, loadTags, removeHighlight, setLabels, setTags, togglePin } from "./notes-meta.js"
+import { addHighlight, forgetNote, loadAllLabels, loadAllTags, loadHighlights, loadPinned, loadTags, rekeyNoteMetadata, removeHighlight, setLabels, setTags, togglePin } from "./notes-meta.js"
 import { listWorkspaceDir, readWorkspaceFile, breadcrumbOf, safeResolve as safeResolveWorkspacePath } from "./workspace-files.js"
 // v12.3.0 : l'accueil reprend le dernier document RÉELLEMENT ouvert — Aven en garde
 // la trace par espace (jamais un « fichier récent » inventé).
@@ -1627,20 +1627,55 @@ async function dispatch(method: string, params: any): Promise<unknown> {
       return notesTree(requireWorkspace())
     case "noteCreateFolder":
       return createFolder(requireWorkspace(), String(params?.[0] ?? ""))
-    case "noteRenameFolder":
-      return renameFolder(requireWorkspace(), String(params?.[0] ?? ""), String(params?.[1] ?? ""))
-    case "noteDeleteFolder":
-      return deleteFolder(requireWorkspace(), String(params?.[0] ?? ""))
-    case "noteMove":
-      return moveNote(requireWorkspace(), String(params?.[0] ?? ""), String(params?.[1] ?? ""))
-    case "noteDelete":
-      return deleteNote(requireWorkspace(), String(params?.[0] ?? ""))
-    case "noteRestore":
-      return restoreNote(requireWorkspace(), String(params?.[0] ?? ""))
-    case "noteArchive":
-      return archiveNote(requireWorkspace(), String(params?.[0] ?? ""))
-    case "noteUnarchive":
-      return unarchiveNote(requireWorkspace(), String(params?.[0] ?? ""))
+    case "noteRenameFolder": {
+      const workspace = requireWorkspace()
+      const from = String(params?.[0] ?? "")
+      const renamed = renameFolder(workspace, from, String(params?.[1] ?? ""))
+      rekeyNoteMetadata(workspace, from, renamed)
+      return renamed
+    }
+    case "noteDeleteFolder": {
+      const workspace = requireWorkspace()
+      const from = String(params?.[0] ?? "")
+      const trashed = deleteFolder(workspace, from)
+      rekeyNoteMetadata(workspace, from, trashed)
+      return trashed
+    }
+    case "noteMove": {
+      const workspace = requireWorkspace()
+      const from = String(params?.[0] ?? "")
+      const moved = moveNote(workspace, from, String(params?.[1] ?? ""))
+      rekeyNoteMetadata(workspace, from, moved)
+      return moved
+    }
+    case "noteDelete": {
+      const workspace = requireWorkspace()
+      const from = String(params?.[0] ?? "")
+      const trashed = deleteNote(workspace, from)
+      rekeyNoteMetadata(workspace, from, trashed)
+      return trashed
+    }
+    case "noteRestore": {
+      const workspace = requireWorkspace()
+      const from = String(params?.[0] ?? "")
+      const restored = restoreNote(workspace, from)
+      rekeyNoteMetadata(workspace, from, restored)
+      return restored
+    }
+    case "noteArchive": {
+      const workspace = requireWorkspace()
+      const from = String(params?.[0] ?? "")
+      const archived = archiveNote(workspace, from)
+      rekeyNoteMetadata(workspace, from, archived)
+      return archived
+    }
+    case "noteUnarchive": {
+      const workspace = requireWorkspace()
+      const from = String(params?.[0] ?? "")
+      const restored = unarchiveNote(workspace, from)
+      rekeyNoteMetadata(workspace, from, restored)
+      return restored
+    }
     case "noteTrash":
       return listTrash(requireWorkspace())
     case "noteArchived":
