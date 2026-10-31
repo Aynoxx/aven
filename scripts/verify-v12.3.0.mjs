@@ -92,8 +92,8 @@ assert.match(read("web/src/app/use-aven-app.ts"), /const openFilesView = \(initi
 // ── D bis. La reprise ne lit que l'espace réellement actif ──────────────────
 assert.match(shell, /ready=\{appState\.status === "ready" && !appState\.needsWorkspace\}/,
   "l'accueil reçoit l'état réel du Poste, pas une supposition")
-assert.match(home, /if \(!ready\) \{ setNotes\(\[\]\); setFiles\(\[\]\); return \}/,
-  "hors d'un espace actif, aucune lecture d'historique n'est affichée")
+assert.match(home, /if \(!ready\) \{[\s\S]*?setNotes\(\[\]\)[\s\S]*?setFiles\(\[\]\)[\s\S]*?setRecentLoaded\(false\)[\s\S]*?return[\s\S]*?\}/,
+  "hors d'un espace actif, les données et l'état de chargement sont réinitialisés")
 assert.match(home, /\}, \[ready, lastChatId\]\)/, "l'extrait se recharge quand l'espace devient actif")
 
 // ── E. Actions et reprise ne se mélangent pas ──────────────────────────────
