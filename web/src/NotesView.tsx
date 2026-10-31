@@ -303,7 +303,12 @@ export default function NotesView(props: Props) {
   const tagName = (tag: string) => props.agents.find((a) => a.id === tag)?.name ?? tag
   const activeAgentName = props.currentAgent === "projet" ? "l’agent principal Aven" : props.agents.find((a) => a.id === props.currentAgent)?.name ?? "agent actif"
   const allTags = useMemo(() => [...new Set(Object.values(tags).flat())].sort((a, b) => a.localeCompare(b, "fr")), [tags])
-  const visibleNote = (n: { id: string }) => !tagFilter || (tags[n.id] ?? []).includes(tagFilter)
+  const allLabels = useMemo(() => [...new Set(Object.values(labels).flat())].sort((a, b) => a.localeCompare(b, "fr")), [labels])
+  const visibleNote = (node: NoteTreeEntry) => {
+    if (node.type === "folder") return true
+    return (!tagFilter || (tags[node.id] ?? []).includes(tagFilter))
+      && (!labelFilter || (labels[node.id] ?? []).includes(labelFilter))
+  }
 
   const renderNoteRow = (entry: NoteTreeEntry & { type: "note" }) => (
     <div key={entry.id} className={`notes-tree-row ${selectedId === entry.id ? "selected" : ""}`} data-note-id={entry.id} draggable
@@ -325,11 +330,17 @@ export default function NotesView(props: Props) {
       return (
         <div key={`f-${n.id}`} className={`notes-tree-folder ${dropFolder === n.id ? "drop-target" : ""}`} data-folder-id={n.id} style={{ paddingLeft: depth * 12 }}
           onDragOver={(e) => { e.preventDefault(); setDropFolder(n.id) }} onDragLeave={() => setDropFolder((f) => (f === n.id ? null : f))} onDrop={(e) => { e.preventDefault(); void onDrop(n.id) }}>
-          <button className="notes-tree-item folder" onClick={() => setCollapsed((c) => ({ ...c, [n.id]: !c[n.id] }))} type="button">
-            <Icon name={isCollapsed ? "chevron-right" : "chevron-down"} size={12} />
-            <Icon name="folder" size={14} />
-            <span>{n.name}</span>
-          </button>
+          <div className="notes-tree-folder-head">
+            <button className="notes-tree-item folder" onClick={() => setCollapsed((c) => ({ ...c, [n.id]: !c[n.id] }))} type="button" aria-expanded={!isCollapsed}>
+              <Icon name={isCollapsed ? "chevron-right" : "chevron-down"} size={12} />
+              <Icon name="folder" size={14} />
+              <span>{n.name}</span>
+            </button>
+            <div className="notes-folder-actions">
+              <button className="button ghost note-folder-action" type="button" onClick={(event) => { event.stopPropagation(); void renameFolder(n.id) }} aria-label={`Renommer le dossier ${n.name}`} title="Renommer le dossier"><Icon name="pencil" size={12} /></button>
+              <button className="button ghost note-folder-action" type="button" onClick={(event) => { event.stopPropagation(); void removeFolder(n.id) }} aria-label={`Mettre le dossier ${n.name} à la poubelle`} title="Mettre le dossier à la poubelle"><Icon name="trash" size={12} /></button>
+            </div>
+          </div>
           {!isCollapsed && renderTree(n.children, depth + 1)}
         </div>
       )
@@ -369,6 +380,7 @@ export default function NotesView(props: Props) {
 
   // v11.0.0 : l'instrument déclare SES actions ; la sortie est l'onglet voisin.
   const pageActions: InstrumentAction[] = [
+    { key: "focus", label: focusMode ? "Quitter le mode concentration" : "Mode concentration", icon: focusMode ? "minimize" : "maximize", onClick: () => setFocusMode((value) => !value) },
     { key: "dir", label: "Ouvrir le dossier", icon: "folder", onClick: () => { api.noteOpenFolder().catch((e) => props.onError(e)) }, title: dir },
   ]
 
@@ -385,18 +397,30 @@ export default function NotesView(props: Props) {
       toolbarLabel="Actions des notes"
       bodyClassName="notes-body notes-dialog"
     >
-      <div className="notes-layout">
+      <div className={`notes-layout${focusMode ? " focus-mode" : ""}`}>
         <aside className="notes-list-panel">
           <div className="row notes-actions-row">
             <input className="settings-input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher… (global)" aria-label="Rechercher dans les notes" />
             {/* v11.0.1 : boutons icône seuls — le title ne remplace pas un nom accessible (§12.1). */}
             <button className="button secondary" type="button" onClick={() => void quickCapture()} title="Capture rapide (dans Inbox)" aria-label="Capture rapide dans Inbox"><Icon name="inbox" size={14} /></button>
             <button className="button secondary" type="button" onClick={() => void createFolder()} title="Nouveau dossier" aria-label="Nouveau dossier"><Icon name="folder" size={14} /></button>
+            <select className="settings-input notes-template-select" aria-label="Créer depuis un modèle" defaultValue="" onChange={(event) => { if (event.currentTarget.value) startFromTemplate(event.currentTarget.value); event.currentTarget.value = "" }}>
+              <option value="">Modèles…</option>
+              {NOTE_TEMPLATES.map((template) => <option key={template.id} value={template.id}>{template.label}</option>)}
+            </select>
             <button className="button primary" type="button" onClick={() => startEdit()} title="Nouvelle note"><Icon name="plus" size={14} />Nouvelle</button>
           </div>
+          {!!allLabels.length && (
+            <div className="notes-tags-filter" role="group" aria-label="Filtrer par étiquette">
+              <span className="eyebrow">ÉTIQUETTES</span>
+              <button className={`notes-tag ${labelFilter === null ? "selected" : ""}`} onClick={() => setLabelFilter(null)} type="button">Toutes</button>
+              {allLabels.map((label) => <button key={label} className={`notes-tag ${labelFilter === label ? "selected" : ""}`} onClick={() => setLabelFilter(labelFilter === label ? null : label)} type="button">{label}</button>)}
+            </div>
+          )}
           {!!allTags.length && (
             <div className="notes-tags-filter" role="group" aria-label="Filtrer par agent">
-              <button className={`notes-tag ${tagFilter === null ? "selected" : ""}`} onClick={() => setTagFilter(null)} type="button">Toutes</button>
+              <span className="eyebrow">AGENTS</span>
+              <button className={`notes-tag ${tagFilter === null ? "selected" : ""}`} onClick={() => setTagFilter(null)} type="button">Tous</button>
               {allTags.map((t) => <button key={t} className={`notes-tag ${tagFilter === t ? "selected" : ""}`} onClick={() => setTagFilter(tagFilter === t ? null : t)} type="button">{tagName(t)}</button>)}
             </div>
           )}
