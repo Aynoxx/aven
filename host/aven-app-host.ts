@@ -28,7 +28,7 @@ import {
   listNotes, listTrash, moveNote, noteLinks, notesDir, notesTree, purgeNote, quickCapture,
   renameFolder, restoreNote, saveNote, searchNotes, unarchiveNote,
 } from "./notes.js"
-import { forgetNote, loadAllLabels, loadAllTags, loadPinned, loadTags, setLabels, setTags, togglePin } from "./notes-meta.js"
+import { addHighlight, forgetNote, loadAllLabels, loadAllTags, loadHighlights, loadPinned, loadTags, removeHighlight, setLabels, setTags, togglePin } from "./notes-meta.js"
 import { listWorkspaceDir, readWorkspaceFile, breadcrumbOf, safeResolve as safeResolveWorkspacePath } from "./workspace-files.js"
 // v12.3.0 : l'accueil reprend le dernier document RÉELLEMENT ouvert — Aven en garde
 // la trace par espace (jamais un « fichier récent » inventé).
@@ -1592,6 +1592,14 @@ async function dispatch(method: string, params: any): Promise<unknown> {
       return loadAllLabels(requireWorkspace())[String(params?.[0] ?? "")] ?? []
     case "noteLabelsAll":
       return loadAllLabels(requireWorkspace())
+    // v12.8.0 : highlights rattachés à une note locale, jamais des citations anonymes.
+    case "noteHighlights":
+      return loadHighlights(requireWorkspace())
+    case "noteHighlightAdd":
+      return addHighlight(requireWorkspace(), String(params?.[0] ?? ""), String(params?.[1] ?? ""), String(params?.[2] ?? ""))
+    case "noteHighlightDelete":
+      removeHighlight(requireWorkspace(), String(params?.[0] ?? ""))
+      return true
     case "noteDir":
       return notesDir(requireWorkspace())
     case "filesList":
