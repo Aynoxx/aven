@@ -27,6 +27,7 @@ const app = readApp()
 const css = readStyles()
 const notesView = read("web/src/NotesView.tsx")
 const noteEditor = read("web/src/NoteEditor.tsx")
+const noteDocument = read("web/src/notes/NoteDocument.tsx")
 const markdown = read("web/src/Markdown.tsx")
 const lib = read("src-tauri/src/lib.rs")
 const webPkg = JSON.parse(read("web/package.json"))
@@ -83,12 +84,16 @@ assert.ok(webPkg.dependencies?.["@tiptap/react"], "dépendance @tiptap/react ins
 assert.ok(webPkg.dependencies?.["tiptap-markdown"], "export Markdown bidirectionnel (tiptap-markdown)")
 assert.match(noteEditor, /from "@tiptap\/react"/, "NoteEditor branché sur TipTap")
 assert.match(noteEditor, /StarterKit/, "kit de base TipTap")
-assert.match(notesView, /from "\.\/NoteEditor"/, "la vue Notes utilise l'éditeur riche")
+assert.match(notesView, /from "\.\/notes\/NoteDocument"/, "la vue Notes délègue au document éditable")
+assert.match(noteDocument, /from "\.\.\/NoteEditor"/, "le document utilise l'éditeur riche")
 assert.match(notesView, /api\.notesTree\(\)/, "arbre rendu côté renderer")
 assert.match(notesView, /draggable/, "lignes déplaçables (drag & drop)")
 assert.match(notesView, /onDrop/, "dossiers recevant le drop")
 assert.match(notesView, /api\.noteSearch\(q\)/, "recherche globale déléguée au host")
-assert.match(markdown, /onWikilink/, "les [[liens]] deviennent cliquables dans la vue Notes")
+// v12.8.0 : les wikilinks sont décorés et cliqués dans l'éditeur, plus dans un
+// rendu Markdown séparé. L'intention — un [[lien]] reste navigable — ne change pas.
+assert.match(noteEditor, /WikilinkDecorations/, "les [[liens]] sont décorés dans l'éditeur")
+assert.match(noteEditor, /handleClick\(view, pos/, "un clic sur un [[lien]] ouvre sa cible")
 
 // ── F. Capture rapide globale : Ctrl+Shift+N (Rust) → événement → autoCapture ──
 assert.match(lib, /Modifiers::CONTROL \| Modifiers::SHIFT\),\s*\r?\n\s*Code::KeyN/, "raccourci global Ctrl+Shift+N enregistré")

@@ -57,7 +57,12 @@ export type NoteTreeEntry =
   | { type: "folder"; id: string; name: string; children: NoteTreeEntry[] }
   | { type: "note"; id: string; name: string; title: string; updated: number }
 export type NoteLink = { target: string; resolved: string | null }
-export type NoteSearchHit = { id: string; title: string; snippet: string }
+// v12.8.0 : la recherche affiche le dossier et le type de résultat (note, repère,
+// étiquette, agent). `folder` est optionnel pour rester compatible avec l'existant.
+export type NoteSearchHit = { id: string; title: string; snippet: string; folder?: string }
+// v12.8.0 : un repère appartient à une note par son chemin ; il survit à la note
+// jusqu'à ce que l'utilisateur le supprime ou que la note soit purgée.
+export type NoteHighlight = { id: string; noteId: string; noteTitle: string; folder: string; quote: string; createdAt: number }
 // v9.3.0 : explorateur de fichiers de l'espace (miroir de host/workspace-files.ts).
 export type RecentFile = { path: string; name: string; opened: number }
 export type FileEntry = { name: string; path: string; kind: "dir" | "file"; size: number; modified: number }
@@ -187,6 +192,10 @@ export type OpenCodeApi = {
   noteSave: (id: string, title: string, markdown: string) => Promise<Note>
   noteSetTags: (id: string, tags: string[]) => Promise<string[]>
   noteTags: (id: string) => Promise<string[]>
+  // v12.8.0 : étiquettes libres, séparées des agents associés.
+  noteLabels: (id: string) => Promise<string[]>
+  noteLabelsAll: () => Promise<Record<string, string[]>>
+  noteSetLabels: (id: string, labels: string[]) => Promise<string[]>
   // v10.5.0 : évite un appel IPC par note dans l'arbre Notes.
   noteTagsAll: () => Promise<Record<string, string[]>>
   // v9.3.0 : explorateur de fichiers intégré (lecture seule, cloisonné à l'espace).
@@ -222,6 +231,10 @@ export type OpenCodeApi = {
   noteBacklinks: (id: string) => Promise<string[]>
   noteSearch: (query: string) => Promise<NoteSearchHit[]>
   noteQuickCapture: (title: string, markdown: string) => Promise<Note>
+  // v12.8.0 : repères locaux de la bibliothèque.
+  noteHighlights: () => Promise<NoteHighlight[]>
+  noteHighlightAdd: (noteId: string, quote: string) => Promise<NoteHighlight>
+  noteHighlightDelete: (id: string) => Promise<string>
   getStats: () => Promise<AggregatedStats>
   voiceTranscribe: (audio: Uint8Array, mimeType: string) => Promise<DictationResult>
   // v11.1.0 : agent vocal (mot d'activation « Aven ») — STT et LLM distants,

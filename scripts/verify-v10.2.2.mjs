@@ -51,7 +51,7 @@ assert.match(readme, /verify-v10\.2\.2\.mjs/, "README : la sonde est citée")
 assert.match(notes, /export function restoreWikilinks/, "notes.ts expose restoreWikilinks (testé)")
 assert.match(notes, /const body = restoreWikilinks\(String\(markdown \?\? ""\)\)/,
   "saveNote restaure les wikilinks AVANT d'écrire (seul endroit qui décide du disque)")
-assert.match(noteEditor, /e\.storage\.markdown\.getMarkdown\(\)/,
+assert.match(noteEditor, /storage\.markdown\.getMarkdown\(\)/,
   "l'éditeur continue d'exporter du Markdown standard (l'échappement est absorbé côté host)")
 
 // ── C. Menu du modèle : direction mesurée + libellé sain ──────────────────────
@@ -102,13 +102,15 @@ assert.match(workbench, /<option value="">Auto — le routeur choisit<\/option>/
 // ── G. Notes : épingle, aperçu, dossiers vides, purge ─────────────────────────
 assert.ok(!/["'`]📌/.test(notesView), "l'arbre des notes n'affiche plus d'emoji (icône <Icon name=\"pin\">)")
 assert.match(notesView, /<Icon name="pin"/, "l'épingle est une icône de la bibliothèque")
-assert.match(notesView, /stripLeadingTitle\(selected\.markdown, selected\.title\)/,
-  "l'aperçu ne répète pas le titre (H1 retiré à l'affichage)")
+assert.match(notesView, /stripLeadingTitle\(note\.markdown, note\.title\)/,
+  "le document ne répète pas le titre (H1 retiré à l'affichage)")
 assert.match(notes, /const walkFolders/, "notesTree scanne les dossiers, pas seulement les notes")
 assert.match(meta, /export function forgetNote/, "notes-meta expose forgetNote")
 assert.ok(meta.includes('clean.replace(/^\\.(?:trash|archive)\\//, "")'),
   "forgetNote normalise l'id de poubelle vers le chemin d'origine")
-assert.match(host, /forgetNote\(requireWorkspace\(\), rel\)/,
+assert.match(host, /forgetNote\(workspace, rel\)/,
   "notePurge oublie épinglage et tags de la note purgée")
+assert.match(host, /forgetHighlightsForNote\(workspace, rel\)/,
+  "notePurge oublie aussi les repères de la note purgée")
 
 console.log("v10.2.2 verification: OK")

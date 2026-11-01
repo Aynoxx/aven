@@ -501,6 +501,7 @@ export default function WorkbenchShell({ app }: { app: AvenApp }) {
                 autoCapture={captureRequested}
                 onCaptureHandled={() => setCaptureRequested(false)}
                 initialId={app.notesInitialId}
+                workspaceReady={!appState.needsWorkspace}
                 agents={orderedAgents.map((a) => ({ id: a.id, name: a.name }))}
                 currentAgent={tab}
                 onCompose={(text) => void composeIntoChat(text)}

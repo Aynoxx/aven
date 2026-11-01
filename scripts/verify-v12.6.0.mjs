@@ -57,13 +57,14 @@ assert.ok(!/setInterval\(|requestAnimationFrame\([^)]*\)\s*;\s*\/\/ simule/.test
 
 // ── B. Supprimer une note se voit tout de suite ────────────────────────────
 assert.match(notes, /import \{ pruneNote \} from "\.\/notes-tree"/, "le retrait de l'arbre est un module pur")
-assert.match(notes, /if \(removedId\) dropFromView\(removedId\)/, "la vue est mise à jour avant le rechargement disque")
-assert.match(notes, /setSelected\(null\)/, "la note ouverte n'est pas laissée affichée après sa suppression")
-// Chaque chemin destructeur nomme la note retirée. Un `withNote` sans identifiant
-// laisserait la note à l'écran — le défaut exact de cette version.
-for (const appel of ["api.noteDelete(selected.id), selected.id", "api.noteArchive(selected.id), selected.id", "api.notePurge(id), id"]) {
-  assert.ok(notes.includes(appel), `suppression : « ${appel} » doit retirer la note de la vue`)
+assert.match(notes, /dropFromView\(current\.id\)/, "la vue est mise à jour avant le rechargement disque")
+assert.match(notes, /setDraft\(null\)/, "le document ouvert n'est pas laissé affiché après sa suppression")
+// v12.8.0 : le document ne s'appelle plus `selected` ; les trois chemins destructeurs
+// doivent toujours retirer leur note AVANT le rechargement du disque.
+for (const appel of ["api.noteDelete(current.id)", "api.noteArchive(current.id)", "api.notePurge(id)"]) {
+  assert.ok(notes.includes(appel), `suppression : « ${appel} » doit exister`)
 }
+assert.ok((notes.match(/dropFromView\(/g) ?? []).length >= 3, "chaque chemin destructeur retire la note de la vue")
 assert.ok(!/withNote\(\(\) => api\.note(Delete|Archive)\(selected\.id\)\)/.test(notes),
   "aucun chemin de suppression ne laisse la note affichée")
 

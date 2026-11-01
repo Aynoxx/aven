@@ -1,4 +1,15 @@
-# Aven v12.7.4
+# Aven v12.8.0
+
+> **v12.8.0 — Notes devient une bibliothèque et un document**
+> ① La sidebar compacte garde les vrais dossiers Markdown, les récentes, les épinglées,
+> les étiquettes libres, les agents, les repères, l'archive et la corbeille. ② Une note
+> s'ouvre directement dans un document éditable : titre, filet, placeholder `/` et `@`,
+> tableaux, tâches, liens, wikilinks cliquables, compteur de mots et sauvegarde
+> automatique. Plus de formulaire « titre + éditeur + Enregistrer », plus d'aperçu
+> séparé. ③ `/` et `@` sont des modules purs testés, les repères et les étiquettes ont
+> leur stockage local, les dossiers se renomment et se déplacent, et le mode
+> concentration masque la bibliothèque sans quitter le document. La sonde
+> `scripts/verify-v12.8.0.mjs` fige ces invariants.
 
 > ## v10.0.0 — 100 % Tauri (Electron et le natif retirés)
 > Aven est une **app Tauri 2** : la webview React parle à Rust (`src-tauri/`)

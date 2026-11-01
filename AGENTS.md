@@ -234,6 +234,17 @@ par les variables `:root` existantes, sinon thèmes et densités cassent.
   `scripts/verify-v12.1.0.mjs` refuse le retour au titre plein écran, à un
   historique fabriqué, à une action sans effet, comme à un fond qui prétendrait
   mesurer quelque chose.
+- **Notes est une bibliothèque et un document (v12.8.0)** : `NotesView` tient la
+  bibliothèque réelle (arbre, récentes, épinglées, étiquettes, agents, repères,
+  archive, corbeille) et ouvre `NoteDocument` ; `NoteEditor` reste le seul TipTap
+  (tableaux, tâches, liens, wikilinks décorés) et la saisie portée par
+  `notes-menu.ts` — `/` et `@` sont des décisions pures. Le titre édite le H1 du
+  fichier, l'autosave écrit le Markdown (650 ms puis sur blur / changement de note),
+  et les étiquettes libres comme les repères ont leur stockage local séparé
+  (`host/notes-meta.ts`, `host/notes-highlights.ts`). Un déplacement ou un renommage
+  de dossier remappe les deux. Le mode concentration masque la bibliothèque, jamais
+  le document. `scripts/verify-v12.8.0.mjs` refuse le retour à l'aperçu séparé, au
+  formulaire d'édition ou à une couleur / taille en dur dans `notes.css`.
 - **Un accueil d'application ouvre une saisie, pas une affiche (v12.5.0)** : la
   surface d'entrée porte un champ (`.wb-home-command` dans `HomeStage.tsx`), pas une
   question rhétorique suivie de boutons — sans champ, l'écran ne propose que des

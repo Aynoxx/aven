@@ -191,7 +191,7 @@ assert.match(app, /armDelete\(c\.id\)/, "E1 : les boutons trash passent par armD
 assert.match(app, /deleteArmTimer\.window\.setTimeout|deleteArmTimer = useRef/, "E1 : minuteur d'armement")
 assert.match(css, /\.chat-actions button\.armed/, "E1 : état armé visible (rouge + anneau)")
 assert.match(notesView, /const \[purgeArmed, setPurgeArmed\]/, "E2 : état armé de la purge de note")
-assert.match(notesView, /purgeNote\(n\.id\)/, "E2 : le bouton purge passe par purgeNote")
+assert.match(notesView, /purgeNote\(id\)/, "E2 : le bouton purge passe par purgeNote")
 assert.match(css, /\.note-row-action\.armed/, "E2 : purge armée visible")
 
 // ── I. Push-to-talk qui suit le doigt (F6) ───────────────────────────────────

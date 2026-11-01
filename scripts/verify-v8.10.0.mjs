@@ -13,6 +13,7 @@ const main = read("host/aven-app-host.ts") // v10.0.0 : remplace le main Electro
 const preload = read("web/src/types.ts") // v10.0.0 : remplace le preload (contrat OpenCodeApi)
 const types = read("web/src/types.ts")
 const dialog = read("web/src/NotesView.tsx") // v9.3.0 : la vue Notes remplace le modal
+const document = read("web/src/notes/NoteDocument.tsx") // v12.8.0 : le document porte les actions de la note
 const notes = read("host/notes.ts") // v10.1.0 : la recherche globale vit côté host
 const tests = read("tests/notes-premium.test.mjs")
 const selection = read("web/src/selection-actions.ts") // régression v8.9.0
@@ -40,9 +41,11 @@ assert.match(types, /noteTogglePin|notePins|noteExport/)
 
 // Interface : recherche plein-texte, épinglées d'abord, comptage, export.
 assert.match(dialog, /notePins\(\)/)
-assert.match(dialog, /Épingler|Détacher/)
-assert.match(dialog, /Exporter \.md/)
-assert.match(dialog, /mots/)
+// v12.8.0 : l'épingle, l'export et le comptage vivent dans le document éditable,
+// la vue portant la bibliothèque. L'invariant reste : ces trois actions existent.
+assert.match(document, /Épingler la note|Détacher la note/)
+assert.match(document, /Exporter \.md/)
+assert.match(document, /mots/)
 // v10.1.0 : la recherche est globale et côté host (searchNotes) — le critère
 // « la recherche porte sur le contenu » est vérifié là où il s'applique.
 assert.match(dialog, /noteSearch\(q\)/, "la vue interroge la recherche globale du host")

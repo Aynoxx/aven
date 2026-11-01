@@ -89,6 +89,19 @@ export function restoreWikilinks(markdown: string): string {
   return String(markdown ?? "").replace(/\\\[\\\[/g, "[[").replace(/\\\]\\\]/g, "]]")
 }
 
+/** Écrit le H1 de tête depuis le titre éditable, sans dupliquer un H1 existant. */
+export function withLeadingTitle(markdown: string, title: string): string {
+  const body = String(markdown ?? "")
+    .replace(/^\uFEFF?\s*#\s+[^\n]*(?:\r?\n|$)/, "")
+    .replace(/^\s+/, "")
+    .trimEnd()
+  return body ? `# ${cleanTitle(title)}
+
+${body}
+` : `# ${cleanTitle(title)}
+`
+}
+
 /** Crée ou met à jour une note. `id` vide = création (id dérivé du titre dans `folder`). */
 export function saveNote(workspace: string, id: string, title: string, markdown: string, folder = "") {
   ensureNoteDir(workspace)
@@ -111,10 +124,10 @@ export function saveNote(workspace: string, id: string, title: string, markdown:
   }
   const abs = absOf(workspace, rel)
   ensureDir(path.dirname(abs))
-  const content = /^#\s+/m.test(body) ? body : `# ${cleanTitleFinal}\n\n${body}`
+  const content = withLeadingTitle(body, cleanTitleFinal)
   // v10.2.1 : le contenu d'une note est irremplaçable — une coupure pendant
   // l'écriture tronquait le .md en place. Temp + rename désormais.
-  writeTextAtomic(abs, content.endsWith("\n") ? content : `${content}\n`)
+  writeTextAtomic(abs, content)
   return getNote(workspace, rel)
 }
 

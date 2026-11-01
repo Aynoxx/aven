@@ -55,6 +55,8 @@ export type IconName =
   | "chat"
   | "stop"
   | "paperclip"
+  // v12.8.0 : notes — étiquette libre, repère, menu d'actions, encadré, tableau, modèle.
+  | "more" | "tag" | "highlight" | "info" | "table" | "template"
 
 export interface IconProps {
   name: IconName
@@ -205,6 +207,18 @@ function paths(name: IconName): ReactNode {
     // v11.0.2 : 10 unités se lisaient comme un point de ponctuation avant « Interrompre ».
     case "stop":
       return <rect x="6.5" y="6.5" width="11" height="11" rx="1.8" fill="currentColor" stroke="none" />
+    case "more":
+      return <><circle cx="6" cy="12" r="1.2" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none" /><circle cx="18" cy="12" r="1.2" fill="currentColor" stroke="none" /></>
+    case "tag":
+      return <><path d="M4 5.5V4h8.5L20 11.5 12.5 19 4 10.5z" /><circle cx="8.5" cy="8.5" r="1" fill="currentColor" stroke="none" /></>
+    case "highlight":
+      return <><path d="m5 19 3.2-.8L19 7.4a2.1 2.1 0 0 0-3-3L5.2 15.2z" /><path d="m13 6 5 5M5 19h8" /></>
+    case "info":
+      return <><circle cx="12" cy="12" r="8.5" /><path d="M12 11v5M12 7.8v.1" /></>
+    case "table":
+      return <><rect x="3.5" y="5" width="17" height="14" rx="1.5" /><path d="M3.5 10h17M9 5v14M15 5v14" /></>
+    case "template":
+      return <><path d="M6 4h8l4 4v12H6z" /><path d="M14 4v5h5M9 13h6M9 16h4" /></>
     case "paperclip":
       return <path d="M20.5 11.6 12 20.1a4.9 4.9 0 0 1-6.9-6.9l8.5-8.5a3.3 3.3 0 0 1 4.6 4.6l-8.4 8.4a1.6 1.6 0 0 1-2.3-2.3l7.7-7.7" />
   }

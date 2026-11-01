@@ -29,7 +29,8 @@ import {
   listNotes, listTrash, moveNote, noteLinks, notesDir, notesTree, purgeNote, quickCapture,
   renameFolder, restoreNote, saveNote, searchNotes, unarchiveNote,
 } from "./notes.js"
-import { forgetNote, loadAllTags, loadPinned, loadTags, setTags, togglePin } from "./notes-meta.js"
+import { forgetNote, loadAllLabels, loadAllTags, loadLabels, loadPinned, loadTags, remapNoteIds, remapNotePrefix, setLabels, setTags, togglePin } from "./notes-meta.js"
+import { addHighlight, deleteHighlight, forgetHighlightsForNote, listHighlights, remapHighlightNote, remapHighlightPrefix } from "./notes-highlights.js"
 import { listWorkspaceDir, readWorkspaceFile, breadcrumbOf, safeResolve as safeResolveWorkspacePath } from "./workspace-files.js"
 // v12.3.0 : l'accueil reprend le dernier document RÉELLEMENT ouvert — Aven en garde
 // la trace par espace (jamais un « fichier récent » inventé).
@@ -1611,6 +1612,13 @@ async function dispatch(method: string, params: any): Promise<unknown> {
     // v10.5.0 : l'arbre Notes lit toutes les étiquettes en un seul appel IPC.
     case "noteTagsAll":
       return loadAllTags(requireWorkspace())
+    // v12.8.0 : étiquettes libres, distinctes des agents associés.
+    case "noteLabels":
+      return loadLabels(requireWorkspace(), String(params?.[0] ?? ""))
+    case "noteLabelsAll":
+      return loadAllLabels(requireWorkspace())
+    case "noteSetLabels":
+      return setLabels(requireWorkspace(), String(params?.[0] ?? ""), Array.isArray(params?.[1]) ? params[1].map(String) : [])
     case "noteDir":
       return notesDir(requireWorkspace())
     case "filesList":
@@ -1638,12 +1646,27 @@ async function dispatch(method: string, params: any): Promise<unknown> {
       return notesTree(requireWorkspace())
     case "noteCreateFolder":
       return createFolder(requireWorkspace(), String(params?.[0] ?? ""))
-    case "noteRenameFolder":
-      return renameFolder(requireWorkspace(), String(params?.[0] ?? ""), String(params?.[1] ?? ""))
+    case "noteRenameFolder": {
+      const workspace = requireWorkspace()
+      const from = String(params?.[0] ?? "")
+      const renamed = renameFolder(workspace, from, String(params?.[1] ?? ""))
+      // v12.8.0 : les métadonnées et les repères suivent les notes du dossier.
+      remapNotePrefix(workspace, from, renamed)
+      remapHighlightPrefix(workspace, from, renamed)
+      return renamed
+    }
     case "noteDeleteFolder":
       return deleteFolder(requireWorkspace(), String(params?.[0] ?? ""))
-    case "noteMove":
-      return moveNote(requireWorkspace(), String(params?.[0] ?? ""), String(params?.[1] ?? ""))
+    case "noteMove": {
+      const workspace = requireWorkspace()
+      const oldId = String(params?.[0] ?? "")
+      const moved = moveNote(workspace, oldId, String(params?.[1] ?? ""))
+      // v12.8.0 : une note déplacée garde ses épingles, ses agents, ses étiquettes
+      // et ses repères — ils sont indexés par chemin, pas par un id stable.
+      remapNoteIds(workspace, oldId, moved)
+      remapHighlightNote(workspace, oldId, moved)
+      return moved
+    }
     case "noteDelete":
       return deleteNote(requireWorkspace(), String(params?.[0] ?? ""))
     case "noteRestore":
@@ -1659,8 +1682,10 @@ async function dispatch(method: string, params: any): Promise<unknown> {
     case "notePurge": {
       // v10.2.2 : la purge oublie aussi l'épinglage et les tags de la note — sinon
       // notes-meta.json gardait des ids fantômes après la suppression du fichier.
-      const rel = purgeNote(requireWorkspace(), String(params?.[0] ?? ""))
-      forgetNote(requireWorkspace(), rel)
+      const workspace = requireWorkspace()
+      const rel = purgeNote(workspace, String(params?.[0] ?? ""))
+      forgetNote(workspace, rel)
+      forgetHighlightsForNote(workspace, rel)
       return rel
     }
     case "noteLinks":
@@ -1671,6 +1696,13 @@ async function dispatch(method: string, params: any): Promise<unknown> {
       return searchNotes(requireWorkspace(), String(params?.[0] ?? ""))
     case "noteQuickCapture":
       return quickCapture(requireWorkspace(), String(params?.[0] ?? ""), String(params?.[1] ?? ""))
+    // v12.8.0 : repères locaux — ajout, liste et suppression sans toucher à la note.
+    case "noteHighlights":
+      return listHighlights(requireWorkspace())
+    case "noteHighlightAdd":
+      return addHighlight(requireWorkspace(), String(params?.[0] ?? ""), String(params?.[1] ?? ""))
+    case "noteHighlightDelete":
+      return deleteHighlight(requireWorkspace(), String(params?.[0] ?? ""))
     case "prefs":
       return loadPrefs()
     case "setNotifications":

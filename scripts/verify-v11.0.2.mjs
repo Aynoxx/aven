@@ -15,6 +15,7 @@ const icon = read("web/src/icons/Icon.tsx")
 const shell = read("web/src/workbench/WorkbenchShell.tsx")
 const home = read("web/src/workbench/HomeStage.tsx")
 const notesView = read("web/src/NotesView.tsx")
+const noteDocument = read("web/src/notes/NoteDocument.tsx")
 const conversation = read("web/src/pages/ConversationPage.tsx")
 const tasks = read("web/src/pages/TasksPage.tsx")
 const filesView = read("web/src/FilesView.tsx")
@@ -45,7 +46,7 @@ assert.equal(sparkleSites.length, 1, `« sparkle » ne sert qu'à la marque (lig
 assert.match(shell, /<span className="brand-mark" aria-hidden="true"><Icon name="sparkle"/, "« sparkle » est la marque du rail")
 
 // ── C. La génération assistée a son glyphe ───────────────────────────────────
-assert.match(notesView, /<Icon name="wand"[^>]*\/>Demander une synthèse/, "la synthèse demande une génération (wand)")
+assert.match(noteDocument, /<Icon name="wand"[^>]*\/>Demander une synthèse à/, "la synthèse demande une génération (wand)")
 assert.match(shell, /applySelection\("explain"\)}><Icon name="wand"/, "« Expliquer ce code » demande une génération (wand)")
 
 // ── D. Une conversation n'est pas un agent ni un fichier ─────────────────────
@@ -60,9 +61,9 @@ assert.match(shell, /kind: "orchestration", label: "Orchestration", icon: "branc
 
 // ── F. Interrompre ≠ fermer, joindre ≠ naviguer, citer ≠ chevron ─────────────
 assert.match(freebuff, /<Icon name="stop" size=\{14\} \/>Interrompre/, "« Interrompre » affiche un carré d'arrêt")
-assert.match(notesView, /<Icon name="paperclip" size=\{14\} \/>Joindre à \{activeAgentName\}/, "« Joindre à » affiche un trombone")
+assert.match(noteDocument, /<Icon name="paperclip" size=\{14\} \/>Joindre à \{props\.attachTargetName\}/, "« Joindre à » affiche un trombone")
 assert.match(shell, /applySelection\("send"\)}><Icon name="quote"/, "« Citer » affiche une citation")
-assert.doesNotMatch(notesView, /<Icon name="chevron-right"/, "aucune action des Notes ne prend un chevron de navigation")
+assert.doesNotMatch(noteDocument, /<Icon name="chevron-right"/, "aucune action des Notes ne prend un chevron de navigation")
 assert.doesNotMatch(shell, /<Icon name="chevron-right" size=\{15\} \/>/, "la barre de sélection ne prend pas un chevron")
 
 // ── G. La règle est écrite là où on la lit ───────────────────────────────────
