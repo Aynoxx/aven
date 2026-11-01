@@ -15,6 +15,7 @@ import { useVoiceAgent } from "../voice-agent/use-voice-agent"
 import { noteTitleFromDraft } from "../voice-agent/note"
 import { TASK_MODES_UI, engineStatusLabel } from "../app/constants"
 import { planFor } from "./actions"
+import { agentPhaseFor } from "./agent-phase"
 import { nextTabFocus } from "./tabs"
 import CommandBar from "./CommandBar"
 import HomeStage from "./HomeStage"
@@ -164,6 +165,10 @@ export default function WorkbenchShell({ app }: { app: AvenApp }) {
   const lastAssistant = [...app.messages].reverse().find((m) => m.role === "assistant" && m.text.trim())
   const activeKind = activeInstrument.kind
   const isHome = activeKind === "home"
+  // v12.7.4 : la phase de la sphère suit l'état réel du Poste. `starting` ne
+  // couvre que le démarrage ; sans espace elle reste `muted`, et une erreur
+  // garde `error` — la sphère ne prétend jamais démarrer après un échec.
+  const agentPhase = agentPhaseFor(appState.status, appState.needsWorkspace, voice.phase)
   const activeSection = DESTINATIONS.find((d) => d.kind === activeKind) ?? DESTINATIONS[0]
   const conversationTabs = tabsState.tabs.filter((t) => t.kind === "conversation")
   // Le bandeau d'onglets ne liste QUE des conversations : la scène ne peut être
@@ -306,10 +311,10 @@ export default function WorkbenchShell({ app }: { app: AvenApp }) {
             type="button"
             onClick={() => openConfiguration("workspaces")}
             title="Changer d’espace de travail"
-            aria-label={`Espace de travail : ${workspaceName || "aucun"}. Changer`}
+            aria-label={`Espace de travail : ${workspaceName || (appState.status === "starting" ? "en démarrage" : "aucun")}. Changer`}
           >
             <Icon name="folder" size={14} />
-            <span>{workspaceName || "Aucun espace"}</span>
+            <span>{workspaceName || (appState.status === "starting" ? "Démarrage…" : "Aucun espace")}</span>
           </button>
           {activeKind !== "home" && activeKind !== "settings" && (
             <>
@@ -460,6 +465,8 @@ export default function WorkbenchShell({ app }: { app: AvenApp }) {
                 // v12.3.0 : « Reprendre » ne lit l'espace que lorsque le Poste est
                 // prêt et qu'un espace est réellement actif.
                 ready={appState.status === "ready" && !appState.needsWorkspace}
+                starting={appState.status === "starting"}
+                phase={agentPhase}
                 chats={app.chats}
                 // v12.7.0 : ne pas afficher un faux état vide pendant le chargement
                 // de l'historique de l'espace actif.
@@ -719,7 +726,7 @@ export default function WorkbenchShell({ app }: { app: AvenApp }) {
         </div>
       )}
 
-      {appState.status !== "ready" && !appState.needsWorkspace && (
+      {appState.status !== "ready" && !appState.needsWorkspace && (appState.status === "error" || !isHome) && (
         <div className="status-banner">
           <span className="status-dot warning" />
           {appState.status === "starting" ? "Démarrage d’Aven…" : <><b>Aven n’a pas démarré.</b> {appState.error}</>}
@@ -739,7 +746,7 @@ export default function WorkbenchShell({ app }: { app: AvenApp }) {
           : { visibility: "hidden" }}
         aria-hidden="true"
       >
-        <WireframeAgent phase={voice.phase} size={AGENT_CANVAS} />
+        <WireframeAgent phase={agentPhase} size={AGENT_CANVAS} />
       </div>
 
       {form && <FormDialog key={form.id} form={form} onSubmit={answerForm} onCancel={cancelForm} />}

@@ -16,12 +16,14 @@ export type Projected = {
 }
 
 /**
- * Les sept phases RÉELLES de la session vocale (web/src/voice-agent/session.ts).
- * Aucune phase inventée : si le système n'en expose pas, la sphère n'en montre
- * pas. Les intensités sont déterministes — un rendu qui tremble au hasard
- * suggérerait une activité qui n'existe pas.
+ * Les huit phases RÉELLES du Poste : les sept de la session vocale
+ * (web/src/voice-agent/session.ts) et le démarrage de l'app, qui n'est pas une
+ * phase vocale mais un état réel. Aucune phase inventée : si le système n'en
+ * expose pas, la sphère n'en montre pas. Les intensités sont déterministes — un
+ * rendu qui tremble au hasard suggérerait une activité qui n'existe pas.
  */
 export type AgentPhase =
+  | "starting"
   | "muted"
   | "listening"
   | "capturing"
@@ -31,6 +33,7 @@ export type AgentPhase =
   | "error"
 
 export const AGENT_PHASES: readonly AgentPhase[] = [
+  "starting",
   "muted",
   "listening",
   "capturing",
@@ -52,6 +55,9 @@ export type PhaseEnergy = {
 }
 
 const ENERGY: Record<AgentPhase, PhaseEnergy> = {
+  // v12.7.4 : le démarrage est un état réel, pas une animation d'attente. La
+  // sphère tourne lentement et reste sobre : elle ne prétend ni écouter ni parler.
+  starting: { spin: 0.02, density: 0.6, wave: 0.12, glow: 0.22 },
   // Micro coupé : la sphère tourne encore (elle est vivante), mais lentement,
   // et elle n'affirme aucune écoute.
   muted: { spin: 0.012, density: 0.55, wave: 0, glow: 0.18 },

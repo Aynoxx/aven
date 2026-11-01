@@ -19,8 +19,9 @@ import { execFileSync, execFile, spawn } from "node:child_process"
 // v11.10.0 : un port libre est demandé au système pour le serveur vocal local.
 import { createServer } from "node:net"
 import { promisify } from "node:util"
-import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync } from "node:fs"
+import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync } from "node:fs"
 import { randomUUID } from "node:crypto"
+import { performance } from "node:perf_hooks"
 import path from "node:path"
 import {
   archiveNote, backlinks, cleanFolder, createFolder, deleteFolder, deleteNote, getNote,
@@ -108,6 +109,20 @@ function trace(line: string) {
   if (diagLog.length > 30) diagLog.shift()
 }
 trace("démarrage du runtime applicatif")
+
+// v12.7.4 : chronométrage du démarrage, actif seulement quand AVEN_BOOT_TIMING
+// pointe un fichier. Sans la variable, aucun coût et aucun fichier écrit. Il sert
+// à savoir ce qui pèse réellement (clés, sonde réseau, moteur) avant d'optimiser.
+const bootOrigin = performance.now()
+function bootMark(label: string) {
+  const target = process.env.AVEN_BOOT_TIMING
+  if (!target) return
+  try {
+    appendFileSync(target, String(Math.round(performance.now() - bootOrigin)) + " ms\t" + label + "\n")
+  } catch {
+    // La mesure ne doit jamais gêner le démarrage.
+  }
+}
 
 let workspace = ""
 let templateDir = ""
@@ -1171,15 +1186,18 @@ async function initialize(params: {
   binPath?: string
   binShell?: boolean
 }) {
+  bootMark("initialize : appelé")
   const nextWorkspace = join(String(params?.workspace || ""))
   if (!nextWorkspace) throw new Error("workspace requis")
   workspace = nextWorkspace
   templateDir = join(String(params?.templateDir || process.cwd()))
 
   await shutdown()
+  bootMark("après shutdown")
 
   // v10.0.0 : conserver les retours de synchronisation que l'ancien boot Electron transmettait aux réglages.
   const seed = seedWorkspace(workspace, templateDir)
+  bootMark("seedWorkspace")
   let agentsBridgeWritten: string[] = []
   try {
     agentsBridgeWritten = buildAgentsDir(
@@ -1191,7 +1209,9 @@ async function initialize(params: {
     // Le pont agents est best effort (toujours, depuis l'origine).
   }
 
+  bootMark("pont agents")
   const storedEnv = loadKeys()
+  bootMark("loadKeys (DPAPI)")
   const effectiveEnv = { ...storedEnv, ...(params.env ?? {}) }
   for (const [id, envName] of [["openrouter", "OPENROUTER_API_KEY"], ["groq", "GROQ_API_KEY"]] as const) {
     if (storedEnv[envName]) effectiveEnv[envName] = storedEnv[envName]
@@ -1201,7 +1221,9 @@ async function initialize(params: {
   const keyWarnings: Record<string, string> = { ...(params.keyWarnings ?? {}) }
   let openRouterUsable = params.openRouterUsable !== false
   if (storedEnv.OPENROUTER_API_KEY) {
+    bootMark("sonde OpenRouter : début")
     const probe = await probeOpenRouterKey(storedEnv.OPENROUTER_API_KEY)
+    bootMark("sonde OpenRouter : " + probe.status)
     if (probe.status === "invalid") {
       openRouterUsable = false
       keyWarnings.openrouter = `Clé OpenRouter refusée : ${probe.message} Remplace-la dans Paramètres.`
@@ -1224,6 +1246,7 @@ async function initialize(params: {
     onHostExit: (code) => push({ type: "engine.host.exit", data: { code } }),
   })
 
+  bootMark("moteur : spawn + initialize")
   engineState = await engine.call("initialize", {
     workspace,
     env: effectiveEnv,
@@ -1234,6 +1257,7 @@ async function initialize(params: {
     binShell: bin.shell,
   })
 
+  bootMark("moteur prêt")
   engineChains = (engineState.assignments ?? {}) as typeof engineChains
 
   // v10.0.0 : avertir aussi quand une clé existe mais qu'aucun modèle du fournisseur n'est actif.
@@ -1271,6 +1295,7 @@ async function initialize(params: {
     },
   } as unknown as BridgeHost
 
+  bootMark("avant état prêt")
   ops = makeOps(() => engineBridge)
   appState = {
     status: "ready",
@@ -1290,6 +1315,7 @@ async function initialize(params: {
     versionWarning: engineState.versionWarning as string | undefined,
     keyWarnings,
   }
+  bootMark("état prêt")
 
   return appState
 }

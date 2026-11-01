@@ -85,7 +85,8 @@ assert.match(home, /Délégation · \{delegation\}/, "la ligne d'état nomme la 
 
 // ── D. Un seul statut vocal sur l'accueil ──────────────────────────────────
 assert.equal(home.match(/className="wb-home-status"/g)?.length, 1, "un seul statut vocal sur l'accueil (l'avis transitoire est un autre message)")
-assert.equal(home.match(/\{error \?\? voice\.label\}/g)?.length, 1, "l'état vocal est dit une seule fois")
+// AMENDEMENT v12.7.4 : le démarrage remplace le libellé vocal, sans ajouter un second statut.
+assert.equal(home.match(/\{error \?\? \(starting \? "Démarrage d’Aven…" : voice\.label\)\}/g)?.length, 1, "l'état vocal est dit une seule fois")
 assert.match(shell, /\{!isHome && \(/, "l'en-tête ne répète pas l'état vocal quand l'accueil le porte déjà")
 assert.match(shell, /onOpenConversation=\{openHomeConversation\}/, "reprendre une conversation passe par le chemin qui la sélectionne vraiment")
 

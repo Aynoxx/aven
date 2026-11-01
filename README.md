@@ -1,4 +1,4 @@
-# Aven v12.7.3
+# Aven v12.7.4
 
 > ## v10.0.0 — 100 % Tauri (Electron et le natif retirés)
 > Aven est une **app Tauri 2** : la webview React parle à Rust (`src-tauri/`)
@@ -27,6 +27,12 @@
 Application de bureau (Tauri) : une chatbox avec **3 agents commutables** (code, recherche, analyse) et un
 sous-agent (code-reviewer), branchée sur **OpenCode 2.0.10** et un catalogue d’agents strictement gratuit (OpenRouter Free / OpenCode Zen).
 
+> **v12.7.4 — le démarrage s'anime dans la sphère, pas dans un écran**
+> Pendant que le moteur démarre, la sphère prend une phase `starting` lente et les
+> anneaux se creusent ; le bandeau « Démarrage d’Aven… » disparaît de l'accueil, où
+> les actions restent désactivées avec leur raison écrite. Le bandeau reste pour une
+> erreur réelle. Aucune progression inventée : l'état vient de `appState.status`.
+>
 > **v12.7.3 — les actions rapides attendent que le Poste soit prêt**
 > Pendant le démarrage, ou sans espace de travail, les trois actions de l'accueil
 > sont désactivées et une ligne dit pourquoi. Avant, un clic ouvrait une vue sur un

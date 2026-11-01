@@ -73,7 +73,8 @@ assert.ok(voiceAt > 0 && modeAt > voiceAt && modeAt < actionsAt,
   "« Délégation · … » vit dans la ligne d'état du micro, plus sous les actions")
 assert.match(css, /\.wb-home-mode \{[^}]*border-left: 1px solid var\(--border\)/, "elle est séparée de l'état par un filet, un seul statut par ligne")
 // L'état affiché vient de la session réelle : micro coupé, et un seul libellé.
-assert.match(home, /\{error \?\? voice\.label\}/, "l'état vocal vient de la session, pas d'un texte local")
+// AMENDEMENT v12.7.4 : le démarrage remplace le libellé vocal, sans ajouter un second statut.
+assert.match(home, /\{error \?\? \(starting \? "Démarrage d’Aven…" : voice\.label\)\}/, "l'état vocal vient de la session, pas d'un texte local")
 assert.equal(home.match(/className="wb-home-status"/g)?.length, 1, "un seul statut vocal sur l'accueil")
 
 // ── D. Sphère : la motion reste gouvernée par la phase ────────────────────

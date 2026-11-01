@@ -93,8 +93,8 @@ test("wireframe : grille complète et unitaire", () => {
   }
 })
 
-test("phaseEnergy : les sept phases réelles, aucune inventée", () => {
-  assert.equal(AGENT_PHASES.length, 7)
+test("phaseEnergy : les huit phases réelles, aucune inventée", () => {
+  assert.equal(AGENT_PHASES.length, 8)
   for (const phase of AGENT_PHASES) {
     const energy = phaseEnergy(phase)
     assert.ok(Number.isFinite(energy.spin) && energy.spin >= 0)
@@ -107,6 +107,9 @@ test("phaseEnergy : les sept phases réelles, aucune inventée", () => {
   // La parole est la phase la plus « vivante », l'écoute la plus large.
   assert.ok(phaseEnergy("speaking").wave > phaseEnergy("listening").wave)
   assert.equal(phaseEnergy("listening").density, 0.9)
+  // v12.7.4 : le démarrage est sobre — plus lent que l'écoute, jamais toute la sphère.
+  assert.ok(phaseEnergy("starting").spin < phaseEnergy("listening").spin)
+  assert.ok(phaseEnergy("starting").density < 1)
 })
 
 // v12.4.0 : la sphère est une STRUCTURE (maillage géodésique + lumière fixe),

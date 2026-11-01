@@ -49,7 +49,8 @@ assert.match(css, /\.wb-home-field::after \{[^}]*mask-image: radial-gradient/, "
 assert.match(css, /\.wb-home-ticks \{[^}]*repeating-linear-gradient/, "la ligne graduée est un motif, pas un caractère Unicode")
 
 // ── C. Le bâti suit la phase réelle, sans minuteur ─────────────────────────
-assert.match(home, /data-phase=\{voice\.phase\}/, "la scène reçoit la phase de la session vocale")
+// AMENDEMENT v12.7.4 : la scène suit la phase du Poste — voix, ou `starting` pendant le démarrage.
+assert.match(home, /data-phase=\{phase\}/, "la scène reçoit la phase réelle du Poste (voix ou démarrage)")
 assert.ok(!/setTimeout|setInterval/.test(home), "aucun minuteur ne simule un état dans l'accueil")
 assert.ok(!/data-phase="listening"/.test(home), "la phase n'est jamais écrite en dur dans le rendu")
 

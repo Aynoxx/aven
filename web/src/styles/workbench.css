@@ -880,6 +880,12 @@
 .wb-home-scene[data-phase="thinking"] .wb-home-node { opacity: .3; }
 .wb-home-scene[data-phase="listening"] .wb-home-node { box-shadow: 0 0 0 7px color-mix(in srgb, var(--accent) 16%, transparent); }
 .wb-home-scene[data-phase="capturing"] .wb-home-node { scale: 1.45; }
+/* v12.7.4 : le démarrage est un état réel, porté par la sphère (phase `starting`).
+   Les anneaux se creusent, le nœud pâlit — aucune boucle CSS ajoutée, le mouvement
+   vient de la sphère. Le bandeau supérieur s'efface sur l'accueil ; l'erreur garde
+   le sien. */
+.wb-home-scene[data-phase="starting"] .wb-home-ring { opacity: .34; border-color: var(--border-strong); }
+.wb-home-scene[data-phase="starting"] .wb-home-node { opacity: .5; }
 .wb-home-scene[data-phase="speaking"] .wb-home-node { scale: 1.8; }
 /* L'ancre de la sphère au repos : une boîte réelle, mesurée par le calque de
    l'agent. Elle ne peint rien — le canvas vit au-dessus. */

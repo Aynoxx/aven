@@ -3,6 +3,7 @@ import { api } from "../api"
 import { Icon, type IconName } from "../icons"
 import type { Chat, Note, RecentFile } from "../types"
 import type { VoiceAgentApi } from "../voice-agent/use-voice-agent"
+import type { AgentPhase } from "../agent/sphere"
 import { ageLabel, resumeBoard, type ResumeEntry, type ResumeKind } from "./resume"
 
 // v12.1.0 : l'accueil devient une COMPOSITION éditoriale, pas un titre qui remplit
@@ -22,6 +23,10 @@ type Props = {
   /** Le Poste est prêt ET un espace est actif : hors de cet état, « Reprendre »
    *  n'a rien de réel à montrer et ne doit pas lire un ancien état de session. */
   ready: boolean
+  /** L'app est encore en train de démarrer (état réel, distinct de « pas d'espace »). */
+  starting: boolean
+  /** Phase réelle portée par la sphère : `starting` pendant le démarrage. */
+  phase: AgentPhase
   /** Conversations réellement chargées — la plus récente nourrit « Reprendre ». */
   chats: Chat[]
   /** La liste des conversations a terminé son chargement pour l'espace actif. */
@@ -63,6 +68,8 @@ const KIND_ICON: Record<ResumeKind, IconName> = {
 export default function HomeStage({
   voice,
   ready,
+  starting,
+  phase,
   chats,
   chatsReady,
   delegation,
@@ -201,7 +208,7 @@ export default function HomeStage({
             <input
               value={draft}
               aria-label="Message à Aven"
-              placeholder={ready ? "Que souhaitez-vous accomplir ?" : "Choisissez d’abord un espace de travail…"}
+              placeholder={ready ? "Que souhaitez-vous accomplir ?" : starting ? "Démarrage d’Aven…" : "Choisissez d’abord un espace de travail…"}
               disabled={!ready}
               autoComplete="off"
               onChange={(event) => setDraft(event.target.value)}
@@ -227,7 +234,7 @@ export default function HomeStage({
             </button>
             {/* L'état est du TEXTE : la couleur seule ne dit jamais si Aven écoute. */}
             <span className="wb-home-status" role="status" aria-live="polite" data-error={error ? "true" : undefined}>
-              {error ?? voice.label}
+              {error ?? (starting ? "Démarrage d’Aven…" : voice.label)}
             </span>
             {/* v12.3.1 : la délégation appartient à l'état de session, pas au travail
                 passé — elle rejoint donc la ligne du micro au lieu de flotter seule
@@ -266,9 +273,9 @@ export default function HomeStage({
         {/* Zone centre droit : la sphère et son environnement. Les anneaux et les
             repères sont des traits de construction — aucune coordonnée, aucune
             mesure inventée, et ils ne captent jamais le pointeur. */}
-        {/* L'environnement suit la phase RÉELLE de la session vocale : data-phase
-            vient de `voice.phase`, jamais d'un minuteur ni d'un état simulé. */}
-        <div className="wb-home-scene" data-phase={voice.phase}>
+        {/* v12.1.0, précisé v12.7.4 : l'environnement suit la phase RÉELLE du Poste
+            (`phase`) — la voix, ou le démarrage. Jamais un minuteur, jamais un état simulé. */}
+        <div className="wb-home-scene" data-phase={phase}>
           <span className="wb-home-ring" aria-hidden="true" />
           <span className="wb-home-ring wb-home-ring--wide" aria-hidden="true" />
           <span className="wb-home-link wb-home-link--a" aria-hidden="true" />
