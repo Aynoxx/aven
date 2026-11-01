@@ -237,17 +237,30 @@ export default function HomeStage({
 
           {/* v12.3.0 : les actions vivent près de la question — elles y répondent.
               Séparées de « Reprendre », qui parle du passé (brief §5). */}
-          <div className="wb-home-actions" role="group" aria-label="Actions rapides">
-            <button className="button ghost wb-home-action" type="button" onClick={onNewChat}>
+          <div
+            className="wb-home-actions"
+            role="group"
+            aria-label="Actions rapides"
+            aria-describedby={ready ? undefined : "wb-home-actions-state"}
+          >
+            <button className="button ghost wb-home-action" type="button" onClick={onNewChat} disabled={!ready}>
               <Icon name="chat" size={14} />Nouvelle conversation
             </button>
-            <button className="button ghost wb-home-action" type="button" onClick={onNewNote}>
+            <button className="button ghost wb-home-action" type="button" onClick={onNewNote} disabled={!ready}>
               <Icon name="file" size={14} />Nouvelle note
             </button>
-            <button className="button ghost wb-home-action" type="button" onClick={onBrowseFiles}>
+            <button className="button ghost wb-home-action" type="button" onClick={onBrowseFiles} disabled={!ready}>
               <Icon name="folder" size={14} />Parcourir les fichiers
             </button>
           </div>
+          {/* v12.7.3 : un bouton inerte sans explication se lit comme un bug. Tant que
+              le Poste n'est pas prêt, les trois actions sont désactivées ET la raison
+              est écrite. La ligne disparaît avec la condition, jamais avant. */}
+          {!ready && (
+            <p id="wb-home-actions-state" className="wb-home-actions-state">
+              Les actions seront disponibles lorsque l’espace de travail sera prêt.
+            </p>
+          )}
         </div>
 
         {/* Zone centre droit : la sphère et son environnement. Les anneaux et les

@@ -733,6 +733,15 @@
    laissent « Reprendre » parler du travail déjà fait (deux fonctions distinctes).
    v12.3.1 : une rangée compacte, pas un empilement de trois boutons. */
 .wb-home-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: clamp(10px, 1.8vh, 16px); }
+/* v12.7.3 : la raison d'une action désactivée est écrite, jamais laissée à deviner.
+   Même voix technique que les métadonnées, taille tokenisée. */
+.wb-home-actions-state {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  letter-spacing: .02em;
+}
 /* La délégation décrit l'agent en cours de session : elle rejoint l'état du micro
    au lieu de flotter seule sous les actions (revue : métadonnée isolée). */
 .wb-home-mode {
