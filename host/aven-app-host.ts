@@ -61,11 +61,11 @@ import { resolveVoiceRoute } from "./voice-route.js"
 import { applyPronunciations } from "./pronunciation.js"
 // v11.10.0 : moteur vocal local Pocket TTS (binaire embarqué, synthèse en flux).
 import {
-  POCKET_CLONE_TIMEOUT_MS, POCKET_CLONE_VOICE_ID, POCKET_PCM_MIME, POCKET_SAMPLE_RATE, POCKET_VOICE_ID,
-  normalizePocketPreference, pocketCloneBlockedReason, pocketClonePaths, pocketCloneProfile,
+  POCKET_BUNDLED_CONSENT_FILE, POCKET_CLONE_TIMEOUT_MS, POCKET_CLONE_VOICE_ID, POCKET_PCM_MIME, POCKET_SAMPLE_RATE, POCKET_VOICE_ID,
+  normalizePocketPreference, pocketBundledProfile, pocketCloneBlockedReason, pocketClonePaths, pocketCloneProfile,
   pocketCloneRepoDir, pocketCloneWeightsPresent, pocketExportArgs, pocketExportEnv,
-  pocketHealthUrl, pocketInstalled, pocketLayout, pocketModelDir, pocketServerArgs,
-  pocketServerEnv, pocketSpeechUrl, pocketUnavailableReason, pocketVoiceId, profileTensorCount,
+  pocketHealthUrl, pocketInstalled, pocketLayout, pocketModelDir, pocketSeedDecision, pocketServerArgs,
+  pocketServerEnv, pocketSpeechUrl, pocketUnavailableReason, pocketVoiceId, pocketVoiceSeedMarker, profileTensorCount,
   streamKindForVoice, waitForPocketReady, wavDataOffset, wrapPcmAsWav,
 } from "./pocket-tts.js"
 // v11.10.0 : niveau et silences du PCM local — mêmes seuils que la voix de référence.
@@ -312,6 +312,9 @@ async function cloneVoiceProfile(source: string): Promise<{ downloaded: boolean 
   }
   // Écriture par renommage : jamais un profil à moitié écrit à la place du bon.
   renameSync(paths.staged, paths.file)
+  // v12.9.0 : un profil choisi par l'utilisateur remplace le profil fourni ; le
+  // marqueur de retrait ne doit pas bloquer une future pose.
+  rmSync(pocketVoiceSeedMarker(dataDir), { force: true })
   stopPocketServer()
   savePrefs({ voiceName: POCKET_CLONE_VOICE_ID })
   trace(`voix clonée posée${downloaded ? " (modèle de clonage téléchargé)" : " (modèle déjà en cache)"}`)
@@ -329,10 +332,62 @@ function removeVoiceProfile(): void {
     }
   }
   stopPocketServer()
+  // v12.9.0 : le retrait est DÉFINITIF pour le profil fourni par l'installeur.
+  // Sans ce marqueur, le profil reviendrait au prochain lancement et « Retirer »
+  // ne serait qu'un masque.
+  writeTextAtomic(pocketVoiceSeedMarker(pocketDataDir()), JSON.stringify({ removed: true, at: Date.now() }) + "\n")
   // `loadPrefs` recale déjà une préférence Pocket sur la voix restante ; on
   // l'écrit pour que le fichier cesse de parler d'un profil qui n'existe plus.
   if (loadPrefs().voiceName.startsWith("pocket:")) savePrefs({ voiceName: POCKET_VOICE_ID })
   trace("voix clonée retirée")
+}
+
+/**
+ * v12.9.0 : pose le profil fourni avec un installeur LOCAL dans les données de
+ * l'app, au premier lancement. Trois garde-fous : un profil déjà installé n'est
+ * jamais écrasé, une attestation `voice-consent.json` est exigée, et un retrait
+ * volontaire écrit un marqueur qui empêche le retour. Un échec reste une trace :
+ * une voix fournie ne doit pas empêcher l'app de démarrer.
+ */
+function seedBundledVoiceProfile(): void {
+  const dir = pocketDir()
+  if (!dir) return
+  const bundled = pocketBundledProfile(dir, existsSync)
+  const installed = !!pocketProfile()
+  const marker = pocketVoiceSeedMarker(pocketDataDir())
+  let removed = false
+  if (existsSync(marker)) {
+    try {
+      removed = JSON.parse(readFileSync(marker, "utf8"))?.removed === true
+    } catch {
+      // Marqueur illisible : on respecte le retrait plutôt que de faire revenir
+      // une voix que l'utilisateur a peut-être retirée.
+      removed = true
+    }
+  }
+  if (pocketSeedDecision({ bundled: !!bundled, installed, removed }) !== "seed" || !bundled) return
+  try {
+    const consent = JSON.parse(readFileSync(join(dir, "voices", POCKET_BUNDLED_CONSENT_FILE), "utf8"))
+    if (consent?.attested !== true || consent?.scope !== "local-installer") {
+      trace("profil de voix embarqué ignoré : attestation absente ou hors build local")
+      return
+    }
+    const paths = pocketClonePaths(pocketDataDir())
+    mkdirSync(paths.dir, { recursive: true })
+    rmSync(paths.staged, { force: true })
+    copyFileSync(bundled, paths.staged)
+    profileTensorCount(new Uint8Array(readFileSync(paths.staged)))
+    renameSync(paths.staged, paths.file)
+    // Ne remplace pas un choix Windows explicite : on ne pose la voix clonée
+    // que si la préférence est vide ou déjà Pocket.
+    const prefs = loadPrefs()
+    if (!prefs.voiceName || prefs.voiceName.startsWith("pocket:")) savePrefs({ voiceName: POCKET_CLONE_VOICE_ID })
+    writeTextAtomic(marker, JSON.stringify({ seeded: true, at: Date.now() }) + "\n")
+    trace("voix clonée fournie avec l'installation, posée dans les données")
+  } catch (error) {
+    rmSync(pocketClonePaths(pocketDataDir()).staged, { force: true })
+    trace(`profil de voix embarqué inutilisable : ${(error as Error).message}`)
+  }
 }
 
 // v11.10.0 : le serveur Pocket TTS reste vivant pour la session. Le chargement du
@@ -1195,6 +1250,10 @@ async function initialize(params: {
 
   await shutdown()
   bootMark("après shutdown")
+  // v12.9.0 : un profil de voix fourni par un installeur local est posé AVANT
+  // le moteur — `--default-voice` ne se lit qu'à son démarrage.
+  seedBundledVoiceProfile()
+  bootMark("voix fournie")
 
   // v10.0.0 : conserver les retours de synchronisation que l'ancien boot Electron transmettait aux réglages.
   const seed = seedWorkspace(workspace, templateDir)

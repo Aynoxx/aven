@@ -170,6 +170,38 @@ export function pocketVoiceId(cloneProfile: string | null): string {
   return cloneProfile ? POCKET_CLONE_VOICE_ID : POCKET_VOICE_ID
 }
 
+// v12.9.0 : un profil peut être fourni AVEC un installeur LOCAL, à côté du
+// moteur (`runtime/pocket-tts/voices/aven.safetensors`). Il n'est jamais lu
+// depuis le dépôt : le build local l'embarque, et `voice-consent.json` dit qu'il
+// a été attesté. Le host le recopie dans les données de l'app au premier
+// lancement — le moteur, lui, ne lit jamais le dossier d'installation.
+export const POCKET_SEED_MARKER_FILE = "seed.json"
+export const POCKET_BUNDLED_CONSENT_FILE = "voice-consent.json"
+
+export function pocketBundledProfile(engineDir: string, exists: (file: string) => boolean): string | null {
+  const file = path.join(engineDir, "voices", POCKET_CLONE_FILE)
+  return exists(file) ? file : null
+}
+
+/** Marqueur de pose ou de retrait volontaire, dans les données de l'app. */
+export function pocketVoiceSeedMarker(dataDir: string): string {
+  return path.join(pocketVoicesDir(dataDir), POCKET_SEED_MARKER_FILE)
+}
+
+/**
+ * Décision pure de pose du profil fourni :
+ *   - `seed` : profil fourni, aucun profil installé, aucun retrait volontaire ;
+ *   - `keep` : un profil existe déjà (le sien) — on ne l'écrase jamais ;
+ *   - `skip-removed` : l'utilisateur a retiré la voix, le marqueur le dit ;
+ *   - `none` : aucun profil fourni.
+ */
+export function pocketSeedDecision(input: { bundled: boolean; installed: boolean; removed: boolean }): "seed" | "keep" | "skip-removed" | "none" {
+  if (!input.bundled) return "none"
+  if (input.installed) return "keep"
+  if (input.removed) return "skip-removed"
+  return "seed"
+}
+
 /**
  * v11.11.0 : chemins du profil cloné sous les données de l'app. `staged` est le
  * fichier que le moteur écrit : il n'occupe la place du profil qu'une fois son

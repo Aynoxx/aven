@@ -28,7 +28,9 @@ const types = read("web/src/types.ts")
 
 assert.ok(pkg.scripts["verify:v12.8.0"] === "node scripts/verify-v12.8.0.mjs", "sonde v12.8.0 exposée")
 assert.ok(pkg.scripts.verify.includes("scripts/verify-v12.8.0.mjs"), "sonde v12.8.0 branchée dans npm run verify")
-assert.match(readme, /^# Aven v12\.8\.0$/m, "README annonce v12.8.0")
+// AMENDEMENT v12.8.1 : la version courante vient de package.json ; la note v12.8.0,
+// elle, reste vérifiée juste en dessous.
+assert.ok(readme.startsWith(`# Aven v${pkg.version}`), "README annonce la version courante")
 assert.match(readme, /v12\.8\.0 — Notes devient une bibliothèque et un document/, "note README présente")
 assert.match(readme, /scripts\/verify-v12\.8\.0\.mjs/, "README cite la sonde")
 assert.match(rules, /Notes est une bibliothèque et un document \(v12\.8\.0\)/, "AGENTS.md fixe la convention Notes")

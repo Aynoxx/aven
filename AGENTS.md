@@ -497,9 +497,14 @@ par les variables `:root` existantes, sinon thèmes et densités cassent.
   mis en cache sous les données de l'app ; absent, la voix retombe sur la voix
   Windows **et le dit**. Une voix **clonée** peut remplacer la voix intégrée : le profil
   (`.safetensors`) se pose dans les données de l'app par
-  `npm run voice:pocket -- <fichier>`, jamais dans l'installeur ni dans le dépôt
-  (c'est un dérivé d'un enregistrement de référence, qu'on ne redistribue pas), et
-  le host le transmet au moteur par `--default-voice` **au démarrage** — le
+  `npm run voice:pocket -- <fichier>`, et il n'entre **jamais dans le dépôt**.
+  Un build **local** peut l'embarquer par `npm run voice:bundle -- --attest`
+  (attestation écrite, `src-tauri/resources/pocket-tts/voices/`, dossier
+  gitignoré) : au premier lancement le host le copie dans les données de l'app,
+  et une suppression volontaire y écrit un marqueur qui empêche son retour. Un
+  installeur public ne doit pas le contenir — c'est un dérivé d'un
+  enregistrement de référence. Le host le transmet au moteur par
+  `--default-voice` **au démarrage** — le
   moteur n'accepte pas de voix par requête. Le menu propose donc une seule voix
   Pocket à la fois, celle qui parlera (« voix clonée » ou « voix française »), et
   jamais le nom d'une personne. Le PCM passe par `host/pcm-audio.ts` (pur) :

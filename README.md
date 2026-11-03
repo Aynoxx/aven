@@ -1,4 +1,21 @@
-# Aven v12.8.0
+# Aven v12.9.0
+
+> **v12.9.0 — la voix clonée peut être livrée avec ton installation**
+> ① `npm run voice:bundle -- --attest` copie ton profil dans l'installeur
+> **local** (dossier gitignoré) avec une attestation écrite ; au premier
+> lancement, Aven le pose dans ses données et le menu affiche « voix clonée ».
+> ② Le profil n'entre jamais dans le dépôt ni dans un installeur public ; une
+> suppression volontaire dans les Réglages écrit un marqueur qui empêche son
+> retour au lancement suivant.
+> ③ Le profil ajoute ~11 Mo à l'installeur ; le moteur et le modèle restent
+> inchangés.
+
+> **v12.8.1 — le titre d'accueil porte le signal**
+> « Votre espace. » passe en `--accent-ink` : une seule grande tache d'accent au lieu
+> de micro-touches dispersées, et la seconde ligne reste reculée en `--muted`. Aucun
+> nouveau token, aucun changement de thème : l'encre d'accent est déjà calculée pour
+> les deux thèmes et suit le preset choisi. La sonde `scripts/verify-v12.8.1.mjs`
+> fige cet usage.
 
 > **v12.8.0 — Notes devient une bibliothèque et un document**
 > ① La sidebar compacte garde les vrais dossiers Markdown, les récentes, les épinglées,
@@ -254,7 +271,7 @@ sous-agent (code-reviewer), branchée sur **OpenCode 2.0.10** et un catalogue d�
 > ② Elle parle **au fil de la synthèse** : premier son à **270 ms** mesuré, contre ~2,4 s si l'on attendait la phrase entière. Sa génération tient 2,5 fois le temps réel et ne décroche jamais la lecture.
 > ③ Son modèle français (« estelle », 209 Mo, dépôt ouvert sans jeton) se télécharge au premier usage, une seule fois — `npm run fetch:pocket-tts` le prépare à l'avance. Si le moteur manque, Aven le signale et repasse sur Piper, comme pour Edge.
 > ④ Sa voix **clonée** peut prendre la place de la voix intégrée : un profil posé par `npm run voice:pocket -- <fichier.safetensors>` est appliqué par le moteur au démarrage, et c'est elle que tu entends — mesuré à 0,9 % de distance spectrale de l'enregistrement de référence, contre 18,8 % pour la voix intégrée.
-> ⑤ Le profil reste **sur ton disque** : ni dans le dépôt, ni dans l'installeur. Réglages → Agent vocal propose donc une seule voix Pocket à la fois, celle qui va parler : « voix clonée » si un profil est posé, « voix française » sinon.
+> ⑤ Le profil reste **sur ton disque** : ni dans le dépôt, ni dans un installeur public (v12.9.0 : un build local peut l'embarquer avec attestation). Réglages → Agent vocal propose donc une seule voix Pocket à la fois, celle qui va parler : « voix clonée » si un profil est posé, « voix française » sinon.
 > ⑥ Et elle se fait **entendre** : elle sortait 2,4 dB sous Piper et laissait 550 ms de silence après le dernier mot. Le niveau est calé sur Piper Tom et les **silences de tête et de queue** sont rognés, comme pour Edge (pauses internes de plus de 650 ms ramenées à 420 ms). Mesure à phrase identique : RMS voisé −20,4 dBFS contre −20,4 pour Tom, silence de queue 0 ms contre 550.
 
 > **v11.9.0 — Aven agit dans le Poste, et demande avant de détruire**

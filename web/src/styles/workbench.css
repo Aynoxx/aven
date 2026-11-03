@@ -674,7 +674,11 @@
   font-stretch: 85%;
   text-transform: uppercase;
   text-align: left;
-  color: var(--text);
+  /* v12.8.1 : le titre est LE signal de l'accueil — une grande tache d'accent, pas
+     dix micro-touches dispersées. `--accent-ink` (jamais `--accent` en texte, §3)
+     reste lisible dans les deux thèmes et suit le preset choisi ; la seconde ligne
+     garde son recul en `--muted`. */
+  color: var(--accent-ink);
 }
 /* Le titre se lit comme une phrase à deux temps : la seconde ligne recule au lieu
    d'être une deuxième masse de blanc. */

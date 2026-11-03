@@ -168,14 +168,28 @@ assert.match(voiceScript, /\"pocket-tts\", \"voices\"/, "le script vise le même
 assert.match(voiceScript, /export-voice/, "un enregistrement de référence est converti par le binaire")
 assert.match(voiceScript, /kyutai\/pocket-tts/, "l'accès soumis à conditions est cité quand la conversion échoue")
 assert.equal(pkg.scripts["voice:pocket"], "node scripts/fetch-pocket-voice.mjs", "la pose a son entrée npm")
-// Le profil est un dérivé d'un enregistrement de référence : il ne se distribue pas.
+// v12.9.0 : le profil reste hors du dépôt. Un build LOCAL peut l'embarquer sous
+// le chemin canonique, avec une attestation écrite ; tout autre profil est refusé.
+const resourcesDir = path.join(root, "src-tauri", "resources")
+const bundledVoices = existsSync(resourcesDir)
+  ? readdirSync(resourcesDir, { recursive: true })
+      .map(String)
+      .map((name) => name.replaceAll("\\", "/"))
+      .filter((name) => name.endsWith(".safetensors"))
+  : []
+const canonicalVoice = "pocket-tts/voices/aven.safetensors"
 assert.deepEqual(
-  existsSync(path.join(root, "src-tauri", "resources"))
-    ? readdirSync(path.join(root, "src-tauri", "resources"), { recursive: true }).map(String).filter((name) => name.endsWith(".safetensors"))
-    : [],
+  bundledVoices.filter((name) => name !== canonicalVoice),
   [],
-  "aucun profil de voix n'est livré dans le dépôt",
+  "seul le profil canonique peut être embarqué",
 )
+if (bundledVoices.length) {
+  const consentPath = path.join(resourcesDir, "pocket-tts", "voices", "voice-consent.json")
+  assert.ok(existsSync(consentPath), "un profil embarqué exige voice-consent.json")
+  const consent = JSON.parse(readFileSync(consentPath, "utf8"))
+  assert.equal(consent.attested, true, "l'attestation du profil embarqué est explicite")
+  assert.equal(consent.scope, "local-installer", "le profil embarqué est limité à un installeur local")
+}
 assert.match(audit, /[Vv]oix clonée/, "l'audit documente l'essai de la voix clonée")
 assert.match(agents, /voice:pocket/, "AGENTS.md cite la commande de pose")
 assert.match(readme, /voix clonée/, "README annonce la voix clonée")
@@ -203,4 +217,4 @@ assert.match(audit, /2,4 dB/, "l'audit porte l'écart mesuré avec Piper")
 assert.match(agents, /pcm-audio\.ts/, "AGENTS.md cite le module")
 assert.match(readme, /silences de tête et de queue/, "README annonce la correction")
 
-console.log(`v${pkg.version} verification: OK (voix locale Pocket TTS, voix clonée posée hors dépôt, niveau et silences mesurés, binaire vérifié)`)
+console.log(`v${pkg.version} verification: OK (voix locale Pocket TTS, profil local jamais dans le dépôt public, niveau et silences mesurés, binaire vérifié)`)
